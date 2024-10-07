@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Historical Data</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <h1>Upload Historical Data</h1>
+    
+    <form method="POST" enctype="multipart/form-data">
+        <label for="commodity">Select Commodity:</label>
+        <select name="commodity" id="commodity" required>
+            <option value="Anaheim">Anaheim</option>
+            <option value="Cubanelle">Cubanelle</option>
+            <option value="Fresno">Fresno</option>
+            <option value="Habanero">Habanero</option>
+            <option value="Hungarian Wax">Hungarian Wax</option>
+            <option value="Jalapeno">Jalapeno</option>
+            <option value="Long Hot">Long Hot</option>
+            <option value="Poblano">Poblano</option>
+            <option value="Serrano">Serrano</option>
+            <option value="Shishito">Shishito</option>
+        </select>
+
+        <br><br>
+
+        <label for="file">Upload CSV:</label>
+        <input type="file" name="file" id="file" accept=".csv" required>
+
+        <br><br>
+
+        <input type="submit" value="Upload">
+    </form>
+
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            <ul>
+            {% for message in messages %}
+                <li>{{ message }}</li>
+            {% endfor %}
+            </ul>
+        {% endif %}
+    {% endwith %}
+</body>
+</html>

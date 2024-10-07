@@ -499,21 +499,21 @@ function interpolateMissingData(dates, prices) {
   let interpolatedPrices = [];
 
   for (let i = 0; i < dates.length; i++) {
-    if (prices[i] !== undefined) {
-      interpolatedPrices.push(prices[i]);
-    } else {
-      // If the current price is missing, perform linear interpolation
-      let prevPrice = interpolatedPrices[i - 1];
-      let nextPrice = prices.slice(i).find(price => price !== undefined);
-
-      if (prevPrice !== undefined && nextPrice !== undefined) {
-        let steps = prices.slice(i).findIndex(price => price === nextPrice) + 1;
-        let stepValue = (nextPrice - prevPrice) / steps;
-        interpolatedPrices.push(prevPrice + stepValue);
+      if (prices[i] !== undefined) {
+          interpolatedPrices.push(prices[i]);
       } else {
-        interpolatedPrices.push(null); // If unable to interpolate, leave it as null
+          // If the current price is missing, perform linear interpolation
+          let prevPrice = interpolatedPrices[i - 1];
+          let nextPrice = prices.slice(i).find(price => price !== undefined);
+
+          if (prevPrice !== undefined && nextPrice !== undefined) {
+              let steps = prices.slice(i).findIndex(price => price === nextPrice) + 1;
+              let stepValue = (nextPrice - prevPrice) / steps;
+              interpolatedPrices.push(prevPrice + stepValue);
+          } else {
+              interpolatedPrices.push(null); // If unable to interpolate, leave it as null
+          }
       }
-    }
   }
 
   return interpolatedPrices;
@@ -524,42 +524,54 @@ function formatDataForChart(historicalData) {
   var dates = [];
   var datasets = [];
 
-  // Collect unique dates and initialize dataset structures
   historicalData.forEach(item => {
-    if (!dates.includes(item.date)) {
-      dates.push(item.date);
-    }
-  });
+      // Convert the year-day format into a proper date string
+      const actualDate = convertYearDayToDate(parseInt(item.year), parseInt(item.day));
 
-  historicalData.forEach(item => {
-    var label = item.city_name + " - " + item.commodity;
-    var existingDataset = datasets.find(d => d.label === label);
+      // If actualDate is invalid (null), skip this item
+      if (!actualDate) {
+          console.warn("Skipping invalid date for item: ", item);
+          return; // Skip invalid dates
+      }
 
-    if (existingDataset) {
-      existingDataset.rawData.push(item.price);
-    } else {
-      datasets.push({
-        label: label,
-        rawData: [item.price],
-        data: [],
-        borderColor: getRandomColor(),  // Assign a unique color
-        fill: false
-      });
-    }
+      const formattedDate = actualDate.toISOString().split('T')[0]; // Convert to YYYY-MM-DD format
+
+      // Collect unique dates
+      if (!dates.includes(formattedDate)) {
+          dates.push(formattedDate);
+      }
+
+      // Prepare datasets by city and commodity
+      var label = item.city_name + " - " + item.commodity;
+      var existingDataset = datasets.find(d => d.label === label);
+
+      if (existingDataset) {
+          existingDataset.rawData.push(item.price);
+      } else {
+          datasets.push({
+              label: label,
+              rawData: [item.price],
+              data: [],
+              borderColor: getRandomColor(),  // Assign a unique color
+              fill: false
+          });
+      }
   });
 
   // Fill missing data with null and interpolate missing values
   datasets.forEach(dataset => {
-    for (let i = 0; i < dates.length; i++) {
-      let price = dataset.rawData[i] !== undefined ? dataset.rawData[i] : null;
-      dataset.data.push(price);
-    }
-    // Perform interpolation on the dataset
-    dataset.data = interpolateMissingData(dates, dataset.data);
+      for (let i = 0; i < dates.length; i++) {
+          let price = dataset.rawData[i] !== undefined ? dataset.rawData[i] : null;
+          dataset.data.push(price);
+      }
+      // Perform interpolation on the dataset
+      dataset.data = interpolateMissingData(dates, dataset.data);
   });
 
   return { dates: dates, datasets: datasets };
 }
+
+
 
 // Update the line chart
 function updateHistoricalChart(data) {
@@ -699,6 +711,23 @@ function downloadDataAsExcel(historicalData) {
       }
       return color;
     }
+// Helper function to convert year-day format to actual date (YYYY-MM-DD)
+function convertYearDayToDate(year, dayOfYear) {
+  // Check if the year and dayOfYear are valid numbers
+  if (isNaN(year) || isNaN(dayOfYear)) {
+      console.error("Invalid year or day: ", year, dayOfYear);
+      return null; // Return null if invalid
+  }
+
+  try {
+      var date = new Date(year, 0); // January 1st of the given year
+      return new Date(date.setDate(dayOfYear)); // Add days to the date
+  } catch (error) {
+      console.error("Error in converting year-day to date: ", year, dayOfYear, error);
+      return null; // Return null in case of error
+  }
+}
+
   </script>
 
 {% endblock %}

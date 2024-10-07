@@ -22,6 +22,7 @@ import os
 import logging
 import requests
 import base64
+import csv
 
 #Configuration for Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -49,6 +50,10 @@ else:
 # Configure other Flask settings
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)  # Session timeout after 30 minutes
+# for uploading data
+UPLOAD_FOLDER = 'uploads'
+ALLOWED_EXTENSIONS = {'csv'}
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 # Initialize extensions
 db = SQLAlchemy(app)
@@ -893,6 +898,65 @@ def trigger_usda_fetch():
     fetch_usda_daily_data()
     fetch_daily_data()
     return "USDA Data Fetch Triggered"
+# Function to check file extension
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+# Route for uploading historical data
+@app.route('/upload_historical', methods=['GET', 'POST'])
+def upload_historical():
+    if request.method == 'POST':
+        # Get the selected commodity
+        commodity = request.form.get('commodity')
+        
+        # Check if file was uploaded
+        if 'file' not in request.files:
+            flash('No file part')
+            return redirect(request.url)
+        
+        file = request.files['file']
+        
+        if file.filename == '':
+            flash('No selected file')
+            return redirect(request.url)
+        
+        if file and allowed_file(file.filename):
+            filename = secure_filename(file.filename)
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(file_path)
+
+            # Open the uploaded CSV and insert data into the PriceData table
+            with open(file_path, newline='', encoding='utf-8') as csvfile:
+                reader = csv.DictReader(csvfile)
+                
+                for row in reader:
+                    # Extract data from the CSV
+                    city_name = row['CityName']
+                    year = int(row['Year'])
+                    day = int(row['Day'])
+                    price = float(row['Price'])
+                    source = 'Historical'  # Assuming source is always historical
+                    season = 'default'  # Add season logic if needed
+                    
+                    # Insert the data into the PriceData table
+                    new_price_data = PriceData(
+                        city_name=city_name,
+                        commodity=commodity,
+                        year=year,
+                        day=day,
+                        price=price,
+                        source=source,
+                        season=season
+                    )
+                    db.session.add(new_price_data)
+
+                db.session.commit()
+
+            flash('Data uploaded successfully')
+            return redirect(url_for('upload_historical'))
+
+    return render_template('upload_historical.html')
+
 
 
 # Run the app
