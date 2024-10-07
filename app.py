@@ -936,7 +936,7 @@ def upload_historical():
                     year = int(row['Year'])
                     day = int(row['Day'])
                     price = float(row['Price'])
-                    source = 'Historical'
+                    source = 'ProduceIQ'
 
                     # Create a date string for the season determination (YYYY-MM-DD)
                     report_date = datetime.strptime(f'{year}-{day}', '%Y-%j').strftime('%Y-%m-%d')
