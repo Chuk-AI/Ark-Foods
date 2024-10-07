@@ -494,30 +494,68 @@ function updateMap(commodity) {
       });
   }
   
-  // Format data for Chart.js (helper function)
+  // Helper function to interpolate missing data
+function interpolateMissingData(dates, prices) {
+  let interpolatedPrices = [];
+
+  for (let i = 0; i < dates.length; i++) {
+    if (prices[i] !== undefined) {
+      interpolatedPrices.push(prices[i]);
+    } else {
+      // If the current price is missing, perform linear interpolation
+      let prevPrice = interpolatedPrices[i - 1];
+      let nextPrice = prices.slice(i).find(price => price !== undefined);
+
+      if (prevPrice !== undefined && nextPrice !== undefined) {
+        let steps = prices.slice(i).findIndex(price => price === nextPrice) + 1;
+        let stepValue = (nextPrice - prevPrice) / steps;
+        interpolatedPrices.push(prevPrice + stepValue);
+      } else {
+        interpolatedPrices.push(null); // If unable to interpolate, leave it as null
+      }
+    }
+  }
+
+  return interpolatedPrices;
+}
+
+// Format data for Chart.js (helper function)
 function formatDataForChart(historicalData) {
   var dates = [];
   var datasets = [];
 
+  // Collect unique dates and initialize dataset structures
   historicalData.forEach(item => {
-      if (!dates.includes(item.date)) {
-          dates.push(item.date);
-      }
+    if (!dates.includes(item.date)) {
+      dates.push(item.date);
+    }
+  });
 
-      // Prepare datasets by city and commodity
-      var label = item.city_name + " - " + item.commodity;
-      var existingDataset = datasets.find(d => d.label === label);
+  historicalData.forEach(item => {
+    var label = item.city_name + " - " + item.commodity;
+    var existingDataset = datasets.find(d => d.label === label);
 
-      if (existingDataset) {
-          existingDataset.data.push(item.price);
-      } else {
-          datasets.push({
-              label: label,
-              data: [item.price],
-              borderColor: 'rgba(75, 192, 192, 1)',
-              fill: false
-          });
-      }
+    if (existingDataset) {
+      existingDataset.rawData.push(item.price);
+    } else {
+      datasets.push({
+        label: label,
+        rawData: [item.price],
+        data: [],
+        borderColor: getRandomColor(),  // Assign a unique color
+        fill: false
+      });
+    }
+  });
+
+  // Fill missing data with null and interpolate missing values
+  datasets.forEach(dataset => {
+    for (let i = 0; i < dates.length; i++) {
+      let price = dataset.rawData[i] !== undefined ? dataset.rawData[i] : null;
+      dataset.data.push(price);
+    }
+    // Perform interpolation on the dataset
+    dataset.data = interpolateMissingData(dates, dataset.data);
   });
 
   return { dates: dates, datasets: datasets };
@@ -653,7 +691,14 @@ function downloadDataAsExcel(historicalData) {
       fetchBestSellMarket();
       fetchMostRecentPrices();
     });
-
+    function getRandomColor() {
+      const letters = '0123456789ABCDEF';
+      let color = '#';
+      for (let i = 0; i < 6; i++) {
+        color += letters[Math.floor(Math.random() * 16)];
+      }
+      return color;
+    }
   </script>
 
 {% endblock %}

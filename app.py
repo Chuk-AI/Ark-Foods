@@ -10,7 +10,7 @@ from datetime import timedelta, datetime
 from flask_cors import CORS
 import pytz
 from pytz import timezone
-from sqlalchemy import text, func
+from sqlalchemy import text, func, or_
 import pandas as pd
 # Flask-Admin Setup
 from flask_admin import Admin
@@ -706,7 +706,10 @@ def historical_data():
     query = PriceData.query.filter(
         PriceData.commodity.in_(commodities),
         PriceData.city_name.in_(cities),
-        PriceData.source == source,
+        or_(
+            PriceData.source == source,
+            PriceData.source == 'Historical'
+        ),
         ((PriceData.year == start_year) & (PriceData.day >= start_day)) | 
         ((PriceData.year == end_year) & (PriceData.day <= end_day))
     ).order_by(PriceData.year.asc(), PriceData.day.asc())
