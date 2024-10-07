@@ -941,7 +941,18 @@ def upload_historical():
                     city_name = row['CityName']
                     year = int(row['Year'])
                     day = int(row['Day'])
-                    price = float(row['Price'])
+
+                    # Check if the price value is valid (not empty and can be converted to float)
+                    if row['Price'].strip():  # Check if the price is not empty
+                        try:
+                            price = float(row['Price'])
+                        except ValueError:
+                            flash(f"Invalid price value in row: {row}", 'danger')
+                            continue  # Skip the current row if the price is invalid
+                    else:
+                        flash(f"Missing price in row: {row}", 'warning')
+                        continue  # Skip the current row if the price is missing
+
                     source = 'Historical'  # Assuming source is always historical
                     season = determine_season(f'{year}-{day}')  # Add season logic
                     
@@ -958,6 +969,7 @@ def upload_historical():
                     db.session.add(new_price_data)
 
                 db.session.commit()
+
 
             flash('Data uploaded successfully')
             return redirect(url_for('upload_historical'))
