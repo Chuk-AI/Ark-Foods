@@ -203,7 +203,7 @@
 
 
   <script>
-
+    var historicalChart = null;
     var $ = jQuery.noConflict();
 
     var $ = jQuery.noConflict();
@@ -526,7 +526,14 @@ function formatDataForChart(historicalData) {
 // Update the line chart
 function updateHistoricalChart(data) {
   var ctx = document.getElementById('historicalChart').getContext('2d');
-  var chart = new Chart(ctx, {
+
+  // Destroy the chart if it already exists
+  if (historicalChart) {
+      historicalChart.destroy();
+  }
+
+  // Create a new chart instance
+  historicalChart = new Chart(ctx, {
       type: 'line',
       data: {
           labels: data.dates,  // X-axis labels (dates)
@@ -544,7 +551,6 @@ function updateHistoricalChart(data) {
       }
   });
 }
-
 // Download chart as image and data as Excel
 function downloadChart() {
   var chart = document.getElementById('historicalChart');

@@ -28,20 +28,37 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 
 # Initialize Flask app
+# Initialize Flask app
 app = Flask(__name__)
-# CORS
+
+# Enable CORS
 CORS(app)
+
+# Set the secret key for session handling
 app.config['SECRET_KEY'] = 'your_secret_key_here'
-DATABASE_URL = os.environ.get('DATABASE_URL').replace("postgres://", "postgresql://", 1)
-app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
+
+# Check if DATABASE_URL is present for Heroku's PostgreSQL, otherwise use SQLite for local development
+DATABASE_URL = os.environ.get('DATABASE_URL')
+if DATABASE_URL:
+    # Replace the "postgres://" scheme with "postgresql://" for compatibility with SQLAlchemy
+    app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+else:
+    # Use SQLite for local development
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(app.instance_path, 'users.db')
+
+# Configure other Flask settings
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)  # Session timeout after 30 minutes
 
 # Initialize extensions
 db = SQLAlchemy(app)
+
+# Initialize LoginManager for handling user sessions
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
+
+# Initialize Bootstrap for front-end styling
 Bootstrap(app)
 
 # Data Base Models
