@@ -679,14 +679,20 @@ def historical_data():
     end_date = request.args.get('end_date')
     source = request.args.get('source')
 
+    # Convert start_date and end_date into year and day of the year
+    start_year = datetime.strptime(start_date, '%Y-%m-%d').year
+    start_day = datetime.strptime(start_date, '%Y-%m-%d').timetuple().tm_yday
+    end_year = datetime.strptime(end_date, '%Y-%m-%d').year
+    end_day = datetime.strptime(end_date, '%Y-%m-%d').timetuple().tm_yday
+
     # Query the PriceData table based on the filters
     query = PriceData.query.filter(
         PriceData.commodity.in_(commodities),
         PriceData.city_name.in_(cities),
         PriceData.source == source,
-        PriceData.date >= start_date,
-        PriceData.date <= end_date
-    ).order_by(PriceData.date.asc())
+        ((PriceData.year == start_year) & (PriceData.day >= start_day)) | 
+        ((PriceData.year == end_year) & (PriceData.day <= end_day))
+    ).order_by(PriceData.year.asc(), PriceData.day.asc())
 
     # Extract the data from the query
     data = query.all()
@@ -695,7 +701,7 @@ def historical_data():
     historical_data = []
     for entry in data:
         historical_data.append({
-            'date': entry.date.strftime('%Y-%m-%d'),
+            'date': f"{entry.year}-{entry.day}",
             'city_name': entry.city_name,
             'commodity': entry.commodity,
             'price': entry.price
