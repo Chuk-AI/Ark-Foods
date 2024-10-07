@@ -944,8 +944,13 @@ def upload_historical():
             return redirect(request.url)
         
         if file and allowed_file(file.filename):
+            # Ensure the 'uploads' folder exists
+            upload_folder_path = app.config['UPLOAD_FOLDER']
+            os.makedirs(upload_folder_path, exist_ok=True)
+            
+            # Save the uploaded file
             filename = secure_filename(file.filename)
-            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file_path = os.path.join(upload_folder_path, filename)
             file.save(file_path)
 
             # Open the uploaded CSV and insert data into the PriceData table
@@ -991,6 +996,7 @@ def upload_historical():
             return redirect(url_for('upload_historical'))
 
     return render_template('upload_historical.html')
+
 
 
 # Run the app
