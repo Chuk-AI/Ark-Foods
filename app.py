@@ -946,7 +946,7 @@ def upload_historical():
                             year = int(row['Year'])
                             day = int(row['Day'])
                             price = float(row['Price'])
-                            source = 'Historical'
+                            source = 'ProduceIQ'
                             season = determine_season(f'{year}-{day}')  # Add season logic based on year and day
 
                             # Insert the data into the PriceData table
