@@ -28,8 +28,8 @@ from werkzeug.utils import secure_filename
 #Configuration for Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+CSV_DIRECTORY = 'data/'
 
-# Initialize Flask app
 # Initialize Flask app
 app = Flask(__name__)
 
@@ -929,74 +929,50 @@ def allowed_file(filename):
 @app.route('/upload_historical', methods=['GET', 'POST'])
 def upload_historical():
     if request.method == 'POST':
-        # Get the selected commodity
-        commodity = request.form.get('commodity')
-        
-        # Check if file was uploaded
-        if 'file' not in request.files:
-            flash('No file part')
-            return redirect(request.url)
-        
-        file = request.files['file']
-        
-        if file.filename == '':
-            flash('No selected file')
-            return redirect(request.url)
-        
-        if file and allowed_file(file.filename):
-            # Ensure the 'uploads' folder exists
-            upload_folder_path = app.config['UPLOAD_FOLDER']
-            os.makedirs(upload_folder_path, exist_ok=True)
-            
-            # Save the uploaded file
-            filename = secure_filename(file.filename)
-            file_path = os.path.join(upload_folder_path, filename)
-            file.save(file_path)
-
-            # Open the uploaded CSV and insert data into the PriceData table
-            with open(file_path, newline='', encoding='utf-8') as csvfile:
-                reader = csv.DictReader(csvfile)
+        # Get all CSV files from the 'data' directory
+        for csv_file in os.listdir(CSV_DIRECTORY):
+            # Ensure we're only processing CSV files
+            if csv_file.endswith('.csv'):
+                commodity = os.path.splitext(csv_file)[0]  # Commodity name is the filename without extension
+                file_path = os.path.join(CSV_DIRECTORY, csv_file)
                 
-                for row in reader:
-                    # Extract data from the CSV
-                    city_name = row['CityName']
-                    year = int(row['Year'])
-                    day = int(row['Day'])
-
-                    # Ensure the price is not empty or invalid
-                    if row['Price'].strip():
-                        try:
+                try:
+                    # Open the CSV file and insert data into the PriceData table
+                    with open(file_path, newline='', encoding='utf-8') as csvfile:
+                        reader = csv.DictReader(csvfile)
+                        
+                        for row in reader:
+                            city_name = row['CityName']
+                            year = int(row['Year'])
+                            day = int(row['Day'])
                             price = float(row['Price'])
-                        except ValueError:
-                            flash(f"Invalid price value in row: {row}", 'danger')
-                            continue  # Skip invalid price rows
-                    else:
-                        flash(f"Missing price in row: {row}", 'warning')
-                        continue  # Skip rows with missing price
+                            source = 'Historical'
+                            season = determine_season(f'{year}-{day}')  # Add season logic based on year and day
 
-                    source = 'Historical'
-                    # Use the new function to determine the season
-                    season = determine_season_from_year_day(year, day)
-                    
-                    # Insert the data into the PriceData table
-                    new_price_data = PriceData(
-                        city_name=city_name,
-                        commodity=commodity,
-                        year=year,
-                        day=day,
-                        price=price,
-                        source=source,
-                        season=season
-                    )
-                    db.session.add(new_price_data)
+                            # Insert the data into the PriceData table
+                            new_price_data = PriceData(
+                                city_name=city_name,
+                                commodity=commodity,
+                                year=year,
+                                day=day,
+                                price=price,
+                                source=source,
+                                season=season
+                            )
+                            db.session.add(new_price_data)
 
-                db.session.commit()
+                        # Commit after processing each file
+                        db.session.commit()
+                        flash(f'Data for {commodity} uploaded successfully', 'success')
+                
+                except Exception as e:
+                    flash(f'Error processing file {csv_file}: {str(e)}', 'danger')
+                    continue
 
-            flash('Data uploaded successfully')
-            return redirect(url_for('upload_historical'))
+        # Redirect back to the same page
+        return redirect(url_for('upload_historical'))
 
     return render_template('upload_historical.html')
-
 
 
 # Run the app
