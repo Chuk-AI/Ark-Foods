@@ -254,6 +254,28 @@ def determine_season_for_dashboard(forecast_date):
     else:
         return 'Winter'
 
+def determine_season_from_year_day(year, day_of_year):
+    """
+    This function converts a given year and day-of-year into a valid date and determines the season.
+    """
+    try:
+        # Convert the year and day of the year to a valid date
+        date_from_day = datetime.strptime(f'{year}-{day_of_year}', '%Y-%j')
+        month = date_from_day.month
+
+        # Determine the season based on the month
+        if month in [3, 4, 5]:
+            return 'Spring'
+        elif month in [6, 7, 8]:
+            return 'Summer'
+        elif month in [9, 10, 11]:
+            return 'Autumn'
+        else:
+            return 'Winter'
+
+    except ValueError:
+        # If there is an error, return a default season or handle accordingly
+        return 'Unknown'
 
 # PRODUCE IQ DATA FETCHING IS HERE!!
 # Function to fetch the last fetched date
@@ -924,12 +946,6 @@ def upload_historical():
         if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            
-            # Check if the uploads folder exists, if not, create it
-            if not os.path.exists(app.config['UPLOAD_FOLDER']):
-                os.makedirs(app.config['UPLOAD_FOLDER'])
-
-            # Save the file to the uploads folder
             file.save(file_path)
 
             # Open the uploaded CSV and insert data into the PriceData table
@@ -942,19 +958,20 @@ def upload_historical():
                     year = int(row['Year'])
                     day = int(row['Day'])
 
-                    # Check if the price value is valid (not empty and can be converted to float)
-                    if row['Price'].strip():  # Check if the price is not empty
+                    # Ensure the price is not empty or invalid
+                    if row['Price'].strip():
                         try:
                             price = float(row['Price'])
                         except ValueError:
                             flash(f"Invalid price value in row: {row}", 'danger')
-                            continue  # Skip the current row if the price is invalid
+                            continue  # Skip invalid price rows
                     else:
                         flash(f"Missing price in row: {row}", 'warning')
-                        continue  # Skip the current row if the price is missing
+                        continue  # Skip rows with missing price
 
-                    source = 'Historical'  # Assuming source is always historical
-                    season = determine_season(f'{year}-{day}')  # Add season logic
+                    source = 'Historical'
+                    # Use the new function to determine the season
+                    season = determine_season_from_year_day(year, day)
                     
                     # Insert the data into the PriceData table
                     new_price_data = PriceData(
@@ -969,7 +986,6 @@ def upload_historical():
                     db.session.add(new_price_data)
 
                 db.session.commit()
-
 
             flash('Data uploaded successfully')
             return redirect(url_for('upload_historical'))
