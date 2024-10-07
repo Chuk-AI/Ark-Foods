@@ -908,18 +908,18 @@ def upload_historical():
     if request.method == 'POST':
         # Get the selected commodity
         commodity = request.form.get('commodity')
-        
+
         # Check if file was uploaded
         if 'file' not in request.files:
             flash('No file part')
             return redirect(request.url)
-        
+
         file = request.files['file']
-        
+
         if file.filename == '':
             flash('No selected file')
             return redirect(request.url)
-        
+
         if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
@@ -928,16 +928,21 @@ def upload_historical():
             # Open the uploaded CSV and insert data into the PriceData table
             with open(file_path, newline='', encoding='utf-8') as csvfile:
                 reader = csv.DictReader(csvfile)
-                
+
                 for row in reader:
                     # Extract data from the CSV
                     city_name = row['CityName']
                     year = int(row['Year'])
                     day = int(row['Day'])
                     price = float(row['Price'])
-                    source = 'Historical'  # Assuming source is always historical
-                    season = 'default'  # Add season logic if needed
-                    
+                    source = 'Historical'
+
+                    # Create a date string for the season determination (YYYY-MM-DD)
+                    report_date = datetime.strptime(f'{year}-{day}', '%Y-%j').strftime('%Y-%m-%d')
+
+                    # Determine season using the existing function
+                    season = determine_season(report_date)
+
                     # Insert the data into the PriceData table
                     new_price_data = PriceData(
                         city_name=city_name,
