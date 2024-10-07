@@ -909,41 +909,42 @@ def upload_historical():
     if request.method == 'POST':
         # Get the selected commodity
         commodity = request.form.get('commodity')
-
+        
         # Check if file was uploaded
         if 'file' not in request.files:
             flash('No file part')
             return redirect(request.url)
-
+        
         file = request.files['file']
-
+        
         if file.filename == '':
             flash('No selected file')
             return redirect(request.url)
-
+        
         if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            
+            # Check if the uploads folder exists, if not, create it
+            if not os.path.exists(app.config['UPLOAD_FOLDER']):
+                os.makedirs(app.config['UPLOAD_FOLDER'])
+
+            # Save the file to the uploads folder
             file.save(file_path)
 
             # Open the uploaded CSV and insert data into the PriceData table
             with open(file_path, newline='', encoding='utf-8') as csvfile:
                 reader = csv.DictReader(csvfile)
-
+                
                 for row in reader:
                     # Extract data from the CSV
                     city_name = row['CityName']
                     year = int(row['Year'])
                     day = int(row['Day'])
                     price = float(row['Price'])
-                    source = 'ProduceIQ'
-
-                    # Create a date string for the season determination (YYYY-MM-DD)
-                    report_date = datetime.strptime(f'{year}-{day}', '%Y-%j').strftime('%Y-%m-%d')
-
-                    # Determine season using the existing function
-                    season = determine_season(report_date)
-
+                    source = 'Historical'  # Assuming source is always historical
+                    season = determine_season(f'{year}-{day}')  # Add season logic
+                    
                     # Insert the data into the PriceData table
                     new_price_data = PriceData(
                         city_name=city_name,
@@ -962,7 +963,6 @@ def upload_historical():
             return redirect(url_for('upload_historical'))
 
     return render_template('upload_historical.html')
-
 
 
 # Run the app
