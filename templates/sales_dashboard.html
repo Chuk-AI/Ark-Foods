@@ -143,7 +143,7 @@
         <div class="form-row">
           <div class="form-group col-md-4">
             <label for="commodity">Commodity</label>
-            <select id="historical-commodity" class="form-control">
+            <select id="historical-commodity" class="form-control" multiple>
               <option value="Anaheim">Anaheim</option>
               <option value="Cubanelles">Cubanelles</option>
               <option value="Fresno">Fresno</option>
@@ -168,35 +168,30 @@
         <div class="form-group">
           <label for="source">Source</label>
           <select id="historical-source" class="form-control">
-            <option value="Historical" selected>Historical</option>
             <option value="USDA">USDA</option>
             <option value="Produce IQ">Produce IQ</option>
           </select>
         </div>
         <div class="form-group">
           <label for="city">City</label>
-          <select id="historical-city" class="form-control">
-            <option value="baltimore">Baltimore</option>
-            <option value="boston">Boston</option>
-            <option value="chicago">Chicago</option>
-            <option value="columbia">Columbia</option>
-            <option value="miami">Miami</option>
-            <option value="new york">New York</option>
-            <option value="philadelphia">Philadelphia</option>
-            <option value="los angeles">Los Angeles</option>
+          <select id="historical-city" class="form-control" multiple>
+            <option value="BLATIMORE">Baltimore</option>
+            <option value="BOSTON">Boston</option>
+            <option value="CHICAGO">Chicago</option>
+            <option value="COLUMBIA">Columbia</option>
+            <option value="MIAMI">Miami</option>
+            <option value="NEW YORK">New York</option>
+            <option value="PHILADELPHIA">Philadelphia</option>
+            <option value="LOS ANGELES">Los Angeles</option>
           </select>
         </div>
       </form>
       <button class="btn btn-primary" onclick="fetchHistoricalData()">Update</button>
-      <table class="table mt-3" id="historical-data-table">
-        <thead>
-          <tr>
-            <th>City</th>
-            <th>Average Price</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
+<!-- Add a Canvas for the Chart -->
+<canvas id="historicalChart" width="400" height="400"></canvas>
+<!-- Add a Download Button -->
+<button class="btn btn-primary" onclick="downloadChart()">Download Chart & Data</button>
+
     </div>
   </div>
 
@@ -204,6 +199,8 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.16.9/xlsx.full.min.js"></script>
+
 
   <script>
 
@@ -474,35 +471,132 @@ function updateMap(commodity) {
       updateMap(selectedCommodity);
     });
     function fetchHistoricalData() {
-      var commodity = $('#historical-commodity').val();
+      var commodities = $('#historical-commodity').val(); // Get selected commodities (as an array)
+      var cities = $('#historical-city').val(); // Get selected cities (as an array)
       var start_date = $('#start_date').val();
       var end_date = $('#end_date').val();
       var source = $('#historical-source').val();
-      var city = $('#historical-city').val();
-
-      // Update the URL
-      var newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + 
-                   '?commodity=' + encodeURIComponent(commodity) + 
-                   '&start_date=' + encodeURIComponent(start_date) + 
-                   '&end_date=' + encodeURIComponent(end_date) +
-                   '&source=' + encodeURIComponent(source) +
-                   '&city=' + encodeURIComponent(city);
-      window.history.pushState({ path: newUrl }, '', newUrl);
-
+  
       $.ajax({
-          url: "/api/historical_data",
+          url: "/api/historical_data",  // Adjusted API to support multiple cities/commodities
           type: 'GET',
-          data: { commodity: commodity, start_date: start_date, end_date: end_date, source: source, city: city },
+          data: { 
+              commodities: commodities.join(','),  // Convert arrays to comma-separated strings
+              cities: cities.join(','), 
+              start_date: start_date, 
+              end_date: end_date, 
+              source: source 
+          },
           success: function(response) {
-              var tableBody = $('#historical-data-table tbody');
-              tableBody.empty();
-              response.historical_data.forEach(function(item) {
-                  tableBody.append('<tr><td>' + item.city_name + '</td><td>' + item.avg_price + '</td></tr>');
-              });
+              var chartData = formatDataForChart(response.historical_data); // Format data for Chart.js
+              updateHistoricalChart(chartData);  // Function to update the line chart
           }
       });
-    }
+  }
+  
+  // Format data for Chart.js (helper function)
+function formatDataForChart(historicalData) {
+  var dates = [];
+  var datasets = [];
 
+  historicalData.forEach(item => {
+      if (!dates.includes(item.date)) {
+          dates.push(item.date);
+      }
+
+      // Prepare datasets by city and commodity
+      var label = item.city_name + " - " + item.commodity;
+      var existingDataset = datasets.find(d => d.label === label);
+
+      if (existingDataset) {
+          existingDataset.data.push(item.price);
+      } else {
+          datasets.push({
+              label: label,
+              data: [item.price],
+              borderColor: 'rgba(75, 192, 192, 1)',
+              fill: false
+          });
+      }
+  });
+
+  return { dates: dates, datasets: datasets };
+}
+
+// Update the line chart
+function updateHistoricalChart(data) {
+  var ctx = document.getElementById('historicalChart').getContext('2d');
+  var chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+          labels: data.dates,  // X-axis labels (dates)
+          datasets: data.datasets  // Y-axis data (prices for each city/commodity)
+      },
+      options: {
+          scales: {
+              x: {
+                  title: { display: true, text: 'Date' }
+              },
+              y: {
+                  title: { display: true, text: 'Price' }
+              }
+          }
+      }
+  });
+}
+
+// Download chart as image and data as Excel
+function downloadChart() {
+  var chart = document.getElementById('historicalChart');
+  var chartImage = chart.toDataURL("image/png");
+  
+  // Download chart image
+  var a = document.createElement('a');
+  a.href = chartImage;
+  a.download = 'historical_chart.png';
+  a.click();
+
+  // Fetch and download data in Excel
+  fetchHistoricalDataForDownload();
+}
+
+function fetchHistoricalDataForDownload() {
+  var commodities = $('#historical-commodity').val();
+  var cities = $('#historical-city').val();
+  var start_date = $('#start_date').val();
+  var end_date = $('#end_date').val();
+  var source = $('#historical-source').val();
+
+  $.ajax({
+      url: "/api/historical_data", 
+      type: 'GET',
+      data: { 
+          commodities: commodities.join(','), 
+          cities: cities.join(','), 
+          start_date: start_date, 
+          end_date: end_date, 
+          source: source 
+      },
+      success: function(response) {
+          downloadDataAsExcel(response.historical_data);
+      }
+  });
+}
+
+// Convert historical data to Excel format
+function downloadDataAsExcel(historicalData) {
+  var data = historicalData.map(item => ({
+      Date: item.date,
+      City: item.city_name,
+      Commodity: item.commodity,
+      Price: item.price
+  }));
+
+  var wb = XLSX.utils.book_new();
+  var ws = XLSX.utils.json_to_sheet(data);
+  XLSX.utils.book_append_sheet(wb, ws, "Historical Data");
+  XLSX.writeFile(wb, 'historical_data.xlsx');
+}
 
     
     jQuery(document).ready(function() {

@@ -671,37 +671,82 @@ def api_most_recent_prices():
 
 #Historical Data (Visualization tab in Google Sheets)
 @app.route('/api/historical_data', methods=['GET'])
-@login_required
-def api_historical_data():
-    selected_commodity = request.args.get('commodity', 'Jalapeno')
-    selected_source = request.args.get('source', 'Historical')
-    start_date = request.args.get('start_date', '2018-01-01')
-    end_date = request.args.get('end_date', datetime.today().strftime('%Y-%m-%d'))
+def historical_data():
+    # Fetch the parameters from the frontend
+    commodities = request.args.get('commodities').split(',')
+    cities = request.args.get('cities').split(',')
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    source = request.args.get('source')
 
-    # Convert start and end dates to year and day of the year
-    start_year, start_day = datetime.strptime(start_date, '%Y-%m-%d').year, datetime.strptime(start_date, '%Y-%m-%d').timetuple().tm_yday
-    end_year, end_day = datetime.strptime(end_date, '%Y-%m-%d').year, datetime.strptime(end_date, '%Y-%m-%d').timetuple().tm_yday
+    # Query the PriceData table based on the filters
+    query = PriceData.query.filter(
+        PriceData.commodity.in_(commodities),
+        PriceData.city_name.in_(cities),
+        PriceData.source == source,
+        PriceData.date >= start_date,
+        PriceData.date <= end_date
+    ).order_by(PriceData.date.asc())
 
-    # Query historical data for all cities between the selected dates
-    historical_data = db.session.query(
-        PriceData.city_name,
-        db.func.avg(PriceData.price).label('avg_price')
-    ).filter(
-        PriceData.commodity == selected_commodity,
-        PriceData.source == selected_source,
-        PriceData.year.between(start_year, end_year),
-        PriceData.day.between(start_day, end_day)
-    ).group_by(PriceData.city_name).order_by(db.desc('avg_price')).all()
+    # Extract the data from the query
+    data = query.all()
 
-    # Format data for JSON response
-    historical_data_list = [{
-        'city_name': data.city_name,
-        'avg_price': round(data.avg_price, 2)
-    } for data in historical_data]
+    # Format the data to be returned as JSON for the frontend
+    historical_data = []
+    for entry in data:
+        historical_data.append({
+            'date': entry.date.strftime('%Y-%m-%d'),
+            'city_name': entry.city_name,
+            'commodity': entry.commodity,
+            'price': entry.price
+        })
 
-    return jsonify({
-        'historical_data': historical_data_list
-    })
+    return jsonify(historical_data=historical_data)
+
+
+@app.route('/api/download_historical_data', methods=['GET'])
+def download_historical_data():
+    # Fetch the parameters from the frontend
+    commodities = request.args.get('commodities').split(',')
+    cities = request.args.get('cities').split(',')
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    source = request.args.get('source')
+
+    # Query the PriceData table based on the filters
+    query = PriceData.query.filter(
+        PriceData.commodity.in_(commodities),
+        PriceData.city_name.in_(cities),
+        PriceData.source == source,
+        PriceData.date >= start_date,
+        PriceData.date <= end_date
+    ).order_by(PriceData.date.asc())
+
+    # Fetch the data
+    data = query.all()
+
+    # Create an Excel file in memory
+    output = io.BytesIO()
+    workbook = xlsxwriter.Workbook(output, {'in_memory': True})
+    worksheet = workbook.add_worksheet()
+
+    # Write the headers to the Excel file
+    headers = ['Date', 'City', 'Commodity', 'Price']
+    for col_num, header in enumerate(headers):
+        worksheet.write(0, col_num, header)
+
+    # Write the data rows to the Excel file
+    for row_num, entry in enumerate(data, start=1):
+        worksheet.write(row_num, 0, entry.date.strftime('%Y-%m-%d'))
+        worksheet.write(row_num, 1, entry.city_name)
+        worksheet.write(row_num, 2, entry.commodity)
+        worksheet.write(row_num, 3, entry.price)
+
+    workbook.close()
+    output.seek(0)
+
+    # Send the Excel file as a response
+    return send_file(output, attachment_filename='historical_data.xlsx', as_attachment=True)
 
 
 #Forecast Calculator
