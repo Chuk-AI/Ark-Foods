@@ -24,7 +24,7 @@ import requests
 import base64
 import csv
 from werkzeug.utils import secure_filename
-
+import json
 #Configuration for Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -761,8 +761,10 @@ def historical_data():
             print(f"Error converting date for {entry.city_name}, {entry.commodity}: {e}")
             continue
 
-    return jsonify(historical_data=historical_data)
+    # Log the historical data before returning
+    logging.info(f"Sending Historical Data: {json.dumps(historical_data, indent=2)}")
 
+    return jsonify(historical_data=historical_data)
 
 @app.route('/api/download_historical_data', methods=['GET'])
 def download_historical_data():
