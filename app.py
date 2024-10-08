@@ -315,7 +315,7 @@ def fetch_daily_data():
         headers = {'Api-Subscription-Key': '5aa11f87fed04300b05addd031c56ffa'}
 
         # Define the 10 specific commodities to filter by
-        wanted_commodities = ['Anaheim', 'Cubanelle', 'Fresno', 'Habanero', 'Hungarian Wax', 
+        wanted_commodities = ['Anaheim', 'Cubanelles', 'Fresno', 'Habanero', 'Hungarian Wax', 
                               'Jalapeno', 'Long Hot', 'Poblano', 'Serrano', 'Shishito']
 
         # Get the last fetched date
