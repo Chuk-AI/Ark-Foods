@@ -937,65 +937,76 @@ def trigger_usda_fetch():
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-@app.route('/upload_historical', methods=['GET', 'POST'])
+# Route for uploading historical data automatically on route trigger
+@app.route('/upload_historical', methods=['GET'])
 def upload_historical():
-    if request.method == 'POST':
-        logging.info("Started processing the uploaded historical data.")
-        
-        # Get all CSV files from the 'data' directory
+    try:
+        # Log when the upload process starts
+        logging.info("Starting upload of historical data from 'data/' directory")
+
+        # Loop through all CSV files in the 'data/' directory
         for csv_file in os.listdir(CSV_DIRECTORY):
-            logging.info(f"Found file: {csv_file}")
-            
             # Ensure we're only processing CSV files
             if csv_file.endswith('.csv'):
                 commodity = os.path.splitext(csv_file)[0]  # Commodity name is the filename without extension
                 file_path = os.path.join(CSV_DIRECTORY, csv_file)
                 
-                logging.info(f"Processing file: {file_path} for commodity: {commodity}")
-                
-                try:
-                    # Open the CSV file and insert data into the PriceData table
-                    with open(file_path, newline='', encoding='utf-8') as csvfile:
-                        reader = csv.DictReader(csvfile)
-                        
-                        for row in reader:
-                            city_name = row['CityName']
-                            year = int(row['Year'])
-                            day = int(row['Day'])
-                            price = float(row['Price'])
-                            source = 'ProduceIQ'
-                            season = determine_season(f'{year}-{day}')  # Add season logic based on year and day
+                logging.info(f"Processing file: {csv_file}")
 
-                            # Insert the data into the PriceData table
-                            new_price_data = PriceData(
-                                city_name=city_name,
-                                commodity=commodity,
-                                year=year,
-                                day=day,
-                                price=price,
-                                source=source,
-                                season=season
-                            )
+                # Open the CSV file and insert data into the PriceData table
+                with open(file_path, newline='', encoding='utf-8') as csvfile:
+                    reader = csv.DictReader(csvfile)
+                    
+                    for row in reader:
+                        city_name = row['CityName']
+                        year = int(row['Year'])
+                        day = int(row['Day'])
+                        price_str = row['Price']
 
-                            db.session.add(new_price_data)
-                            logging.info(f"Added data for {city_name}, {commodity}: Year={year}, Day={day}, Price={price}")
+                        # Check if the price is empty or not a valid float
+                        if price_str.strip() == '':
+                            logging.warning(f"Skipping row with empty price for {city_name} on day {day} in year {year}")
+                            continue
 
-                        # Commit after processing each file
-                        db.session.commit()
-                        logging.info(f"Successfully committed data for commodity: {commodity}")
+                        try:
+                            price = float(price_str)
+                        except ValueError:
+                            logging.error(f"Invalid price value: {price_str} for {city_name} on day {day} in year {year}")
+                            continue
 
-                        flash(f'Data for {commodity} uploaded successfully', 'success')
-                
-                except Exception as e:
-                    logging.error(f"Error processing file {csv_file}: {str(e)}")
-                    flash(f'Error processing file {csv_file}: {str(e)}', 'danger')
-                    continue
+                        source = 'ProduceIQ'
 
-        # Redirect back to the same page
-        logging.info("Finished processing all files.")
-        return redirect(url_for('upload_historical'))
+                        # Correct the season logic using proper year-day conversion
+                        try:
+                            report_date = datetime.strptime(f"{year}-{day}", "%Y-%j")  # %Y-%j converts year and day of year
+                            season = determine_season(report_date.strftime('%m/%d/%Y'))  # Convert date to month/day/year format
+                        except Exception as e:
+                            logging.error(f"Error converting year-day to date for {year}-{day}: {str(e)}")
+                            continue
 
-    return render_template('upload_historical.html')
+                        # Insert the data into the PriceData table
+                        new_price_data = PriceData(
+                            city_name=city_name,
+                            commodity=commodity,
+                            year=year,
+                            day=day,
+                            price=price,
+                            source=source,
+                            season=season
+                        )
+                        db.session.add(new_price_data)
+
+                    # Commit after processing each file
+                    db.session.commit()
+                    logging.info(f"Data for {commodity} uploaded successfully from {csv_file}")
+
+        logging.info("Historical data upload process completed")
+        return "Historical data upload process completed", 200
+
+    except Exception as e:
+        logging.error(f"Error during upload: {str(e)}")
+        return f"Error during upload: {str(e)}", 500
+
 
 # Run the app
 if __name__ == '__main__':
