@@ -740,9 +740,13 @@ def historical_data():
             PriceData.source == source,
             PriceData.source == 'Historical'
         ),
-        ((PriceData.year == start_year) & (PriceData.day >= start_day)) | 
-        ((PriceData.year == end_year) & (PriceData.day <= end_day))
+        (
+            (PriceData.year == start_year) & (PriceData.day >= start_day) |  # Handle the start year
+            (PriceData.year == end_year) & (PriceData.day <= end_day) |      # Handle the end year
+            (PriceData.year > start_year) & (PriceData.year < end_year)      # Handle years in between
+        )
     ).order_by(PriceData.year.asc(), PriceData.day.asc())
+
 
     # Extract the data from the query
     data = query.all()
