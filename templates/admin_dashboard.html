@@ -3,16 +3,18 @@
 {% block title %}Admin Dashboard{% endblock %}
 
 {% block content %}
-  <h1 class="mt-4">Admin Dashboard</h1>
-  <p>Welcome, {{ current_user.username }}! Admin Dashboard.</p>
 
+<!-- Add the Approve Users button -->
+<div class="mt-3 mb-3">
+  <a href="{{ url_for('approve_users') }}" class="btn btn-primary">Approve Users</a>
+</div>
+<h1 class="mt-4">Admin Dashboard</h1>
+
+<p>Welcome, {{ current_user.username }}! You have Admin privileges.</p>
   <!-- Tabs Navigation -->
   <ul class="nav nav-tabs" id="myTab" role="tablist">
     <li class="nav-item" role="presentation">
       <a class="nav-link active" id="yield-calculator-tab" data-toggle="tab" href="#yield-calculator" role="tab" aria-controls="yield-calculator" aria-selected="true">Yield Calculator</a>
-    </li>
-    <li class="nav-item" role="presentation">
-      <a class="nav-link" id="approve-users-tab" data-toggle="tab" href="#approve-users" role="tab" aria-controls="approve-users" aria-selected="false">Approve Users</a>
     </li>
   </ul>
 
@@ -81,7 +83,7 @@
         </div>
       </div>
 
-      <!-- Analytics Section (Part of Yield Calculator Tab) -->
+      <!-- Analytics Section -->
       <hr>
       <div class="row">
         <div class="col-md-12">
@@ -90,51 +92,21 @@
         </div>
       </div>
     </div>
-
-    <!-- Approve Users Tab -->
-    <div class="tab-pane fade" id="approve-users" role="tabpanel" aria-labelledby="approve-users-tab">
-      <h2 class="mt-4">Approve Users</h2>
-      <table class="table">
-        <thead>
-          <tr>
-            <th>Username</th>
-            <th>Email</th>
-            <th>Role</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for user in users %}
-          <tr>
-            <td>{{ user.username }}</td>
-            <td>{{ user.email }}</td>
-            <td>{{ user.role }}</td>
-            <td>
-              <form action="{{ url_for('approve_user', user_id=user.id) }}" method="POST">
-                <button type="submit" class="btn btn-success">Approve</button>
-              </form>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
   </div>
 
   <!-- Include Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
-
+  
   <script>
     let seasonPriceChart;  // Define globally to allow chart updates
     const varietySelect = document.getElementById("variety");
     const citySelect = document.getElementById("city");
-
+  
     // Event listeners to automatically update chart when city or variety changes
     varietySelect.addEventListener('change', updateChart);
     citySelect.addEventListener('change', updateChart);
-
+  
     function updateChart() {
       const variety = varietySelect.value;
       const city = citySelect.value;
@@ -143,7 +115,7 @@
         alert("Please select both variety and city!");
         return;
       }
-
+    
       fetch(`/api/seasonal_prices?variety=${variety}&city=${city}`)
         .then(response => {
           if (!response.ok) {
@@ -156,7 +128,7 @@
           if (seasonPriceChart) {
             seasonPriceChart.destroy();
           }
-
+    
           const ctx = document.getElementById('seasonPriceChart').getContext('2d');
           seasonPriceChart = new Chart(ctx, {
             type: 'bar',
@@ -207,27 +179,27 @@
         })
         .catch(error => console.error('There was a problem with the fetch operation:', error));
     }
-
+    
     // Initial chart update on page load
     updateChart();
-
+  
     // Form submission handler for the calculator (uses start date)
     document.querySelector('form').addEventListener('submit', function (event) {
       event.preventDefault();  // Prevent form from submitting the traditional way
-
+  
       // Get form field values
       const variety = document.getElementById("variety").value;
       const city = document.getElementById("city").value;
       const startDate = document.getElementById("start_date").value;
       const forecastDate = document.getElementById("forecast_date").value;
       const yieldPerAcre = document.getElementById("yield_per_acre").value;
-
+  
       // Validate that all fields are filled in
       if (!startDate || !forecastDate || !yieldPerAcre) {
           alert("Please fill in all required fields!");
           return;
       }
-
+  
       // Prepare the form data to send via POST request
       const formData = new FormData();
       formData.append('variety', variety);
@@ -235,7 +207,7 @@
       formData.append('start_date', startDate);
       formData.append('forecast_date', forecastDate);
       formData.append('yield_per_acre', yieldPerAcre);
-
+  
       // Send the form data to the backend using fetch
       fetch('/api/calculate_forecast', {
           method: 'POST',
@@ -253,7 +225,7 @@
           if (noForecastMessage) {
               noForecastMessage.style.display = 'none';
           }
-
+  
           // Ensure the forecast container exists and update the results dynamically
           let forecastContainer = document.getElementById('forecast-results-container');
           forecastContainer.innerHTML = `
@@ -273,4 +245,5 @@
   });
   
   </script>
+  
 {% endblock %}
