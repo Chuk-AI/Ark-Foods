@@ -714,7 +714,6 @@ def api_most_recent_prices():
     return jsonify({"prices": recent_prices})
 
 
-#Historical Data (Visualization tab in Google Sheets)
 @app.route('/api/historical_data', methods=['GET'])
 def historical_data():
     # Fetch the parameters from the frontend
@@ -729,7 +728,10 @@ def historical_data():
     start_day = datetime.strptime(start_date, '%Y-%m-%d').timetuple().tm_yday
     end_year = datetime.strptime(end_date, '%Y-%m-%d').year
     end_day = datetime.strptime(end_date, '%Y-%m-%d').timetuple().tm_yday
-
+    print("start day:",start_day)
+    print("start year:",start_year)
+    print("end day:",end_day)
+    print("end year:",end_year)
     # Query the PriceData table based on the filters
     query = PriceData.query.filter(
         PriceData.commodity.in_(commodities),
@@ -765,6 +767,7 @@ def historical_data():
     logging.info(f"Sending Historical Data: {json.dumps(historical_data, indent=2)}")
 
     return jsonify(historical_data=historical_data)
+
 
 @app.route('/api/download_historical_data', methods=['GET'])
 def download_historical_data():
