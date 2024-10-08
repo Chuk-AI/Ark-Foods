@@ -736,14 +736,11 @@ def historical_data():
     query = PriceData.query.filter(
         PriceData.commodity.in_(commodities),
         PriceData.city_name.in_(cities),
+        PriceData.source == source,  # Ensure this captures ProduceIQ correctly
         or_(
-            PriceData.source == source,
-            PriceData.source == 'Historical'
-        ),
-        (
-            (PriceData.year == start_year) & (PriceData.day >= start_day) |  # Handle the start year
-            (PriceData.year == end_year) & (PriceData.day <= end_day) |      # Handle the end year
-            (PriceData.year > start_year) & (PriceData.year < end_year)      # Handle years in between
+            (PriceData.year == start_year) & (PriceData.day >= start_day),  # Handle start year and start day
+            (PriceData.year == end_year) & (PriceData.day <= end_day),      # Handle end year and end day
+            (PriceData.year > start_year) & (PriceData.year < end_year)     # Handle years in between
         )
     ).order_by(PriceData.year.asc(), PriceData.day.asc())
 
@@ -940,16 +937,21 @@ def trigger_usda_fetch():
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# Route for uploading historical data
 @app.route('/upload_historical', methods=['GET', 'POST'])
 def upload_historical():
     if request.method == 'POST':
+        logging.info("Started processing the uploaded historical data.")
+        
         # Get all CSV files from the 'data' directory
         for csv_file in os.listdir(CSV_DIRECTORY):
+            logging.info(f"Found file: {csv_file}")
+            
             # Ensure we're only processing CSV files
             if csv_file.endswith('.csv'):
                 commodity = os.path.splitext(csv_file)[0]  # Commodity name is the filename without extension
                 file_path = os.path.join(CSV_DIRECTORY, csv_file)
+                
+                logging.info(f"Processing file: {file_path} for commodity: {commodity}")
                 
                 try:
                     # Open the CSV file and insert data into the PriceData table
@@ -974,21 +976,26 @@ def upload_historical():
                                 source=source,
                                 season=season
                             )
+
                             db.session.add(new_price_data)
+                            logging.info(f"Added data for {city_name}, {commodity}: Year={year}, Day={day}, Price={price}")
 
                         # Commit after processing each file
                         db.session.commit()
+                        logging.info(f"Successfully committed data for commodity: {commodity}")
+
                         flash(f'Data for {commodity} uploaded successfully', 'success')
                 
                 except Exception as e:
+                    logging.error(f"Error processing file {csv_file}: {str(e)}")
                     flash(f'Error processing file {csv_file}: {str(e)}', 'danger')
                     continue
 
         # Redirect back to the same page
+        logging.info("Finished processing all files.")
         return redirect(url_for('upload_historical'))
 
     return render_template('upload_historical.html')
-
 
 # Run the app
 if __name__ == '__main__':
