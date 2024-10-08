@@ -520,21 +520,14 @@ function interpolateMissingData(dates, prices) {
 }
 
 // Format data for Chart.js (helper function)
+// Format data for Chart.js (helper function)
 function formatDataForChart(historicalData) {
   var dates = [];
   var datasets = [];
 
   historicalData.forEach(item => {
-      // Convert the year-day format into a proper date string
-      const actualDate = convertYearDayToDate(parseInt(item.year), parseInt(item.day));
-
-      // If actualDate is invalid (null), skip this item
-      if (!actualDate) {
-          console.warn("Skipping invalid date for item: ", item);
-          return; // Skip invalid dates
-      }
-
-      const formattedDate = actualDate.toISOString().split('T')[0]; // Convert to YYYY-MM-DD format
+      // Now the date is already in YYYY-MM-DD format from the backend
+      const formattedDate = item.date;
 
       // Collect unique dates
       if (!dates.includes(formattedDate)) {
@@ -586,7 +579,7 @@ function updateHistoricalChart(data) {
   historicalChart = new Chart(ctx, {
       type: 'line',
       data: {
-          labels: data.dates,  // X-axis labels (dates)
+          labels: data.dates,  // X-axis labels (now proper dates)
           datasets: data.datasets  // Y-axis data (prices for each city/commodity)
       },
       options: {

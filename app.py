@@ -745,15 +745,21 @@ def historical_data():
     # Extract the data from the query
     data = query.all()
 
-    # Format the data to be returned as JSON for the frontend
+    # Convert year-day to proper date format
     historical_data = []
     for entry in data:
-        historical_data.append({
-            'date': f"{entry.year}-{entry.day}",
-            'city_name': entry.city_name,
-            'commodity': entry.commodity,
-            'price': entry.price
-        })
+        try:
+            # Convert year-day to date using '%Y-%j'
+            actual_date = datetime.strptime(f"{entry.year}-{entry.day}", '%Y-%j').strftime('%Y-%m-%d')
+            historical_data.append({
+                'date': actual_date,  # Now it's a proper date (YYYY-MM-DD)
+                'city_name': entry.city_name,
+                'commodity': entry.commodity,
+                'price': entry.price
+            })
+        except Exception as e:
+            print(f"Error converting date for {entry.city_name}, {entry.commodity}: {e}")
+            continue
 
     return jsonify(historical_data=historical_data)
 
