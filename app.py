@@ -104,6 +104,12 @@ INTERESTED_COMMODITIES = [
     'Long Hot', 'Shishito', 'Anaheim', 'Cubanelles',
     'Poblano', 'Serrano'
 ]
+
+INTERESTED_COMMODITIES_USDA = [
+    'Fresno', 'Habanero', 'Hungarian Wax', 'Jalapeno',
+    'Long Hot', 'Shishito', 'Anaheim', 'Cubanelle',
+    'Poblano', 'Serrano'
+]
 # Function to fetch daily USDA data
 def get_last_fetched_usda_date():
     # Step 1: Find the maximum year
@@ -186,7 +192,7 @@ def process_usda_data(data):
             commodity_name = commodity_name.replace('Peppers, ', '').strip()
 
         # Filter out only the commodities of interest
-        if commodity_name in INTERESTED_COMMODITIES:
+        if commodity_name in INTERESTED_COMMODITIES_USDA:
             report_date = report.get('report_date', '')
             year = datetime.strptime(report_date, '%m/%d/%Y').year if report_date else ''
             day_of_year = datetime.strptime(report_date, '%m/%d/%Y').timetuple().tm_yday if report_date else ''
