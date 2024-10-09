@@ -130,7 +130,7 @@ def get_last_fetched_usda_date():
         logging.warning("No valid USDA or Historical data found. Using fallback date 2020-01-01.")
 
     # If no valid date was found, return a default fallback date
-    last_fetched_date = pd.Timestamp('2020-01-01')
+    last_fetched_date = pd.Timestamp('2018-01-01')
     logging.info(f"Final fetched USDA date: {last_fetched_date}")
     return last_fetched_date
 
@@ -304,7 +304,7 @@ def get_last_fetched_date():
         logging.warning("No valid ProduceIQ or Historical data found. Using fallback date 2020-01-01.")
 
     # If no valid date was found, return a default fallback date
-    last_fetched_date = pd.Timestamp('2020-01-01')
+    last_fetched_date = pd.Timestamp('2018-01-01')
     logging.info(f"Final fetched ProduceIQ date: {last_fetched_date}")
     return last_fetched_date
 
