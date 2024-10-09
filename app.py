@@ -424,7 +424,7 @@ def schedule_jobs():
     # Schedule USDA job to run every 2 hours but 5 minutes after ProduceIQ job
     scheduler.add_job(
         func=fetch_usda_daily_data, 
-        trigger=IntervalTrigger(minutes=10, start_date='2024-10-03 00:05:00', timezone=la_timezone),  # Runs every 2 hours but starts 5 minutes after, LA time
+        trigger=IntervalTrigger(minutes=30, start_date='2024-10-03 00:05:00', timezone=la_timezone),  # Runs every 2 hours but starts 5 minutes after, LA time
         id="usda_job"
     )
 
