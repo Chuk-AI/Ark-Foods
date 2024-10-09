@@ -609,6 +609,11 @@ def api_best_sell_market():
     # Debugging Logs
     print(f"Received Request - Commodity: {selected_commodity}, Source: {selected_source}, Last 7 Days Filter: {last7Days}")
 
+    # Handle special case: If the commodity is "Cubanelles" and the source is "USDA", search for "Cubanelle"
+    if selected_commodity == "Cubanelles" and selected_source == "USDA":
+        print("Adjusting commodity name from 'Cubanelles' to 'Cubanelle' for USDA data")
+        selected_commodity = "Cubanelle"
+
     # Define the static cities
     cities = ['Baltimore', 'Boston', 'Chicago', 'Columbia', 'Miami', 'New York', 'Philadelphia', 'Los Angeles']
 
@@ -690,6 +695,9 @@ def api_most_recent_prices():
     cities = ['Baltimore', 'Boston', 'Chicago', 'Columbia', 'Miami', 'New York', 'Philadelphia', 'Los Angeles']
     commodities = ['Anaheim', 'Cubanelles', 'Fresno', 'Habanero', 'Hungarian Wax', 'Jalapeno', 'Long Hot', 'Poblano', 'Serrano', 'Shishito']
 
+    # Get source from request, default to 'USDA'
+    selected_source = request.args.get('source', 'USDA')
+
     # Calculate the date 7 days ago
     seven_days_ago = datetime.now(timezone('US/Pacific')) - timedelta(days=7)
 
@@ -697,13 +705,20 @@ def api_most_recent_prices():
 
     # Fetch the most recent maximum prices for each commodity and city within the last 7 days
     for commodity in commodities:
+        # Handle special case: If the commodity is "Cubanelles" and the source is "USDA", search for "Cubanelle"
+        if commodity == "Cubanelles" and selected_source == "USDA":
+            print("Adjusting commodity name from 'Cubanelles' to 'Cubanelle' for USDA data")
+            commodity_to_query = "Cubanelle"
+        else:
+            commodity_to_query = commodity
+
         for city in cities:
             price_entry = db.session.query(
                 func.max(PriceData.price).label('max_price'),
                 PriceData.year,
                 PriceData.day
             ).filter(
-                PriceData.commodity == commodity,
+                PriceData.commodity == commodity_to_query,  # Use the adjusted commodity name
                 func.upper(PriceData.city_name) == city.upper(),
                 PriceData.year >= seven_days_ago.year,
                 PriceData.day >= seven_days_ago.timetuple().tm_yday
@@ -729,15 +744,22 @@ def historical_data():
     end_date = request.args.get('end_date')
     source = request.args.get('source')
 
+    # Handle special case: If the commodity is "Cubanelles" and the source is "USDA", search for "Cubanelle"
+    commodities = [
+        "Cubanelle" if commodity == "Cubanelles" and source == "USDA" else commodity
+        for commodity in commodities
+    ]
+
     # Convert start_date and end_date into year and day of the year
     start_year = datetime.strptime(start_date, '%Y-%m-%d').year
     start_day = datetime.strptime(start_date, '%Y-%m-%d').timetuple().tm_yday
     end_year = datetime.strptime(end_date, '%Y-%m-%d').year
     end_day = datetime.strptime(end_date, '%Y-%m-%d').timetuple().tm_yday
-    print("start day:",start_day)
-    print("start year:",start_year)
-    print("end day:",end_day)
-    print("end year:",end_year)
+    print("start day:", start_day)
+    print("start year:", start_year)
+    print("end day:", end_day)
+    print("end year:", end_year)
+
     # Query the PriceData table based on the filters
     query = PriceData.query.filter(
         PriceData.commodity.in_(commodities),
@@ -749,7 +771,6 @@ def historical_data():
             (PriceData.year > start_year) & (PriceData.year < end_year)     # Handle years in between
         )
     ).order_by(PriceData.year.asc(), PriceData.day.asc())
-
 
     # Extract the data from the query
     data = query.all()
