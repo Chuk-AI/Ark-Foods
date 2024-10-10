@@ -129,7 +129,7 @@
 
   <!-- Map Container -->
   <div class="col-md-6">
-    <div id="commodityMap" style="height: 500px;"></div>
+    <div id="commodityMap" style="height: 500px; width:100%;"></div>
   </div>
 </div>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
@@ -395,6 +395,12 @@ function fetchMostRecentPrices() {
     }
   });
 }
+// Ensure the map is re-rendered properly when the tab is clicked
+$('#most-recent-prices-tab').on('shown.bs.tab', function () {
+  setTimeout(function () {
+      map.invalidateSize();  // This ensures the map recalculates its size
+  }, 100);  // Small delay to allow rendering
+});
 
     var $ = jQuery.noConflict();
 
@@ -451,13 +457,15 @@ function updateMap(commodity) {
           if (cityLatLng[city]) {
             var markerIcon = city === highestCity ? greenIcon : defaultIcon; // Use green icon for the highest price city
             var marker = L.marker(cityLatLng[city], { icon: markerIcon }).addTo(map);
-            marker.bindPopup(`<b>${city}</b><br>Max Price: $${price}`).openPopup();
+
+            marker.bindPopup(`<b>${city}</b><br>Max Price: $${price}`).on('click', function () {
+              map.setView(cityLatLng[city], map.getZoom(), { animate: true });  // Set map view to center on the marker clicked
+            });
           }
         }
-      } else {
-        console.log(`No price data available for commodity: ${commodity}`);
       }
-    },
+    },  // <-- Missing comma added here to separate success and error blocks
+
     error: function(xhr, status, error) {
       console.log('AJAX error:', error); // Log any AJAX errors
     }
@@ -470,6 +478,11 @@ function updateMap(commodity) {
       var selectedCommodity = $(this).val();
       updateMap(selectedCommodity);
     });
+    // Trigger map render when the tab becomes active
+$('#most-recent-prices-tab').on('shown.bs.tab', function () {
+  map.invalidateSize();
+  updateMap($('#commodityFilter').val());
+});
     function fetchHistoricalData() {
       var commodities = $('#historical-commodity').val(); // Get selected commodities (as an array)
       var cities = $('#historical-city').val(); // Get selected cities (as an array)
@@ -519,7 +532,6 @@ function interpolateMissingData(dates, prices) {
   return interpolatedPrices;
 }
 
-// Format data for Chart.js (helper function)
 // Format data for Chart.js (helper function)
 function formatDataForChart(historicalData) {
   var dates = [];
