@@ -610,32 +610,9 @@ def fetch_daily_data():
         )
 
 
-# token retrieval function
-def get_ibm_access_token(tenant_id, api_key, org_id):
-    url = f"https://api.ibm.com/saascore/run/authentication-retrieve/api-key?orgId={org_id}"
-
-    headers = {"X-IBM-Client-Id": f"saascore-{tenant_id}", "X-Api-Key": api_key}
-
-    try:
-        response = requests.get(url, headers=headers)
-
-        if response.status_code == 200:
-            token = response.json().get("accessToken")
-            logging.info(f"Successfully retrieved access token: {token}")
-            return token
-        else:
-            logging.error(
-                f"Failed to retrieve access token. Status Code: {response.status_code}, Response: {response.text}"
-            )
-            return None
-    except Exception as e:
-        logging.error(f"Error occurred while fetching access token: {e}")
-        return None
-
-
-# Function to fetch ensemble data with access token
+# Function to fetch ensemble data
 def fetch_ensemble_data(
-    lat, lon, valid_dates_horizons, variable, token, iso_8601="%Y-%m-%dT%H:%M:%SZ"
+    lat, lon, valid_dates_horizons, variable, ibm_client, iso_8601="%Y-%m-%dT%H:%M:%SZ"
 ):
     # Define the layers for the different variables
     layers_TWC = {"PRECIP": 50686, "TMIN": 50683, "TMAX": 50684, "TAVG": 50685}
@@ -680,21 +657,13 @@ def fetch_ensemble_data(
         "outputType": "json",
     }
 
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "User-Agent": "Mozilla/5.0",
-        "Accept": "application/json",
-    }
-
     try:
         # Send the batch request to the API
-        response = requests.post(
-            "https://api.ibm.com/weather/query", json=query_json, headers=headers
-        )
-        df = response.json()["pointData"]
+        response = query.submit(query_json, ibm_client)
+        df = response.point_data_as_dataframe()
 
         # Process the dataframe returned from the API
-        for index, row in enumerate(df):
+        for index, row in df.iterrows():
             date = row["timestamp"]
             ens = int(
                 row["property"].split(";")[0].split(":")[1]
@@ -765,82 +734,95 @@ def apply_temperature_adjustment(values, adjustment):
 # Function to fetch weather forecast for a single location and store in the database
 def fetch_and_store_weather_forecast(lat, lon, valid_dates_horizons, city_name):
     try:
-        # Retrieve IBM API access token
-        token = get_ibm_access_token(EIS_TENANT_ID, EIS_API_KEY, EIS_ORG_ID)
-        if not token:
-            logging.error("Failed to retrieve IBM access token.")
-            return
+        # Adding a custom header to ensure the IBM API receives it properly
+        headers = {
+            "Authorization": f"Bearer {EIS_API_KEY}",
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "application/json",
+        }
 
-        iso_8601 = "%Y-%m-%dT%H:%M:%SZ"
-
-        # Step 1: Fetch Climatology Data and pass the token
-        try:
-            fetch_and_store_climatology_data(
-                lat, lon, city_name, valid_dates_horizons, token
-            )
-        except Exception as e:
-            logging.error(f"Error fetching climatology data for {city_name}: {e}")
-
-        # Step 2: Fetch Elevation Data for Temperature Adjustments
-        try:
-            twc_elevation, srtm_elevation = fetch_elevation_data(lat, lon, token)
-            temperature_adjustment = compute_temperature_adjustment(
-                twc_elevation, srtm_elevation
-            )
-        except Exception as e:
-            logging.error(f"Error fetching elevation data for {city_name}: {e}")
-            temperature_adjustment = 0.0  # Set default if error occurs
-
-        # Step 3: Fetch Weather Forecast Data (existing functionality)
-        variables = ["PRECIP", "TMIN", "TMAX", "TAVG"]
-        for variable in variables:
-            try:
-                results = fetch_ensemble_data(
-                    lat, lon, valid_dates_horizons, variable, token, iso_8601
-                )
-                if results and variable in results:
-                    for date, ensemble_data in zip(
-                        results[variable]["dates"], results[variable]["values"]
-                    ):
-                        if variable in ["TMAX", "TMIN", "TAVG"]:
-                            ensemble_data = apply_temperature_adjustment(
-                                ensemble_data, temperature_adjustment
-                            )
-
-                        for ens, value in enumerate(ensemble_data):
-                            forecast_date = datetime.utcfromtimestamp(
-                                date / 1000
-                            ).date()
-
-                            # Store Weather Forecast Data in DB
-                            weather_forecast = WeatherForecast(
-                                city_name=city_name,
-                                latitude=lat,
-                                longitude=lon,
-                                forecast_date=forecast_date,
-                                variable=variable,
-                                forecasted_value=value,
-                                ensemble_member=ens + 1,
-                                source="IBM",
-                            )
-                            db.session.add(weather_forecast)
-
-                    db.session.commit()
-                    logging.info(f"Weather data for {variable} saved for {city_name}.")
-                else:
-                    logging.warning(f"No data found for {variable} for {city_name}.")
-            except Exception as e:
-                logging.error(
-                    f"Error fetching weather data for {variable} in {city_name}: {e}"
-                )
-
+        # Ensure the API key and tenant ID are correctly passed
         logging.info(
-            f"Completed fetching weather and climatology data for {city_name} (lat: {lat}, lon: {lon})"
+            f"Initializing IBM client with API Key: {EIS_API_KEY}, Tenant ID: {EIS_TENANT_ID}"
         )
+
+        # Initialize IBM client with custom headers (adjust if needed for the IBM library you are using)
+        ibm_client = client.get_client(
+            api_key=EIS_API_KEY,
+            tenant_id=EIS_TENANT_ID,
+            org_id=EIS_ORG_ID,
+            legacy=False,
+        )
+        logging.info(f"IBM client successfully initialized.")
 
     except Exception as e:
         logging.error(f"Error initializing IBM client: {e}")
         return  # Exit if the client initialization fails
+
+    iso_8601 = "%Y-%m-%dT%H:%M:%SZ"
+
+    # Step 1: Fetch Climatology Data and pass ibm_client
+    try:
+        fetch_and_store_climatology_data(
+            lat, lon, city_name, valid_dates_horizons, ibm_client
+        )
+    except Exception as e:
+        logging.error(f"Error fetching climatology data for {city_name}: {e}")
+
+    # Step 2: Fetch Elevation Data for Temperature Adjustments
+    try:
+        twc_elevation, srtm_elevation = fetch_elevation_data(lat, lon, ibm_client)
+        temperature_adjustment = compute_temperature_adjustment(
+            twc_elevation, srtm_elevation
+        )
+    except Exception as e:
+        logging.error(f"Error fetching elevation data for {city_name}: {e}")
+        temperature_adjustment = 0.0  # Set default if error occurs
+
+    # Step 3: Fetch Weather Forecast Data (existing functionality)
+    variables = ["PRECIP", "TMIN", "TMAX", "TAVG"]
+    for variable in variables:
+        try:
+            results = fetch_ensemble_data(
+                lat, lon, valid_dates_horizons, variable, ibm_client, iso_8601
+            )
+            if results and variable in results:
+                for date, ensemble_data in zip(
+                    results[variable]["dates"], results[variable]["values"]
+                ):
+                    if variable in ["TMAX", "TMIN", "TAVG"]:
+                        ensemble_data = apply_temperature_adjustment(
+                            ensemble_data, temperature_adjustment
+                        )
+
+                    for ens, value in enumerate(ensemble_data):
+                        forecast_date = datetime.utcfromtimestamp(date / 1000).date()
+
+                        # Store Weather Forecast Data in DB
+                        weather_forecast = WeatherForecast(
+                            city_name=city_name,
+                            latitude=lat,
+                            longitude=lon,
+                            forecast_date=forecast_date,
+                            variable=variable,
+                            forecasted_value=value,
+                            ensemble_member=ens + 1,
+                            source="IBM",
+                        )
+                        db.session.add(weather_forecast)
+
+                db.session.commit()
+                logging.info(f"Weather data for {variable} saved for {city_name}.")
+            else:
+                logging.warning(f"No data found for {variable} for {city_name}.")
+        except Exception as e:
+            logging.error(
+                f"Error fetching weather data for {variable} in {city_name}: {e}"
+            )
+
+    logging.info(
+        f"Completed fetching weather and climatology data for {city_name} (lat: {lat}, lon: {lon})"
+    )
 
 
 # Function to fetch and store weather forecasts for multiple locations
