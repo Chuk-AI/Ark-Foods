@@ -867,7 +867,7 @@ async def fetch_and_store_climatology_data(
             }
 
             # Using ibmpairs query client
-            df = ibm_client.query.submit(query_json).point_data_as_dataframe()
+            df = query.submit(query_json).point_data_as_dataframe()
 
             if not df.empty:
                 climo_dates_variable = df["timestamp"].tolist()
