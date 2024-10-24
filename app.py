@@ -751,7 +751,6 @@ def fetch_and_store_weather_forecast(lat, lon, valid_dates_horizons, city_name):
             api_key=EIS_API_KEY,
             tenant_id=EIS_TENANT_ID,
             org_id=EIS_ORG_ID,
-            headers=headers,  # Adding headers for API request
             legacy=False,
         )
         logging.info(f"IBM client successfully initialized.")
