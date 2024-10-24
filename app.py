@@ -611,6 +611,26 @@ def fetch_daily_data():
         )
 
 
+# function for ibm auth
+async def initialize_ibm_client():
+    try:
+        # Create a client object with the given API key, tenant ID, and org ID
+        eis_client = client.get_client(
+            api_key=EIS_API_KEY,
+            tenant_id=EIS_TENANT_ID,
+            org_id=EIS_ORG_ID,
+            legacy=False,
+        )
+        if eis_client.token:
+            print(f"IBM EIS token fetched successfully at {datetime.utcnow()}")
+        else:
+            print("Failed to fetch IBM EIS token.")
+        return eis_client
+    except Exception as e:
+        print(f"Error initializing IBM EIS client: {e}")
+        return None
+
+
 # Function to fetch ensemble data asynchronously
 async def fetch_ensemble_data(
     lat, lon, valid_dates_horizons, variable, ibm_client, iso_8601="%Y-%m-%dT%H:%M:%SZ"
@@ -656,7 +676,7 @@ async def fetch_ensemble_data(
     try:
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                f"https://api.ibm.com/geospatial/run/na/core/v3/query",
+                "https://api.ibm.com/geospatial/run/na/core/v3/query",
                 json=query_json,
                 headers={
                     "Authorization": f"Bearer {ibm_client.token}",
@@ -690,7 +710,7 @@ async def fetch_ensemble_data(
     return results
 
 
-# Helper function to fetch elevation data for a location
+# Helper function to fetch elevation data for a location (async)
 async def fetch_elevation_data(lat, lon, ibm_client):
     layers_ELEVATION = {"twc_elevation": 51219, "srtm_elevation": 49506}
     elevation = {}
@@ -704,11 +724,26 @@ async def fetch_elevation_data(lat, lon, ibm_client):
         }
 
         try:
-            response = query.submit(query_json, ibm_client)
-            df = response.point_data_as_dataframe()
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    "https://api.ibm.com/geospatial/run/na/core/v3/query",
+                    json=query_json,
+                    headers={
+                        "Authorization": f"Bearer {ibm_client.token}",
+                        "Content-Type": "application/json",
+                        "Accept": "application/json",
+                    },
+                ) as response:
 
-            if not df.empty:
-                elevation[VARIABLE] = float(df.iloc[0]["value"])
+                    if response.status != 200:
+                        print(f"Failed to fetch elevation data: {response.status}")
+                        continue
+
+                    json_data = await response.json()
+                    df = ibm_client.point_data_as_dataframe(json_data)
+
+                    if not df.empty:
+                        elevation[VARIABLE] = float(df.iloc[0]["value"])
 
         except Exception as e:
             print(f"Error fetching elevation data for {VARIABLE}: {e}")
@@ -739,22 +774,13 @@ def apply_temperature_adjustment(values, adjustment):
 # Function to fetch weather forecast for a single location and store in the database
 async def fetch_and_store_weather_forecast(lat, lon, valid_dates_horizons, city_name):
     try:
-        token = get_ibm_access_token(EIS_TENANT_ID, EIS_API_KEY, EIS_ORG_ID)
-        if not token:
-            logging.error(f"Failed to retrieve the IBM token for {city_name}.")
+        ibm_client = await initialize_ibm_client()
+        if not ibm_client:
+            print(f"Failed to retrieve the IBM token for {city_name}.")
             return
 
-        ibm_client = client.get_client(
-            api_key=EIS_API_KEY,
-            tenant_id=EIS_TENANT_ID,
-            org_id=EIS_ORG_ID,
-            legacy=False,
-        )
-        ibm_client.token = token
-        logging.info(f"IBM client successfully initialized for {city_name}.")
-
     except Exception as e:
-        logging.error(f"Error initializing IBM client: {e}")
+        print(f"Error initializing IBM client: {e}")
         return
 
     iso_8601 = "%Y-%m-%dT%H:%M:%SZ"
@@ -764,7 +790,7 @@ async def fetch_and_store_weather_forecast(lat, lon, valid_dates_horizons, city_
             lat, lon, city_name, valid_dates_horizons, ibm_client
         )
     except Exception as e:
-        logging.error(f"Error fetching climatology data for {city_name}: {e}")
+        print(f"Error fetching climatology data for {city_name}: {e}")
 
     try:
         twc_elevation, srtm_elevation = await fetch_elevation_data(lat, lon, ibm_client)
@@ -772,7 +798,7 @@ async def fetch_and_store_weather_forecast(lat, lon, valid_dates_horizons, city_
             twc_elevation, srtm_elevation
         )
     except Exception as e:
-        logging.error(f"Error fetching elevation data for {city_name}: {e}")
+        print(f"Error fetching elevation data for {city_name}: {e}")
         temperature_adjustment = 0.0
 
     variables = ["PRECIP", "TMIN", "TMAX", "TAVG"]
@@ -806,15 +832,13 @@ async def fetch_and_store_weather_forecast(lat, lon, valid_dates_horizons, city_
                         db.session.add(weather_forecast)
 
                 db.session.commit()
-                logging.info(f"Weather data for {variable} saved for {city_name}.")
+                print(f"Weather data for {variable} saved for {city_name}.")
             else:
-                logging.warning(f"No data found for {variable} for {city_name}.")
+                print(f"No data found for {variable} for {city_name}.")
         except Exception as e:
-            logging.error(
-                f"Error fetching weather data for {variable} in {city_name}: {e}"
-            )
+            print(f"Error fetching weather data for {variable} in {city_name}: {e}")
 
-    logging.info(
+    print(
         f"Completed fetching weather and climatology data for {city_name} (lat: {lat}, lon: {lon})."
     )
 
@@ -951,29 +975,6 @@ def schedule_jobs():
     logging.info(
         "Scheduler has started with adjusted timing for ProduceIQ, USDA, and Weather Forecast jobs."
     )
-
-
-# Function to retrieve IBM API JWT token
-def get_ibm_access_token(tenant_id, api_key, org_id):
-    url = f"https://api.ibm.com/saascore/run/authentication-retrieve/api-key?orgId={org_id}"
-
-    headers = {"X-IBM-Client-Id": f"saascore-{tenant_id}", "X-Api-Key": api_key}
-
-    try:
-        response = requests.get(url, headers=headers)
-
-        if response.status_code == 200:
-            token = response.json().get("accessToken")
-            logging.info(f"Successfully retrieved access token: {token}")
-            return token
-        else:
-            logging.error(
-                f"Failed to retrieve access token. Status Code: {response.status_code}, Response: {response.text}"
-            )
-            return None
-    except Exception as e:
-        logging.error(f"Error occurred while fetching access token: {e}")
-        return None
 
 
 # Start scheduler when the app starts
