@@ -729,9 +729,16 @@ def apply_temperature_adjustment(values, adjustment):
 
 # Function to fetch weather forecast for a single location and store in the database
 def fetch_and_store_weather_forecast(lat, lon, valid_dates_horizons, city_name):
-    ibm_client = client.get_client(
-        api_key=EIS_API_KEY, tenant_id=EIS_TENANT_ID, org_id=EIS_ORG_ID, legacy=False
-    )
+    try:
+        ibm_client = client.get_client(
+            api_key=EIS_API_KEY,
+            tenant_id=EIS_TENANT_ID,
+            org_id=EIS_ORG_ID,
+            legacy=False,
+        )
+        logging.info(f"IBM client successfully initialized.")
+    except Exception as e:
+        logging.error(f"Error initializing IBM client: {e}")
     iso_8601 = "%Y-%m-%dT%H:%M:%SZ"
 
     # Step 1: Fetch Climatology Data and pass ibm_client
