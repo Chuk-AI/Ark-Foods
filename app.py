@@ -621,10 +621,10 @@ def initialize_ibm_client():
             org_id=EIS_ORG_ID,
             legacy=False,
         )
-        print("IBM EIS client initialized successfully")
+        logging.info("IBM EIS client initialized successfully")
         return eis_client
     except Exception as e:
-        print(f"Error initializing IBM EIS client: {e}")
+        logging.error(f"Error initializing IBM EIS client: {e}")
         return None
 
 
@@ -640,7 +640,8 @@ async def fetch_ensemble_data(
     values = np.zeros((len(valid_dates_horizons), number_of_ensembles))
     dates = []
 
-    # Loop through valid dates and horizons
+    logging.info(f"Fetching ensemble data for {variable} at (lat: {lat}, lon: {lon})")
+
     for valid_date, horizon in valid_dates_horizons:
         query_json = {
             "layers": [
@@ -672,8 +673,8 @@ async def fetch_ensemble_data(
         }
 
         try:
-            # Submit the query using the client and wait for it to complete
             df = query.submit(query_json).point_data_as_dataframe()
+            logging.info(f"Data fetched for {variable} on date {valid_date}")
 
             for index, row in df.iterrows():
                 date = row["timestamp"]
@@ -686,10 +687,11 @@ async def fetch_ensemble_data(
                 values[dates.index(date), ens - 1] = value
 
         except Exception as e:
-            print(f"Error querying data for {variable}: {e}")
+            logging.error(f"Error querying data for {variable}: {e}")
             return None
 
     results[variable] = {"dates": dates, "values": values}
+    await asyncio.sleep(1)  # Adding delay between requests to prevent loops
     return results
 
 
@@ -697,6 +699,8 @@ async def fetch_ensemble_data(
 async def fetch_elevation_data(lat, lon, ibm_client):
     layers_ELEVATION = {"twc_elevation": 51219, "srtm_elevation": 49506}
     elevation = {}
+
+    logging.info(f"Fetching elevation data for (lat: {lat}, lon: {lon})")
 
     for VARIABLE in ["twc_elevation", "srtm_elevation"]:
         query_json = {
@@ -707,75 +711,55 @@ async def fetch_elevation_data(lat, lon, ibm_client):
         }
 
         try:
-            # Submit the query using the ibmpairs client
             df = query.submit(query_json).point_data_as_dataframe()
 
             if not df.empty:
                 elevation[VARIABLE] = float(df.iloc[0]["value"])
+                logging.info(
+                    f"Elevation data fetched for {VARIABLE}: {elevation[VARIABLE]}"
+                )
 
         except Exception as e:
-            print(f"Error fetching elevation data for {VARIABLE}: {e}")
+            logging.error(f"Error fetching elevation data for {VARIABLE}: {e}")
             continue
 
     if "twc_elevation" in elevation and "srtm_elevation" in elevation:
+        await asyncio.sleep(1)  # Adding delay between requests
         return elevation["twc_elevation"], elevation["srtm_elevation"]
     else:
         return None, None
 
 
-# Helper function to compute temperature adjustment based on elevation difference
-def compute_temperature_adjustment(twc_elevation, srtm_elevation):
-    # Standard lapse rate: -0.0098°C per meter
-    if twc_elevation is not None and srtm_elevation is not None:
-        elevation_diff = srtm_elevation - twc_elevation
-        temperature_adjustment = elevation_diff * (-0.0098)  # °C per meter
-        return temperature_adjustment
-    return 0.0
-
-
-# Function to apply temperature adjustment to the forecast values
-def apply_temperature_adjustment(values, adjustment):
-    # Apply the adjustment to the entire array of temperature values
-    return values + adjustment
-
-
-# Function to fetch weather forecast for a single location and store in the database
+# Function to fetch and store weather forecast for a single location
 async def fetch_and_store_weather_forecast(lat, lon, valid_dates_horizons, city_name):
+    logging.info(f"Fetching weather data for {city_name} (lat: {lat}, lon: {lon})")
     try:
         # Initialize IBM client
         ibm_client = initialize_ibm_client()
         if not ibm_client:
-            print(f"Failed to retrieve the IBM client for {city_name}.")
+            logging.error(f"Failed to retrieve the IBM client for {city_name}.")
             return
     except Exception as e:
-        print(f"Error initializing IBM client: {e}")
+        logging.error(f"Error initializing IBM client: {e}")
         return
 
     iso_8601 = "%Y-%m-%dT%H:%M:%SZ"
 
-    # Fetch and store climatology data first
-    try:
-        await fetch_and_store_climatology_data(
-            lat, lon, city_name, valid_dates_horizons, ibm_client
-        )
-    except Exception as e:
-        print(f"Error fetching climatology data for {city_name}: {e}")
-
-    # Fetch elevation data to compute temperature adjustment
+    # Step 1: Fetch elevation data to compute temperature adjustment
     try:
         twc_elevation, srtm_elevation = await fetch_elevation_data(lat, lon, ibm_client)
         temperature_adjustment = compute_temperature_adjustment(
             twc_elevation, srtm_elevation
         )
     except Exception as e:
-        print(f"Error fetching elevation data for {city_name}: {e}")
+        logging.error(f"Error fetching elevation data for {city_name}: {e}")
         temperature_adjustment = 0.0
 
-    # Fetch and store ensemble data for each variable, waiting for each one to complete
+    # Step 2: Fetch and store ensemble data for each variable
     variables = ["PRECIP", "TMIN", "TMAX", "TAVG"]
     for variable in variables:
         try:
-            # Fetch ensemble data asynchronously, ensuring previous data is fetched first
+            logging.info(f"Fetching ensemble data for {variable} in {city_name}")
             results = await fetch_ensemble_data(
                 lat, lon, valid_dates_horizons, variable, ibm_client, iso_8601
             )
@@ -783,13 +767,11 @@ async def fetch_and_store_weather_forecast(lat, lon, valid_dates_horizons, city_
                 for date, ensemble_data in zip(
                     results[variable]["dates"], results[variable]["values"]
                 ):
-                    # Apply temperature adjustment for temperature variables
                     if variable in ["TMAX", "TMIN", "TAVG"]:
                         ensemble_data = apply_temperature_adjustment(
                             ensemble_data, temperature_adjustment
                         )
 
-                    # Store each ensemble member's forecast data in the database
                     for ens, value in enumerate(ensemble_data):
                         forecast_date = datetime.utcfromtimestamp(date / 1000).date()
 
@@ -806,13 +788,23 @@ async def fetch_and_store_weather_forecast(lat, lon, valid_dates_horizons, city_
                         db.session.add(weather_forecast)
 
                 db.session.commit()
-                print(f"Weather data for {variable} saved for {city_name}.")
+                logging.info(f"Weather data for {variable} saved for {city_name}.")
             else:
-                print(f"No data found for {variable} for {city_name}.")
+                logging.info(f"No data found for {variable} for {city_name}.")
         except Exception as e:
-            print(f"Error fetching weather data for {variable} in {city_name}: {e}")
+            logging.error(
+                f"Error fetching weather data for {variable} in {city_name}: {e}"
+            )
 
-    print(
+    # Step 3: Fetch and store climatology data after ensemble data
+    try:
+        await fetch_and_store_climatology_data(
+            lat, lon, city_name, valid_dates_horizons, ibm_client
+        )
+    except Exception as e:
+        logging.error(f"Error fetching climatology data for {city_name}: {e}")
+
+    logging.info(
         f"Completed fetching weather and climatology data for {city_name} (lat: {lat}, lon: {lon})."
     )
 
@@ -836,24 +828,22 @@ async def fetch_and_store_weather_forecasts():
         "Sodus, Michigan": {"lat": 42.0086, "lon": -86.3614},
     }
 
-    # Forecast date range and horizons
     start_date = datetime.now(pytz.UTC)
     forecast_length_months = 6
     valid_dates_horizons = [
         (start_date + timedelta(days=i), i) for i in range(forecast_length_months * 30)
     ]
 
-    # Loop through each city and fetch weather/climatology data one at a time
     for city_name, coords in locations.items():
         lat = coords["lat"]
         lon = coords["lon"]
-        print(f"Fetching forecast for {city_name} (lat: {lat}, lon: {lon})")
+        logging.info(f"Fetching forecast for {city_name} (lat: {lat}, lon: {lon})")
         await fetch_and_store_weather_forecast(
             lat, lon, valid_dates_horizons, city_name
         )
 
 
-# Function to fetch climatology data and store it (Non-async)
+# Function to fetch climatology data and store it
 async def fetch_and_store_climatology_data(
     lat, lon, city_name, valid_dates_horizons, ibm_client
 ):
@@ -862,8 +852,9 @@ async def fetch_and_store_climatology_data(
 
     for variable in variables:
         try:
-            print(f"Fetching climatology data for {variable} for city: {city_name}")
-
+            logging.info(
+                f"Fetching climatology data for {variable} for city: {city_name}"
+            )
             query_json = {
                 "layers": [{"type": "raster", "id": layers_ERA5[variable]}],
                 "spatial": {"type": "point", "coordinates": [lat, lon]},
@@ -875,9 +866,7 @@ async def fetch_and_store_climatology_data(
                 "outputType": "json",
             }
 
-            # Using ibmpairs query client
             df = query.submit(query_json).point_data_as_dataframe()
-
             if not df.empty:
                 climo_dates_variable = df["timestamp"].tolist()
                 climo_values_variable = df["value"].tolist()
@@ -904,10 +893,11 @@ async def fetch_and_store_climatology_data(
                         db.session.add(climatology_entry)
 
                 db.session.commit()
-                print(f"Climatology data for {variable} saved for {city_name}.")
-
+                logging.info(f"Climatology data for {variable} saved for {city_name}.")
         except Exception as e:
-            print(f"Error fetching climatology data for {variable} in {city_name}: {e}")
+            logging.error(
+                f"Error fetching climatology data for {variable} in {city_name}: {e}"
+            )
 
 
 # Scheduler for API calls to USDA and Produce IQ
