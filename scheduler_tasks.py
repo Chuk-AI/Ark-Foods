@@ -1,11 +1,14 @@
 # scheduler_tasks.py
 
-from app import fetch_and_store_weather_forecasts
+from app import fetch_and_store_weather_forecasts, app  # Import your Flask app
 
 
 def run_scheduled_job():
     print("Running scheduled job: Fetch and store weather data")
-    fetch_and_store_weather_forecasts()
+
+    # Use Flask's app context to run the job
+    with app.app_context():
+        fetch_and_store_weather_forecasts()
 
 
 if __name__ == "__main__":
