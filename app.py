@@ -980,15 +980,6 @@ def schedule_jobs():
 # Start scheduler when the app starts
 @app.before_request
 def initialize():
-    # Retrieve IBM API access token
-    token = get_ibm_access_token(EIS_TENANT_ID, EIS_API_KEY, EIS_ORG_ID)
-
-    if token:
-        # Store the token in session or globally for use in API requests
-        session["ibm_access_token"] = token
-        logging.info("IBM access token successfully retrieved and stored.")
-    else:
-        logging.error("Failed to retrieve IBM access token.")
     schedule_jobs()
 
 
