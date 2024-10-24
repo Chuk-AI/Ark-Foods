@@ -770,7 +770,7 @@ def apply_temperature_adjustment(values, adjustment):
 # Function to fetch weather forecast for a single location and store in the database
 async def fetch_and_store_weather_forecast(lat, lon, valid_dates_horizons, city_name):
     try:
-        ibm_client = await initialize_ibm_client()
+        ibm_client = initialize_ibm_client()
         if not ibm_client:
             print(f"Failed to retrieve the IBM token for {city_name}.")
             return
