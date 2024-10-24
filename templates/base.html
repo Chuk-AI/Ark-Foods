@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Ark Foods{% endblock %}</title>
   <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js"></script>
@@ -22,30 +23,36 @@
   <div class="collapse navbar-collapse" id="navbarNav">
     <ul class="navbar-nav ml-auto">
       {% if current_user.is_authenticated %}
-        {% if current_user.is_admin() %}
-          <li class="nav-item">
-            <a class="nav-link" href="{{ url_for('admin_dashboard') }}">Admin Dashboard</a>
-          </li>
-        {% elif current_user.is_owner() %}
-          <li class="nav-item">
-            <a class="nav-link" href="{{ url_for('owner_dashboard') }}">Owner Dashboard</a>
-          </li>
-        {% endif %}
-        <!-- All user roles can access the Sales Dashboard -->
+      {% if current_user.is_admin() %}
         <li class="nav-item">
-          <a class="nav-link" href="{{ url_for('sales_dashboard') }}">Sales Dashboard</a>
+          <a class="nav-link" href="{{ url_for('admin_dashboard') }}">Admin Dashboard</a>
         </li>
         <li class="nav-item">
-          <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
+          <a class="nav-link" href="{{ url_for('weather_dashboard') }}">Weather Dashboard</a>
         </li>
-      {% else %}
+      {% elif current_user.is_owner() %}
         <li class="nav-item">
-          <a class="nav-link" href="{{ url_for('login') }}">Login</a>
+          <a class="nav-link" href="{{ url_for('owner_dashboard') }}">Owner Dashboard</a>
         </li>
         <li class="nav-item">
-          <a class="nav-link" href="{{ url_for('register') }}">Register</a>
+          <a class="nav-link" href="{{ url_for('weather_dashboard') }}">Weather Dashboard</a>
         </li>
       {% endif %}
+      <!-- All user roles can access the Sales Dashboard -->
+      <li class="nav-item">
+        <a class="nav-link" href="{{ url_for('sales_dashboard') }}">Sales Dashboard</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
+      </li>
+    {% else %}
+      <li class="nav-item">
+        <a class="nav-link" href="{{ url_for('login') }}">Login</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="{{ url_for('register') }}">Register</a>
+      </li>
+    {% endif %}
     </ul>
   </div>
 </nav>

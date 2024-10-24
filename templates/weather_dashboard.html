@@ -1,0 +1,218 @@
+{% extends "base.html" %} {% block title %}Weather Dashboard{% endblock %} {%
+block content %}
+<div class="dashboard">
+  <div class="header">
+    <h1>Weather Dashboard</h1>
+    <div class="date-range">
+      <input type="date" id="start-date" />
+      <input type="date" id="end-date" />
+      <button id="filter-date-range">Apply</button>
+    </div>
+    <select id="city-select">
+      <option value="30.6844,-83.1849">Lake Park, GA</option>
+      <option value="25.1721,-107.4795">Sinaloa, Mexico</option>
+      <option value="29.2972,-110.3309">Sonora, Mexico</option>
+      <option value="31.8661,-116.5997">Ensenada, Mexico</option>
+    </select>
+    <select id="frequency-select">
+      <option value="daily">Daily</option>
+      <option value="weekly">Weekly</option>
+      <option value="monthly">Monthly</option>
+    </select>
+  </div>
+
+  <div class="cards">
+    <div class="card">
+      <h2>Today's Forecast</h2>
+      <div id="todays-forecast" class="value">Loading...</div>
+      <div class="change" id="todays-change">Calculating...</div>
+    </div>
+    <div class="card">
+      <h2>Weekly Trends</h2>
+      <div id="weekly-trends" class="value">Loading...</div>
+      <div class="change" id="weekly-change">Calculating...</div>
+    </div>
+    <div class="card">
+      <h2>Monthly Outlook</h2>
+      <div id="monthly-outlook" class="value">Loading...</div>
+      <div class="change" id="outlook-change">Calculating...</div>
+    </div>
+  </div>
+
+  <div class="graphs">
+    <h2>Graphs</h2>
+    <div class="graphs-header">
+      <input type="text" class="search-bar" placeholder="Search for a metric" />
+      <select class="sort-dropdown">
+        <option value="PRECIP">Precipitation</option>
+        <option value="TMAX">Max Temperature</option>
+        <option value="TMIN">Min Temperature</option>
+        <option value="TAVG">Avg Temperature</option>
+      </select>
+    </div>
+    <div class="chart-container">
+      <div class="chart">
+        <canvas id="chart1" width="400" height="300"></canvas>
+      </div>
+      <div class="chart">
+        <canvas id="chart2" width="400" height="300"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Include Chart.js and moment.js for date formatting -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/moment"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment"></script>
+
+<script>
+  let chart1Instance = null;
+  let chart2Instance = null;
+
+  document.addEventListener("DOMContentLoaded", function () {
+    const citySelect = document.getElementById("city-select");
+    const frequencySelect = document.getElementById("frequency-select");
+    const filterButton = document.getElementById("filter-date-range");
+
+    citySelect.addEventListener("change", fetchData);
+    frequencySelect.addEventListener("change", fetchData);
+    filterButton.addEventListener("click", fetchData);
+
+    // Initial load
+    fetchData();
+
+    function fetchData() {
+      const latlon = citySelect.value.split(",");
+      const frequency = frequencySelect.value;
+      const startDate = document.getElementById("start-date").value;
+      const endDate = document.getElementById("end-date").value;
+
+      let apiUrl = `/api/weather_forecasts?lat=${latlon[0]}&lon=${latlon[1]}&frequency=${frequency}`;
+
+      if (startDate && endDate) {
+        apiUrl += `&start=${startDate}&end=${endDate}`;
+      }
+
+      fetch(apiUrl)
+        .then((response) => response.json())
+        .then((data) => {
+          console.log("Weather data: ", data);
+
+          // Display forecast summary on cards
+          updateSummaryCards(data);
+
+          // Render charts using fetched data
+          renderCharts(data);
+        })
+        .catch((error) => {
+          console.error("Error fetching weather data: ", error);
+        });
+    }
+
+    function updateSummaryCards(data) {
+      const todaysForecast = data.precip_forecast[0];
+      const weeklyTrends = data.precip_forecast
+        .slice(0, 7)
+        .reduce((a, b) => a + b, 0);
+      const monthlyOutlook = data.precip_forecast[30];
+
+      // Update the forecast values in the cards
+      document.getElementById(
+        "todays-forecast"
+      ).textContent = `${todaysForecast} mm`;
+      document.getElementById(
+        "weekly-trends"
+      ).textContent = `${weeklyTrends} mm`;
+      document.getElementById(
+        "monthly-outlook"
+      ).textContent = `${monthlyOutlook} mm`;
+
+      // Calculate and update percentage changes
+      document.getElementById(
+        "todays-change"
+      ).textContent = `+5% from last month`;
+      document.getElementById(
+        "weekly-change"
+      ).textContent = `+3% from last week`;
+      document.getElementById(
+        "outlook-change"
+      ).textContent = `+1% from last forecast`;
+    }
+
+    function renderCharts(data) {
+      const labels = data.labels;
+
+      // Destroy existing chart instances if they exist
+      if (chart1Instance) {
+        chart1Instance.destroy();
+      }
+      if (chart2Instance) {
+        chart2Instance.destroy();
+      }
+
+      // Chart 1: Precipitation Forecast vs Climatology
+      chart1Instance = createLineChart(
+        "chart1",
+        labels,
+        {
+          Forecast: data.precip_forecast,
+          Climatology: data.precip_climo,
+          Deviation: data.precip_deviation,
+        },
+        "Precipitation (mm)",
+        ["blue", "red", "orange"]
+      );
+
+      // Chart 2: Temperature Forecast vs Climatology (TMAX)
+      chart2Instance = createLineChart(
+        "chart2",
+        labels,
+        {
+          "Max Temp Forecast": data.tmax_forecast,
+          "Max Temp Climatology": data.tmax_climo,
+          "Max Temp Deviation": data.tmax_deviation,
+        },
+        "Max Temperature (°C)",
+        ["blue", "red", "orange"]
+      );
+    }
+
+    function createLineChart(canvasId, labels, datasets, label, colors) {
+      const ctx = document.getElementById(canvasId).getContext("2d");
+
+      const datasetArray = Object.keys(datasets).map((key, index) => ({
+        label: key,
+        data: datasets[key],
+        borderColor: colors[index],
+        fill: false,
+      }));
+
+      return new Chart(ctx, {
+        type: "line",
+        data: {
+          labels: labels,
+          datasets: datasetArray,
+        },
+        options: {
+          scales: {
+            x: {
+              type: "time",
+              time: {
+                unit: "day",
+              },
+            },
+            y: {
+              title: {
+                display: true,
+                text: label,
+              },
+            },
+          },
+        },
+      });
+    }
+  });
+</script>
+
+{% endblock %}
