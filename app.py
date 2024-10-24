@@ -874,7 +874,7 @@ async def fetch_and_store_weather_forecasts():
 
 
 # Function to fetch climatology data and store it (Non-async)
-def fetch_and_store_climatology_data(
+async def fetch_and_store_climatology_data(
     lat, lon, city_name, valid_dates_horizons, ibm_client
 ):
     layers_ERA5 = {"PRECIP": 51198, "TMIN": 51217, "TMAX": 51200, "TAVG": 51199}
