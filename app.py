@@ -844,7 +844,7 @@ async def fetch_and_store_weather_forecast(lat, lon, valid_dates_horizons, city_
 
 
 # Function to fetch and store weather forecasts for multiple locations
-def fetch_and_store_weather_forecasts():
+async def fetch_and_store_weather_forecasts():
     # List of locations with lat/lon pairs and city names
     locations = {
         "Sinaloa": {"lat": 25.1721, "lon": -107.4795},
@@ -874,7 +874,10 @@ def fetch_and_store_weather_forecasts():
         lat = coords["lat"]
         lon = coords["lon"]
         print(f"Fetching forecast for {city_name} (lat: {lat}, lon: {lon})")
-        fetch_and_store_weather_forecast(lat, lon, valid_dates_horizons, city_name)
+        # Await the async function
+        await fetch_and_store_weather_forecast(
+            lat, lon, valid_dates_horizons, city_name
+        )
 
 
 # Function to fetch climatology data and store it
