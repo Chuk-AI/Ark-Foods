@@ -618,7 +618,7 @@ def fetch_ensemble_data(
     layers_TWC = {"PRECIP": 50686, "TMIN": 50683, "TMAX": 50684, "TAVG": 50685}
 
     # Fetch for all ensemble members at once
-    number_of_ensembles = 2
+    number_of_ensembles = 50
     ensemble_members = [str(i).zfill(2) for i in range(1, number_of_ensembles + 1)]
 
     # Initialize results storage
@@ -934,7 +934,7 @@ def schedule_jobs():
     # Schedule data fetching job to run daily at 11:35 AM in Pakistan Time
     scheduler.add_job(
         func=fetch_and_store_weather_forecasts,  # Your data fetching function
-        trigger=CronTrigger(hour=11, minute=45, timezone=pk_timezone),  # 11:35 AM PST
+        trigger=CronTrigger(hour=12, minute=25, timezone=pk_timezone),  # 11:35 AM PST
         id="daily_weather_fetch",  # Unique job ID
     )
 
