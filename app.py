@@ -634,7 +634,7 @@ async def fetch_ensemble_data(
     lat, lon, valid_dates_horizons, variable, ibm_client, iso_8601="%Y-%m-%dT%H:%M:%SZ"
 ):
     layers_TWC = {"PRECIP": 50686, "TMIN": 50683, "TMAX": 50684, "TAVG": 50685}
-    number_of_ensembles = 50
+    number_of_ensembles = 5
     ensemble_members = [str(i).zfill(2) for i in range(1, number_of_ensembles + 1)]
 
     results = {}
