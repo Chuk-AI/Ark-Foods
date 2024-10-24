@@ -767,7 +767,6 @@ def apply_temperature_adjustment(values, adjustment):
     return values + adjustment
 
 
-# Function to fetch weather forecast for a single location and store in the database
 async def fetch_and_store_weather_forecast(lat, lon, valid_dates_horizons, city_name):
     try:
         ibm_client = initialize_ibm_client()
@@ -775,51 +774,40 @@ async def fetch_and_store_weather_forecast(lat, lon, valid_dates_horizons, city_
             print(f"Failed to retrieve the IBM token for {city_name}.")
             return
 
-    except Exception as e:
-        print(f"Error initializing IBM client: {e}")
-        return
-
-    iso_8601 = "%Y-%m-%dT%H:%M:%SZ"
-
-    try:
+        # Fetch climatology data
         await fetch_and_store_climatology_data(
             lat, lon, city_name, valid_dates_horizons, ibm_client
         )
-    except Exception as e:
-        print(f"Error fetching climatology data for {city_name}: {e}")
 
-    try:
+        # Fetch elevation data
         twc_elevation, srtm_elevation = await fetch_elevation_data(lat, lon, ibm_client)
         temperature_adjustment = compute_temperature_adjustment(
             twc_elevation, srtm_elevation
         )
-    except Exception as e:
-        print(f"Error fetching elevation data for {city_name}: {e}")
-        temperature_adjustment = 0.0
 
-    variables = ["PRECIP", "TMIN", "TMAX", "TAVG"]
-    for variable in variables:
-        try:
+        # Query weather forecast data in batches
+        variables = ["PRECIP", "TAVG"]
+        for variable in variables:
             results = await fetch_ensemble_data(
-                lat, lon, valid_dates_horizons, variable, ibm_client, iso_8601
+                lat, lon, valid_dates_horizons, variable, ibm_client
             )
-            if results and variable in results:
+            if results:
+                # Apply temperature adjustment to temperature variables
+                if variable in ["TMAX", "TAVG"]:
+                    results[variable]["values"] = apply_temperature_adjustment(
+                        results[variable]["values"], temperature_adjustment
+                    )
+
+                # Save results to the database (adjust as necessary)
                 for date, ensemble_data in zip(
                     results[variable]["dates"], results[variable]["values"]
                 ):
-                    if variable in ["TMAX", "TMIN", "TAVG"]:
-                        ensemble_data = apply_temperature_adjustment(
-                            ensemble_data, temperature_adjustment
-                        )
-
                     for ens, value in enumerate(ensemble_data):
-                        forecast_date = datetime.utcfromtimestamp(date / 1000).date()
-
                         weather_forecast = WeatherForecast(
                             city_name=city_name,
                             latitude=lat,
                             longitude=lon,
-                            forecast_date=forecast_date,
+                            forecast_date=date,
                             variable=variable,
                             forecasted_value=value,
                             ensemble_member=ens + 1,
@@ -829,14 +817,9 @@ async def fetch_and_store_weather_forecast(lat, lon, valid_dates_horizons, city_
 
                 db.session.commit()
                 print(f"Weather data for {variable} saved for {city_name}.")
-            else:
-                print(f"No data found for {variable} for {city_name}.")
-        except Exception as e:
-            print(f"Error fetching weather data for {variable} in {city_name}: {e}")
 
-    print(
-        f"Completed fetching weather and climatology data for {city_name} (lat: {lat}, lon: {lon})."
-    )
+    except Exception as e:
+        print(f"Error fetching or saving weather data for {city_name}: {e}")
 
 
 # Function to fetch and store weather forecasts for multiple locations
