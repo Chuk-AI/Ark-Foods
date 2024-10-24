@@ -934,7 +934,7 @@ def schedule_jobs():
     # Schedule data fetching job to run daily at 11:35 AM in Pakistan Time
     scheduler.add_job(
         func=fetch_and_store_weather_forecasts,  # Your data fetching function
-        trigger=CronTrigger(hour=11, minute=40, timezone=pk_timezone),  # 11:35 AM PST
+        trigger=CronTrigger(hour=11, minute=45, timezone=pk_timezone),  # 11:35 AM PST
         id="daily_weather_fetch",  # Unique job ID
     )
 
