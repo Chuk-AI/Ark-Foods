@@ -895,8 +895,10 @@ async def fetch_and_store_climatology_data(
                 "outputType": "json",
             }
 
-            # Ensure the client is authenticated and the query uses the IBM client
-            response = ibm_client.submit(query_json)
+            # Use the correct method to submit the query
+            query_obj = query.Query(query_json)  # Create query object
+            response = query_obj.submit(ibm_client)  # Submit query with the client
+
             df = response.point_data_as_dataframe()
 
             if not df.empty:
