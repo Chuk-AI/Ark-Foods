@@ -730,27 +730,51 @@ def apply_temperature_adjustment(values, adjustment):
 # Function to fetch weather forecast for a single location and store in the database
 def fetch_and_store_weather_forecast(lat, lon, valid_dates_horizons, city_name):
     try:
+        # Adding a custom header to ensure the IBM API receives it properly
+        headers = {
+            "Authorization": f"Bearer {EIS_API_KEY}",
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "application/json",
+        }
+
+        # Ensure the API key and tenant ID are correctly passed
+        logging.info(
+            f"Initializing IBM client with API Key: {EIS_API_KEY}, Tenant ID: {EIS_TENANT_ID}"
+        )
+
+        # Initialize IBM client with custom headers (adjust if needed for the IBM library you are using)
         ibm_client = client.get_client(
             api_key=EIS_API_KEY,
             tenant_id=EIS_TENANT_ID,
             org_id=EIS_ORG_ID,
+            headers=headers,  # Adding headers for API request
             legacy=False,
         )
         logging.info(f"IBM client successfully initialized.")
+
     except Exception as e:
         logging.error(f"Error initializing IBM client: {e}")
+        return  # Exit if the client initialization fails
+
     iso_8601 = "%Y-%m-%dT%H:%M:%SZ"
 
     # Step 1: Fetch Climatology Data and pass ibm_client
-    fetch_and_store_climatology_data(
-        lat, lon, city_name, valid_dates_horizons, ibm_client
-    )
+    try:
+        fetch_and_store_climatology_data(
+            lat, lon, city_name, valid_dates_horizons, ibm_client
+        )
+    except Exception as e:
+        logging.error(f"Error fetching climatology data for {city_name}: {e}")
 
     # Step 2: Fetch Elevation Data for Temperature Adjustments
-    twc_elevation, srtm_elevation = fetch_elevation_data(lat, lon, ibm_client)
-    temperature_adjustment = compute_temperature_adjustment(
-        twc_elevation, srtm_elevation
-    )
+    try:
+        twc_elevation, srtm_elevation = fetch_elevation_data(lat, lon, ibm_client)
+        temperature_adjustment = compute_temperature_adjustment(
+            twc_elevation, srtm_elevation
+        )
+    except Exception as e:
+        logging.error(f"Error fetching elevation data for {city_name}: {e}")
+        temperature_adjustment = 0.0  # Set default if error occurs
 
     # Step 3: Fetch Weather Forecast Data (existing functionality)
     variables = ["PRECIP", "TMIN", "TMAX", "TAVG"]
@@ -785,12 +809,15 @@ def fetch_and_store_weather_forecast(lat, lon, valid_dates_horizons, city_name):
                         db.session.add(weather_forecast)
 
                 db.session.commit()
-                print(f"Weather data for {variable} saved for {city_name}.")
+                logging.info(f"Weather data for {variable} saved for {city_name}.")
             else:
-                print(f"No data for {variable}.")
+                logging.warning(f"No data found for {variable} for {city_name}.")
         except Exception as e:
-            print(f"Error fetching weather data for {variable}: {e}")
-    print(
+            logging.error(
+                f"Error fetching weather data for {variable} in {city_name}: {e}"
+            )
+
+    logging.info(
         f"Completed fetching weather and climatology data for {city_name} (lat: {lat}, lon: {lon})"
     )
 
