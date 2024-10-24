@@ -672,7 +672,7 @@ async def fetch_ensemble_data(
 
         try:
             # Submit the query using the client
-            df = ibm_client.query.submit(query_json).point_data_as_dataframe()
+            df = query.submit(query_json).point_data_as_dataframe()
 
             for index, row in df.iterrows():
                 date = row["timestamp"]
@@ -707,7 +707,7 @@ async def fetch_elevation_data(lat, lon, ibm_client):
 
         try:
             # Submit the query using the ibmpairs client
-            df = ibm_client.query.submit(query_json).point_data_as_dataframe()
+            df = query.submit(query_json).point_data_as_dataframe()
 
             if not df.empty:
                 elevation[VARIABLE] = float(df.iloc[0]["value"])
