@@ -641,63 +641,63 @@ async def fetch_ensemble_data(
     values = np.zeros((len(valid_dates_horizons), number_of_ensembles))
     dates = []
 
-    query_json = {
-        "layers": [
-            {
-                "type": "raster",
-                "id": layers_TWC[variable],
-                "temporal": {
-                    "intervals": [
-                        {
-                            "start": (valid_date - timedelta(seconds=60)).strftime(
-                                iso_8601
-                            ),
-                            "end": (valid_date + timedelta(seconds=60)).strftime(
-                                iso_8601
-                            ),
-                        }
-                    ]
-                },
-                "dimensions": [
-                    {"name": "forecast", "value": ens},
-                    {"name": "horizon", "value": horizon},
-                ],
-            }
-            for valid_date, horizon in valid_dates_horizons
-            for ens in ensemble_members
-        ],
-        "spatial": {"type": "point", "coordinates": [lat, lon]},
-        "temporal": {"intervals": [{"snapshot": "1982-01-01"}]},
-        "outputType": "json",
-    }
-
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                "https://api.ibm.com/geospatial/run/na/core/v3/query",
-                json=query_json,
-                headers={
-                    "Content-Type": "application/json",
-                    "Accept": "application/json",
-                },
-            ) as response:
+        for valid_date, horizon in valid_dates_horizons:
+            query_json = {
+                "layers": [
+                    {
+                        "type": "raster",
+                        "id": layers_TWC[variable],
+                        "temporal": {
+                            "intervals": [
+                                {
+                                    "start": (
+                                        valid_date - timedelta(seconds=60)
+                                    ).strftime(iso_8601),
+                                    "end": (
+                                        valid_date + timedelta(seconds=60)
+                                    ).strftime(iso_8601),
+                                }
+                            ]
+                        },
+                        "dimensions": [
+                            {"name": "forecast", "value": ens},
+                            {"name": "horizon", "value": horizon},
+                        ],
+                    }
+                    for ens in ensemble_members
+                ],
+                "spatial": {"type": "point", "coordinates": [lat, lon]},
+                "temporal": {"intervals": [{"snapshot": "1982-01-01"}]},
+                "outputType": "json",
+            }
 
-                if response.status != 200:
-                    print(f"Failed to fetch data: {response.status}")
-                    return None
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    "https://api.ibm.com/geospatial/run/na/core/v3/query",
+                    json=query_json,
+                    headers={
+                        "Content-Type": "application/json",
+                        "Accept": "application/json",
+                    },
+                ) as response:
 
-                json_data = await response.json()
-                df = ibm_client.point_data_as_dataframe(json_data)
+                    if response.status != 200:
+                        print(f"Failed to fetch data: {response.status}")
+                        return None
 
-                for index, row in df.iterrows():
-                    date = row["timestamp"]
-                    ens = int(row["property"].split(";")[0].split(":")[1])
-                    value = float(row["value"])
+                    json_data = await response.json()
+                    df = ibm_client.point_data_as_dataframe(json_data)
 
-                    if date not in dates:
-                        dates.append(date)
+                    for index, row in df.iterrows():
+                        date = row["timestamp"]
+                        ens = int(row["property"].split(";")[0].split(":")[1])
+                        value = float(row["value"])
 
-                    values[dates.index(date), ens - 1] = value
+                        if date not in dates:
+                            dates.append(date)
+
+                        values[dates.index(date), ens - 1] = value
 
     except Exception as e:
         print(f"Error querying data for {variable}: {e}")
@@ -767,47 +767,59 @@ def apply_temperature_adjustment(values, adjustment):
     return values + adjustment
 
 
+# Function to fetch weather forecast for a single location and store in the database
 async def fetch_and_store_weather_forecast(lat, lon, valid_dates_horizons, city_name):
     try:
         ibm_client = initialize_ibm_client()
         if not ibm_client:
-            print(f"Failed to retrieve the IBM token for {city_name}.")
+            print(f"Failed to retrieve the IBM client for {city_name}.")
             return
 
-        # Fetch climatology data
+    except Exception as e:
+        print(f"Error initializing IBM client: {e}")
+        return
+
+    iso_8601 = "%Y-%m-%dT%H:%M:%SZ"
+
+    try:
         await fetch_and_store_climatology_data(
             lat, lon, city_name, valid_dates_horizons, ibm_client
         )
+    except Exception as e:
+        print(f"Error fetching climatology data for {city_name}: {e}")
 
-        # Fetch elevation data
+    try:
         twc_elevation, srtm_elevation = await fetch_elevation_data(lat, lon, ibm_client)
         temperature_adjustment = compute_temperature_adjustment(
             twc_elevation, srtm_elevation
         )
+    except Exception as e:
+        print(f"Error fetching elevation data for {city_name}: {e}")
+        temperature_adjustment = 0.0
 
-        # Query weather forecast data in batches
-        variables = ["PRECIP", "TAVG"]
-        for variable in variables:
+    variables = ["PRECIP", "TMIN", "TMAX", "TAVG"]
+    for variable in variables:
+        try:
             results = await fetch_ensemble_data(
-                lat, lon, valid_dates_horizons, variable, ibm_client
+                lat, lon, valid_dates_horizons, variable, ibm_client, iso_8601
             )
-            if results:
-                # Apply temperature adjustment to temperature variables
-                if variable in ["TMAX", "TAVG"]:
-                    results[variable]["values"] = apply_temperature_adjustment(
-                        results[variable]["values"], temperature_adjustment
-                    )
-
-                # Save results to the database (adjust as necessary)
+            if results and variable in results:
                 for date, ensemble_data in zip(
                     results[variable]["dates"], results[variable]["values"]
                 ):
+                    if variable in ["TMAX", "TMIN", "TAVG"]:
+                        ensemble_data = apply_temperature_adjustment(
+                            ensemble_data, temperature_adjustment
+                        )
+
                     for ens, value in enumerate(ensemble_data):
+                        forecast_date = datetime.utcfromtimestamp(date / 1000).date()
+
                         weather_forecast = WeatherForecast(
                             city_name=city_name,
                             latitude=lat,
                             longitude=lon,
-                            forecast_date=date,
+                            forecast_date=forecast_date,
                             variable=variable,
                             forecasted_value=value,
                             ensemble_member=ens + 1,
@@ -817,9 +829,14 @@ async def fetch_and_store_weather_forecast(lat, lon, valid_dates_horizons, city_
 
                 db.session.commit()
                 print(f"Weather data for {variable} saved for {city_name}.")
+            else:
+                print(f"No data found for {variable} for {city_name}.")
+        except Exception as e:
+            print(f"Error fetching weather data for {variable} in {city_name}: {e}")
 
-    except Exception as e:
-        print(f"Error fetching or saving weather data for {city_name}: {e}")
+    print(
+        f"Completed fetching weather and climatology data for {city_name} (lat: {lat}, lon: {lon})."
+    )
 
 
 # Function to fetch and store weather forecasts for multiple locations
@@ -856,12 +873,12 @@ async def fetch_and_store_weather_forecasts():
         )
 
 
-# Function to fetch climatology data and store it
+# Function to fetch climatology data and store it (Non-async)
 async def fetch_and_store_climatology_data(
     lat, lon, city_name, valid_dates_horizons, ibm_client
 ):
-    layers_ERA5 = {"PRECIP": 51198, "TMIN": 51217, "TMAX": 51200, "TAVG": 51199}
-    variables = ["PRECIP", "TAVG"]  # Adjust based on what you want to fetch
+    layers_ERA5 = {"PRECIP": 51198, "TAVG": 51199}
+    variables = ["PRECIP", "TAVG"]
 
     for variable in variables:
         try:
@@ -878,42 +895,49 @@ async def fetch_and_store_climatology_data(
                 "outputType": "json",
             }
 
-            # Use the correct method to submit the query
-            query_obj = query.Query(query_json)  # Create query object
-            response = query_obj.submit(ibm_client)  # Submit query with the client
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    "https://api.ibm.com/geospatial/run/na/core/v3/query",
+                    json=query_json,
+                    headers={
+                        "Content-Type": "application/json",
+                        "Accept": "application/json",
+                    },
+                ) as response:
+                    if response.status != 200:
+                        print(f"Failed to fetch climatology data: {response.status}")
+                        continue
 
-            df = response.point_data_as_dataframe()
+                    json_data = await response.json()
+                    df = ibm_client.point_data_as_dataframe(json_data)
 
-            if not df.empty:
-                climo_dates_variable = df["timestamp"].tolist()
-                climo_values_variable = df["value"].tolist()
+                    if not df.empty:
+                        climo_dates_variable = df["timestamp"].tolist()
+                        climo_values_variable = df["value"].tolist()
 
-                # Store climatology data for valid_dates_horizons
-                for date, horizon in valid_dates_horizons:
-                    tmp_date = np.datetime64(
-                        f"2020-{str(date.month).zfill(2)}-{str(date.day).zfill(2)}T00:00:00.000000000"
-                    )
-                    search_date = int(tmp_date.astype(datetime) / 1000000)
+                        for date, horizon in valid_dates_horizons:
+                            tmp_date = np.datetime64(
+                                f"2020-{str(date.month).zfill(2)}-{str(date.day).zfill(2)}T00:00:00.000000000"
+                            )
+                            search_date = int(tmp_date.astype(datetime) / 1000000)
 
-                    if search_date in climo_dates_variable:
-                        index = climo_dates_variable.index(search_date)
-                        climatology_value = float(climo_values_variable[index])
+                            if search_date in climo_dates_variable:
+                                index = climo_dates_variable.index(search_date)
+                                climatology_value = float(climo_values_variable[index])
 
-                        climatology_entry = ClimatologyData(
-                            city_name=city_name,
-                            latitude=lat,
-                            longitude=lon,
-                            forecast_date=date,
-                            variable=variable,
-                            climatology_value=climatology_value,
-                            source="ERA5",
-                        )
-                        db.session.add(climatology_entry)
+                                climatology_entry = ClimatologyData(
+                                    city_name=city_name,
+                                    latitude=lat,
+                                    longitude=lon,
+                                    forecast_date=date,
+                                    variable=variable,
+                                    climatology_value=climatology_value,
+                                    source="ERA5",
+                                )
+                                db.session.add(climatology_entry)
 
-                db.session.commit()
-                print(f"Climatology data for {variable} saved for {city_name}.")
-            else:
-                print(f"No climatology data found for {variable} for {city_name}.")
+                        db.session.commit()
+                        print(f"Climatology data for {variable} saved for {city_name}.")
 
         except Exception as e:
             print(f"Error fetching climatology data for {variable} in {city_name}: {e}")
