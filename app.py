@@ -873,12 +873,12 @@ async def fetch_and_store_weather_forecasts():
         )
 
 
-# Function to fetch climatology data and store it (Non-async)
+# Function to fetch climatology data and store it
 async def fetch_and_store_climatology_data(
     lat, lon, city_name, valid_dates_horizons, ibm_client
 ):
     layers_ERA5 = {"PRECIP": 51198, "TMIN": 51217, "TMAX": 51200, "TAVG": 51199}
-    variables = ["PRECIP", "TAVG"]
+    variables = ["PRECIP", "TAVG"]  # Adjust based on what you want to fetch
 
     for variable in variables:
         try:
@@ -894,13 +894,16 @@ async def fetch_and_store_climatology_data(
                 },
                 "outputType": "json",
             }
-            response = query.submit(query_json, ibm_client)
+
+            # Ensure the client is authenticated and the query uses the IBM client
+            response = ibm_client.submit(query_json)
             df = response.point_data_as_dataframe()
 
             if not df.empty:
                 climo_dates_variable = df["timestamp"].tolist()
                 climo_values_variable = df["value"].tolist()
 
+                # Store climatology data for valid_dates_horizons
                 for date, horizon in valid_dates_horizons:
                     tmp_date = np.datetime64(
                         f"2020-{str(date.month).zfill(2)}-{str(date.day).zfill(2)}T00:00:00.000000000"
@@ -924,6 +927,8 @@ async def fetch_and_store_climatology_data(
 
                 db.session.commit()
                 print(f"Climatology data for {variable} saved for {city_name}.")
+            else:
+                print(f"No climatology data found for {variable} for {city_name}.")
 
         except Exception as e:
             print(f"Error fetching climatology data for {variable} in {city_name}: {e}")
