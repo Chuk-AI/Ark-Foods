@@ -37,7 +37,8 @@ from flask_admin.contrib.sqla import ModelView
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.triggers.cron import CronTrigger
-
+import aiohttp
+import asyncio
 import os
 import logging
 import requests
@@ -610,8 +611,8 @@ def fetch_daily_data():
         )
 
 
-# Function to fetch ensemble data
-def fetch_ensemble_data(
+# Function to fetch ensemble data asynchronously
+async def fetch_ensemble_data(
     lat, lon, valid_dates_horizons, variable, ibm_client, iso_8601="%Y-%m-%dT%H:%M:%SZ"
 ):
     # Define the layers for the different variables
@@ -658,23 +659,40 @@ def fetch_ensemble_data(
     }
 
     try:
-        # Send the batch request to the API
-        response = query.submit(query_json, ibm_client)
-        df = response.point_data_as_dataframe()
+        # Send the batch request to the API using aiohttp
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"https://api.ibm.com/geospatial/run/na/core/v3/query",
+                json=query_json,
+                headers={
+                    "Authorization": f"Bearer {ibm_client.token}",
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                },
+            ) as response:
 
-        # Process the dataframe returned from the API
-        for index, row in df.iterrows():
-            date = row["timestamp"]
-            ens = int(
-                row["property"].split(";")[0].split(":")[1]
-            )  # Extract ensemble member
-            value = float(row["value"])
+                if response.status != 200:
+                    print(f"Failed to fetch data: {response.status}")
+                    return None
 
-            if date not in dates:
-                dates.append(date)
+                json_data = await response.json()
 
-            # Store the values for the corresponding date and ensemble member
-            values[dates.index(date), ens - 1] = value
+                # Assuming you have a method in ibm_client that converts the json data to DataFrame
+                df = ibm_client.point_data_as_dataframe(json_data)
+
+                # Process the dataframe returned from the API
+                for index, row in df.iterrows():
+                    date = row["timestamp"]
+                    ens = int(
+                        row["property"].split(";")[0].split(":")[1]
+                    )  # Extract ensemble member
+                    value = float(row["value"])
+
+                    if date not in dates:
+                        dates.append(date)
+
+                    # Store the values for the corresponding date and ensemble member
+                    values[dates.index(date), ens - 1] = value
 
     except Exception as e:
         print(f"Error querying data for {variable}: {e}")
