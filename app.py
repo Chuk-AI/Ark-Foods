@@ -614,14 +614,13 @@ def fetch_daily_data():
 # Function to initialize the IBM client
 def initialize_ibm_client():
     try:
-        # Initialize IBM EIS Client
+        # Initialize IBM EIS Client using the ibmpairs library
         eis_client = client.get_client(
             api_key=EIS_API_KEY,
             tenant_id=EIS_TENANT_ID,
             org_id=EIS_ORG_ID,
             legacy=False,
         )
-
         print("IBM EIS client initialized successfully")
         return eis_client
     except Exception as e:
@@ -641,67 +640,53 @@ async def fetch_ensemble_data(
     values = np.zeros((len(valid_dates_horizons), number_of_ensembles))
     dates = []
 
-    try:
-        for valid_date, horizon in valid_dates_horizons:
-            query_json = {
-                "layers": [
-                    {
-                        "type": "raster",
-                        "id": layers_TWC[variable],
-                        "temporal": {
-                            "intervals": [
-                                {
-                                    "start": (
-                                        valid_date - timedelta(seconds=60)
-                                    ).strftime(iso_8601),
-                                    "end": (
-                                        valid_date + timedelta(seconds=60)
-                                    ).strftime(iso_8601),
-                                }
-                            ]
-                        },
-                        "dimensions": [
-                            {"name": "forecast", "value": ens},
-                            {"name": "horizon", "value": horizon},
-                        ],
-                    }
-                    for ens in ensemble_members
-                ],
-                "spatial": {"type": "point", "coordinates": [lat, lon]},
-                "temporal": {"intervals": [{"snapshot": "1982-01-01"}]},
-                "outputType": "json",
-            }
-
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    "https://api.ibm.com/geospatial/run/na/core/v3/query",
-                    json=query_json,
-                    headers={
-                        "Content-Type": "application/json",
-                        "Accept": "application/json",
+    for valid_date, horizon in valid_dates_horizons:
+        query_json = {
+            "layers": [
+                {
+                    "type": "raster",
+                    "id": layers_TWC[variable],
+                    "temporal": {
+                        "intervals": [
+                            {
+                                "start": (valid_date - timedelta(seconds=60)).strftime(
+                                    iso_8601
+                                ),
+                                "end": (valid_date + timedelta(seconds=60)).strftime(
+                                    iso_8601
+                                ),
+                            }
+                        ]
                     },
-                ) as response:
+                    "dimensions": [
+                        {"name": "forecast", "value": ens},
+                        {"name": "horizon", "value": horizon},
+                    ],
+                }
+                for ens in ensemble_members
+            ],
+            "spatial": {"type": "point", "coordinates": [lat, lon]},
+            "temporal": {"intervals": [{"snapshot": "1982-01-01"}]},
+            "outputType": "json",
+        }
 
-                    if response.status != 200:
-                        print(f"Failed to fetch data: {response.status}")
-                        return None
+        try:
+            # Submit the query using the client
+            df = ibm_client.query.submit(query_json).point_data_as_dataframe()
 
-                    json_data = await response.json()
-                    df = ibm_client.point_data_as_dataframe(json_data)
+            for index, row in df.iterrows():
+                date = row["timestamp"]
+                ens = int(row["property"].split(";")[0].split(":")[1])
+                value = float(row["value"])
 
-                    for index, row in df.iterrows():
-                        date = row["timestamp"]
-                        ens = int(row["property"].split(";")[0].split(":")[1])
-                        value = float(row["value"])
+                if date not in dates:
+                    dates.append(date)
 
-                        if date not in dates:
-                            dates.append(date)
+                values[dates.index(date), ens - 1] = value
 
-                        values[dates.index(date), ens - 1] = value
-
-    except Exception as e:
-        print(f"Error querying data for {variable}: {e}")
-        return None
+        except Exception as e:
+            print(f"Error querying data for {variable}: {e}")
+            return None
 
     results[variable] = {"dates": dates, "values": values}
     return results
@@ -721,25 +706,11 @@ async def fetch_elevation_data(lat, lon, ibm_client):
         }
 
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    "https://api.ibm.com/geospatial/run/na/core/v3/query",
-                    json=query_json,
-                    headers={
-                        "Content-Type": "application/json",
-                        "Accept": "application/json",
-                    },
-                ) as response:
+            # Submit the query using the ibmpairs client
+            df = ibm_client.query.submit(query_json).point_data_as_dataframe()
 
-                    if response.status != 200:
-                        print(f"Failed to fetch elevation data: {response.status}")
-                        continue
-
-                    json_data = await response.json()
-                    df = ibm_client.point_data_as_dataframe(json_data)
-
-                    if not df.empty:
-                        elevation[VARIABLE] = float(df.iloc[0]["value"])
+            if not df.empty:
+                elevation[VARIABLE] = float(df.iloc[0]["value"])
 
         except Exception as e:
             print(f"Error fetching elevation data for {VARIABLE}: {e}")
@@ -895,49 +866,36 @@ async def fetch_and_store_climatology_data(
                 "outputType": "json",
             }
 
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    "https://api.ibm.com/geospatial/run/na/core/v3/query",
-                    json=query_json,
-                    headers={
-                        "Content-Type": "application/json",
-                        "Accept": "application/json",
-                    },
-                ) as response:
-                    if response.status != 200:
-                        print(f"Failed to fetch climatology data: {response.status}")
-                        continue
+            # Using ibmpairs query client
+            df = ibm_client.query.submit(query_json).point_data_as_dataframe()
 
-                    json_data = await response.json()
-                    df = ibm_client.point_data_as_dataframe(json_data)
+            if not df.empty:
+                climo_dates_variable = df["timestamp"].tolist()
+                climo_values_variable = df["value"].tolist()
 
-                    if not df.empty:
-                        climo_dates_variable = df["timestamp"].tolist()
-                        climo_values_variable = df["value"].tolist()
+                for date, horizon in valid_dates_horizons:
+                    tmp_date = np.datetime64(
+                        f"2020-{str(date.month).zfill(2)}-{str(date.day).zfill(2)}T00:00:00.000000000"
+                    )
+                    search_date = int(tmp_date.astype(datetime) / 1000000)
 
-                        for date, horizon in valid_dates_horizons:
-                            tmp_date = np.datetime64(
-                                f"2020-{str(date.month).zfill(2)}-{str(date.day).zfill(2)}T00:00:00.000000000"
-                            )
-                            search_date = int(tmp_date.astype(datetime) / 1000000)
+                    if search_date in climo_dates_variable:
+                        index = climo_dates_variable.index(search_date)
+                        climatology_value = float(climo_values_variable[index])
 
-                            if search_date in climo_dates_variable:
-                                index = climo_dates_variable.index(search_date)
-                                climatology_value = float(climo_values_variable[index])
+                        climatology_entry = ClimatologyData(
+                            city_name=city_name,
+                            latitude=lat,
+                            longitude=lon,
+                            forecast_date=date,
+                            variable=variable,
+                            climatology_value=climatology_value,
+                            source="ERA5",
+                        )
+                        db.session.add(climatology_entry)
 
-                                climatology_entry = ClimatologyData(
-                                    city_name=city_name,
-                                    latitude=lat,
-                                    longitude=lon,
-                                    forecast_date=date,
-                                    variable=variable,
-                                    climatology_value=climatology_value,
-                                    source="ERA5",
-                                )
-                                db.session.add(climatology_entry)
-
-                        db.session.commit()
-                        print(f"Climatology data for {variable} saved for {city_name}.")
+                db.session.commit()
+                print(f"Climatology data for {variable} saved for {city_name}.")
 
         except Exception as e:
             print(f"Error fetching climatology data for {variable} in {city_name}: {e}")
