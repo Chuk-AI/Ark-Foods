@@ -611,20 +611,18 @@ def fetch_daily_data():
         )
 
 
-# function for ibm auth
-async def initialize_ibm_client():
+# Function to initialize the IBM client
+def initialize_ibm_client():
     try:
-        # Create a client object with the given API key, tenant ID, and org ID
+        # Initialize IBM EIS Client
         eis_client = client.get_client(
             api_key=EIS_API_KEY,
             tenant_id=EIS_TENANT_ID,
             org_id=EIS_ORG_ID,
             legacy=False,
         )
-        if eis_client.token:
-            print(f"IBM EIS token fetched successfully at {datetime.utcnow()}")
-        else:
-            print("Failed to fetch IBM EIS token.")
+
+        print("IBM EIS client initialized successfully")
         return eis_client
     except Exception as e:
         print(f"Error initializing IBM EIS client: {e}")
@@ -679,7 +677,6 @@ async def fetch_ensemble_data(
                 "https://api.ibm.com/geospatial/run/na/core/v3/query",
                 json=query_json,
                 headers={
-                    "Authorization": f"Bearer {ibm_client.token}",
                     "Content-Type": "application/json",
                     "Accept": "application/json",
                 },
@@ -729,7 +726,6 @@ async def fetch_elevation_data(lat, lon, ibm_client):
                     "https://api.ibm.com/geospatial/run/na/core/v3/query",
                     json=query_json,
                     headers={
-                        "Authorization": f"Bearer {ibm_client.token}",
                         "Content-Type": "application/json",
                         "Accept": "application/json",
                     },
