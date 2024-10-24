@@ -640,6 +640,7 @@ async def fetch_ensemble_data(
     values = np.zeros((len(valid_dates_horizons), number_of_ensembles))
     dates = []
 
+    # Loop through valid dates and horizons
     for valid_date, horizon in valid_dates_horizons:
         query_json = {
             "layers": [
@@ -671,7 +672,7 @@ async def fetch_ensemble_data(
         }
 
         try:
-            # Submit the query using the client
+            # Submit the query using the client and wait for it to complete
             df = query.submit(query_json).point_data_as_dataframe()
 
             for index, row in df.iterrows():
@@ -770,11 +771,11 @@ async def fetch_and_store_weather_forecast(lat, lon, valid_dates_horizons, city_
         print(f"Error fetching elevation data for {city_name}: {e}")
         temperature_adjustment = 0.0
 
-    # Fetch and store ensemble data for each variable
+    # Fetch and store ensemble data for each variable, waiting for each one to complete
     variables = ["PRECIP", "TMIN", "TMAX", "TAVG"]
     for variable in variables:
         try:
-            # Fetch ensemble data asynchronously
+            # Fetch ensemble data asynchronously, ensuring previous data is fetched first
             results = await fetch_ensemble_data(
                 lat, lon, valid_dates_horizons, variable, ibm_client, iso_8601
             )
@@ -842,7 +843,7 @@ async def fetch_and_store_weather_forecasts():
         (start_date + timedelta(days=i), i) for i in range(forecast_length_months * 30)
     ]
 
-    # Loop through each city and fetch weather/climatology data
+    # Loop through each city and fetch weather/climatology data one at a time
     for city_name, coords in locations.items():
         lat = coords["lat"]
         lon = coords["lon"]
