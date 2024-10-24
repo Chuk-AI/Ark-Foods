@@ -750,7 +750,7 @@ def apply_temperature_adjustment(values, adjustment):
 
 
 # Function to fetch weather forecast for a single location and store in the database
-def fetch_and_store_weather_forecast(lat, lon, valid_dates_horizons, city_name):
+async def fetch_and_store_weather_forecast(lat, lon, valid_dates_horizons, city_name):
     try:
         # Adding a custom header to ensure the IBM API receives it properly
         headers = {
@@ -781,7 +781,7 @@ def fetch_and_store_weather_forecast(lat, lon, valid_dates_horizons, city_name):
 
     # Step 1: Fetch Climatology Data and pass ibm_client
     try:
-        fetch_and_store_climatology_data(
+        await fetch_and_store_climatology_data(
             lat, lon, city_name, valid_dates_horizons, ibm_client
         )
     except Exception as e:
@@ -789,7 +789,7 @@ def fetch_and_store_weather_forecast(lat, lon, valid_dates_horizons, city_name):
 
     # Step 2: Fetch Elevation Data for Temperature Adjustments
     try:
-        twc_elevation, srtm_elevation = fetch_elevation_data(lat, lon, ibm_client)
+        twc_elevation, srtm_elevation = await fetch_elevation_data(lat, lon, ibm_client)
         temperature_adjustment = compute_temperature_adjustment(
             twc_elevation, srtm_elevation
         )
@@ -801,7 +801,7 @@ def fetch_and_store_weather_forecast(lat, lon, valid_dates_horizons, city_name):
     variables = ["PRECIP", "TMIN", "TMAX", "TAVG"]
     for variable in variables:
         try:
-            results = fetch_ensemble_data(
+            results = await fetch_ensemble_data(
                 lat, lon, valid_dates_horizons, variable, ibm_client, iso_8601
             )
             if results and variable in results:
