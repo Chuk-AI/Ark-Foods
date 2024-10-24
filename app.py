@@ -926,13 +926,16 @@ def schedule_jobs():
 
     scheduler = BackgroundScheduler(timezone=la_timezone)
 
-    # Schedule Weather Forecast job to run at midnight on the 1st of each month
+    pk_timezone = timezone("Asia/Karachi")
+
+    # Initialize the scheduler
+    scheduler = BackgroundScheduler(timezone=pk_timezone)
+
+    # Schedule data fetching job to run daily at 11:35 AM in Pakistan Time
     scheduler.add_job(
-        func=fetch_and_store_weather_forecasts,
-        trigger=CronTrigger(
-            day=1, hour=0, minute=0, timezone=la_timezone
-        ),  # Runs at midnight on the 1st of the month
-        id="weather_forecast_job",
+        func=fetch_and_store_weather_forecasts,  # Your data fetching function
+        trigger=CronTrigger(hour=11, minute=40, timezone=pk_timezone),  # 11:35 AM PST
+        id="daily_weather_fetch",  # Unique job ID
     )
 
     # Schedule ProduceIQ job to run every 2 hours but start at 12:25 AM to avoid overlap with weather forecast
@@ -959,9 +962,41 @@ def schedule_jobs():
     )
 
 
+# Function to retrieve IBM API JWT token
+def get_ibm_access_token(tenant_id, api_key, org_id):
+    url = f"https://api.ibm.com/saascore/run/authentication-retrieve/api-key?orgId={org_id}"
+
+    headers = {"X-IBM-Client-Id": f"saascore-{tenant_id}", "X-Api-Key": api_key}
+
+    try:
+        response = requests.get(url, headers=headers)
+
+        if response.status_code == 200:
+            token = response.json().get("accessToken")
+            logging.info(f"Successfully retrieved access token: {token}")
+            return token
+        else:
+            logging.error(
+                f"Failed to retrieve access token. Status Code: {response.status_code}, Response: {response.text}"
+            )
+            return None
+    except Exception as e:
+        logging.error(f"Error occurred while fetching access token: {e}")
+        return None
+
+
 # Start scheduler when the app starts
 @app.before_request
 def initialize():
+    # Retrieve IBM API access token
+    token = get_ibm_access_token(EIS_TENANT_ID, EIS_API_KEY, EIS_ORG_ID)
+
+    if token:
+        # Store the token in session or globally for use in API requests
+        session["ibm_access_token"] = token
+        logging.info("IBM access token successfully retrieved and stored.")
+    else:
+        logging.error("Failed to retrieve IBM access token.")
     schedule_jobs()
 
 
