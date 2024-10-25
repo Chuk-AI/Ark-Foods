@@ -652,7 +652,7 @@ async def fetch_ensemble_data(
     # Define the batch sizes for the ensemble members
     ensemble_members_batches = [
         [str(i).zfill(2) for i in range(batch_start, batch_start + 1)]
-        for batch_start in range(1, 51)  # Splitting the 50 ensemble members
+        for batch_start in range(1, 6)  # Splitting the 50 ensemble members
     ]
 
     results = {}
