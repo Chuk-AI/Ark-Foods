@@ -56,10 +56,13 @@ logging.basicConfig(
 import time
 import numpy as np
 import copy
-from ibmpairs import query
+import ibmpairs.query as query
 from dateutil.relativedelta import relativedelta
 from ibmpairs import client
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import ibmpairs.authentication as authentication
+import ibmpairs.catalog as catalog
+import ibmpairs.client as client
 
 CSV_DIRECTORY = "data/"
 
