@@ -694,7 +694,7 @@ async def fetch_ensemble_data(
         }
 
         try:
-            logging.info(f"Submitting query: {json.dumps(query_json, indent=2)}")
+            # logging.info(f"Submitting query: {json.dumps(query_json, indent=2)}")
             df = query.submit(query_json).point_data_as_dataframe()
             logging.info(f"DataFrame returned for {variable}: {df}")
 
