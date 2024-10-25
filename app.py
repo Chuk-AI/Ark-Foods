@@ -793,16 +793,25 @@ async def fetch_and_store_weather_forecast(lat, lon, valid_dates_horizons, city_
                 lat, lon, valid_dates_horizons, variable, ibm_client, iso_8601
             )
             if results and variable in results:
-                for date, ensemble_data in zip(
-                    results[variable]["dates"], results[variable]["values"]
-                ):
+                dates = results[variable]["dates"]
+                values = results[variable]["values"]
+
+                if len(dates) == 0 or len(values) == 0:
+                    logging.warning(
+                        f"No data found for {variable} in {city_name}. Skipping."
+                    )
+                    continue
+
+                for date, ensemble_data in zip(dates, values):
                     if variable in ["TMAX", "TMIN", "TAVG"]:
                         ensemble_data = apply_temperature_adjustment(
                             ensemble_data, temperature_adjustment
                         )
 
                     for ens, value in enumerate(ensemble_data):
-                        forecast_date = datetime.utcfromtimestamp(date / 1000).date()
+                        forecast_date = datetime.fromtimestamp(
+                            date / 1000, tz=datetime.timezone.utc
+                        ).date()
 
                         weather_forecast = WeatherForecast(
                             city_name=city_name,
@@ -816,8 +825,14 @@ async def fetch_and_store_weather_forecast(lat, lon, valid_dates_horizons, city_
                         )
                         db.session.add(weather_forecast)
 
-                db.session.commit()
-                logging.info(f"Weather data for {variable} saved for {city_name}.")
+                try:
+                    db.session.commit()
+                    logging.info(f"Weather data for {variable} saved for {city_name}.")
+                except Exception as commit_error:
+                    logging.error(
+                        f"Error committing weather data for {variable} in {city_name}: {commit_error}"
+                    )
+                    db.session.rollback()  # Rollback in case of any error during commit
             else:
                 logging.info(f"No data found for {variable} for {city_name}.")
         except Exception as e:
