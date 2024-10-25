@@ -796,7 +796,7 @@ async def fetch_and_store_weather_forecast(lat, lon, valid_dates_horizons, city_
                 f"Error fetching weather data for {variable} in {city_name}: {e}"
             )
 
-    # Step 3: Fetch and store climatology data after ensemble data
+    # Step 3: Fetch and store climatology data after all ensemble data
     try:
         await fetch_and_store_climatology_data(
             lat, lon, city_name, valid_dates_horizons, ibm_client
