@@ -612,6 +612,9 @@ def fetch_daily_data():
         )
 
 
+iso_8601 = "%Y-%m-%dT%H:%M:%SZ"  # Define the ISO 8601 format here for universal use
+
+
 # Function to initialize the IBM client
 def initialize_ibm_client():
     try:
