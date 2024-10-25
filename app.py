@@ -153,6 +153,7 @@ class PriceData(db.Model):
 
 
 class WeatherForecast(db.Model):
+    __tablename__ = "weather_forecast"
     id = db.Column(db.Integer, primary_key=True)
     city_name = db.Column(db.String(100), nullable=False)
     latitude = db.Column(db.Float, nullable=False)
