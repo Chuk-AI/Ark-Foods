@@ -649,17 +649,20 @@ async def fetch_ensemble_data(
     lat, lon, valid_dates_horizons, variable, ibm_client, iso_8601="%Y-%m-%dT%H:%M:%SZ"
 ):
     layers_TWC = {"PRECIP": 50686, "TMIN": 50683, "TMAX": 50684, "TAVG": 50685}
-    ensemble_members_batches = [[str(i).zfill(2)] for i in range(1, 51)]
-    results = {}
-    values = np.zeros((len(valid_dates_horizons), 50))
-    dates = []
+    ensemble_members_batches = [
+        [str(i).zfill(2) for i in range(1, 2)]
+    ]  # testing with 1 ensemble member for simplicity
 
-    logging.info(f"Fetching ensemble data for {variable} at (lat: {lat}, lon: {lon})")
+    results = {}
+    dates = []
+    values = np.zeros(
+        (len(valid_dates_horizons), len(ensemble_members_batches[0]))
+    )  # Array for each ensemble member
 
     for ensemble_members in ensemble_members_batches:
         logging.info(f"Querying ensemble members batch: {ensemble_members}")
 
-        # Updated query structure to align with IBM's logic
+        # Revised query structure
         query_json = {
             "layers": [
                 {
@@ -674,8 +677,8 @@ async def fetch_ensemble_data(
                                 "end": (valid_date + timedelta(seconds=60)).strftime(
                                     iso_8601
                                 ),
-                            },
-                        ]
+                            }
+                        ],
                     },
                     "dimensions": [
                         {"name": "forecast", "value": ens},
@@ -691,7 +694,7 @@ async def fetch_ensemble_data(
         }
 
         try:
-            # logging.info(f"Submitting query: {json.dumps(query_json, indent=2)}")
+            logging.info(f"Submitting query: {json.dumps(query_json, indent=2)}")
             df = query.submit(query_json).point_data_as_dataframe()
             logging.info(f"DataFrame returned for {variable}: {df}")
 
@@ -699,9 +702,12 @@ async def fetch_ensemble_data(
                 logging.warning(f"No data found for {variable} in {lat}, {lon}.")
                 continue
 
+            # Process the data if found
             for index, row in df.iterrows():
                 date = row["timestamp"]
-                ens = int(row["property"].split(";")[0].split(":")[1])
+                ens = int(
+                    row["property"].split(";")[0].split(":")[1]
+                )  # Forecast number
                 value = float(row["value"])
 
                 if date not in dates:
