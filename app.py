@@ -611,6 +611,21 @@ def fetch_daily_data():
         )
 
 
+def compute_temperature_adjustment(twc_elevation, srtm_elevation):
+    # Standard lapse rate: -0.0098°C per meter
+    if twc_elevation is not None and srtm_elevation is not None:
+        elevation_diff = srtm_elevation - twc_elevation
+        temperature_adjustment = elevation_diff * (-0.0098)  # °C per meter
+        return temperature_adjustment
+    return 0.0
+
+
+# Function to apply temperature adjustment to the forecast values
+def apply_temperature_adjustment(values, adjustment):
+    # Apply the adjustment to the entire array of temperature values
+    return values + adjustment
+
+
 # Function to initialize the IBM client
 def initialize_ibm_client():
     try:
