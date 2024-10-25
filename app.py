@@ -649,13 +649,9 @@ async def fetch_ensemble_data(
     lat, lon, valid_dates_horizons, variable, ibm_client, iso_8601="%Y-%m-%dT%H:%M:%SZ"
 ):
     layers_TWC = {"PRECIP": 50686, "TMIN": 50683, "TMAX": 50684, "TAVG": 50685}
-    ensemble_members_batches = [
-        [str(i).zfill(2) for i in range(batch_start, batch_start + 1)]
-        for batch_start in range(1, 51)
-    ]
-
+    ensemble_members_batches = [[str(i).zfill(2)] for i in range(1, 51)]
     results = {}
-    values = np.zeros((len(valid_dates_horizons), 50))  # Array for 50 ensemble members
+    values = np.zeros((len(valid_dates_horizons), 50))
     dates = []
 
     logging.info(f"Fetching ensemble data for {variable} at (lat: {lat}, lon: {lon})")
@@ -663,6 +659,7 @@ async def fetch_ensemble_data(
     for ensemble_members in ensemble_members_batches:
         logging.info(f"Querying ensemble members batch: {ensemble_members}")
 
+        # Updated query structure to align with IBM's logic
         query_json = {
             "layers": [
                 {
@@ -677,7 +674,7 @@ async def fetch_ensemble_data(
                                 "end": (valid_date + timedelta(seconds=60)).strftime(
                                     iso_8601
                                 ),
-                            }
+                            },
                         ]
                     },
                     "dimensions": [
@@ -710,13 +707,13 @@ async def fetch_ensemble_data(
                 if date not in dates:
                     dates.append(date)
 
-                values[dates.index(date), ens - 1] = value  # Ens are 1-indexed
+                values[dates.index(date), ens - 1] = value
 
         except Exception as e:
             logging.error(f"Error querying data for {variable}: {e}")
             continue
 
-        await asyncio.sleep(1)  # Delay between batch queries to prevent throttling
+        await asyncio.sleep(1)
 
     results[variable] = {"dates": dates, "values": values}
     return results
@@ -739,7 +736,6 @@ async def fetch_elevation_data(lat, lon, ibm_client):
 
         try:
             df = query.submit(query_json).point_data_as_dataframe()
-
             if not df.empty:
                 elevation[VARIABLE] = float(df.iloc[0]["value"])
                 logging.info(f"Elevation for {VARIABLE}: {elevation[VARIABLE]}")
@@ -765,8 +761,6 @@ async def fetch_and_store_weather_forecast(lat, lon, valid_dates_horizons, city_
         logging.error(f"Error initializing IBM client: {e}")
         return
 
-    iso_8601 = "%Y-%m-%dT%H:%M:%SZ"
-
     try:
         twc_elevation, srtm_elevation = await fetch_elevation_data(lat, lon, ibm_client)
         temperature_adjustment = compute_temperature_adjustment(
@@ -781,7 +775,7 @@ async def fetch_and_store_weather_forecast(lat, lon, valid_dates_horizons, city_
         try:
             logging.info(f"Fetching ensemble data for {variable} in {city_name}")
             results = await fetch_ensemble_data(
-                lat, lon, valid_dates_horizons, variable, ibm_client, iso_8601
+                lat, lon, valid_dates_horizons, variable, ibm_client
             )
             if results and variable in results:
                 dates, values = results[variable]["dates"], results[variable]["values"]
@@ -792,7 +786,6 @@ async def fetch_and_store_weather_forecast(lat, lon, valid_dates_horizons, city_
                     )
                     continue
 
-                # Prepare data for batch insertion
                 entries = []
                 for date, ensemble_data in zip(dates, values):
                     if variable in ["TMAX", "TMIN", "TAVG"]:
@@ -825,10 +818,8 @@ async def fetch_and_store_weather_forecast(lat, lon, valid_dates_horizons, city_
                     logging.error(
                         f"Error committing data for {variable} in {city_name}: {commit_error}"
                     )
-                    db.session.rollback()  # Log the error but don't save any partial data
+                    db.session.rollback()
                     continue
-            else:
-                logging.info(f"No data found for {variable} for {city_name}.")
         except Exception as e:
             logging.error(f"Error fetching data for {variable} in {city_name}: {e}")
 
@@ -851,7 +842,7 @@ async def fetch_and_store_weather_forecasts():
         # Additional locations as needed...
     }
     start_date = datetime.now(pytz.UTC)
-    forecast_length_months = 6
+    forecast_length_months = 1
     valid_dates_horizons = [
         (start_date + timedelta(days=i), i) for i in range(forecast_length_months * 30)
     ]
