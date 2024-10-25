@@ -766,29 +766,27 @@ async def fetch_elevation_data(lat, lon, ibm_client):
 
 # Function to fetch and store weather forecast for a single location
 async def fetch_and_store_weather_forecast(lat, lon, valid_dates_horizons, city_name):
-    logging.info(f"Starting data fetch for {city_name} (lat: {lat}, lon: {lon})")
-
-    ibm_client = initialize_ibm_client()
-    if not ibm_client:
-        logging.error(
-            f"Failed to retrieve IBM client for {city_name}. Skipping forecast fetch."
-        )
+    logging.info(f"Fetching weather data for {city_name} (lat: {lat}, lon: {lon})")
+    try:
+        ibm_client = initialize_ibm_client()
+        if not ibm_client:
+            logging.error(f"Failed to initialize IBM client for {city_name}.")
+            return
+    except Exception as e:
+        logging.error(f"Error initializing IBM client: {e}")
         return
 
     iso_8601 = "%Y-%m-%dT%H:%M:%SZ"
 
-    # Step 1: Fetch elevation data for temperature adjustment
     try:
         twc_elevation, srtm_elevation = await fetch_elevation_data(lat, lon, ibm_client)
         temperature_adjustment = compute_temperature_adjustment(
             twc_elevation, srtm_elevation
         )
-        logging.info(f"Temperature adjustment computed: {temperature_adjustment}")
     except Exception as e:
-        logging.error(f"Error fetching elevation data for {city_name}: {e}")
+        logging.error(f"Elevation data fetch error for {city_name}: {e}")
         temperature_adjustment = 0.0
 
-    # Step 2: Fetch and store ensemble data
     variables = ["PRECIP", "TMIN", "TMAX", "TAVG"]
     for variable in variables:
         try:
@@ -796,49 +794,63 @@ async def fetch_and_store_weather_forecast(lat, lon, valid_dates_horizons, city_
             results = await fetch_ensemble_data(
                 lat, lon, valid_dates_horizons, variable, ibm_client, iso_8601
             )
+            if results and variable in results:
+                dates, values = results[variable]["dates"], results[variable]["values"]
 
-            if not results or not results[variable]["dates"]:
-                logging.warning(
-                    f"No data available for {variable} in {city_name}. Skipping."
-                )
-                continue
-
-            dates = results[variable]["dates"]
-            values = results[variable]["values"]
-
-            for date, ensemble_data in zip(dates, values):
-                if variable in ["TMAX", "TMIN", "TAVG"]:
-                    ensemble_data = apply_temperature_adjustment(
-                        ensemble_data, temperature_adjustment
+                if not dates or not values:
+                    logging.warning(
+                        f"No data found for {variable} in {city_name}. Skipping."
                     )
+                    continue
 
-                for ens, value in enumerate(ensemble_data):
-                    forecast_date = datetime.fromtimestamp(
-                        date / 1000, tz=datetime.timezone.utc
-                    ).date()
+                # Prepare data for batch insertion
+                entries = []
+                for date, ensemble_data in zip(dates, values):
+                    if variable in ["TMAX", "TMIN", "TAVG"]:
+                        ensemble_data = apply_temperature_adjustment(
+                            ensemble_data, temperature_adjustment
+                        )
 
-                    weather_forecast = WeatherForecast(
-                        city_name=city_name,
-                        latitude=lat,
-                        longitude=lon,
-                        forecast_date=forecast_date,
-                        variable=variable,
-                        forecasted_value=value,
-                        ensemble_member=ens + 1,
-                        source="IBM",
+                    for ens, value in enumerate(ensemble_data):
+                        forecast_date = datetime.fromtimestamp(
+                            date / 1000, tz=datetime.timezone.utc
+                        ).date()
+                        entries.append(
+                            WeatherForecast(
+                                city_name=city_name,
+                                latitude=lat,
+                                longitude=lon,
+                                forecast_date=forecast_date,
+                                variable=variable,
+                                forecasted_value=value,
+                                ensemble_member=ens + 1,
+                                source="IBM",
+                            )
+                        )
+
+                try:
+                    db.session.add_all(entries)
+                    db.session.commit()
+                    logging.info(f"Weather data for {variable} saved for {city_name}.")
+                except Exception as commit_error:
+                    logging.error(
+                        f"Error committing data for {variable} in {city_name}: {commit_error}"
                     )
-                    db.session.add(weather_forecast)
-
-            try:
-                db.session.commit()
-                logging.info(f"Weather data committed for {variable} in {city_name}.")
-            except Exception as commit_error:
-                logging.error(
-                    f"Error committing data for {variable} in {city_name}: {commit_error}"
-                )
-                db.session.rollback()
+                    db.session.rollback()  # Log the error but don't save any partial data
+                    continue
+            else:
+                logging.info(f"No data found for {variable} for {city_name}.")
         except Exception as e:
             logging.error(f"Error fetching data for {variable} in {city_name}: {e}")
+
+    try:
+        await fetch_and_store_climatology_data(
+            lat, lon, city_name, valid_dates_horizons, ibm_client
+        )
+    except Exception as e:
+        logging.error(f"Climatology data fetch error for {city_name}: {e}")
+
+    logging.info(f"Completed weather and climatology data fetch for {city_name}.")
 
 
 # Function to fetch and store weather forecasts for multiple locations
@@ -847,19 +859,8 @@ async def fetch_and_store_weather_forecasts():
         "Sinaloa": {"lat": 25.1721, "lon": -107.4795},
         "Sonora": {"lat": 29.2972, "lon": -110.3309},
         "Ensenada": {"lat": 31.86613056, "lon": -116.59971944},
-        "Baja Mx": {"lat": 28.0444, "lon": -115.2062},
-        "Culican": {"lat": 24.8091, "lon": -107.3940},
-        "Hendersonville, NC": {"lat": 35.3187, "lon": -82.4610},
-        "Cameron SC": {"lat": 33.5568, "lon": -80.7151},
-        "Adel, Ga": {"lat": 31.13633333, "lon": -83.42216389},
-        "Lake Park Ga": {"lat": 30.6844, "lon": -83.1849},
-        "Bowling Green Fl": {"lat": 27.6386, "lon": -81.8265},
-        "Immokalee Fl": {"lat": 26.4187, "lon": -81.4173},
-        "Palm Beach County, FL": {"lat": 26.7153, "lon": -80.0534},
-        "Vineland NJ": {"lat": 39.4802, "lon": -75.0138},
-        "Sodus, Michigan": {"lat": 42.0086, "lon": -86.3614},
+        # Additional locations as needed...
     }
-
     start_date = datetime.now(pytz.UTC)
     forecast_length_months = 6
     valid_dates_horizons = [
@@ -867,12 +868,17 @@ async def fetch_and_store_weather_forecasts():
     ]
 
     for city_name, coords in locations.items():
-        lat = coords["lat"]
-        lon = coords["lon"]
-        logging.info(f"Fetching forecast for {city_name} (lat: {lat}, lon: {lon})")
-        await fetch_and_store_weather_forecast(
-            lat, lon, valid_dates_horizons, city_name
+        lat, lon = coords["lat"], coords["lon"]
+        logging.info(
+            f"Starting forecast fetch for {city_name} at (lat: {lat}, lon: {lon})"
         )
+        try:
+            await fetch_and_store_weather_forecast(
+                lat, lon, valid_dates_horizons, city_name
+            )
+        except Exception as e:
+            logging.error(f"Forecast fetch error for {city_name}: {e}")
+            continue  # Proceed with next city
 
 
 # Function to fetch climatology data and store it
