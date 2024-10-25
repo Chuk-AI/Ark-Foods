@@ -648,16 +648,23 @@ async def fetch_ensemble_data(
     lat, lon, valid_dates_horizons, variable, ibm_client, iso_8601="%Y-%m-%dT%H:%M:%SZ"
 ):
     layers_TWC = {"PRECIP": 50686, "TMIN": 50683, "TMAX": 50684, "TAVG": 50685}
-    number_of_ensembles = 5
-    ensemble_members = [str(i).zfill(2) for i in range(1, number_of_ensembles + 1)]
+
+    # Define the batch sizes for the ensemble members
+    ensemble_members_batches = [
+        [str(i).zfill(2) for i in range(batch_start, batch_start + 1)]
+        for batch_start in range(1, 51)  # Splitting the 50 ensemble members
+    ]
 
     results = {}
-    values = np.zeros((len(valid_dates_horizons), number_of_ensembles))
+    values = np.zeros((len(valid_dates_horizons), 50))  # 50 ensembles
     dates = []
 
     logging.info(f"Fetching ensemble data for {variable} at (lat: {lat}, lon: {lon})")
 
-    for valid_date, horizon in valid_dates_horizons:
+    # Querying in batches
+    for ensemble_members in ensemble_members_batches:
+        logging.info(f"Querying batch for ensemble members: {ensemble_members}")
+
         query_json = {
             "layers": [
                 {
@@ -680,6 +687,7 @@ async def fetch_ensemble_data(
                         {"name": "horizon", "value": horizon},
                     ],
                 }
+                for valid_date, horizon in valid_dates_horizons
                 for ens in ensemble_members
             ],
             "spatial": {"type": "point", "coordinates": [lat, lon]},
@@ -688,8 +696,11 @@ async def fetch_ensemble_data(
         }
 
         try:
+            # Submit the query using the client
             df = query.submit(query_json).point_data_as_dataframe()
-            logging.info(f"Data fetched for {variable} on date {valid_date}")
+            logging.info(
+                f"Data fetched for {variable} for ensemble members {ensemble_members}"
+            )
 
             for index, row in df.iterrows():
                 date = row["timestamp"]
@@ -699,14 +710,16 @@ async def fetch_ensemble_data(
                 if date not in dates:
                     dates.append(date)
 
-                values[dates.index(date), ens - 1] = value
+                values[dates.index(date), ens - 1] = value  # Ens are 1-indexed
 
         except Exception as e:
             logging.error(f"Error querying data for {variable}: {e}")
             return None
 
+        # Adding a small delay between each batch query to prevent API throttling
+        await asyncio.sleep(1)
+
     results[variable] = {"dates": dates, "values": values}
-    await asyncio.sleep(1)  # Adding delay between requests to prevent loops
     return results
 
 
