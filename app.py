@@ -651,17 +651,17 @@ async def fetch_ensemble_data(
     layers_TWC = {"PRECIP": 50686, "TMIN": 50683, "TMAX": 50684, "TAVG": 50685}
     ensemble_members_batches = [
         [str(i).zfill(2) for i in range(batch_start, batch_start + 1)]
-        for batch_start in range(1, 6)
+        for batch_start in range(1, 51)
     ]
 
     results = {}
-    values = np.zeros((len(valid_dates_horizons), 50))  # 50 ensembles
+    values = np.zeros((len(valid_dates_horizons), 50))  # Array for 50 ensemble members
     dates = []
 
     logging.info(f"Fetching ensemble data for {variable} at (lat: {lat}, lon: {lon})")
 
     for ensemble_members in ensemble_members_batches:
-        logging.info(f"Querying batch for ensemble members: {ensemble_members}")
+        logging.info(f"Querying ensemble members batch: {ensemble_members}")
 
         query_json = {
             "layers": [
@@ -694,16 +694,12 @@ async def fetch_ensemble_data(
         }
 
         try:
-            logging.info(
-                f"Submitting query for batch: {json.dumps(query_json, indent=2)}"
-            )
+            logging.info(f"Submitting query: {json.dumps(query_json, indent=2)}")
             df = query.submit(query_json).point_data_as_dataframe()
-            logging.info(f"Returned DataFrame for {variable}: {df}")
+            logging.info(f"DataFrame returned for {variable}: {df}")
 
             if df.empty:
-                logging.warning(
-                    f"No data returned for {variable} in batch {ensemble_members}."
-                )
+                logging.warning(f"No data found for {variable} in {lat}, {lon}.")
                 continue
 
             for index, row in df.iterrows():
@@ -718,15 +714,12 @@ async def fetch_ensemble_data(
 
         except Exception as e:
             logging.error(f"Error querying data for {variable}: {e}")
-            continue  # Skip this batch on error
+            continue
 
-        await asyncio.sleep(1)  # Small delay to avoid throttling
+        await asyncio.sleep(1)  # Delay between batch queries to prevent throttling
 
     results[variable] = {"dates": dates, "values": values}
-    logging.info(
-        f"Fetched data for {variable} at (lat: {lat}, lon: {lon}) with results: {results}"
-    )
-    return results if results[variable]["dates"] else None  # Return None if no dates
+    return results
 
 
 # Helper function to fetch elevation data for a location (async)
@@ -749,19 +742,15 @@ async def fetch_elevation_data(lat, lon, ibm_client):
 
             if not df.empty:
                 elevation[VARIABLE] = float(df.iloc[0]["value"])
-                logging.info(
-                    f"Elevation data fetched for {VARIABLE}: {elevation[VARIABLE]}"
-                )
+                logging.info(f"Elevation for {VARIABLE}: {elevation[VARIABLE]}")
 
         except Exception as e:
             logging.error(f"Error fetching elevation data for {VARIABLE}: {e}")
-            continue
 
     if "twc_elevation" in elevation and "srtm_elevation" in elevation:
-        await asyncio.sleep(1)  # Adding delay between requests
+        await asyncio.sleep(1)
         return elevation["twc_elevation"], elevation["srtm_elevation"]
-    else:
-        return None, None
+    return None, None
 
 
 # Function to fetch and store weather forecast for a single location
@@ -893,6 +882,7 @@ async def fetch_and_store_climatology_data(
             logging.info(
                 f"Fetching climatology data for {variable} for city: {city_name}"
             )
+
             query_json = {
                 "layers": [{"type": "raster", "id": layers_ERA5[variable]}],
                 "spatial": {"type": "point", "coordinates": [lat, lon]},
@@ -936,6 +926,7 @@ async def fetch_and_store_climatology_data(
             logging.error(
                 f"Error fetching climatology data for {variable} in {city_name}: {e}"
             )
+            continue
 
 
 # Scheduler for API calls to USDA and Produce IQ
