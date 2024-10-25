@@ -698,10 +698,13 @@ async def fetch_ensemble_data(
 
         try:
             # Submit the query using the client
+            logging.info(f"Submitting query: {json.dumps(query_json, indent=2)}")
             df = query.submit(query_json).point_data_as_dataframe()
-            logging.info(
-                f"Data fetched for {variable} for ensemble members {ensemble_members}"
-            )
+            logging.info(f"Returned DataFrame for {variable}: {df}")
+
+            if df.empty:
+                logging.warning(f"No data found for {variable} in {lat}, {lon}.")
+                continue
 
             for index, row in df.iterrows():
                 date = row["timestamp"]
