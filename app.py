@@ -648,60 +648,74 @@ def apply_temperature_adjustment(values, adjustment):
 
 
 # Function to fetch ensemble data asynchronously
+# Function to fetch ensemble data asynchronously
 async def fetch_ensemble_data(lat, lon, valid_dates_horizons, variable, ibm_client):
     layers_TWC = {"PRECIP": 50686, "TMIN": 50683, "TMAX": 50684, "TAVG": 50685}
-    ensemble_members_batches = [
-        [str(i).zfill(2) for i in range(1, 2)]
-    ]  # Test with 1 member
+    ensemble_members = [
+        str(i).zfill(2) for i in range(1, 6)
+    ]  # Fetch up to 5 ensemble members for better coverage
+
     results = {}
     dates = []
-    values = np.zeros((len(valid_dates_horizons), len(ensemble_members_batches[0])))
+    values = np.zeros((len(valid_dates_horizons), len(ensemble_members)))
 
-    for ensemble_members in ensemble_members_batches:
+    for valid_date, horizon in valid_dates_horizons:
+        query_layers = [
+            {
+                "type": "raster",
+                "id": layers_TWC[variable],
+                "temporal": {
+                    "intervals": [
+                        {
+                            "start": (valid_date - timedelta(seconds=60)).strftime(
+                                iso_8601
+                            ),
+                            "end": (valid_date + timedelta(seconds=60)).strftime(
+                                iso_8601
+                            ),
+                        }
+                    ]
+                },
+                "dimensions": [
+                    {"name": "forecast", "value": ens},
+                    {"name": "horizon", "value": horizon},
+                ],
+            }
+            for ens in ensemble_members
+        ]
+
         query_json = {
-            "layers": [
-                {
-                    "type": "raster",
-                    "id": layers_TWC[variable],
-                    "temporal": {
-                        "intervals": [
-                            {
-                                "start": (valid_date - timedelta(seconds=60)).strftime(
-                                    iso_8601
-                                ),
-                                "end": (valid_date + timedelta(seconds=60)).strftime(
-                                    iso_8601
-                                ),
-                            }
-                        ]
-                    },
-                    "dimensions": [
-                        {"name": "forecast", "value": ens},
-                        {"name": "horizon", "value": horizon},
-                    ],
-                }
-                for valid_date, horizon in valid_dates_horizons
-                for ens in ensemble_members
-            ],
+            "layers": query_layers,
             "spatial": {"type": "point", "coordinates": [lat, lon]},
-            "temporal": {"intervals": [{"snapshot": "1982-01-01"}]},
             "outputType": "json",
         }
+
         try:
+            logging.info(f"Submitting ensemble query for {variable}")
             df = query.submit(query_json).point_data_as_dataframe()
             if df.empty:
-                logging.warning(f"No data found for {variable} in {lat}, {lon}.")
+                logging.warning(
+                    f"No data found for {variable} at ({lat}, {lon}) on {valid_date}"
+                )
                 continue
+
+            # Process returned data
             for index, row in df.iterrows():
                 date = row["timestamp"]
                 ens = int(row["property"].split(";")[0].split(":")[1])
                 value = float(row["value"])
+
                 if date not in dates:
                     dates.append(date)
+
                 values[dates.index(date), ens - 1] = value
+
         except Exception as e:
-            logging.error(f"Error querying data for {variable}: {e}")
-        await asyncio.sleep(1)
+            logging.error(f"Error querying data for {variable} on {valid_date}: {e}")
+            continue
+
+        await asyncio.sleep(1)  # Pause between queries to avoid throttling
+
     results[variable] = {"dates": dates, "values": values}
     return results
 
