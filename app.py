@@ -646,7 +646,7 @@ def fetch_and_store_weather_forecast():
     start_forecast_date = datetime.strptime("2024-10-01", "%Y-%m-%d")
     forecast_length_months = 1
     layers_TWC = {"PRECIP": 50686, "TMIN": 50683, "TMAX": 50684, "TAVG": 50685}
-    number_of_ensembles = 50
+    number_of_ensembles = 5
     iso_8601 = "%Y-%m-%dT%H:%M:%SZ"
 
     # List of cities with their latitude and longitude
