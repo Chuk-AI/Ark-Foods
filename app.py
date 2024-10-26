@@ -644,9 +644,9 @@ def fetch_and_store_weather_forecast():
 
     # Forecast parameters
     start_forecast_date = datetime.strptime("2024-10-01", "%Y-%m-%d")
-    forecast_length_months = 1
+    forecast_length_months = 7
     layers_TWC = {"PRECIP": 50686, "TMIN": 50683, "TMAX": 50684, "TAVG": 50685}
-    number_of_ensembles = 5
+    number_of_ensembles = 50
     iso_8601 = "%Y-%m-%dT%H:%M:%SZ"
 
     # List of cities with their latitude and longitude
@@ -680,9 +680,14 @@ def fetch_and_store_weather_forecast():
         date += timedelta(days=1)
     logging.info(f"Generated {len(valid_dates_horizons)} forecast horizons.")
 
-    # Ensemble members in batches
+    # Ensemble members in smaller batches
+    batch_size = 5  # Adjust batch size to avoid timeouts
     ensemble_members_batches = [
-        [str(x).zfill(2) for x in range(1, number_of_ensembles + 1)]
+        [
+            str(x).zfill(2)
+            for x in range(i, min(i + batch_size, number_of_ensembles + 1))
+        ]
+        for i in range(1, number_of_ensembles + 1, batch_size)
     ]
 
     # Loop over each city, variable, and ensemble members in batches
@@ -741,45 +746,7 @@ def fetch_and_store_weather_forecast():
                         continue
 
                     logging.info(f"Data retrieved, processing {len(df)} records.")
-                    for _, row in df.iterrows():
-                        try:
-                            date = int(row["timestamp"])
-                            value = float(row["value"])
-                            ens = int(
-                                row.get("property", "forecast:0")
-                                .split(";")[0]
-                                .split(":")[1]
-                            )
-                            logging.debug(
-                                f"Processing record - Date: {date}, Value: {value}, Forecast: {ens}"
-                            )
-
-                            # Convert timestamp to datetime
-                            forecast_date = datetime.utcfromtimestamp(
-                                date / 1000
-                            ).date()
-
-                            # Store data in the WeatherForecast database
-                            weather_forecast = WeatherForecast(
-                                city_name=city,
-                                latitude=lat,
-                                longitude=lon,
-                                forecast_date=forecast_date,
-                                variable=VARIABLE,
-                                forecasted_value=value,
-                                ensemble_member=ens,
-                                source="IBM",
-                            )
-                            db.session.add(weather_forecast)
-                        except Exception as e:
-                            logging.error(
-                                f"Error processing record for {VARIABLE}: {e}"
-                            )
-                            logging.debug(f"Record data: {row}")
-                            continue
-
-                    db.session.commit()
-                    logging.info(f"Data points for city {city} stored successfully.")
+                    process_and_store_data(df, city, lat, lon, VARIABLE)
 
                 except Exception as e:
                     logging.error(f"Error during query submission for {VARIABLE}: {e}")
@@ -787,6 +754,41 @@ def fetch_and_store_weather_forecast():
 
     logging.info("Weather forecast data query completed successfully.")
     return "Weather forecast data query completed."
+
+
+def process_and_store_data(df, city, lat, lon, VARIABLE):
+    # Process and store data in the database
+    for _, row in df.iterrows():
+        try:
+            date = int(row["timestamp"])
+            value = float(row["value"])
+            ens = int(row.get("property", "forecast:0").split(";")[0].split(":")[1])
+            logging.debug(
+                f"Processing record - Date: {date}, Value: {value}, Forecast: {ens}"
+            )
+
+            # Convert timestamp to datetime
+            forecast_date = datetime.utcfromtimestamp(date / 1000).date()
+
+            # Store data in the WeatherForecast database
+            weather_forecast = WeatherForecast(
+                city_name=city,
+                latitude=lat,
+                longitude=lon,
+                forecast_date=forecast_date,
+                variable=VARIABLE,
+                forecasted_value=value,
+                ensemble_member=ens,
+                source="IBM",
+            )
+            db.session.add(weather_forecast)
+        except Exception as e:
+            logging.error(f"Error processing record for {VARIABLE}: {e}")
+            logging.debug(f"Record data: {row}")
+            continue
+
+    db.session.commit()
+    logging.info(f"Data points for city {city} stored successfully.")
 
 
 # Scheduler for API calls to USDA and Produce IQ
