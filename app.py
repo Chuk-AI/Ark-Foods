@@ -645,11 +645,27 @@ def fetch_and_store_weather_forecast():
     # Forecast parameters
     start_forecast_date = datetime.strptime("2024-10-01", "%Y-%m-%d")
     forecast_length_months = 1
-    lat = 30.6844
-    lon = -83.1849
-    layers_TWC = {"PRECIP": 50686}
+    layers_TWC = {"PRECIP": 50686, "TMIN": 50683, "TMAX": 50684, "TAVG": 50685}
     number_of_ensembles = 50
     iso_8601 = "%Y-%m-%dT%H:%M:%SZ"
+
+    # List of cities with their latitude and longitude
+    cities = {
+        "Sinaloa": {"lat": "25.1721", "lon": "-107.4795"},
+        "Sonora": {"lat": "29.2972", "lon": "-110.3309"},
+        "Ensenada": {"lat": "31.86613056", "lon": "-116.59971944"},
+        "Baja Mx": {"lat": "28.0444", "lon": "-115.2062"},
+        "Culican": {"lat": "24.8091", "lon": "-107.3940"},
+        "Hendersonville, NC": {"lat": "35.3187", "lon": "-82.4610"},
+        "Cameron SC": {"lat": "33.5568", "lon": "-80.7151"},
+        "Adel, Ga": {"lat": "31.13633333", "lon": "-83.42216389"},
+        "Lake Park Ga": {"lat": "30.6844", "lon": "-83.1849"},
+        "Bowling Green Fl": {"lat": "27.6386", "lon": "-81.8265"},
+        "Immokalee Fl": {"lat": "26.4187", "lon": "-81.4173"},
+        "Palm Beach County, fl": {"lat": "26.7153", "lon": "-80.0534"},
+        "Vineland NJ": {"lat": "39.4802", "lon": "-75.0138"},
+        "Sodus, Michigan": {"lat": "42.0086", "lon": "-86.3614"},
+    }
 
     # Generate valid dates and horizons
     valid_dates_horizons = []
@@ -666,69 +682,108 @@ def fetch_and_store_weather_forecast():
 
     # Ensemble members in batches
     ensemble_members_batches = [
-        [str(x).zfill(2) for x in range(i, i + 1)]
-        for i in range(1, number_of_ensembles + 1)
+        [str(x).zfill(2) for x in range(1, number_of_ensembles + 1)]
     ]
 
-    # Loop over each variable and ensemble members in batches
-    for VARIABLE in ["PRECIP"]:
-        logging.info(f"Starting data query for variable: {VARIABLE}")
-        for ensemble_members in ensemble_members_batches:
-            logging.info(f"Querying ensemble members: {ensemble_members}")
+    # Loop over each city, variable, and ensemble members in batches
+    for city, coordinates in cities.items():
+        lat = float(coordinates["lat"])
+        lon = float(coordinates["lon"])
+        logging.info(f"Starting data query for city: {city} (lat: {lat}, lon: {lon})")
 
-            # Construct query JSON payload
-            query_json = {
-                "layers": [
-                    {
-                        "type": "raster",
-                        "id": layers_TWC[VARIABLE],
-                        "temporal": {
-                            "intervals": [
-                                {
-                                    "start": (
-                                        valid_date - timedelta(seconds=60)
-                                    ).strftime(iso_8601),
-                                    "end": (
-                                        valid_date + timedelta(seconds=60)
-                                    ).strftime(iso_8601),
-                                }
-                            ]
-                        },
-                        "dimensions": [
-                            {"name": "forecast", "value": ens},
-                            {"name": "horizon", "value": horizon},
-                        ],
-                    }
-                    for valid_date, horizon in valid_dates_horizons
-                    for ens in ensemble_members
-                ],
-                "spatial": {"type": "point", "coordinates": [lat, lon]},
-                "temporal": {"intervals": [{"snapshot": "1982-01-01"}]},
-                "outputType": "json",
-            }
-            logging.info(
-                f"Constructed query JSON for ensemble members {ensemble_members}."
-            )
+        for VARIABLE in layers_TWC.keys():
+            logging.info(f"Starting data query for variable: {VARIABLE}")
+            for ensemble_members in ensemble_members_batches:
+                logging.info(f"Querying ensemble members: {ensemble_members}")
 
-            # Submit the query and process the results
-            try:
-                logging.info("Submitting query to IBM PAIRS API.")
-                df = query.submit(query_json).point_data_as_dataframe()
-                if df.empty:
-                    logging.warning(
-                        f"No data returned for ensemble members {ensemble_members}"
-                    )
+                # Construct query JSON payload
+                query_json = {
+                    "layers": [
+                        {
+                            "type": "raster",
+                            "id": layers_TWC[VARIABLE],
+                            "temporal": {
+                                "intervals": [
+                                    {
+                                        "start": (
+                                            valid_date - timedelta(seconds=60)
+                                        ).strftime(iso_8601),
+                                        "end": (
+                                            valid_date + timedelta(seconds=60)
+                                        ).strftime(iso_8601),
+                                    }
+                                ]
+                            },
+                            "dimensions": [
+                                {"name": "forecast", "value": ens},
+                                {"name": "horizon", "value": horizon},
+                            ],
+                        }
+                        for valid_date, horizon in valid_dates_horizons
+                        for ens in ensemble_members
+                    ],
+                    "spatial": {"type": "point", "coordinates": [lat, lon]},
+                    "temporal": {"intervals": [{"snapshot": "1982-01-01"}]},
+                    "outputType": "json",
+                }
+                logging.info(
+                    f"Constructed query JSON for ensemble members {ensemble_members}."
+                )
+
+                # Submit the query and process the results
+                try:
+                    logging.info("Submitting query to IBM PAIRS API.")
+                    df = query.submit(query_json).point_data_as_dataframe()
+                    if df.empty:
+                        logging.warning(
+                            f"No data returned for ensemble members {ensemble_members}"
+                        )
+                        continue
+
+                    logging.info(f"Data retrieved, processing {len(df)} records.")
+                    for _, row in df.iterrows():
+                        try:
+                            date = int(row["timestamp"])
+                            value = float(row["value"])
+                            ens = int(
+                                row.get("property", "forecast:0")
+                                .split(";")[0]
+                                .split(":")[1]
+                            )
+                            logging.debug(
+                                f"Processing record - Date: {date}, Value: {value}, Forecast: {ens}"
+                            )
+
+                            # Convert timestamp to datetime
+                            forecast_date = datetime.utcfromtimestamp(
+                                date / 1000
+                            ).date()
+
+                            # Store data in the WeatherForecast database
+                            weather_forecast = WeatherForecast(
+                                city_name=city,
+                                latitude=lat,
+                                longitude=lon,
+                                forecast_date=forecast_date,
+                                variable=VARIABLE,
+                                forecasted_value=value,
+                                ensemble_member=ens,
+                                source="IBM",
+                            )
+                            db.session.add(weather_forecast)
+                        except Exception as e:
+                            logging.error(
+                                f"Error processing record for {VARIABLE}: {e}"
+                            )
+                            logging.debug(f"Record data: {row}")
+                            continue
+
+                    db.session.commit()
+                    logging.info(f"Data points for city {city} stored successfully.")
+
+                except Exception as e:
+                    logging.error(f"Error during query submission for {VARIABLE}: {e}")
                     continue
-
-                logging.info(f"Data retrieved, processing {len(df)} records.")
-                for _, row in df.iterrows():
-                    date = row["timestamp"]
-                    value = float(row["value"])
-                    logging.info(f"Processed data point - Date: {date}, Value: {value}")
-
-            except Exception as e:
-                logging.error(f"Error during query submission for {VARIABLE}: {e}")
-                continue
 
     logging.info("Weather forecast data query completed successfully.")
     return "Weather forecast data query completed."
