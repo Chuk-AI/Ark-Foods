@@ -1,5 +1,8 @@
 import asyncio
 from app import fetch_and_store_weather_forecasts, app  # Import your Flask app
+from dotenv import load_dotenv  # Import dotenv to load environment variables
+
+load_dotenv()
 
 
 # Function to run the scheduled job
