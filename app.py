@@ -636,21 +636,24 @@ from ibmpairs.client import get_client
 import logging
 
 
-def fetch_and_store_weather_forecast():
+# for weather forecasting
+def fetch_and_store_weather_forecast(start_forecast_date, forecast_length_months):
     # IBM API Configuration
     eis_client = get_client(
         api_key=EIS_API_KEY, tenant_id=EIS_TENANT_ID, org_id=EIS_ORG_ID, legacy=False
     )
 
     # Forecast parameters
-    start_forecast_date = datetime.strptime("2024-10-01", "%Y-%m-%d")
-    forecast_length_months = 7
     layers_TWC = {"PRECIP": 50686, "TMIN": 50683, "TMAX": 50684, "TAVG": 50685}
-    number_of_ensembles = 50
+    number_of_ensembles = 5
     iso_8601 = "%Y-%m-%dT%H:%M:%SZ"
 
     # List of cities with their latitude and longitude
     cities = {
+        "Immokalee Fl": {"lat": "26.4187", "lon": "-81.4173"},
+        "Palm Beach County, fl": {"lat": "26.7153", "lon": "-80.0534"},
+        "Vineland NJ": {"lat": "39.4802", "lon": "-75.0138"},
+        "Sodus, Michigan": {"lat": "42.0086", "lon": "-86.3614"},
         "Sinaloa": {"lat": "25.1721", "lon": "-107.4795"},
         "Sonora": {"lat": "29.2972", "lon": "-110.3309"},
         "Ensenada": {"lat": "31.86613056", "lon": "-116.59971944"},
@@ -661,10 +664,6 @@ def fetch_and_store_weather_forecast():
         "Adel, Ga": {"lat": "31.13633333", "lon": "-83.42216389"},
         "Lake Park Ga": {"lat": "30.6844", "lon": "-83.1849"},
         "Bowling Green Fl": {"lat": "27.6386", "lon": "-81.8265"},
-        "Immokalee Fl": {"lat": "26.4187", "lon": "-81.4173"},
-        "Palm Beach County, fl": {"lat": "26.7153", "lon": "-80.0534"},
-        "Vineland NJ": {"lat": "39.4802", "lon": "-75.0138"},
-        "Sodus, Michigan": {"lat": "42.0086", "lon": "-86.3614"},
     }
 
     # Generate valid dates and horizons in monthly batches
@@ -776,7 +775,7 @@ def process_and_store_data(df, city, lat, lon, VARIABLE):
             )
 
             # Convert timestamp to datetime
-            forecast_date = datetime.utcfromtimestamp(date / 1000).date()
+            forecast_date = datetime.fromtimestamp(date / 1000, tz=pytz.utc).date()
 
             # Store data in the WeatherForecast database
             weather_forecast = WeatherForecast(
@@ -792,11 +791,159 @@ def process_and_store_data(df, city, lat, lon, VARIABLE):
             db.session.add(weather_forecast)
         except Exception as e:
             logging.error(f"Error processing record for {VARIABLE}: {e}")
-            logging.debug(f"Record data: {row}")
+            logging.error(f"Record data: {row}")
             continue
 
     db.session.commit()
     logging.info(f"Data points for city {city} stored successfully.")
+
+
+def fetch_elevation_data(lat, lon):
+    layers_ELEVATION = {"twc_elevation": 51219, "srtm_elevation": 49506}
+    elevation = {}
+
+    for VARIABLE in ["twc_elevation", "srtm_elevation"]:
+        query_json = {
+            "layers": [{"type": "raster", "id": layers_ELEVATION[VARIABLE]}],
+            "spatial": {"type": "point", "coordinates": [lat, lon]},
+            "temporal": {"intervals": [{"snapshot": "2020-01-01T00:00:00Z"}]},
+        }
+        try:
+            logging.info(f"Submitting elevation data query for {VARIABLE}.")
+            df = query.submit(query_json).point_data_as_dataframe()
+            if len(df) > 0:
+                elevation[VARIABLE] = float(df.iloc[0]["value"])
+        except Exception as e:
+            logging.error(f"Error retrieving elevation data for {VARIABLE}: {e}")
+
+    if "twc_elevation" in elevation and "srtm_elevation" in elevation:
+        # Compute lapse-rate correction of Temperature
+        elevation_diff = elevation["srtm_elevation"] - elevation["twc_elevation"]
+        temperature_adjustment = elevation_diff * (-0.0098)
+        logging.info(
+            f"Temperature adjustment based on elevation difference: {temperature_adjustment}"
+        )
+    else:
+        temperature_adjustment = 0
+        logging.warning(
+            f"Could not calculate temperature adjustment due to missing elevation data."
+        )
+
+    return temperature_adjustment
+
+
+# for climatology Data
+def fetch_and_store_climatology_data(start_climo_date, end_climo_date):
+    # IBM API Configuration
+    eis_client = get_client(
+        api_key=EIS_API_KEY, tenant_id=EIS_TENANT_ID, org_id=EIS_ORG_ID, legacy=False
+    )
+
+    # Climatology parameters
+    layers_ERA5 = {"PRECIP": 51198, "TAVG": 51199}
+    iso_8601 = "%Y-%m-%dT%H:%M:%SZ"
+
+    # List of cities with their latitude and longitude
+    cities = {
+        "Immokalee Fl": {"lat": "26.4187", "lon": "-81.4173"},
+        "Sinaloa": {"lat": "25.1721", "lon": "-107.4795"},
+        "Sonora": {"lat": "29.2972", "lon": "-110.3309"},
+        "Ensenada": {"lat": "31.86613056", "lon": "-116.59971944"},
+        "Baja Mx": {"lat": "28.0444", "lon": "-115.2062"},
+        "Culican": {"lat": "24.8091", "lon": "-107.3940"},
+        "Hendersonville, NC": {"lat": "35.3187", "lon": "-82.4610"},
+        "Cameron SC": {"lat": "33.5568", "lon": "-80.7151"},
+        "Adel, Ga": {"lat": "31.13633333", "lon": "-83.42216389"},
+        "Lake Park Ga": {"lat": "30.6844", "lon": "-83.1849"},
+        "Bowling Green Fl": {"lat": "27.6386", "lon": "-81.8265"},
+        "Palm Beach County, fl": {"lat": "26.7153", "lon": "-80.0534"},
+        "Vineland NJ": {"lat": "39.4802", "lon": "-75.0138"},
+        "Sodus, Michigan": {"lat": "42.0086", "lon": "-86.3614"},
+    }
+
+    # Loop over each city and variable
+    for city, coordinates in cities.items():
+        lat = float(coordinates["lat"])
+        lon = float(coordinates["lon"])
+        logging.info(
+            f"Starting climatology data query for city: {city} (lat: {lat}, lon: {lon})"
+        )
+
+        for VARIABLE in layers_ERA5.keys():
+            logging.info(f"Starting climatology data query for variable: {VARIABLE}")
+
+            # Construct query JSON payload
+            query_json = {
+                "layers": [{"type": "raster", "id": layers_ERA5[VARIABLE]}],
+                "spatial": {"type": "point", "coordinates": [lat, lon]},
+                "temporal": {
+                    "intervals": [
+                        {
+                            "start": start_climo_date.strftime(iso_8601),
+                            "end": end_climo_date.strftime(iso_8601),
+                        }
+                    ]
+                },
+                "outputType": "json",
+            }
+            logging.info(f"Constructed query JSON for climatology data.")
+
+            # Submit the query and process the results
+            try:
+                logging.info("Submitting query to IBM PAIRS API for climatology data.")
+                df = query.submit(query_json).point_data_as_dataframe()
+                if df.empty:
+                    logging.warning(
+                        f"No data returned for climatology data for {VARIABLE}"
+                    )
+                    continue
+
+                logging.info(
+                    f"Climatology data retrieved, processing {len(df)} records."
+                )
+                process_and_store_climatology_data(df, city, lat, lon, VARIABLE)
+
+            except Exception as e:
+                logging.error(
+                    f"Error during climatology data query for {VARIABLE}: {e}"
+                )
+                continue
+
+    logging.info("Climatology data query completed successfully.")
+    return "Climatology data query completed."
+
+
+def process_and_store_climatology_data(df, city, lat, lon, VARIABLE):
+    # Process and store data in the database
+    for _, row in df.iterrows():
+        try:
+            date = int(row["timestamp"])
+            value = float(row["value"])
+            logging.debug(
+                f"Processing climatology record - Date: {date}, Value: {value}"
+            )
+
+            # Convert timestamp to datetime
+            forecast_date = datetime.utcfromtimestamp(date / 1000).date()
+
+            # Store data in the Climatology database
+            climatology_data = ClimatologyData(
+                city_name=city,
+                latitude=lat,
+                longitude=lon,
+                forecast_date=forecast_date,
+                variable=VARIABLE,
+                climatology_value=value,
+                source="IBM",
+            )
+            db.session.add(climatology_data)
+        except Exception as e:
+            logging.error(f"Error processing climatology record for {VARIABLE}: {e}")
+            logging.debug(f"Record data: {row}")
+            continue
+
+    db.session.commit()
+    logging.info(f"Climatology data points for city {city} stored successfully.")
 
 
 # Scheduler for API calls to USDA and Produce IQ
@@ -811,13 +958,6 @@ def schedule_jobs():
 
     # Initialize the scheduler
     scheduler = BackgroundScheduler(timezone=pk_timezone)
-
-    # Schedule data fetching job to run daily at 11:35 AM in Pakistan Time
-    scheduler.add_job(
-        func=fetch_and_store_weather_forecast,  # Your data fetching function
-        trigger=CronTrigger(hour=19, minute=00, timezone=pk_timezone),  # 11:35 AM PST
-        id="daily_weather_fetch",  # Unique job ID
-    )
 
     # Schedule ProduceIQ job to run every 2 hours but start at 12:25 AM to avoid overlap with weather forecast
     scheduler.add_job(
