@@ -636,7 +636,6 @@ from ibmpairs.client import get_client
 import logging
 
 
-# for weather forecasting
 def fetch_and_store_weather_forecast(start_forecast_date, forecast_length_months):
     # IBM API Configuration
     eis_client = get_client(
@@ -666,32 +665,23 @@ def fetch_and_store_weather_forecast(start_forecast_date, forecast_length_months
         "Bowling Green Fl": {"lat": "27.6386", "lon": "-81.8265"},
     }
 
-    # Generate valid dates and horizons in monthly batches
-    valid_dates_horizons_batches = []
-    for month in range(forecast_length_months):
-        valid_dates_horizons = []
-        count = 0
-        date = start_forecast_date + relativedelta(months=month)
-        enddate = date + relativedelta(months=1)
-        while date < enddate:
-            valid_date = date
-            horizon = (valid_date - start_forecast_date).days
-            valid_dates_horizons.append((valid_date, horizon))
-            count += 1
-            date += timedelta(days=1)
-        valid_dates_horizons_batches.append(valid_dates_horizons)
-    logging.info(
-        f"Generated {len(valid_dates_horizons_batches)} monthly forecast horizons batches."
-    )
+    # Generate valid dates and horizons
+    valid_dates_horizons = []
+    count = 0
+    date = start_forecast_date
+    enddate = start_forecast_date + relativedelta(months=forecast_length_months)
+    while date < enddate:
+        valid_date = date
+        horizon = (valid_date - start_forecast_date).days
+        valid_dates_horizons.append((valid_date, horizon))
+        count += 1
+        date += timedelta(days=1)
+    logging.info(f"Generated {len(valid_dates_horizons)} forecast horizons.")
 
     # Ensemble members in smaller batches
-    batch_size = 5  # Adjust batch size to avoid timeouts
     ensemble_members_batches = [
-        [
-            str(x).zfill(2)
-            for x in range(i, min(i + batch_size, number_of_ensembles + 1))
-        ]
-        for i in range(1, number_of_ensembles + 1, batch_size)
+        [str(x).zfill(2) for x in range(i, min(i + 1, number_of_ensembles + 1))]
+        for i in range(1, number_of_ensembles + 1)
     ]
 
     # Loop over each city, variable, and ensemble members in batches
@@ -702,62 +692,59 @@ def fetch_and_store_weather_forecast(start_forecast_date, forecast_length_months
 
         for VARIABLE in layers_TWC.keys():
             logging.info(f"Starting data query for variable: {VARIABLE}")
-            for valid_dates_horizons in valid_dates_horizons_batches:
-                for ensemble_members in ensemble_members_batches:
-                    logging.info(f"Querying ensemble members: {ensemble_members}")
+            for ensemble_members in ensemble_members_batches:
+                logging.info(f"Querying ensemble members: {ensemble_members}")
 
-                    # Construct query JSON payload
-                    query_json = {
-                        "layers": [
-                            {
-                                "type": "raster",
-                                "id": layers_TWC[VARIABLE],
-                                "temporal": {
-                                    "intervals": [
-                                        {
-                                            "start": (
-                                                valid_date - timedelta(seconds=60)
-                                            ).strftime(iso_8601),
-                                            "end": (
-                                                valid_date + timedelta(seconds=60)
-                                            ).strftime(iso_8601),
-                                        }
-                                    ]
-                                },
-                                "dimensions": [
-                                    {"name": "forecast", "value": ens},
-                                    {"name": "horizon", "value": horizon},
-                                ],
-                            }
-                            for valid_date, horizon in valid_dates_horizons
-                            for ens in ensemble_members
-                        ],
-                        "spatial": {"type": "point", "coordinates": [lat, lon]},
-                        "temporal": {"intervals": [{"snapshot": "1982-01-01"}]},
-                        "outputType": "json",
-                    }
-                    logging.info(
-                        f"Constructed query JSON for ensemble members {ensemble_members}."
-                    )
+                # Construct query JSON payload
+                query_json = {
+                    "layers": [
+                        {
+                            "type": "raster",
+                            "id": layers_TWC[VARIABLE],
+                            "temporal": {
+                                "intervals": [
+                                    {
+                                        "start": (
+                                            valid_date - timedelta(seconds=60)
+                                        ).strftime(iso_8601),
+                                        "end": (
+                                            valid_date + timedelta(seconds=60)
+                                        ).strftime(iso_8601),
+                                    }
+                                ]
+                            },
+                            "dimensions": [
+                                {"name": "forecast", "value": ens},
+                                {"name": "horizon", "value": horizon},
+                            ],
+                        }
+                        for valid_date, horizon in valid_dates_horizons
+                        for ens in ensemble_members
+                    ],
+                    "spatial": {"type": "point", "coordinates": [lat, lon]},
+                    "temporal": {"intervals": [{"snapshot": "1982-01-01"}]},
+                    "outputType": "json",
+                }
+                logging.info(
+                    f"Constructed query JSON for ensemble members {ensemble_members}."
+                )
 
-                    # Submit the query and process the results
-                    try:
-                        logging.info("Submitting query to IBM PAIRS API.")
-                        df = query.submit(query_json).point_data_as_dataframe()
-                        if df.empty:
-                            logging.warning(
-                                f"No data returned for ensemble members {ensemble_members}"
-                            )
-                            continue
-
-                        logging.info(f"Data retrieved, processing {len(df)} records.")
-                        process_and_store_data(df, city, lat, lon, VARIABLE)
-
-                    except Exception as e:
-                        logging.error(
-                            f"Error during query submission for {VARIABLE}: {e}"
+                # Submit the query and process the results
+                try:
+                    logging.info("Submitting query to IBM PAIRS API.")
+                    df = query.submit(query_json).point_data_as_dataframe()
+                    if df.empty:
+                        logging.warning(
+                            f"No data returned for ensemble members {ensemble_members}"
                         )
                         continue
+
+                    logging.info(f"Data retrieved, processing {len(df)} records.")
+                    process_and_store_data(df, city, lat, lon, VARIABLE)
+
+                except Exception as e:
+                    logging.error(f"Error during query submission for {VARIABLE}: {e}")
+                    continue
 
     logging.info("Weather forecast data query completed successfully.")
     return "Weather forecast data query completed."
