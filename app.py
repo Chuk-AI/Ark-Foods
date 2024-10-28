@@ -655,14 +655,6 @@ def fetch_and_store_weather_forecast(start_forecast_date, forecast_length_months
         "Sodus, Michigan": {"lat": "42.0086", "lon": "-86.3614"},
         "Sinaloa": {"lat": "25.1721", "lon": "-107.4795"},
         "Sonora": {"lat": "29.2972", "lon": "-110.3309"},
-        "Ensenada": {"lat": "31.86613056", "lon": "-116.59971944"},
-        "Baja Mx": {"lat": "28.0444", "lon": "-115.2062"},
-        "Culican": {"lat": "24.8091", "lon": "-107.3940"},
-        "Hendersonville, NC": {"lat": "35.3187", "lon": "-82.4610"},
-        "Cameron SC": {"lat": "33.5568", "lon": "-80.7151"},
-        "Adel, Ga": {"lat": "31.13633333", "lon": "-83.42216389"},
-        "Lake Park Ga": {"lat": "30.6844", "lon": "-83.1849"},
-        "Bowling Green Fl": {"lat": "27.6386", "lon": "-81.8265"},
     }
 
     # Generate valid dates and horizons
