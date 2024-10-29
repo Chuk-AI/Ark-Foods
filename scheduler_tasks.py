@@ -45,9 +45,9 @@ def run_scheduled_job():
     print("Running scheduled job: Fetch and store weather data")
 
     # Use Flask's app context to run the job
-    #    with app.app_context():
-    #        fetch_and_store_weather_forecast(start_forecast_date, forecast_length_months)
-    #        fetch_and_store_climatology_data(start_climo_date, end_climo_date)
+    with app.app_context():
+        fetch_and_store_weather_forecast(start_forecast_date, forecast_length_months)
+        fetch_and_store_climatology_data(start_climo_date, end_climo_date)
 
     # Stop the worker dyno once the job is complete
     stop_worker_dyno()
