@@ -734,9 +734,7 @@ def fetch_and_store_weather_forecast(start_forecast_date, forecast_length_months
 
                     logging.info(f"Data retrieved, processing {len(df)} records.")
                     if VARIABLE == "TAVG":
-                        df["value"] = df["value"].apply(
-                            lambda x: x + temperature_adjustment
-                        )
+                        df["value"] = df["value"].astype(float) + temperature_adjustment
                     process_and_store_data(df, city, lat, lon, VARIABLE)
 
                 except Exception as e:
@@ -879,9 +877,7 @@ def fetch_and_store_climatology_data(start_climo_date, end_climo_date):
 
                 # Apply temperature adjustment if the variable is TAVG
                 if VARIABLE == "TAVG":
-                    df["value"] = df["value"].apply(
-                        lambda x: x + temperature_adjustment
-                    )
+                    df["value"] = df["value"].astype(float) + temperature_adjustment
 
                 logging.info(
                     f"Climatology data retrieved, processing {len(df)} records."
