@@ -643,7 +643,7 @@ def fetch_and_store_weather_forecast(start_forecast_date, forecast_length_months
     )
 
     # Forecast parameters
-    layers_TWC = {"PRECIP": 50686, "TAVG": 50685}
+    layers_TWC = {"TAVG": 50685}
     number_of_ensembles = 30
     iso_8601 = "%Y-%m-%dT%H:%M:%SZ"
 
@@ -681,6 +681,7 @@ def fetch_and_store_weather_forecast(start_forecast_date, forecast_length_months
         lat = float(coordinates["lat"])
         lon = float(coordinates["lon"])
         logging.info(f"Starting data query for city: {city} (lat: {lat}, lon: {lon})")
+        temperature_adjustment = fetch_elevation_data(lat, lon)
 
         for VARIABLE in layers_TWC.keys():
             logging.info(f"Starting data query for variable: {VARIABLE}")
@@ -732,6 +733,10 @@ def fetch_and_store_weather_forecast(start_forecast_date, forecast_length_months
                         continue
 
                     logging.info(f"Data retrieved, processing {len(df)} records.")
+                    if VARIABLE == "TAVG":
+                        df["value"] = df["value"].apply(
+                            lambda x: x + temperature_adjustment
+                        )
                     process_and_store_data(df, city, lat, lon, VARIABLE)
 
                 except Exception as e:
@@ -819,7 +824,7 @@ def fetch_and_store_climatology_data(start_climo_date, end_climo_date):
     )
 
     # Climatology parameters
-    layers_ERA5 = {"PRECIP": 51198, "TAVG": 51199}
+    layers_ERA5 = {"TAVG": 51199}
     iso_8601 = "%Y-%m-%dT%H:%M:%SZ"
 
     # List of cities with their latitude and longitude
@@ -839,6 +844,9 @@ def fetch_and_store_climatology_data(start_climo_date, end_climo_date):
         logging.info(
             f"Starting climatology data query for city: {city} (lat: {lat}, lon: {lon})"
         )
+
+        # Fetch elevation data for temperature adjustment
+        temperature_adjustment = fetch_elevation_data(lat, lon)
 
         for VARIABLE in layers_ERA5.keys():
             logging.info(f"Starting climatology data query for variable: {VARIABLE}")
@@ -868,6 +876,12 @@ def fetch_and_store_climatology_data(start_climo_date, end_climo_date):
                         f"No data returned for climatology data for {VARIABLE}"
                     )
                     continue
+
+                # Apply temperature adjustment if the variable is TAVG
+                if VARIABLE == "TAVG":
+                    df["value"] = df["value"].apply(
+                        lambda x: x + temperature_adjustment
+                    )
 
                 logging.info(
                     f"Climatology data retrieved, processing {len(df)} records."

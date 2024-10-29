@@ -10,7 +10,7 @@ from datetime import datetime
 
 start_forecast_date = datetime.strptime("2024-10-01", "%Y-%m-%d")
 forecast_length_months = 3
-start_climo_date = datetime.strptime("2019-12-31", "%Y-%m-%d")
+start_climo_date = datetime.strptime("2001-12-31", "%Y-%m-%d")
 end_climo_date = datetime.strptime("2020-12-31", "%Y-%m-%d")
 
 HEROKU_API_KEY = os.getenv("HEROKU_API_KEY")
