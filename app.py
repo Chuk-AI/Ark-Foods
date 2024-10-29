@@ -1845,29 +1845,6 @@ def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
-@app.route("/trigger_data_fetch", methods=["GET"])
-@login_required  # Optional: You can require a logged-in user to trigger this action
-def trigger_data_fetch():
-    try:
-
-        # Fetch weather forecasts from IBM API
-        logging.info("Starting Weather data fetch")
-        fetch_and_store_weather_forecasts()
-
-        return (
-            jsonify(
-                {"status": "success", "message": "Data fetched and stored successfully"}
-            ),
-            200,
-        )
-    except Exception as e:
-        logging.error(f"Error during data fetch: {str(e)}")
-        return (
-            jsonify({"status": "error", "message": f"Data fetch failed: {str(e)}"}),
-            500,
-        )
-
-
 # Route for uploading historical data automatically on route trigger
 @app.route("/upload_historical", methods=["GET"])
 def upload_historical():
