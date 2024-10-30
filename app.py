@@ -1519,7 +1519,21 @@ def get_daily_climatology(lat, lon):
     avg_daily_climatology = {
         day: np.mean(values) for day, values in daily_climatology.items()
     }
-    return avg_daily_climatology
+
+    # Create a dictionary of climatology values for each day within the date range
+    full_climatology = {}
+    current_date = datetime.strptime(
+        "2023-01-01", "%Y-%m-%d"
+    )  # Assume an arbitrary year for simplicity
+    while current_date <= datetime.strptime("2023-12-31", "%Y-%m-%d"):
+        day_of_year = current_date.strftime("%m-%d")
+        if day_of_year in avg_daily_climatology:
+            full_climatology[current_date.strftime("%Y-%m-%d")] = avg_daily_climatology[
+                day_of_year
+            ]
+        current_date += timedelta(days=1)
+
+    return full_climatology
 
 
 # Fetch and aggregate forecast data with min, max, and standard deviation by ensembles

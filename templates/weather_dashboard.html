@@ -194,13 +194,21 @@ block content %}
       const unit = unitSelect.value;
       const tempLabel = unit === "C" ? "Temperature (°C)" : "Temperature (°F)";
 
+      // Extract the climatology values to match the dates in the forecast data
+      const matchedClimatologyPrecip = data.forecast_data.PRECIP.dates.map(
+        (date) => data.daily_climatology[date] || 0
+      );
+      const matchedClimatologyTAVG = data.forecast_data.TAVG.dates.map(
+        (date) => data.daily_climatology[date] || 0
+      );
+
       // Chart 1: Precipitation Forecast vs Climatology
       precipChartInstance = createLineChart(
         "precipChart",
         data.forecast_data.PRECIP.dates || [],
         {
           "Forecast (Avg)": data.forecast_data.PRECIP.avg || [],
-          Climatology: data.daily_climatology.PRECIP || [],
+          Climatology: matchedClimatologyPrecip,
           Min: data.forecast_data.PRECIP.min || [],
           Max: data.forecast_data.PRECIP.max || [],
         },
@@ -216,7 +224,7 @@ block content %}
         data.forecast_data.TAVG.dates || [],
         {
           "Forecast (Avg)": data.forecast_data.TAVG.avg || [],
-          Climatology: data.daily_climatology.TAVG || [],
+          Climatology: matchedClimatologyTAVG,
           Min: data.forecast_data.TAVG.min || [],
           Max: data.forecast_data.TAVG.max || [],
         },
