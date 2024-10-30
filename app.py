@@ -1615,9 +1615,18 @@ def api_weather_forecasts():
     start = request.args.get("start")
     end = request.args.get("end")
 
-    # Parse date inputs
-    start_date = datetime.strptime(start, "%Y-%m-%d")
-    end_date = datetime.strptime(end, "%Y-%m-%d")
+    # Set default date range if start or end dates are not provided
+    if not start:
+        start_date = datetime.now()
+    else:
+        start_date = datetime.strptime(start, "%Y-%m-%d")
+
+    if not end:
+        end_date = start_date + timedelta(
+            days=30
+        )  # Default to 30 days from start date if end date is not provided
+    else:
+        end_date = datetime.strptime(end, "%Y-%m-%d")
 
     try:
         # Fetch forecast data with min, max, std_dev for TAVG and PRECIP
@@ -1639,32 +1648,6 @@ def api_weather_forecasts():
                 "accumulation_data": accumulation_data,
             }
         )
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    lat = request.args.get("lat")
-    lon = request.args.get("lon")
-    start = request.args.get("start")
-    end = request.args.get("end")
-
-    # If start and end dates are not provided, use default date range
-    if not start:
-        start = datetime.now().strftime("%Y-%m-%d")
-    if not end:
-        end = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
-
-    try:
-        # Fetch forecast data and filter by date range
-        forecast_data = fetch_weather_forecast_data(lat, lon)
-        climo_data = fetch_climatology_data(lat, lon)
-        deviations = calculate_deviations(forecast_data, climo_data)
-
-        # Filter forecast data based on date range
-        filtered_data = filter_forecast_data_by_date_range(forecast_data, start, end)
-
-        # Prepare data for visualizations
-        chart_data = prepare_data_for_charts(filtered_data, climo_data, deviations)
-
-        return jsonify(chart_data)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
