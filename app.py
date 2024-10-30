@@ -1504,182 +1504,149 @@ def download_historical_data():
 # helper functions for weather forecasting visualizations
 
 
-# Fetch the weather forecast data from the database
-def fetch_weather_forecast_data(lat, lon):
-    forecasts = WeatherForecast.query.filter_by(latitude=lat, longitude=lon).all()
-
-    forecast_data = {}
-    for f in forecasts:
-        date_key = f.forecast_date.strftime("%Y-%m-%d")
-        if date_key not in forecast_data:
-            forecast_data[date_key] = {}
-        forecast_data[date_key][f.variable] = {
-            "forecasted_value": f.forecasted_value,
-            "ensemble_member": f.ensemble_member,
-            "source": f.source,
-        }
-
-    return forecast_data
-
-
-# Fetch the climatology data from the database
-def fetch_climatology_data(lat, lon):
+def get_daily_climatology(lat, lon):
     climatology = ClimatologyData.query.filter_by(latitude=lat, longitude=lon).all()
 
-    climo_data = {}
+    # Aggregate climatology by day of the year
+    daily_climatology = {}
     for c in climatology:
-        date_key = c.forecast_date.strftime("%Y-%m-%d")
-        if date_key not in climo_data:
-            climo_data[date_key] = {}
-        climo_data[date_key][c.variable] = c.climatology_value
+        day_of_year = c.forecast_date.strftime("%m-%d")
+        if day_of_year not in daily_climatology:
+            daily_climatology[day_of_year] = []
+        daily_climatology[day_of_year].append(c.climatology_value)
 
-    return climo_data
-
-
-# Calculate deviations from the climatology values
-def calculate_deviations(forecast_data, climo_data):
-    deviations = {}
-
-    for date, forecast_vars in forecast_data.items():
-        if date in climo_data:
-            deviations[date] = {}
-            for variable, forecast_values in forecast_vars.items():
-                if variable in climo_data[date]:
-                    deviations[date][variable] = (
-                        forecast_values["forecasted_value"] - climo_data[date][variable]
-                    )
-
-    return deviations
+    # Average climatology data for each day of the year
+    avg_daily_climatology = {
+        day: np.mean(values) for day, values in daily_climatology.items()
+    }
+    return avg_daily_climatology
 
 
-# Prepare the data for chart visualizations
-def prepare_data_for_charts(forecast_data, climo_data, deviations):
-    chart_data = {
-        "labels": [],
-        "precip_forecast": [],
-        "tmax_forecast": [],
-        "tmin_forecast": [],
-        "tavg_forecast": [],
-        "precip_climo": [],
-        "tmax_climo": [],
-        "tmin_climo": [],
-        "tavg_climo": [],
-        "precip_deviation": [],
-        "tmax_deviation": [],
-        "tmin_deviation": [],
-        "tavg_deviation": [],
+# Fetch and aggregate forecast data with min, max, and standard deviation by ensembles
+def fetch_forecast_data(lat, lon, start_date, end_date):
+    forecasts = (
+        WeatherForecast.query.filter_by(latitude=lat, longitude=lon)
+        .filter(
+            WeatherForecast.forecast_date >= start_date,
+            WeatherForecast.forecast_date <= end_date,
+        )
+        .all()
+    )
+
+    # Group forecast data by date and variable
+    forecast_data = {"TAVG": {}, "PRECIP": {}}
+    for f in forecasts:
+        date_key = f.forecast_date.strftime("%Y-%m-%d")
+        if date_key not in forecast_data[f.variable]:
+            forecast_data[f.variable][date_key] = []
+        forecast_data[f.variable][date_key].append(f.forecasted_value)
+
+    # Calculate avg, min, max, and standard deviation for each day
+    result = {
+        "TAVG": {"dates": [], "avg": [], "min": [], "max": [], "std_dev": []},
+        "PRECIP": {"dates": [], "avg": [], "min": [], "max": [], "std_dev": []},
     }
 
-    for date in forecast_data.keys():
-        chart_data["labels"].append(date)
+    for variable in forecast_data:
+        for date, values in forecast_data[variable].items():
+            avg = np.mean(values)
+            min_val = np.min(values)
+            max_val = np.max(values)
+            std_dev = np.std(values)
 
-        # Forecast values
-        chart_data["precip_forecast"].append(
-            forecast_data[date].get("PRECIP", {}).get("forecasted_value", None)
+            result[variable]["dates"].append(date)
+            result[variable]["avg"].append(avg)
+            result[variable]["min"].append(min_val)
+            result[variable]["max"].append(max_val)
+            result[variable]["std_dev"].append(std_dev)
+
+    return result
+
+
+# Calculate the accumulated climatology for the date range (blue line) and ensemble totals (gray bars)
+def calculate_accumulated_precipitation(lat, lon, start_date, end_date):
+    # Get daily climatology (average per historical record per day of the year)
+    daily_climatology = get_daily_climatology(lat, lon)
+
+    # Calculate the accumulated climatology precipitation for the date range
+    accumulated_climo_precip = 0
+    date = start_date
+    while date <= end_date:
+        day_of_year = date.strftime("%m-%d")
+        if day_of_year in daily_climatology:
+            accumulated_climo_precip += daily_climatology[day_of_year]
+        date += timedelta(days=1)
+
+    # Calculate accumulated precipitation for each ensemble
+    forecasts = (
+        WeatherForecast.query.filter_by(latitude=lat, longitude=lon, variable="PRECIP")
+        .filter(
+            WeatherForecast.forecast_date >= start_date,
+            WeatherForecast.forecast_date <= end_date,
         )
-        chart_data["tmax_forecast"].append(
-            forecast_data[date].get("TMAX", {}).get("forecasted_value", None)
-        )
-        chart_data["tmin_forecast"].append(
-            forecast_data[date].get("TMIN", {}).get("forecasted_value", None)
-        )
-        chart_data["tavg_forecast"].append(
-            forecast_data[date].get("TAVG", {}).get("forecasted_value", None)
-        )
+        .all()
+    )
 
-        # Climatology values
-        chart_data["precip_climo"].append(climo_data.get(date, {}).get("PRECIP", None))
-        chart_data["tmax_climo"].append(climo_data.get(date, {}).get("TMAX", None))
-        chart_data["tmin_climo"].append(climo_data.get(date, {}).get("TMIN", None))
-        chart_data["tavg_climo"].append(climo_data.get(date, {}).get("TAVG", None))
+    ensemble_totals = {}
+    for f in forecasts:
+        if f.ensemble_member not in ensemble_totals:
+            ensemble_totals[f.ensemble_member] = 0
+        ensemble_totals[f.ensemble_member] += f.forecasted_value
 
-        # Deviations
-        chart_data["precip_deviation"].append(
-            deviations.get(date, {}).get("PRECIP", None)
-        )
-        chart_data["tmax_deviation"].append(deviations.get(date, {}).get("TMAX", None))
-        chart_data["tmin_deviation"].append(deviations.get(date, {}).get("TMIN", None))
-        chart_data["tavg_deviation"].append(deviations.get(date, {}).get("TAVG", None))
+    # Calculate probability (percentage) of ensembles predicting lower than climatology
+    ensembles_below_climo = sum(
+        1 for total in ensemble_totals.values() if total < accumulated_climo_precip
+    )
+    probability_below_climo = (ensembles_below_climo / len(ensemble_totals)) * 100
 
-    return chart_data
-
-
-# Filter the forecast data by the selected frequency (daily, weekly, or monthly)
-def filter_forecast_data_by_frequency(forecast_data, frequency):
-    filtered_data = {}
-    if frequency == "daily":
-        filtered_data = forecast_data
-    elif frequency == "weekly":
-        # Reduce the data to weekly intervals
-        filtered_data = {
-            date: forecast_data[date]
-            for idx, date in enumerate(forecast_data.keys())
-            if idx % 7 == 0
-        }
-    elif frequency == "monthly":
-        # Reduce the data to monthly intervals
-        filtered_data = {
-            date: forecast_data[date]
-            for idx, date in enumerate(forecast_data.keys())
-            if idx % 30 == 0
-        }
-
-    return filtered_data
-
-
-def filter_forecast_data_by_date_range(forecast_data, start_date, end_date):
-    # Convert start and end dates to datetime objects
-    start = datetime.strptime(start_date, "%Y-%m-%d")
-    end = datetime.strptime(end_date, "%Y-%m-%d")
-
-    # Filter the forecast data by the date range
-    filtered_data = {
-        date: data
-        for date, data in forecast_data.items()
-        if start <= datetime.strptime(date, "%Y-%m-%d") <= end
+    return {
+        "accumulated_climo_precip": accumulated_climo_precip,
+        "ensemble_totals": list(ensemble_totals.values()),
+        "probability_below_climo": probability_below_climo,
     }
 
-    return filtered_data  # Convert start and end dates to datetime objects
-    start = datetime.strptime(start_date, "%Y-%m-%d")
-    end = datetime.strptime(end_date, "%Y-%m-%d")
 
-    # Filter the forecast data by the date range
-    filtered_data = {
-        date: data
-        for date, data in forecast_data.items()
-        if start <= datetime.strptime(date, "%Y-%m-%d") <= end
-    }
-
-    return filtered_data
-
-
-# Main API route to serve the weather forecast data
+# Main API route: Serve aggregated forecast and climatology data
 @app.route("/api/weather_forecasts", methods=["GET"])
 def api_weather_forecasts():
-    lat = request.args.get("lat")
-    lon = request.args.get("lon")
+    lat = float(request.args.get("lat"))
+    lon = float(request.args.get("lon"))
     start = request.args.get("start")
     end = request.args.get("end")
 
-    # If start and end dates are not provided, use default date range
+    # Set default date range if start or end dates are not provided
     if not start:
-        start = datetime.now().strftime("%Y-%m-%d")
+        start_date = datetime.now()
+    else:
+        start_date = datetime.strptime(start, "%Y-%m-%d")
+
     if not end:
-        end = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
+        end_date = start_date + timedelta(
+            days=30
+        )  # Default to 30 days from start date if end date is not provided
+    else:
+        end_date = datetime.strptime(end, "%Y-%m-%d")
 
     try:
-        # Fetch forecast data and filter by date range
-        forecast_data = fetch_weather_forecast_data(lat, lon)
-        climo_data = fetch_climatology_data(lat, lon)
-        deviations = calculate_deviations(forecast_data, climo_data)
+        # Fetch forecast data with min, max, std_dev for TAVG and PRECIP
+        forecast_data = fetch_forecast_data(lat, lon, start_date, end_date)
 
-        # Filter forecast data based on date range
-        filtered_data = filter_forecast_data_by_date_range(forecast_data, start, end)
+        # Fetch climatology data
+        daily_climatology = get_daily_climatology(lat, lon)
 
-        # Prepare data for visualizations
-        chart_data = prepare_data_for_charts(filtered_data, climo_data, deviations)
+        # Calculate accumulated precipitation and ensemble analysis
+        accumulation_data = calculate_accumulated_precipitation(
+            lat, lon, start_date, end_date
+        )
 
-        return jsonify(chart_data)
+        # Format response JSON
+        return jsonify(
+            {
+                "forecast_data": forecast_data,
+                "daily_climatology": daily_climatology,
+                "accumulation_data": accumulation_data,
+            }
+        )
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

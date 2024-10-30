@@ -21,6 +21,10 @@ block content %}
       <option value="weekly">Weekly</option>
       <option value="monthly">Monthly</option>
     </select>
+    <select id="temperature-unit">
+      <option value="C">Celsius (°C)</option>
+      <option value="F">Fahrenheit (°F)</option>
+    </select>
   </div>
 
   <div class="cards">
@@ -43,21 +47,20 @@ block content %}
 
   <div class="graphs">
     <h2>Graphs</h2>
-    <div class="graphs-header">
-      <input type="text" class="search-bar" placeholder="Search for a metric" />
-      <select class="sort-dropdown">
-        <option value="PRECIP">Precipitation</option>
-        <option value="TMAX">Max Temperature</option>
-        <option value="TMIN">Min Temperature</option>
-        <option value="TAVG">Avg Temperature</option>
-      </select>
-    </div>
     <div class="chart-container">
+      <!-- Precipitation Chart -->
       <div class="chart">
-        <canvas id="chart1" width="400" height="300"></canvas>
+        <canvas id="precipChart" width="400" height="300"></canvas>
       </div>
+      <!-- Temperature Chart -->
       <div class="chart">
-        <canvas id="chart2" width="400" height="300"></canvas>
+        <canvas id="tempChart" width="400" height="300"></canvas>
+      </div>
+    </div>
+    <!-- Ensemble Analysis Chart (Wider, placed below other charts) -->
+    <div class="chart-container" style="margin-top: 20px">
+      <div class="chart" style="width: 1000px">
+        <canvas id="ensembleChart" width="1000" height="300"></canvas>
       </div>
     </div>
   </div>
@@ -69,17 +72,20 @@ block content %}
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment"></script>
 
 <script>
-  let chart1Instance = null;
-  let chart2Instance = null;
+  let precipChartInstance = null;
+  let tempChartInstance = null;
+  let ensembleChartInstance = null;
 
   document.addEventListener("DOMContentLoaded", function () {
     const citySelect = document.getElementById("city-select");
     const frequencySelect = document.getElementById("frequency-select");
     const filterButton = document.getElementById("filter-date-range");
+    const unitSelect = document.getElementById("temperature-unit");
 
     citySelect.addEventListener("change", fetchData);
     frequencySelect.addEventListener("change", fetchData);
     filterButton.addEventListener("click", fetchData);
+    unitSelect.addEventListener("change", fetchData); // Fetch data and update charts when unit changes
 
     // Initial load
     fetchData();
@@ -89,106 +95,230 @@ block content %}
       const frequency = frequencySelect.value;
       const startDate = document.getElementById("start-date").value;
       const endDate = document.getElementById("end-date").value;
+      const unit = unitSelect.value; // Selected unit (Celsius or Fahrenheit)
 
-      let apiUrl = `/api/weather_forecasts?lat=${latlon[0]}&lon=${latlon[1]}&frequency=${frequency}`;
-
-      if (startDate && endDate) {
-        apiUrl += `&start=${startDate}&end=${endDate}`;
-      }
+      let apiUrl = `/api/weather_forecasts?lat=${latlon[0]}&lon=${latlon[1]}&start=${startDate}&end=${endDate}`;
 
       fetch(apiUrl)
         .then((response) => response.json())
         .then((data) => {
           console.log("Weather data: ", data);
 
-          // Display forecast summary on cards
-          updateSummaryCards(data);
+          // Convert temperature data if needed
+          const convertedData = convertTemperatureData(data, unit);
 
-          // Render charts using fetched data
-          renderCharts(data);
+          // Display forecast summary on cards
+          updateSummaryCards(convertedData);
+
+          // Render charts using converted data
+          renderCharts(convertedData);
         })
         .catch((error) => {
           console.error("Error fetching weather data: ", error);
         });
     }
 
-    function updateSummaryCards(data) {
-      const todaysForecast = data.precip_forecast[0];
-      const weeklyTrends = data.precip_forecast
-        .slice(0, 7)
-        .reduce((a, b) => a + b, 0);
-      const monthlyOutlook = data.precip_forecast[30];
+    function convertTemperatureData(data, unit) {
+      if (!data.forecast_data || !data.daily_climatology) {
+        console.error("Temperature data missing from response:", data);
+        return data;
+      }
 
-      // Update the forecast values in the cards
+      // Convert temperature data from Kelvin to the selected unit (C or F)
+      if (unit === "C") {
+        if (data.forecast_data.TAVG) {
+          data.forecast_data.TAVG.avg = (data.forecast_data.TAVG.avg || []).map(
+            (k) => k - 273.15
+          );
+          data.forecast_data.TAVG.min = (data.forecast_data.TAVG.min || []).map(
+            (k) => k - 273.15
+          );
+          data.forecast_data.TAVG.max = (data.forecast_data.TAVG.max || []).map(
+            (k) => k - 273.15
+          );
+        }
+        if (data.daily_climatology.TAVG) {
+          data.daily_climatology.TAVG = (data.daily_climatology.TAVG || []).map(
+            (k) => k - 273.15
+          );
+        }
+      } else if (unit === "F") {
+        if (data.forecast_data.TAVG) {
+          data.forecast_data.TAVG.avg = (data.forecast_data.TAVG.avg || []).map(
+            (k) => ((k - 273.15) * 9) / 5 + 32
+          );
+          data.forecast_data.TAVG.min = (data.forecast_data.TAVG.min || []).map(
+            (k) => ((k - 273.15) * 9) / 5 + 32
+          );
+          data.forecast_data.TAVG.max = (data.forecast_data.TAVG.max || []).map(
+            (k) => ((k - 273.15) * 9) / 5 + 32
+          );
+        }
+        if (data.daily_climatology.TAVG) {
+          data.daily_climatology.TAVG = (data.daily_climatology.TAVG || []).map(
+            (k) => ((k - 273.15) * 9) / 5 + 32
+          );
+        }
+      }
+      return data;
+    }
+
+    function updateSummaryCards(data) {
+      const todaysForecast = data.forecast_data.PRECIP.avg
+        ? data.forecast_data.PRECIP.avg[0]
+        : 0;
+      const weeklyTrends = data.forecast_data.PRECIP.avg
+        ? data.forecast_data.PRECIP.avg.slice(0, 7).reduce((a, b) => a + b, 0)
+        : 0;
+      const monthlyOutlook = data.forecast_data.PRECIP.avg
+        ? data.forecast_data.PRECIP.avg.slice(0, 30).reduce((a, b) => a + b, 0)
+        : 0;
+
       document.getElementById(
         "todays-forecast"
-      ).textContent = `${todaysForecast} mm`;
+      ).textContent = `${todaysForecast.toFixed(2)} mm`;
       document.getElementById(
         "weekly-trends"
-      ).textContent = `${weeklyTrends} mm`;
+      ).textContent = `${weeklyTrends.toFixed(2)} mm`;
       document.getElementById(
         "monthly-outlook"
-      ).textContent = `${monthlyOutlook} mm`;
-
-      // Calculate and update percentage changes
-      document.getElementById(
-        "todays-change"
-      ).textContent = `+5% from last month`;
-      document.getElementById(
-        "weekly-change"
-      ).textContent = `+3% from last week`;
-      document.getElementById(
-        "outlook-change"
-      ).textContent = `+1% from last forecast`;
+      ).textContent = `${monthlyOutlook.toFixed(2)} mm`;
     }
 
     function renderCharts(data) {
-      const labels = data.labels;
-
       // Destroy existing chart instances if they exist
-      if (chart1Instance) {
-        chart1Instance.destroy();
-      }
-      if (chart2Instance) {
-        chart2Instance.destroy();
-      }
+      if (precipChartInstance) precipChartInstance.destroy();
+      if (tempChartInstance) tempChartInstance.destroy();
+      if (ensembleChartInstance) ensembleChartInstance.destroy();
+
+      const unit = unitSelect.value;
+      const tempLabel = unit === "C" ? "Temperature (°C)" : "Temperature (°F)";
 
       // Chart 1: Precipitation Forecast vs Climatology
-      chart1Instance = createLineChart(
-        "chart1",
-        labels,
+      precipChartInstance = createLineChart(
+        "precipChart",
+        data.forecast_data.PRECIP.dates || [],
         {
-          Forecast: data.precip_forecast,
-          Climatology: data.precip_climo,
-          Deviation: data.precip_deviation,
+          "Forecast (Avg)": data.forecast_data.PRECIP.avg || [],
+          Climatology: data.daily_climatology.PRECIP || [],
+          Min: data.forecast_data.PRECIP.min || [],
+          Max: data.forecast_data.PRECIP.max || [],
         },
         "Precipitation (mm)",
-        ["blue", "red", "orange"]
+        ["blue", "red", "lightblue", "lightblue"],
+        data.forecast_data.PRECIP.min || [],
+        data.forecast_data.PRECIP.max || []
       );
 
-      // Chart 2: Temperature Forecast vs Climatology (TMAX)
-      chart2Instance = createLineChart(
-        "chart2",
-        labels,
+      // Chart 2: Temperature (Avg) Forecast vs Climatology
+      tempChartInstance = createLineChart(
+        "tempChart",
+        data.forecast_data.TAVG.dates || [],
         {
-          "Max Temp Forecast": data.tmax_forecast,
-          "Max Temp Climatology": data.tmax_climo,
-          "Max Temp Deviation": data.tmax_deviation,
+          "Forecast (Avg)": data.forecast_data.TAVG.avg || [],
+          Climatology: data.daily_climatology.TAVG || [],
+          Min: data.forecast_data.TAVG.min || [],
+          Max: data.forecast_data.TAVG.max || [],
         },
-        "Max Temperature (°C)",
-        ["blue", "red", "orange"]
+        tempLabel,
+        ["blue", "red", "lightblue", "lightblue"],
+        data.forecast_data.TAVG.min || [],
+        data.forecast_data.TAVG.max || []
+      );
+
+      // Chart 3: Ensemble Analysis for Precipitation Accumulation
+      const sortedEnsembleTotals = (
+        data.accumulation_data.ensemble_totals || []
+      )
+        .slice()
+        .sort((a, b) => b - a);
+
+      ensembleChartInstance = new Chart(
+        document.getElementById("ensembleChart"),
+        {
+          type: "bar",
+          data: {
+            labels: Array.from(
+              { length: sortedEnsembleTotals.length },
+              (_, i) => `Ensemble ${i + 1}`
+            ),
+            datasets: [
+              {
+                label: "Ensemble Totals",
+                data: sortedEnsembleTotals,
+                backgroundColor: "gray",
+              },
+              {
+                label: "Climatology Total",
+                data: Array(sortedEnsembleTotals.length).fill(
+                  data.accumulation_data.accumulated_climo_precip || 0
+                ),
+                type: "line",
+                borderColor: "blue",
+                borderWidth: 2,
+                fill: false,
+              },
+            ],
+          },
+          options: {
+            indexAxis: "x",
+            scales: {
+              x: {
+                ticks: {
+                  autoSkip: false,
+                  maxRotation: 90,
+                  minRotation: 90,
+                },
+                title: {
+                  display: true,
+                  text: "Ensemble Members",
+                },
+              },
+              y: {
+                beginAtZero: true,
+                title: {
+                  display: true,
+                  text: "Accumulated Precipitation (mm)",
+                },
+              },
+            },
+            plugins: {
+              legend: {
+                display: true,
+                position: "top",
+              },
+            },
+          },
+        }
       );
     }
 
-    function createLineChart(canvasId, labels, datasets, label, colors) {
+    function createLineChart(
+      canvasId,
+      labels,
+      datasets,
+      label,
+      colors,
+      minData,
+      maxData
+    ) {
       const ctx = document.getElementById(canvasId).getContext("2d");
 
-      const datasetArray = Object.keys(datasets).map((key, index) => ({
-        label: key,
-        data: datasets[key],
-        borderColor: colors[index],
-        fill: false,
-      }));
+      const datasetArray = Object.keys(datasets).map((key, index) => {
+        const dataset = {
+          label: key,
+          data: datasets[key],
+          borderColor: colors[index],
+          fill: false,
+        };
+        if (key === "Min" || key === "Max") {
+          dataset.fill = {
+            target: key === "Min" ? "Max" : "Min",
+            above: "rgba(173, 216, 230, 0.4)", // lightblue shading
+          };
+        }
+        return dataset;
+      });
 
       return new Chart(ctx, {
         type: "line",
@@ -209,6 +339,12 @@ block content %}
                 display: true,
                 text: label,
               },
+            },
+          },
+          plugins: {
+            legend: {
+              display: true,
+              position: "top",
             },
           },
         },
