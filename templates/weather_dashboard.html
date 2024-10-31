@@ -188,7 +188,18 @@ block content %}
           Max: data.forecast_data.PRECIP.max || [],
         },
         "Precipitation (mm)",
-        ["blue", "red", "lightblue", "lightblue"]
+        ["blue", "red", "lightblue", "lightblue"],
+        {
+          avgTotal: (data.forecast_data.PRECIP.avg || [])
+            .reduce((a, b) => a + b, 0)
+            .toFixed(2),
+          minTotal: (data.forecast_data.PRECIP.min || [])
+            .reduce((a, b) => a + b, 0)
+            .toFixed(2),
+          maxTotal: (data.forecast_data.PRECIP.max || [])
+            .reduce((a, b) => a + b, 0)
+            .toFixed(2),
+        }
       );
 
       // Chart 2: Temperature (Avg) Forecast vs Climatology
@@ -217,6 +228,25 @@ block content %}
         sortedEnsembleTotals
       );
 
+      const climatologyValue =
+        data.accumulation_data.accumulated_climo_precip || 0;
+      const belowClimatology = sortedEnsembleTotals.filter(
+        (value) => value < climatologyValue
+      ).length;
+      const aboveClimatology = sortedEnsembleTotals.length - belowClimatology;
+      const probability =
+        belowClimatology > aboveClimatology
+          ? (belowClimatology / sortedEnsembleTotals.length) * 100
+          : (aboveClimatology / sortedEnsembleTotals.length) * 100;
+      const probabilityText =
+        belowClimatology > aboveClimatology
+          ? `Probability: ${probability.toFixed(
+              2
+            )}% chance that it will rain less than the climatology value (${climatologyValue} mm)`
+          : `Probability: ${probability.toFixed(
+              2
+            )}% chance that it will rain more than the climatology value (${climatologyValue} mm)`;
+
       ensembleChartInstance = new Chart(
         document.getElementById("ensembleChart"),
         {
@@ -234,9 +264,7 @@ block content %}
               },
               {
                 label: "Climatology Total",
-                data: Array(sortedEnsembleTotals.length).fill(
-                  data.accumulation_data.accumulated_climo_precip || 0
-                ),
+                data: Array(sortedEnsembleTotals.length).fill(climatologyValue),
                 type: "line",
                 borderColor: "blue",
                 borderWidth: 2,
@@ -271,13 +299,27 @@ block content %}
                 display: true,
                 position: "top",
               },
+              tooltip: {
+                callbacks: {
+                  afterBody: function () {
+                    return probabilityText;
+                  },
+                },
+              },
             },
           },
         }
       );
     }
 
-    function createLineChart(canvasId, labels, datasets, label, colors) {
+    function createLineChart(
+      canvasId,
+      labels,
+      datasets,
+      label,
+      colors,
+      totals = {}
+    ) {
       const ctx = document.getElementById(canvasId).getContext("2d");
 
       const datasetArray = Object.keys(datasets).map((key, index) => {
@@ -325,6 +367,15 @@ block content %}
               display: true,
               position: "top",
             },
+            tooltip: totals.avgTotal
+              ? {
+                  callbacks: {
+                    afterBody: function () {
+                      return `Average Total: ${totals.avgTotal} mm\nMin Total: ${totals.minTotal} mm\nMax Total: ${totals.maxTotal} mm`;
+                    },
+                  },
+                }
+              : {},
           },
         },
       });
