@@ -1523,6 +1523,27 @@ def get_daily_climatology(lat, lon):
     return avg_daily_climatology
 
 
+def get_daily_precip_climatology(lat, lon):
+    climatology = ClimatologyData.query.filter_by(
+        latitude=lat, longitude=lon, variable="PRECIP"
+    ).all()
+
+    # Aggregate climatology by day of the year (month and day)
+    daily_climatology = {}
+    for c in climatology:
+        day_of_year = c.forecast_date.strftime("%m-%d")
+        if day_of_year not in daily_climatology:
+            daily_climatology[day_of_year] = []
+        daily_climatology[day_of_year].append(c.climatology_value)
+
+    # Calculate the average for each day of the year
+    avg_daily_climatology = {
+        day: np.mean(values) for day, values in daily_climatology.items()
+    }
+
+    return avg_daily_climatology
+
+
 # Fetch and aggregate forecast data with min, max, and standard deviation by ensembles
 def fetch_forecast_data(lat, lon, start_date, end_date):
     forecasts = (
@@ -1566,19 +1587,19 @@ def fetch_forecast_data(lat, lon, start_date, end_date):
 
 # Calculate the accumulated climatology for the date range (blue line) and ensemble totals (gray bars)
 def calculate_accumulated_precipitation(lat, lon, start_date, end_date):
-    # Get daily climatology (average per historical record per day of the year)
-    daily_climatology = get_daily_climatology(lat, lon)
+    # Get daily climatology for precipitation (average per historical record per day of the year)
+    daily_precip_climatology = get_daily_precip_climatology(lat, lon)
 
     # Calculate the accumulated climatology precipitation for the date range
     accumulated_climo_precip = 0
     date = start_date
     while date <= end_date:
         day_of_year = date.strftime("%m-%d")
-        if day_of_year in daily_climatology:
-            accumulated_climo_precip += daily_climatology[day_of_year]
+        if day_of_year in daily_precip_climatology:
+            accumulated_climo_precip += daily_precip_climatology[day_of_year]
         date += timedelta(days=1)
 
-    # Calculate accumulated precipitation for each ensemble
+    # Calculate accumulated precipitation for each ensemble across the entire date range
     forecasts = (
         WeatherForecast.query.filter_by(latitude=lat, longitude=lon, variable="PRECIP")
         .filter(
@@ -1588,13 +1609,15 @@ def calculate_accumulated_precipitation(lat, lon, start_date, end_date):
         .all()
     )
 
+    # Initialize ensemble totals as a dictionary
     ensemble_totals = {}
     for f in forecasts:
         if f.ensemble_member not in ensemble_totals:
             ensemble_totals[f.ensemble_member] = 0
+        # Accumulate values for each ensemble member over the entire date range
         ensemble_totals[f.ensemble_member] += f.forecasted_value
 
-    # Calculate probability (percentage) of ensembles predicting lower than climatology
+    # Calculate the probability (percentage) of ensembles predicting lower than climatology
     ensembles_below_climo = sum(
         1 for total in ensemble_totals.values() if total < accumulated_climo_precip
     )
@@ -1632,10 +1655,10 @@ def api_weather_forecasts():
         # Fetch forecast data with min, max, std_dev for TAVG and PRECIP
         forecast_data = fetch_forecast_data(lat, lon, start_date, end_date)
 
-        # Fetch climatology data
+        # Fetch climatology data for the specified latitude and longitude
         daily_climatology = get_daily_climatology(lat, lon)
 
-        # Calculate accumulated precipitation and ensemble analysis
+        # Calculate accumulated precipitation and ensemble analysis for the selected date range
         accumulation_data = calculate_accumulated_precipitation(
             lat, lon, start_date, end_date
         )
