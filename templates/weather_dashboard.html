@@ -27,24 +27,6 @@ block content %}
     </select>
   </div>
 
-  <div class="cards">
-    <div class="card">
-      <h2>Today's Forecast</h2>
-      <div id="todays-forecast" class="value">Loading...</div>
-      <div class="change" id="todays-change">Calculating...</div>
-    </div>
-    <div class="card">
-      <h2>Weekly Trends</h2>
-      <div id="weekly-trends" class="value">Loading...</div>
-      <div class="change" id="weekly-change">Calculating...</div>
-    </div>
-    <div class="card">
-      <h2>Monthly Outlook</h2>
-      <div id="monthly-outlook" class="value">Loading...</div>
-      <div class="change" id="outlook-change">Calculating...</div>
-    </div>
-  </div>
-
   <div class="graphs">
     <h2>Graphs</h2>
     <div class="chart-container">
@@ -104,11 +86,15 @@ block content %}
         .then((data) => {
           console.log("Weather data: ", data);
 
+          // Adding logging to understand the climatology data
+          console.log("Climatology Data (TAVG):", data.daily_climatology.TAVG);
+          console.log(
+            "Climatology Data (PRECIP):",
+            data.daily_climatology.PRECIP
+          );
+
           // Convert temperature data if needed
           const convertedData = convertTemperatureData(data, unit);
-
-          // Display forecast summary on cards
-          updateSummaryCards(convertedData);
 
           // Render charts using converted data
           renderCharts(convertedData);
@@ -127,62 +113,46 @@ block content %}
       // Convert temperature data from Kelvin to the selected unit (C or F)
       if (unit === "C") {
         if (data.forecast_data.TAVG) {
-          data.forecast_data.TAVG.avg = (data.forecast_data.TAVG.avg || []).map(
+          data.forecast_data.TAVG.avg = data.forecast_data.TAVG.avg.map(
             (k) => k - 273.15
           );
-          data.forecast_data.TAVG.min = (data.forecast_data.TAVG.min || []).map(
+          data.forecast_data.TAVG.min = data.forecast_data.TAVG.min.map(
             (k) => k - 273.15
           );
-          data.forecast_data.TAVG.max = (data.forecast_data.TAVG.max || []).map(
+          data.forecast_data.TAVG.max = data.forecast_data.TAVG.max.map(
             (k) => k - 273.15
           );
         }
         if (data.daily_climatology.TAVG) {
-          data.daily_climatology.TAVG = (data.daily_climatology.TAVG || []).map(
-            (k) => k - 273.15
+          data.daily_climatology.TAVG = Object.fromEntries(
+            Object.entries(data.daily_climatology.TAVG).map(([key, value]) => [
+              key,
+              value - 273.15,
+            ])
           );
         }
       } else if (unit === "F") {
         if (data.forecast_data.TAVG) {
-          data.forecast_data.TAVG.avg = (data.forecast_data.TAVG.avg || []).map(
+          data.forecast_data.TAVG.avg = data.forecast_data.TAVG.avg.map(
             (k) => ((k - 273.15) * 9) / 5 + 32
           );
-          data.forecast_data.TAVG.min = (data.forecast_data.TAVG.min || []).map(
+          data.forecast_data.TAVG.min = data.forecast_data.TAVG.min.map(
             (k) => ((k - 273.15) * 9) / 5 + 32
           );
-          data.forecast_data.TAVG.max = (data.forecast_data.TAVG.max || []).map(
+          data.forecast_data.TAVG.max = data.forecast_data.TAVG.max.map(
             (k) => ((k - 273.15) * 9) / 5 + 32
           );
         }
         if (data.daily_climatology.TAVG) {
-          data.daily_climatology.TAVG = (data.daily_climatology.TAVG || []).map(
-            (k) => ((k - 273.15) * 9) / 5 + 32
+          data.daily_climatology.TAVG = Object.fromEntries(
+            Object.entries(data.daily_climatology.TAVG).map(([key, value]) => [
+              key,
+              ((value - 273.15) * 9) / 5 + 32,
+            ])
           );
         }
       }
       return data;
-    }
-
-    function updateSummaryCards(data) {
-      const todaysForecast = data.forecast_data.PRECIP.avg
-        ? data.forecast_data.PRECIP.avg[0]
-        : 0;
-      const weeklyTrends = data.forecast_data.PRECIP.avg
-        ? data.forecast_data.PRECIP.avg.slice(0, 7).reduce((a, b) => a + b, 0)
-        : 0;
-      const monthlyOutlook = data.forecast_data.PRECIP.avg
-        ? data.forecast_data.PRECIP.avg.slice(0, 30).reduce((a, b) => a + b, 0)
-        : 0;
-
-      document.getElementById(
-        "todays-forecast"
-      ).textContent = `${todaysForecast.toFixed(2)} mm`;
-      document.getElementById(
-        "weekly-trends"
-      ).textContent = `${weeklyTrends.toFixed(2)} mm`;
-      document.getElementById(
-        "monthly-outlook"
-      ).textContent = `${monthlyOutlook.toFixed(2)} mm`;
     }
 
     function renderCharts(data) {
@@ -194,20 +164,30 @@ block content %}
       const unit = unitSelect.value;
       const tempLabel = unit === "C" ? "Temperature (°C)" : "Temperature (°F)";
 
+      // Adding more logging to understand data passed to charts
+      console.log(
+        "Rendering Precipitation Chart with Data:",
+        data.forecast_data.PRECIP
+      );
+      console.log(
+        "Rendering Temperature Chart with Data:",
+        data.forecast_data.TAVG
+      );
+
       // Chart 1: Precipitation Forecast vs Climatology
       precipChartInstance = createLineChart(
         "precipChart",
         data.forecast_data.PRECIP.dates || [],
         {
           "Forecast (Avg)": data.forecast_data.PRECIP.avg || [],
-          Climatology: data.daily_climatology.PRECIP || [],
+          Climatology: data.daily_climatology.PRECIP
+            ? Object.values(data.daily_climatology.PRECIP)
+            : [],
           Min: data.forecast_data.PRECIP.min || [],
           Max: data.forecast_data.PRECIP.max || [],
         },
         "Precipitation (mm)",
-        ["blue", "red", "lightblue", "lightblue"],
-        data.forecast_data.PRECIP.min || [],
-        data.forecast_data.PRECIP.max || []
+        ["blue", "red", "lightblue", "lightblue"]
       );
 
       // Chart 2: Temperature (Avg) Forecast vs Climatology
@@ -216,14 +196,14 @@ block content %}
         data.forecast_data.TAVG.dates || [],
         {
           "Forecast (Avg)": data.forecast_data.TAVG.avg || [],
-          Climatology: data.daily_climatology.TAVG || [],
+          Climatology: data.daily_climatology.TAVG
+            ? Object.values(data.daily_climatology.TAVG)
+            : [],
           Min: data.forecast_data.TAVG.min || [],
           Max: data.forecast_data.TAVG.max || [],
         },
         tempLabel,
-        ["blue", "red", "lightblue", "lightblue"],
-        data.forecast_data.TAVG.min || [],
-        data.forecast_data.TAVG.max || []
+        ["blue", "red", "lightblue", "lightblue"]
       );
 
       // Chart 3: Ensemble Analysis for Precipitation Accumulation
@@ -232,6 +212,11 @@ block content %}
       )
         .slice()
         .sort((a, b) => b - a);
+
+      console.log(
+        "Rendering Ensemble Analysis Chart with Data:",
+        sortedEnsembleTotals
+      );
 
       ensembleChartInstance = new Chart(
         document.getElementById("ensembleChart"),
@@ -293,15 +278,7 @@ block content %}
       );
     }
 
-    function createLineChart(
-      canvasId,
-      labels,
-      datasets,
-      label,
-      colors,
-      minData,
-      maxData
-    ) {
+    function createLineChart(canvasId, labels, datasets, label, colors) {
       const ctx = document.getElementById(canvasId).getContext("2d");
 
       const datasetArray = Object.keys(datasets).map((key, index) => {
@@ -319,6 +296,9 @@ block content %}
         }
         return dataset;
       });
+
+      console.log(`Creating Line Chart for ${canvasId} with labels:`, labels);
+      console.log(`Datasets for ${canvasId}:`, datasetArray);
 
       return new Chart(ctx, {
         type: "line",

@@ -1597,6 +1597,7 @@ def calculate_accumulated_precipitation(lat, lon, start_date, end_date):
         day_of_year = date.strftime("%m-%d")
         if day_of_year in daily_precip_climatology:
             accumulated_climo_precip += daily_precip_climatology[day_of_year]
+            print(accumulated_climo_precip)
         date += timedelta(days=1)
 
     # Calculate accumulated precipitation for each ensemble across the entire date range
@@ -1630,6 +1631,49 @@ def calculate_accumulated_precipitation(lat, lon, start_date, end_date):
     }
 
 
+# Helper function to aggregate temperature climatology data across all years for each day of the year
+def get_daily_tavg_climatology_v2(lat, lon):
+    climatology = ClimatologyData.query.filter_by(
+        latitude=lat, longitude=lon, variable="TAVG"
+    ).all()
+
+    # Aggregate climatology by day of the year (ignoring year)
+    daily_climatology = {}
+    for c in climatology:
+        day_of_year = c.forecast_date.strftime("%m-%d")
+        if day_of_year not in daily_climatology:
+            daily_climatology[day_of_year] = []
+        daily_climatology[day_of_year].append(c.climatology_value)
+
+    # Average climatology data for each day of the year
+    avg_daily_climatology = {
+        day: np.mean(values) for day, values in daily_climatology.items()
+    }
+    return avg_daily_climatology
+
+
+# Helper function to aggregate precipitation climatology data across all years for each day of the year
+def get_daily_precip_climatology_v2(lat, lon):
+    climatology = ClimatologyData.query.filter_by(
+        latitude=lat, longitude=lon, variable="PRECIP"
+    ).all()
+
+    # Aggregate climatology by day of the year (ignoring year)
+    daily_climatology = {}
+    for c in climatology:
+        day_of_year = c.forecast_date.strftime("%m-%d")
+        if day_of_year not in daily_climatology:
+            daily_climatology[day_of_year] = []
+        daily_climatology[day_of_year].append(c.climatology_value)
+
+    # Calculate the average for each day of the year
+    avg_daily_climatology = {
+        day: np.mean(values) for day, values in daily_climatology.items()
+    }
+
+    return avg_daily_climatology
+
+
 # Main API route: Serve aggregated forecast and climatology data
 @app.route("/api/weather_forecasts", methods=["GET"])
 def api_weather_forecasts():
@@ -1655,8 +1699,15 @@ def api_weather_forecasts():
         # Fetch forecast data with min, max, std_dev for TAVG and PRECIP
         forecast_data = fetch_forecast_data(lat, lon, start_date, end_date)
 
-        # Fetch climatology data for the specified latitude and longitude
-        daily_climatology = get_daily_climatology(lat, lon)
+        # Fetch climatology data for temperature and precipitation
+        daily_tavg_climatology = get_daily_tavg_climatology_v2(lat, lon)
+        daily_precip_climatology = get_daily_precip_climatology_v2(lat, lon)
+
+        # Combine TAVG and PRECIP into daily_climatology
+        daily_climatology = {
+            "TAVG": daily_tavg_climatology,
+            "PRECIP": daily_precip_climatology,
+        }
 
         # Calculate accumulated precipitation and ensemble analysis for the selected date range
         accumulation_data = calculate_accumulated_precipitation(
