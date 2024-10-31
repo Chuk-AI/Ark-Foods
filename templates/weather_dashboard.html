@@ -16,11 +16,6 @@ block content %}
       <option value="25.1721,-107.4795">Sinaloa, Mexico</option>
       <option value="29.2972,-110.3309">Sonora, Mexico</option>
     </select>
-    <select id="frequency-select">
-      <option value="daily">Daily</option>
-      <option value="weekly">Weekly</option>
-      <option value="monthly">Monthly</option>
-    </select>
     <select id="temperature-unit">
       <option value="C">Celsius (°C)</option>
       <option value="F">Fahrenheit (°F)</option>
@@ -60,12 +55,10 @@ block content %}
 
   document.addEventListener("DOMContentLoaded", function () {
     const citySelect = document.getElementById("city-select");
-    const frequencySelect = document.getElementById("frequency-select");
     const filterButton = document.getElementById("filter-date-range");
     const unitSelect = document.getElementById("temperature-unit");
 
     citySelect.addEventListener("change", fetchData);
-    frequencySelect.addEventListener("change", fetchData);
     filterButton.addEventListener("click", fetchData);
     unitSelect.addEventListener("change", fetchData); // Fetch data and update charts when unit changes
     function formatClimatologyData(climatology, forecastDates) {
@@ -87,7 +80,6 @@ block content %}
 
     function fetchData() {
       const latlon = citySelect.value.split(",");
-      const frequency = frequencySelect.value;
       const startDate = document.getElementById("start-date").value;
       const endDate = document.getElementById("end-date").value;
       const unit = unitSelect.value;
