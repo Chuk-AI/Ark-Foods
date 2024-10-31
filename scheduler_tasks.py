@@ -1,13 +1,14 @@
 import os
 import requests
+from datetime import datetime
 
 from app import (
     fetch_and_store_weather_forecast,
     fetch_and_store_climatology_data,
     app,
 )  # Import your Flask app
-from datetime import datetime
 
+# Dates and configuration
 start_forecast_date = datetime.strptime("2024-10-01", "%Y-%m-%d")
 forecast_length_months = 3
 start_climo_date = datetime.strptime("2001-12-31", "%Y-%m-%d")
@@ -54,4 +55,8 @@ def run_scheduled_job():
 
 
 if __name__ == "__main__":
-    run_scheduled_job()
+    # Only run the job if it's the 8th day of the month
+    if datetime.now().day == 8:
+        run_scheduled_job()
+    else:
+        print("Today is not the 8th. Exiting script.")
