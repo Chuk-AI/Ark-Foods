@@ -60,3 +60,4 @@ if __name__ == "__main__":
         run_scheduled_job()
     else:
         print("Today is not the 8th. Exiting script.")
+        stop_worker_dyno()
