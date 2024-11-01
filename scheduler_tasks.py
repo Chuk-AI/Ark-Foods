@@ -10,8 +10,9 @@ from app import (
 
 # Dates and configuration
 start_forecast_date = datetime.strptime("2024-10-01", "%Y-%m-%d")
-forecast_length_months = 3
-start_climo_date = datetime.strptime("2001-12-31", "%Y-%m-%d")
+end_forecast_horizon_date = datetime.strptime("2025-04-30", "%Y-%m-%d")
+start_forecast_horizon_date = datetime.strptime("2025-01-01", "%Y-%m-%d")
+start_climo_date = datetime.strptime("2019-12-31", "%Y-%m-%d")
 end_climo_date = datetime.strptime("2020-12-31", "%Y-%m-%d")
 
 HEROKU_API_KEY = os.getenv("HEROKU_API_KEY")
@@ -47,7 +48,9 @@ def run_scheduled_job():
 
     # Use Flask's app context to run the job
     with app.app_context():
-        fetch_and_store_weather_forecast(start_forecast_date, forecast_length_months)
+        fetch_and_store_weather_forecast(
+            start_forecast_date, end_forecast_horizon_date, start_forecast_horizon_date
+        )
         fetch_and_store_climatology_data(start_climo_date, end_climo_date)
 
     # Stop the worker dyno once the job is complete
@@ -56,8 +59,4 @@ def run_scheduled_job():
 
 if __name__ == "__main__":
     # Only run the job if it's the 8th day of the month
-    if datetime.now().day == 8:
-        run_scheduled_job()
-    else:
-        print("Today is not the 8th. Exiting script.")
-        stop_worker_dyno()
+    run_scheduled_job()

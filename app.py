@@ -636,14 +636,17 @@ from ibmpairs.client import get_client
 import logging
 
 
-def fetch_and_store_weather_forecast(start_forecast_date, forecast_length_months):
+def fetch_and_store_weather_forecast(
+    start_forecast_date, end_forecast_horizon_date, start_forecast_horizon_date
+):
+
     # IBM API Configuration
     eis_client = get_client(
         api_key=EIS_API_KEY, tenant_id=EIS_TENANT_ID, org_id=EIS_ORG_ID, legacy=False
     )
 
     # Forecast parameters
-    layers_TWC = {"TAVG": 50685}
+    layers_TWC = {"PRECIP": 50686, "TAVG": 50685}
     number_of_ensembles = 30
     iso_8601 = "%Y-%m-%dT%H:%M:%SZ"
 
@@ -660,9 +663,8 @@ def fetch_and_store_weather_forecast(start_forecast_date, forecast_length_months
     # Generate valid dates and horizons
     valid_dates_horizons = []
     count = 0
-    date = start_forecast_date
-    enddate = start_forecast_date + relativedelta(months=forecast_length_months)
-    while date < enddate:
+    date = start_forecast_horizon_date
+    while date <= end_forecast_horizon_date:
         valid_date = date
         horizon = (valid_date - start_forecast_date).days
         valid_dates_horizons.append((valid_date, horizon))
@@ -822,7 +824,7 @@ def fetch_and_store_climatology_data(start_climo_date, end_climo_date):
     )
 
     # Climatology parameters
-    layers_ERA5 = {"TAVG": 51199}
+    layers_ERA5 = {"PRECIP": 51198, "TAVG": 51199}
     iso_8601 = "%Y-%m-%dT%H:%M:%SZ"
 
     # List of cities with their latitude and longitude
