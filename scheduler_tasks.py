@@ -11,7 +11,7 @@ from app import (
 # Dates and configuration
 start_forecast_date = datetime.strptime("2024-10-01", "%Y-%m-%d")
 end_forecast_horizon_date = datetime.strptime("2025-04-30", "%Y-%m-%d")
-start_forecast_horizon_date = datetime.strptime("2025-01-01", "%Y-%m-%d")
+start_forecast_horizon_date = datetime.strptime("2024-10-01", "%Y-%m-%d")
 start_climo_date = datetime.strptime("2019-12-31", "%Y-%m-%d")
 end_climo_date = datetime.strptime("2020-12-31", "%Y-%m-%d")
 
