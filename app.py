@@ -637,7 +637,11 @@ import logging
 
 
 def fetch_and_store_weather_forecast(
-    start_forecast_date, end_forecast_horizon_date, start_forecast_horizon_date
+    start_forecast_date,
+    end_forecast_horizon_date,
+    start_forecast_horizon_date,
+    start_ensembles,
+    end_ensembles,
 ):
 
     # IBM API Configuration
@@ -647,11 +651,16 @@ def fetch_and_store_weather_forecast(
 
     # Forecast parameters
     layers_TWC = {"PRECIP": 50686, "TAVG": 50685}
-    number_of_ensembles = 30
     iso_8601 = "%Y-%m-%dT%H:%M:%SZ"
 
     # List of cities with their latitude and longitude
     cities = {
+        "Immokalee Fl": {"lat": "26.4187", "lon": "-81.4173"},
+        "Palm Beach County, fl": {"lat": "26.7153", "lon": "-80.0534"},
+        "Vineland NJ": {"lat": "39.4802", "lon": "-75.0138"},
+        "Sodus, Michigan": {"lat": "42.0086", "lon": "-86.3614"},
+        "Sinaloa": {"lat": "25.1721", "lon": "-107.4795"},
+        "Sonora": {"lat": "29.2972", "lon": "-110.3309"},
         "Ensenada": {"lat": "31.86613056", "lon": "-116.59971944"},
         "Baja Mx": {"lat": "28.0444", "lon": "-115.2062"},
         "Culican": {"lat": "24.8091", "lon": "-107.3940"},
@@ -676,8 +685,8 @@ def fetch_and_store_weather_forecast(
 
     # Ensemble members in smaller batches
     ensemble_members_batches = [
-        [str(x).zfill(2) for x in range(i, min(i + 1, number_of_ensembles + 1))]
-        for i in range(1, number_of_ensembles + 1)
+        [str(x).zfill(2) for x in range(i, min(i + 1, end_ensembles + 1))]
+        for i in range(start_ensembles, end_ensembles + 1)
     ]
 
     # Loop over each city, variable, and ensemble members in batches

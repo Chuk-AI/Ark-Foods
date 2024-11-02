@@ -1,19 +1,13 @@
 import os
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
+from calendar import monthrange
 
 from app import (
     fetch_and_store_weather_forecast,
     fetch_and_store_climatology_data,
     app,
 )  # Import your Flask app
-
-# Dates and configuration
-start_forecast_date = datetime.strptime("2024-10-01", "%Y-%m-%d")
-end_forecast_horizon_date = datetime.strptime("2025-04-30", "%Y-%m-%d")
-start_forecast_horizon_date = datetime.strptime("2024-10-01", "%Y-%m-%d")
-start_climo_date = datetime.strptime("2019-12-31", "%Y-%m-%d")
-end_climo_date = datetime.strptime("2020-12-31", "%Y-%m-%d")
 
 HEROKU_API_KEY = os.getenv("HEROKU_API_KEY")
 APP_NAME = os.getenv("HEROKU_APP_NAME")
@@ -44,19 +38,30 @@ def stop_worker_dyno():
 
 
 def run_scheduled_job():
-    print("Running scheduled job: Fetch and store weather data")
+    today = datetime.now()
+    if today.day == 2:
+        start_forecast_date = datetime.strptime("2024-10-01", "%Y-%m-%d")
+        end_forecast_horizon_date = datetime.strptime("2025-04-30", "%Y-%m-%d")
+        start_forecast_horizon_date = datetime.strptime("2024-10-01", "%Y-%m-%d")
 
-    # Use Flask's app context to run the job
-    with app.app_context():
-        fetch_and_store_weather_forecast(
-            start_forecast_date, end_forecast_horizon_date, start_forecast_horizon_date
-        )
-        fetch_and_store_climatology_data(start_climo_date, end_climo_date)
+        print("Running scheduled job: Fetch and store weather data")
 
-    # Stop the worker dyno once the job is complete
-    stop_worker_dyno()
+        # Use Flask's app context to run the job
+        with app.app_context():
+            fetch_and_store_weather_forecast(
+                start_forecast_date,
+                end_forecast_horizon_date,
+                start_forecast_horizon_date,
+                start_ensembles=31,
+                end_ensembles=50,
+            )
+
+        # Stop the worker dyno once the job is complete
+        stop_worker_dyno()
+    else:
+        # On any other day, just stop the worker dyno
+        stop_worker_dyno()
 
 
 if __name__ == "__main__":
-    # Only run the job if it's the 8th day of the month
     run_scheduled_job()
