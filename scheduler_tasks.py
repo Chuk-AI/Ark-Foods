@@ -2,6 +2,7 @@ import os
 import requests
 from datetime import datetime, timedelta
 from calendar import monthrange
+import sys
 
 from app import (
     fetch_and_store_weather_forecast,
@@ -38,29 +39,41 @@ def stop_worker_dyno():
 
 
 def run_scheduled_job():
-    today = datetime.now()
-    if today.day == 2:
-        start_forecast_date = datetime.strptime("2024-10-01", "%Y-%m-%d")
-        end_forecast_horizon_date = datetime.strptime("2025-04-30", "%Y-%m-%d")
-        start_forecast_horizon_date = datetime.strptime("2024-10-01", "%Y-%m-%d")
+    try:
+        today = datetime.now()
+        if today.day == 8:
+            start_forecast_horizon_date = today.replace(day=1)
+            start_forecast_date = start_forecast_horizon_date
+            end_forecast_horizon_date = (
+                start_forecast_horizon_date
+                + timedelta(
+                    days=monthrange(
+                        start_forecast_horizon_date.year,
+                        start_forecast_horizon_date.month,
+                    )[1]
+                    * 7
+                )
+            ).replace(day=1)
 
-        print("Running scheduled job: Fetch and store weather data")
+            print("Running scheduled job: Fetch and store weather data")
 
-        # Use Flask's app context to run the job
-        with app.app_context():
-            fetch_and_store_weather_forecast(
-                start_forecast_date,
-                end_forecast_horizon_date,
-                start_forecast_horizon_date,
-                start_ensembles=31,
-                end_ensembles=50,
-            )
+            # Use Flask's app context to run the job
+            with app.app_context():
+                fetch_and_store_weather_forecast(
+                    start_forecast_date.strftime("%Y-%m-%d"),
+                    end_forecast_horizon_date.strftime("%Y-%m-%d"),
+                    start_forecast_horizon_date.strftime("%Y-%m-%d"),
+                    start_ensembles=1,
+                    end_ensembles=50,
+                )
 
         # Stop the worker dyno once the job is complete
         stop_worker_dyno()
-    else:
-        # On any other day, just stop the worker dyno
-        stop_worker_dyno()
+    except Exception as e:
+        print(f"Error occurred: {e}")
+    finally:
+        # Ensure the process exits to avoid memory quota exceeded issues
+        sys.exit(0)
 
 
 if __name__ == "__main__":
