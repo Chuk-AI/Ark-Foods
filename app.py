@@ -29,6 +29,7 @@ from pytz import timezone
 from sqlalchemy import text, func, or_
 import pandas as pd
 from dateutil import parser
+import gc  # garbage collection
 
 # Flask-Admin Setup
 from flask_admin import Admin
@@ -332,8 +333,9 @@ def fetch_usda_daily_data():
                 logging.error(
                     f"Error fetching USDA data for {current_date_formatted}: {response.status_code} - {response.text}"
                 )
-
             current_dt += timedelta(days=1)
+            json_data = None
+            gc.collect()
 
 
 # Process and store USDA data in the database, filtered by interested commodities and cities
@@ -615,13 +617,15 @@ def fetch_daily_data():
 
             # Commit the data for the current day
             db.session.commit()
+            gc.collect()
             logging.info(
                 f'Data for {current_dt.strftime("%Y-%m-%d")} saved to the database.'
             )
 
             # Move to the next day
             current_dt += pd.Timedelta(days=1)
-
+            data = None  # Release JSON data memory
+            gc.collect()  # Explicit garbage collection
         logging.info(
             f"Data fetching completed from {start_dt.strftime('%Y-%m-%d')} to {end_dt.strftime('%Y-%m-%d')}."
         )
@@ -749,7 +753,9 @@ def fetch_and_store_weather_forecast(
                     if VARIABLE == "TAVG":
                         df["value"] = df["value"].astype(float) + temperature_adjustment
                     process_and_store_data(df, city, lat, lon, VARIABLE)
-
+                    gc.collect()
+                    df = None
+                    gc.collect()
                 except Exception as e:
                     logging.error(f"Error during query submission for {VARIABLE}: {e}")
                     continue
@@ -898,7 +904,9 @@ def fetch_and_store_climatology_data(start_climo_date, end_climo_date):
                     f"Climatology data retrieved, processing {len(df)} records."
                 )
                 process_and_store_climatology_data(df, city, lat, lon, VARIABLE)
-
+                gc.collect()
+                df = None
+                gc.collect()
             except Exception as e:
                 logging.error(
                     f"Error during climatology data query for {VARIABLE}: {e}"
@@ -977,12 +985,6 @@ def schedule_jobs():
     logging.info(
         "Scheduler has started with adjusted timing for ProduceIQ, USDA, and Weather Forecast jobs."
     )
-
-
-# Start scheduler when the app starts
-@app.before_request
-def initialize():
-    schedule_jobs()
 
 
 # Clean up sessions when the app context ends
