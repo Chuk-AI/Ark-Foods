@@ -310,29 +310,47 @@ def fetch_usda_daily_data():
             current_date_formatted = current_dt.strftime("%m/%d/%Y")
             logging.info(f"Fetching USDA data for {current_date_formatted}")
 
-            endpoint = base_endpoint + current_date_formatted
-            response = requests.get(endpoint, headers=headers)
-
-            logging.info(f"API Response Status Code: {response.status_code}")
-            logging.info(
-                f"API Response Content: {response.text}"
-            )  # Log the entire response
-
-            if response.status_code == 200:
-                json_data = response.json()
-                if json_data.get("results") and isinstance(json_data["results"], list):
-                    logging.info(
-                        f"Valid data found for {current_date_formatted}: {json_data['results']}"
-                    )
-                    process_usda_data(json_data["results"])
-                else:
-                    logging.warning(
-                        f"No valid results found in the API response for {current_date_formatted}"
-                    )
-            else:
-                logging.error(
-                    f"Error fetching USDA data for {current_date_formatted}: {response.status_code} - {response.text}"
+            # Check if data for the current date already exists in the database
+            existing_record = (
+                db.session.query(PriceData)
+                .filter(
+                    PriceData.year == current_dt.year,
+                    PriceData.day == current_dt.timetuple().tm_yday,
+                    PriceData.source == "USDA",
                 )
+                .first()
+            )
+
+            if existing_record:
+                logging.info(
+                    f"Data for {current_date_formatted} already exists. Skipping."
+                )
+            else:
+                endpoint = base_endpoint + current_date_formatted
+                response = requests.get(endpoint, headers=headers)
+
+                logging.info(f"API Response Status Code: {response.status_code}")
+                logging.info(
+                    f"API Response Content: {response.text}"
+                )  # Log the entire response
+
+                if response.status_code == 200:
+                    json_data = response.json()
+                    if json_data.get("results") and isinstance(
+                        json_data["results"], list
+                    ):
+                        logging.info(
+                            f"Valid data found for {current_date_formatted}: {json_data['results']}"
+                        )
+                        process_usda_data(json_data["results"])
+                    else:
+                        logging.warning(
+                            f"No valid results found in the API response for {current_date_formatted}"
+                        )
+                else:
+                    logging.error(
+                        f"Error fetching USDA data for {current_date_formatted}: {response.status_code} - {response.text}"
+                    )
             current_dt += timedelta(days=1)
             json_data = None
             gc.collect()
@@ -531,6 +549,24 @@ def fetch_daily_data():
         # Loop through each day one by one from the last fetched date to today
         current_dt = start_dt
         while current_dt <= end_dt:
+            # Check if data for the current date already exists in the database
+            existing_data = (
+                db.session.query(PriceData)
+                .filter(
+                    PriceData.year == current_dt.year,
+                    PriceData.day == current_dt.day_of_year,
+                    PriceData.source == "ProduceIQ",
+                )
+                .first()
+            )
+
+            if existing_data:
+                logging.info(
+                    f"Data for {current_dt.strftime('%Y-%m-%d')} already exists. Skipping."
+                )
+                current_dt += pd.Timedelta(days=1)
+                continue
+
             params = {
                 "commodityId": 18,  # Adjust this for different commodities
                 "from": current_dt.strftime("%Y-%m-%d"),
