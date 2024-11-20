@@ -5,3 +5,4 @@ users_dump.sql
 users_dump_part_0.sql
 users_dump_part_1.sql
 .env
+data/

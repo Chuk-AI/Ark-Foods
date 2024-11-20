@@ -682,11 +682,15 @@ def fetch_and_store_weather_forecast(
     start_forecast_horizon_date,
     start_ensembles,
     end_ensembles,
+    store_in_excel,
 ):
 
     # IBM API Configuration
     eis_client = get_client(
-        api_key=EIS_API_KEY, tenant_id=EIS_TENANT_ID, org_id=EIS_ORG_ID, legacy=False
+        api_key="PHXfXSpwiWwQ9NoUg9IYhhaf24cXmmMwZa0zPoW23hktX8",
+        tenant_id="7370463f-df01-4aa0-b204-d6d15ff71f85",
+        org_id=EIS_ORG_ID,
+        legacy=False,
     )
 
     # Forecast parameters
@@ -710,6 +714,20 @@ def fetch_and_store_weather_forecast(
         "Lake Park Ga": {"lat": "30.6844", "lon": "-83.1849"},
         "Bowling Green Fl": {"lat": "27.6386", "lon": "-81.8265"},
     }
+
+    # Ensure 'start_forecast_horizon_date' and 'end_forecast_horizon_date' are datetime objects
+    if isinstance(start_forecast_horizon_date, str):
+        start_forecast_horizon_date = datetime.strptime(
+            start_forecast_horizon_date, "%Y-%m-%d"
+        )
+    if isinstance(end_forecast_horizon_date, str):
+        end_forecast_horizon_date = datetime.strptime(
+            end_forecast_horizon_date, "%Y-%m-%d"
+        )
+
+    # Ensure 'start_forecast_date' is a datetime object
+    if isinstance(start_forecast_date, str):
+        start_forecast_date = datetime.strptime(start_forecast_date, "%Y-%m-%d")
 
     # Generate valid dates and horizons
     valid_dates_horizons = []
@@ -741,32 +759,35 @@ def fetch_and_store_weather_forecast(
             for ensemble_members in ensemble_members_batches:
                 logging.info(f"Querying ensemble members: {ensemble_members}")
 
+                query_layers = []
+                for valid_date, horizon in valid_dates_horizons:
+                    for ens in ensemble_members:
+                        query_layers.append(
+                            {
+                                "type": "raster",
+                                "id": layers_TWC[VARIABLE],
+                                "temporal": {
+                                    "intervals": [
+                                        {
+                                            "start": (
+                                                valid_date - timedelta(seconds=60)
+                                            ).strftime(iso_8601),
+                                            "end": (
+                                                valid_date + timedelta(seconds=60)
+                                            ).strftime(iso_8601),
+                                        }
+                                    ]
+                                },
+                                "dimensions": [
+                                    {"name": "forecast", "value": ens},
+                                    {"name": "horizon", "value": horizon},
+                                ],
+                            }
+                        )
+
                 # Construct query JSON payload
                 query_json = {
-                    "layers": [
-                        {
-                            "type": "raster",
-                            "id": layers_TWC[VARIABLE],
-                            "temporal": {
-                                "intervals": [
-                                    {
-                                        "start": (
-                                            valid_date - timedelta(seconds=60)
-                                        ).strftime(iso_8601),
-                                        "end": (
-                                            valid_date + timedelta(seconds=60)
-                                        ).strftime(iso_8601),
-                                    }
-                                ]
-                            },
-                            "dimensions": [
-                                {"name": "forecast", "value": ens},
-                                {"name": "horizon", "value": horizon},
-                            ],
-                        }
-                        for valid_date, horizon in valid_dates_horizons
-                        for ens in ensemble_members
-                    ],
+                    "layers": query_layers,
                     "spatial": {"type": "point", "coordinates": [lat, lon]},
                     "temporal": {"intervals": [{"snapshot": "1982-01-01"}]},
                     "outputType": "json",
@@ -788,7 +809,10 @@ def fetch_and_store_weather_forecast(
                     logging.info(f"Data retrieved, processing {len(df)} records.")
                     if VARIABLE == "TAVG":
                         df["value"] = df["value"].astype(float) + temperature_adjustment
-                    process_and_store_data(df, city, lat, lon, VARIABLE)
+                    if store_in_excel == 1:
+                        process_and_store_in_excel(df, city, lat, lon, VARIABLE)
+                    else:
+                        process_and_store_data(df, city, lat, lon, VARIABLE)
                     gc.collect()
                     df = None
                     gc.collect()
@@ -833,6 +857,72 @@ def process_and_store_data(df, city, lat, lon, VARIABLE):
 
     db.session.commit()
     logging.info(f"Data points for city {city} stored successfully.")
+
+
+def process_and_store_in_excel(df, city, lat, lon, VARIABLE):
+    # Process and store data in an Excel file
+    import os
+    from openpyxl import Workbook, load_workbook
+    from openpyxl.utils.dataframe import dataframe_to_rows
+
+    # Create directory if it doesn't exist
+    data_dir = "data"
+    if not os.path.exists(data_dir):
+        os.makedirs(data_dir)
+
+    # Define Excel file path for each variable
+    file_path = os.path.join(
+        data_dir, f"{city.replace(',', '').replace(' ', '_')}_{VARIABLE}.xlsx"
+    )
+
+    # Load or create workbook
+    if os.path.exists(file_path):
+        workbook = load_workbook(file_path)
+    else:
+        workbook = Workbook()
+        if workbook.active:
+            workbook.remove(workbook.active)
+
+    # Create or get sheet for the data
+    sheet_name = f"{VARIABLE}_data"
+    if sheet_name not in workbook.sheetnames:
+        sheet = workbook.create_sheet(title=sheet_name)
+        # Add headers
+        sheet.append(
+            [
+                "city_name",
+                "latitude",
+                "longitude",
+                "forecast_date",
+                "variable",
+                "forecasted_value",
+                "ensemble_member",
+                "source",
+            ]
+        )
+    else:
+        sheet = workbook[sheet_name]
+
+    # Append data to the sheet
+    for _, row in df.iterrows():
+        try:
+            date = int(row["timestamp"])
+            value = float(row["value"])
+            ens = int(row.get("property", "forecast:0").split(";")[0].split(":")[1])
+
+            # Convert timestamp to datetime
+            forecast_date = datetime.fromtimestamp(date / 1000, tz=pytz.utc).date()
+
+            # Append data in the format of the database
+            sheet.append([city, lat, lon, forecast_date, VARIABLE, value, ens, "IBM"])
+        except Exception as e:
+            logging.error(f"Error processing record for {VARIABLE}: {e}")
+            logging.error(f"Record data: {row}")
+            continue
+
+    # Save workbook periodically to minimize data loss risk
+    workbook.save(file_path)
+    logging.info(f"Data points for city {city} stored in Excel file {file_path}.")
 
 
 def fetch_elevation_data(lat, lon):

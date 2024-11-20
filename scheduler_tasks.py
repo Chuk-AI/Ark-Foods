@@ -6,7 +6,6 @@ import sys
 
 from app import (
     fetch_and_store_weather_forecast,
-    fetch_and_store_climatology_data,
     app,
 )  # Import your Flask app
 
@@ -41,30 +40,29 @@ def stop_worker_dyno():
 def run_scheduled_job():
     try:
         today = datetime.now()
-        if today.day == 8:
-            start_forecast_horizon_date = today.replace(day=1)
+        if today.day == 20:
+            start_forecast_horizon_date = today.replace(day=1).strftime("%Y-%m-%d")
             start_forecast_date = start_forecast_horizon_date
+            days_in_month = monthrange(
+                datetime.strptime(start_forecast_horizon_date, "%Y-%m-%d").year,
+                datetime.strptime(start_forecast_horizon_date, "%Y-%m-%d").month,
+            )[1]
             end_forecast_horizon_date = (
-                start_forecast_horizon_date
-                + timedelta(
-                    days=monthrange(
-                        start_forecast_horizon_date.year,
-                        start_forecast_horizon_date.month,
-                    )[1]
-                    * 7
-                )
-            ).replace(day=1)
+                datetime.strptime(start_forecast_horizon_date, "%Y-%m-%d")
+                + timedelta(days=days_in_month * 7)
+            ).strftime("%Y-%m-%d")
 
             print("Running scheduled job: Fetch and store weather data")
 
             # Use Flask's app context to run the job
             with app.app_context():
                 fetch_and_store_weather_forecast(
-                    start_forecast_date.strftime("%Y-%m-%d"),
-                    end_forecast_horizon_date.strftime("%Y-%m-%d"),
-                    start_forecast_horizon_date.strftime("%Y-%m-%d"),
+                    start_forecast_date,
+                    end_forecast_horizon_date,
+                    start_forecast_horizon_date,
                     start_ensembles=1,
                     end_ensembles=50,
+                    store_in_excel=0,
                 )
 
         # Stop the worker dyno once the job is complete
