@@ -7,8 +7,10 @@ from flask import (
     request,
     session,
     jsonify,
+    send_file,
 )
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import and_, or_
 from flask_login import (
     LoginManager,
     UserMixin,
@@ -30,6 +32,8 @@ from sqlalchemy import text, func, or_
 import pandas as pd
 from dateutil import parser
 import gc  # garbage collection
+import io
+import xlsxwriter
 
 # Flask-Admin Setup
 from flask_admin import Admin
@@ -1353,14 +1357,8 @@ def api_best_sell_market():
     selected_source = request.args.get("source", "USDA")  # Default to USDA
     last7Days = request.args.get("last7Days", "false").lower() == "true"
 
-    # Debugging Logs
-    print(
-        f"Received Request - Commodity: {selected_commodity}, Source: {selected_source}, Last 7 Days Filter: {last7Days}"
-    )
-
     # Handle special case: If the commodity is "Cubanelles" and the source is "USDA", search for "Cubanelle"
     if selected_commodity == "Cubanelles" and selected_source == "USDA":
-        print("Adjusting commodity name from 'Cubanelles' to 'Cubanelle' for USDA data")
         selected_commodity = "Cubanelle"
 
     # Define the static cities
@@ -1383,7 +1381,6 @@ def api_best_sell_market():
     best_market_data = []
 
     for city in cities:
-        print(f"Processing city: {city}")
 
         query = (
             db.session.query(
@@ -1405,7 +1402,6 @@ def api_best_sell_market():
         )
 
         if last7Days:
-            print(f"Applying Last 7 Days filter for {city}")
             # Filter the query further if 'Only Consider Last 7 Days' is checked
             query = query.filter(
                 PriceData.year >= seven_days_ago.year,
@@ -1414,9 +1410,6 @@ def api_best_sell_market():
 
         # Execute the query and get the latest prices
         latest_prices = query.first()
-        print(
-            f"Query Result for {city}: {latest_prices}"
-        )  # Log the result of the query
 
         # If prices are found, format the range and return the prices
         if latest_prices:
@@ -1436,9 +1429,7 @@ def api_best_sell_market():
                     "date": actual_date,
                 }
             )
-            print(
-                f"Added data for {city}: Price Range = {price_range}, Date = {actual_date}"
-            )
+
         else:
             # If no data is found for this city, return 'N/A'
             best_market_data.append(
@@ -1449,7 +1440,6 @@ def api_best_sell_market():
                     "date": "-",
                 }
             )
-            print(f"No data for {city}, adding N/A")
 
     # Sort the cities by max price (highest to lowest), ensuring '-' prices go to the bottom
     best_market_data = sorted(
@@ -1460,8 +1450,6 @@ def api_best_sell_market():
         ),
         reverse=True,
     )
-
-    print(f"Final Best Market Data (sorted): {best_market_data}")
 
     return jsonify({"best_market": best_market_data})
 
@@ -1505,9 +1493,7 @@ def api_most_recent_prices():
     for commodity in commodities:
         # Handle special case: If the commodity is "Cubanelles" and the source is "USDA", search for "Cubanelle"
         if commodity == "Cubanelles" and selected_source == "USDA":
-            print(
-                "Adjusting commodity name from 'Cubanelles' to 'Cubanelle' for USDA data"
-            )
+
             commodity_to_query = "Cubanelle"
         else:
             commodity_to_query = commodity
@@ -1549,36 +1535,56 @@ def historical_data():
     end_date = request.args.get("end_date")
     source = request.args.get("source")
 
-    # Handle special case: If the commodity is "Cubanelles" and the source is "USDA", search for "Cubanelle"
+    # Handle special case for "Cubanelles"
     commodities = [
         "Cubanelle" if commodity == "Cubanelles" and source == "USDA" else commodity
         for commodity in commodities
     ]
 
     # Convert start_date and end_date into year and day of the year
-    start_year = datetime.strptime(start_date, "%Y-%m-%d").year
-    start_day = datetime.strptime(start_date, "%Y-%m-%d").timetuple().tm_yday
-    end_year = datetime.strptime(end_date, "%Y-%m-%d").year
-    end_day = datetime.strptime(end_date, "%Y-%m-%d").timetuple().tm_yday
+    start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+    end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+    start_year = start_dt.year
+    start_day = start_dt.timetuple().tm_yday
+    end_year = end_dt.year
+    end_day = end_dt.timetuple().tm_yday
     print("start day:", start_day)
     print("start year:", start_year)
     print("end day:", end_day)
     print("end year:", end_year)
 
-    # Query the PriceData table based on the filters
-    query = PriceData.query.filter(
-        PriceData.commodity.in_(commodities),
-        PriceData.city_name.in_(cities),
-        PriceData.source == source,  # Ensure this captures ProduceIQ correctly
-        or_(
-            (PriceData.year == start_year)
-            & (PriceData.day >= start_day),  # Handle start year and start day
-            (PriceData.year == end_year)
-            & (PriceData.day <= end_day),  # Handle end year and end day
-            (PriceData.year > start_year)
-            & (PriceData.year < end_year),  # Handle years in between
-        ),
-    ).order_by(PriceData.year.asc(), PriceData.day.asc())
+    # Build the query based on whether dates are in the same year or span multiple years
+    if start_year == end_year:
+        # Dates are within the same year
+        query = PriceData.query.filter(
+            PriceData.commodity.in_(commodities),
+            func.upper(PriceData.city_name).in_([city.upper() for city in cities]),
+            PriceData.source == source,
+            PriceData.year == start_year,
+            PriceData.day >= start_day,
+            PriceData.day <= end_day,
+        ).order_by(PriceData.year.asc(), PriceData.day.asc())
+    else:
+        # Dates span multiple years
+        query = PriceData.query.filter(
+            PriceData.commodity.in_(commodities),
+            func.upper(PriceData.city_name).in_([city.upper() for city in cities]),
+            PriceData.source == source,
+            or_(
+                and_(
+                    PriceData.year == start_year,
+                    PriceData.day >= start_day,
+                ),
+                and_(
+                    PriceData.year == end_year,
+                    PriceData.day <= end_day,
+                ),
+                and_(
+                    PriceData.year > start_year,
+                    PriceData.year < end_year,
+                ),
+            ),
+        ).order_by(PriceData.year.asc(), PriceData.day.asc())
 
     # Extract the data from the query
     data = query.all()
@@ -1593,7 +1599,7 @@ def historical_data():
             ).strftime("%Y-%m-%d")
             historical_data.append(
                 {
-                    "date": actual_date,  # Now it's a proper date (YYYY-MM-DD)
+                    "date": actual_date,
                     "city_name": entry.city_name,
                     "commodity": entry.commodity,
                     "price": entry.price,
@@ -1620,14 +1626,29 @@ def download_historical_data():
     end_date = request.args.get("end_date")
     source = request.args.get("source")
 
+    # Handle special case for "Cubanelles"
+    commodities = [
+        "Cubanelle" if commodity == "Cubanelles" and source == "USDA" else commodity
+        for commodity in commodities
+    ]
+
+    # Convert start_date and end_date into year and day of the year
+    start_year = datetime.strptime(start_date, "%Y-%m-%d").year
+    start_day = datetime.strptime(start_date, "%Y-%m-%d").timetuple().tm_yday
+    end_year = datetime.strptime(end_date, "%Y-%m-%d").year
+    end_day = datetime.strptime(end_date, "%Y-%m-%d").timetuple().tm_yday
+
     # Query the PriceData table based on the filters
     query = PriceData.query.filter(
         PriceData.commodity.in_(commodities),
         PriceData.city_name.in_(cities),
         PriceData.source == source,
-        PriceData.date >= start_date,
-        PriceData.date <= end_date,
-    ).order_by(PriceData.date.asc())
+        or_(
+            (PriceData.year == start_year) & (PriceData.day >= start_day),
+            (PriceData.year == end_year) & (PriceData.day <= end_day),
+            (PriceData.year > start_year) & (PriceData.year < end_year),
+        ),
+    ).order_by(PriceData.year.asc(), PriceData.day.asc())
 
     # Fetch the data
     data = query.all()
@@ -1644,7 +1665,11 @@ def download_historical_data():
 
     # Write the data rows to the Excel file
     for row_num, entry in enumerate(data, start=1):
-        worksheet.write(row_num, 0, entry.date.strftime("%Y-%m-%d"))
+        # Reconstruct the date from year and day
+        actual_date = datetime.strptime(f"{entry.year}-{entry.day}", "%Y-%j").strftime(
+            "%Y-%m-%d"
+        )
+        worksheet.write(row_num, 0, actual_date)
         worksheet.write(row_num, 1, entry.city_name)
         worksheet.write(row_num, 2, entry.commodity)
         worksheet.write(row_num, 3, entry.price)
@@ -1654,7 +1679,10 @@ def download_historical_data():
 
     # Send the Excel file as a response
     return send_file(
-        output, attachment_filename="historical_data.xlsx", as_attachment=True
+        output,
+        as_attachment=True,
+        download_name="historical_data.xlsx",
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 
 

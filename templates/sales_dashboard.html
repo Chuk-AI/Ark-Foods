@@ -1,738 +1,956 @@
-{% extends "base.html" %}
-{% block title %}Sales Dashboard{% endblock %}
-{% block content %}
-  <h1 class="mt-4">Sales Dashboard</h1>
-
-  <!-- Tabs Navigation -->
-  <ul class="nav nav-tabs" id="salesDashboardTabs" role="tablist">
-    <li class="nav-item">
-      <a class="nav-link active" id="best-sell-market-tab" data-toggle="tab" href="#best-sell-market" role="tab" aria-controls="best-sell-market" aria-selected="true">Best Sell Market</a>
-    </li>
-    <li class="nav-item">
-      <a class="nav-link" id="most-recent-prices-tab" data-toggle="tab" href="#most-recent-prices" role="tab" aria-controls="most-recent-prices" aria-selected="false">Most Recent Prices</a>
-    </li>
-    <li class="nav-item">
-      <a class="nav-link" id="historical-data-tab" data-toggle="tab" href="#historical-data" role="tab" aria-controls="historical-data" aria-selected="false">Historical Data</a>
-    </li>
-  </ul>
-
-  <!-- Tab Content -->
-  <div class="tab-content mt-4">
-  <!-- Best Sell Market -->
-  <div class="tab-pane fade show active" id="best-sell-market" role="tabpanel" aria-labelledby="best-sell-market-tab">
-    <h2>Best Sell Market</h2>
-
-    <!-- Filters -->
-    <form id="best-sell-filter" class="mb-3">
-      <!-- Source Toggle Button -->
-      <div class="form-group">
-        <label for="source">Source</label>
-        <div class="btn-group-toggle d-flex" data-toggle="buttons">
-          <label class="btn btn-outline-primary" id="source-usda">
-            <input type="radio" name="source" value="USDA"> USDA
-          </label>
-          <label class="btn btn-outline-primary ml-2" id="source-produceiq">
-            <input type="radio" name="source" value="ProduceIQ"> ProduceIQ
-          </label>
+{% extends "base.html" %} {% block title %}Sales Dashboard{% endblock %} {%
+block content %}
+<div class="d-flex">
+  <!-- Collapsible Sidebar Filters -->
+  <div class="sidebar bg-light p-3" id="filters-sidebar">
+    <div id="sidebar-toggle">
+      <i class="arrow-icon">&larr;</i>
+    </div>
+    <div id="filters-content">
+      <h2 class="text-primary">Filters</h2>
+      <form id="unified-filter">
+        <!-- Commodity Filter -->
+        <div class="form-group">
+          <label for="commodityFilterUnified" class="font-weight-bold"
+            >Commodity</label
+          >
+          <select id="commodityFilterUnified" class="form-control">
+            <option value="Anaheim">Anaheim</option>
+            <option value="Cubanelles">Cubanelles</option>
+            <option value="Fresno">Fresno</option>
+            <option value="Habanero">Habanero</option>
+            <option value="Hungarian Wax">Hungarian Wax</option>
+            <option value="Jalapeno">Jalapeno</option>
+            <option value="Long Hot">Long Hot</option>
+            <option value="Poblano">Poblano</option>
+            <option value="Serrano">Serrano</option>
+            <option value="Shishito">Shishito</option>
+          </select>
         </div>
-      </div>
 
-      <!-- Only Consider Last 7 Days Toggle Button -->
-      <div class="form-group form-check">
-        <input type="checkbox" class="form-check-input" id="last-7-days">
-        <label class="form-check-label" for="last-7-days">Only Consider Last 7 Days</label>
-      </div>
+        <!-- Source Filter -->
+        <div class="form-group">
+          <label for="sourceFilterUnified" class="font-weight-bold"
+            >Source</label
+          >
+          <select id="sourceFilterUnified" class="form-control">
+            <option value="USDA">USDA</option>
+            <option value="ProduceIQ">ProduceIQ</option>
+          </select>
+        </div>
+        <!-- City Filter -->
+        <div class="form-group">
+          <label for="cityFilterUnified" class="font-weight-bold">City</label>
+          <select id="cityFilterUnified" class="form-control">
+            <option value="New York">New York</option>
+            <option value="Chicago">Chicago</option>
+            <option value="Los Angeles">Los Angeles</option>
+            <option value="Miami">Miami</option>
+            <option value="Philadelphia">Philadelphia</option>
+            <option value="Boston">Boston</option>
+            <option value="Baltimore">Baltimore</option>
+            <option value="Columbia">Columbia</option>
+            <!-- Add other cities as needed -->
+          </select>
+        </div>
+        <!-- Start Date Filter -->
+        <div class="form-group">
+          <label for="startDateFilterUnified" class="font-weight-bold"
+            >Start Date</label
+          >
+          <input
+            type="date"
+            id="startDateFilterUnified"
+            class="form-control"
+            value="2024-11-01"
+          />
+        </div>
 
-      <div class="form-group">
-        <label for="commodity">Commodity</label>
-        <select id="best-sell-commodity" class="form-control">
-          <option value="Anaheim">Anaheim</option>
-          <option value="Cubanelles">Cubanelles</option>
-          <option value="Fresno">Fresno</option>
-          <option value="Habanero">Habanero</option>
-          <option value="Hungarian Wax">Hungarian Wax</option>
-          <option value="Jalapeno">Jalapeno</option>
-          <option value="Long Hot">Long Hot</option>
-          <option value="Poblano">Poblano</option>
-          <option value="Serrano">Serrano</option>
-          <option value="Shishito">Shishito</option>
-        </select>
-      </div>
-    </form>
+        <!-- End Date Filter -->
+        <div class="form-group">
+          <label for="endDateFilterUnified" class="font-weight-bold"
+            >End Date</label
+          >
+          <input
+            type="date"
+            id="endDateFilterUnified"
+            class="form-control"
+            value="2024-11-21"
+          />
+        </div>
 
-    <!-- Table and Chart in a Modern Layout -->
-    <div class="row">
-      <!-- Table -->
-      <div class="col-md-6">
-        <table class="table table-striped table-hover table-bordered mt-3" id="best-sell-market-table">
+        <!-- 7-Day Filter -->
+        <div class="form-group form-check">
+          <input
+            type="checkbox"
+            class="form-check-input"
+            id="last-7-days-unified"
+          />
+          <label
+            class="form-check-label font-weight-bold"
+            for="last-7-days-unified"
+            >Only Last 7 Days</label
+          >
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main-content flex-grow-1">
+    <h1 class="mt-4 text-center">Sales Dashboard</h1>
+
+    <!-- Most Recent Prices Section -->
+    <div class="card mb-4">
+      <div class="card-header bg-primary text-white">
+        <h2>Most Recent Prices</h2>
+      </div>
+      <div class="card-body">
+        <table
+          class="table table-striped table-hover table-bordered mt-3"
+          id="most-recent-prices-table"
+        >
           <thead class="thead-dark">
             <tr>
-              <th>City</th>
-              <th>Price</th>
-              <th>Date</th>
+              <th>Commodity</th>
+              <th>Baltimore</th>
+              <th>Boston</th>
+              <th>Chicago</th>
+              <th>Columbia</th>
+              <th>Miami</th>
+              <th>New York</th>
+              <th>Philadelphia</th>
+              <th>Los Angeles</th>
             </tr>
           </thead>
           <tbody>
-            <!-- Static rows for cities will be dynamically populated -->
+            <!-- Rows dynamically populated -->
           </tbody>
         </table>
       </div>
+    </div>
 
-      <!-- Chart -->
-      <div class="col-md-6">
-        <canvas id="bestSellChart" width="400" height="400"></canvas>
+    <!-- Second Row: Map, Best Sell Market Table, and Graph -->
+    <div class="row mb-4">
+      <!-- Map Section -->
+      <div class="col-md-4">
+        <div class="card">
+          <div class="card-header bg-primary text-white">
+            <h2>Map</h2>
+          </div>
+          <div class="card-body p-0">
+            <div id="commodityMap" style="height: 400px; width: 100%"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Best Sell Market Table -->
+      <div class="col-md-4">
+        <div class="card">
+          <div class="card-header bg-primary text-white">
+            <h2>Best Sell Market</h2>
+          </div>
+          <div class="card-body p-0">
+            <table
+              class="table table-striped table-hover table-bordered"
+              id="best-sell-market-table"
+            >
+              <thead class="thead-dark">
+                <tr>
+                  <th>City</th>
+                  <th>Price</th>
+                  <th>Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- Data dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Best Sell Market Graph -->
+      <div class="col-md-4">
+        <div class="card">
+          <div class="card-header bg-primary text-white">
+            <h2>Market Graph</h2>
+          </div>
+          <div class="card-body">
+            <canvas id="bestSellChart" width="400" height="400"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Seasonal Chart Section -->
+    <div class="card mb-4">
+      <div class="card-header bg-primary text-white">
+        <h2>Seasonal Trends</h2>
+      </div>
+      <div class="card-body">
+        <canvas id="seasonalChart" width="400" height="400"></canvas>
+      </div>
+    </div>
+
+    <!-- Historical Data Section -->
+    <div class="card mb-4">
+      <div class="card-header bg-primary text-white">
+        <h2>Historical Data</h2>
+      </div>
+      <div class="card-body">
+        <canvas id="historicalChart" width="400" height="400"></canvas>
+        <button class="btn btn-primary mt-3" onclick="downloadChart()">
+          Download Chart & Data
+        </button>
       </div>
     </div>
   </div>
-
-<!-- Most Recent Prices -->
-<div class="tab-pane fade" id="most-recent-prices" role="tabpanel" aria-labelledby="most-recent-prices-tab">
-  <h2>Most Recent Prices</h2>
-
-    <!-- Commodity Filter for the Map -->
-    <div class="form-group">
-      <label for="commodityFilter">Select Commodity for Map:</label>
-      <select id="commodityFilter" class="form-control">
-        <option value="Anaheim">Anaheim</option>
-        <option value="Cubanelles">Cubanelles</option>
-        <option value="Fresno">Fresno</option>
-        <option value="Habanero">Habanero</option>
-        <option value="Hungarian Wax">Hungarian Wax</option>
-        <option value="Jalapeno">Jalapeno</option>
-        <option value="Long Hot">Long Hot</option>
-        <option value="Poblano">Poblano</option>
-        <option value="Serrano">Serrano</option>
-        <option value="Shishito">Shishito</option>
-      </select>
-    </div>
-  <!-- Table to show prices -->
-  <div class="table-responsive">
-    <table class="table table-bordered mt-3" id="most-recent-prices-table">
-      <thead>
-        <tr>
-          <th>Commodity</th>
-          <th>Baltimore</th>
-          <th>Boston</th>
-          <th>Chicago</th>
-          <th>Columbia</th>
-          <th>Miami</th>
-          <th>New York</th>
-          <th>Philadelphia</th>
-          <th>Los Angeles</th>
-        </tr>
-      </thead>
-      <tbody>
-        <!-- Rows will be populated dynamically with JS -->
-      </tbody>
-    </table>
-  </div>
-
-  <!-- Map Container -->
-  <div class="col-md-6">
-    <div id="commodityMap" style="height: 500px; width:100%;"></div>
-  </div>
 </div>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
-<script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+<!-- Include jQuery if not already included -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
-    <!-- Historical Data -->
-    <div class="tab-pane fade" id="historical-data" role="tabpanel" aria-labelledby="historical-data-tab">
-      <h2>Historical Data</h2>
-      <!-- Filters -->
-      <form id="historical-filter">
-        <div class="form-row">
-          <div class="form-group col-md-4">
-            <label for="commodity">Commodity</label>
-            <select id="historical-commodity" class="form-control" multiple>
-              <option value="Anaheim">Anaheim</option>
-              <option value="Cubanelles">Cubanelles</option>
-              <option value="Fresno">Fresno</option>
-              <option value="Habanero">Habanero</option>
-              <option value="Hungarian Wax">Hungarian Wax</option>
-              <option value="Jalapeno">Jalapeno</option>
-              <option value="Long Hot">Long Hot</option>
-              <option value="Poblano">Poblano</option>
-              <option value="Serrano">Serrano</option>
-              <option value="Shishito">Shishito</option>
-            </select>
-          </div>
-          <div class="form-group col-md-4">
-            <label for="start_date">Start Date</label>
-            <input type="date" id="start_date" class="form-control" value="2018-01-01">
-          </div>
-          <div class="form-group col-md-4">
-            <label for="end_date">End Date</label>
-            <input type="date" id="end_date" class="form-control" value="{{ datetime.today().strftime('%Y-%m-%d') }}">
-          </div>
-        </div>
-        <div class="form-group">
-          <label for="source">Source</label>
-          <select id="historical-source" class="form-control">
-            <option value="USDA">USDA</option>
-            <option value="ProduceIQ">Produce IQ</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label for="city">City</label>
-          <select id="historical-city" class="form-control" multiple>
-            <option value="BALTIMORE">Baltimore</option>
-            <option value="BOSTON">Boston</option>
-            <option value="CHICAGO">Chicago</option>
-            <option value="COLUMBIA">Columbia</option>
-            <option value="MIAMI">Miami</option>
-            <option value="NEW YORK">New York</option>
-            <option value="PHILADELPHIA">Philadelphia</option>
-            <option value="LOS ANGELES">Los Angeles</option>
-          </select>
-        </div>
-      </form>
-      <button class="btn btn-primary" onclick="fetchHistoricalData()">Update</button>
-<!-- Add a Canvas for the Chart -->
-<canvas id="historicalChart" width="400" height="400"></canvas>
-<!-- Add a Download Button -->
-<button class="btn btn-primary" onclick="downloadChart()">Download Chart & Data</button>
+<!-- Include Chart.js 4.4.0 -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
-    </div>
-  </div>
+<!-- Include Luxon 3.3.0 -->
+<script src="https://cdn.jsdelivr.net/npm/luxon@3.3.0/build/global/luxon.min.js"></script>
 
-  <!-- Scripts to Fetch Data Dynamically -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.16.9/xlsx.full.min.js"></script>
+<!-- Include Chart.js adapter for Luxon 1.3.1 -->
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1/dist/chartjs-adapter-luxon.umd.min.js"></script>
 
+<!-- Include other dependencies -->
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  console.log(
+    "Luxon is",
+    typeof luxon !== "undefined" ? "defined" : "undefined"
+  );
+</script>
+<script>
+  console.log("Chart.js version:", Chart.version);
+  console.log(
+    "Luxon version:",
+    luxon.DateTime.now().toFormat("yyyy-MM-dd HH:mm:ss")
+  );
+  console.log("Date Adapter:", Chart._adapters._date);
+</script>
 
-  <script>
-    var historicalChart = null;
-    var $ = jQuery.noConflict();
+<script>
+  // Unified Filters Update Logic
+  function updateAllComponents() {
+    const commodity = $("#commodityFilterUnified").val();
+    const source = $("#sourceFilterUnified").val();
+    const last7Days = $("#last-7-days-unified").is(":checked");
+    const city = $("#cityFilterUnified").val();
 
-    var $ = jQuery.noConflict();
-    var chart; // Chart.js chart variable
-    // Define custom icons
-var defaultIcon = L.icon({
-  iconUrl: 'https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-  shadowSize: [41, 41]
-});
+    updateMap(commodity); // Now only passing commodity
+    fetchBestSellMarket(commodity, source, last7Days);
+    updateSeasonalChart(commodity, city);
+  }
+  // Update functions for specific components
 
-var greenIcon = L.icon({
-  iconUrl: 'https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-  shadowSize: [41, 41]
-});
+  // Event listeners for filters affecting historical data
+  $(
+    "#commodityFilterUnified, #cityFilterUnified, #sourceFilterUnified, #startDateFilterUnified, #endDateFilterUnified"
+  ).on("change", function () {
+    updateHistoricalDataComponent();
+  });
 
-    // Function to create or update the chart
-    function updateBestSellChart(data) {
-      var cityNames = data.map(item => item.city_name); // Extract city names
-      var maxPrices = data.map(item => (item.max_price === '-' ? 0 : item.max_price)); // Extract max prices (use 0 for '-')
-    
-      if (chart) {
-        // Update existing chart
-        chart.data.labels = cityNames;
-        chart.data.datasets[0].data = maxPrices;
-        chart.update();
-      } else {
-        // Create a new chart if it doesn't exist
-        var ctx = document.getElementById('bestSellChart').getContext('2d');
-        chart = new Chart(ctx, {
-          type: 'bar', // For horizontal bar chart, 'bar' is used with `indexAxis` as 'y'
+  // Update functions for specific components
+
+  // Update Map based on Commodity Filter
+  function updateMapComponent() {
+    const commodity = $("#commodityFilterUnified").val();
+    updateMap(commodity);
+  }
+
+  // Update Best Sell Market components (table and graph)
+  function updateBestSellMarketComponents() {
+    const commodity = $("#commodityFilterUnified").val();
+    const source = $("#sourceFilterUnified").val();
+    const last7Days = $("#last-7-days-unified").is(":checked");
+    fetchBestSellMarket(commodity, source, last7Days);
+  }
+
+  // Update Seasonal Chart
+  function updateSeasonalChartComponent() {
+    const commodity = $("#commodityFilterUnified").val();
+    const city = $("#cityFilterUnified").val();
+    updateSeasonalChart(commodity, city);
+  }
+
+  // Update Historical Data Chart
+  function updateHistoricalDataComponent() {
+    fetchHistoricalData();
+  }
+
+  // Event listeners
+
+  // Commodity Filter Changes
+  $("#commodityFilterUnified").on("change", function () {
+    updateMapComponent();
+    updateBestSellMarketComponents();
+    updateSeasonalChartComponent();
+    updateHistoricalDataComponent();
+  });
+
+  // Source Filter Changes
+  $("#sourceFilterUnified").on("change", function () {
+    updateBestSellMarketComponents();
+    updateHistoricalDataComponent();
+  });
+
+  // 7-Day Checkbox Changes
+  $("#last-7-days-unified").on("change", function () {
+    updateBestSellMarketComponents();
+  });
+
+  // City Filter Changes
+  $("#cityFilterUnified").on("change", function () {
+    updateSeasonalChartComponent();
+    updateHistoricalDataComponent();
+  });
+
+  // Start and End Date Changes
+  $("#startDateFilterUnified, #endDateFilterUnified").on("change", function () {
+    updateHistoricalDataComponent();
+  });
+
+  // Seasonal Trends Chart Update
+  function updateSeasonalChart(commodity, city) {
+    if (!city) {
+      console.error("City is required for seasonal chart.");
+      return;
+    }
+
+    $.ajax({
+      url: "/api/seasonal_prices",
+      type: "GET",
+      data: { variety: commodity, city: city },
+      success: function (response) {
+        // Check if response contains valid data
+        if (response.error) {
+          console.error("Error fetching seasonal data:", response.error);
+          return;
+        }
+
+        const ctx = document.getElementById("seasonalChart").getContext("2d");
+
+        // Destroy the old chart instance if it exists
+        if (window.seasonalChart instanceof Chart) {
+          window.seasonalChart.destroy();
+        }
+
+        // Create a new chart
+        window.seasonalChart = new Chart(ctx, {
+          type: "bar", // Vertical bar chart
           data: {
-            labels: cityNames,
-            datasets: [{
-              label: 'Max Price',
-              data: maxPrices,
-              backgroundColor: 'rgba(54, 162, 235, 0.6)',
-              borderColor: 'rgba(54, 162, 235, 1)',
-              borderWidth: 1
-            }]
+            labels: ["Spring", "Summer", "Autumn", "Winter"],
+            datasets: [
+              {
+                label: `Average Seasonal Prices for ${commodity} in ${city}`,
+                data: [
+                  response.Spring || 0,
+                  response.Summer || 0,
+                  response.Autumn || 0,
+                  response.Winter || 0,
+                ],
+                backgroundColor: ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0"],
+                borderColor: ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0"],
+                borderWidth: 1,
+              },
+            ],
           },
           options: {
-            indexAxis: 'y', // Set the index axis to 'y' for horizontal bar chart
+            responsive: true,
             plugins: {
-              legend: {
-                display: false  // Hide the legend
-              },
-              tooltip: {
-                enabled: true  // Keep tooltips enabled
-              },
-              // Add data labels to each bar
-              datalabels: {
-                display: true,  // Enable data labels
-                align: 'center',  // Align labels inside the bar
-                anchor: 'center',  // Anchor labels in the center of the bar
-                clip: false,  // Prevent labels from getting clipped
-                formatter: function(value, context) {
-                  return '$' + value.toFixed(2);  // Format price as currency
-                },
-                color: 'white',  // Set color of labels inside bars
-                font: {
-                  weight: 'bold'  // Make labels bold
-                }
-              }
+              legend: { display: true },
+              tooltip: { enabled: true },
             },
             scales: {
-              x: {  // X-axis configuration
+              x: { title: { display: true, text: "Season" } },
+              y: {
+                title: { display: true, text: "Price ($)" },
                 beginAtZero: true,
-                title: {
-                  display: true,
-                  text: 'Price',
-                },
-                ticks: {
-                  callback: function(value) {
-                    return '$' + value.toFixed(2); // Show the price as currency
-                  }
-                }
               },
-              y: {  // Y-axis (city names)
-                title: {
-                  display: true,
-                  text: 'City'
-                }
-              }
-            }
+            },
           },
-          plugins: [ChartDataLabels]  // Ensure the ChartDataLabels plugin is added
         });
-      }
-    }
-    
-    // Fetch Best Sell Market Data
-    function fetchBestSellMarket() {
-      var commodity = $('#best-sell-commodity').val();
-      var source = $('input[name="source"]:checked').val(); // Get the selected source
-      var last7Days = $('#last-7-days').is(':checked'); // Get the status of the 7-day filter
-    
-      $.ajax({
-        url: "/api/best_sell_market",
-        type: 'GET',
-        data: { commodity: commodity, source: source, last7Days: last7Days },
-        success: function(response) {
-          console.log('Response received:', response); // Log the response to verify
-    
-          // Clear the existing table body
-          $('#best-sell-market-table tbody').empty();
-    
-          // Update each row with the latest price range and date
-          response.best_market.forEach(function(item) {
-            var row = `
-              <tr>
-                <td>${item.city_name}</td>
-                <td>${item.price_range}</td>
-                <td>${item.date !== '-' ? item.date : '-'}</td>
-              </tr>
-            `;
-            $('#best-sell-market-table tbody').append(row);
-          });
-    
-          // Update the chart with the data (using max price for the graph)
-          updateBestSellChart(response.best_market);
-        },
-        error: function(xhr, status, error) {
-          console.log('AJAX error:', error); // Log any AJAX errors
-        }
-      });
-    }
-    // Add event listeners for changes
-    $('#best-sell-commodity').on('change', fetchBestSellMarket);
-    $('input[name="source"]').on('change', fetchBestSellMarket); // Source change listener
-    $('#last-7-days').on('change', fetchBestSellMarket); // 7-day toggle listener
-  
-    // Trigger initial fetch
-    fetchBestSellMarket();
-
-// Fetch Most Recent Prices Data
-function fetchMostRecentPrices() {
-  $.ajax({
-    url: "/api/most_recent_prices",  // API to get recent prices within one week
-    type: 'GET',
-    success: function(response) {
-      console.log('Response received:', response); // Log the full response to verify the structure
-      var tableBody = $('#most-recent-prices-table tbody');
-      tableBody.empty();
-  
-      var commodities = ['Anaheim', 'Cubanelles', 'Fresno', 'Habanero', 'Hungarian Wax', 'Jalapeno', 'Long Hot', 'Poblano', 'Serrano', 'Shishito'];
-      var cities = ['Baltimore', 'Boston', 'Chicago', 'Columbia', 'Miami', 'New York', 'Philadelphia', 'Los Angeles'];
-  
-      // Loop over each commodity and populate a row
-      commodities.forEach(function(commodity) {
-          var row = `<tr><td>${commodity}</td>`;
-  
-          // Loop over each city to find the price for this commodity
-          cities.forEach(function(city) {
-              var price = response.prices[commodity] && response.prices[commodity][city] ? response.prices[commodity][city] : '-';
-              row += `<td data-city="${city}">${price !== '-' ? '$' + parseFloat(price).toFixed(2) : '-'}</td>`;
-          });
-  
-          row += '</tr>';
-          tableBody.append(row);
-      });
-  
-      // Highlight the maximum price for each commodity row
-      $('#most-recent-prices-table tbody tr').each(function() {
-          var prices = $(this).find('td').slice(1);  // Skip the commodity name (first td)
-          var maxPrice = Math.max.apply(null, prices.map(function() {
-              var priceText = $(this).text().replace('$', '');
-              return parseFloat(priceText) || 0;  // Convert price to number or default to 0
-          }).get());
-  
-          // Highlight the cell that has the max price
-          prices.each(function() {
-              var priceText = $(this).text().replace('$', '');
-              if (parseFloat(priceText) === maxPrice) {
-                  $(this).css('background-color', 'yellow');  // Highlight the max price
-              }
-          });
-      });
-    },
-    error: function(xhr, status, error) {
-      console.log('AJAX error:', error); // Log any AJAX errors
-    }
-  });
-}
-// Ensure the map is re-rendered properly when the tab is clicked
-$('#most-recent-prices-tab').on('shown.bs.tab', function () {
-  setTimeout(function () {
-      map.invalidateSize();  // This ensures the map recalculates its size
-  }, 100);  // Small delay to allow rendering
-});
-
-    var $ = jQuery.noConflict();
-
-    // Leaflet map initialization
-    var map = L.map('commodityMap').setView([37.8, -96], 4); // Centered on US
-
-    // Load tile layer for the map
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 18,
-    }).addTo(map);
-
-    // Sample city coordinates (replace these with actual city coordinates)
-    var cityLatLng = {
-      "Baltimore": [39.2904, -76.6122],
-      "Boston": [42.3601, -71.0589],
-      "Chicago": [41.8781, -87.6298],
-      "Columbia": [34.0007, -81.0348],
-      "Miami": [25.7617, -80.1918],
-      "New York": [40.7128, -74.0060],
-      "Philadelphia": [39.9526, -75.1652],
-      "Los Angeles": [34.0522, -118.2437]
-    };
-
-// Function to update map based on selected commodity
-// Function to update map based on selected commodity
-function updateMap(commodity) {
-  $.ajax({
-    url: "/api/most_recent_prices",
-    type: 'GET',
-    data: { commodity: commodity },
-    success: function(response) {
-      // Clear all map markers
-      map.eachLayer(function (layer) {
-        if (layer instanceof L.Marker) {
-          map.removeLayer(layer);
-        }
-      });
-
-      // Ensure response.prices[commodity] exists
-      if (response.prices && response.prices[commodity]) {
-        var maxPrice = -Infinity;
-        var highestCity = null;
-
-        // Find the city with the highest price
-        for (const [city, price] of Object.entries(response.prices[commodity])) {
-          if (parseFloat(price) > maxPrice) {
-            maxPrice = parseFloat(price);
-            highestCity = city;
-          }
-        }
-
-        // Add markers for each city
-        for (const [city, price] of Object.entries(response.prices[commodity])) {
-          if (cityLatLng[city]) {
-            var markerIcon = city === highestCity ? greenIcon : defaultIcon; // Use green icon for the highest price city
-            var marker = L.marker(cityLatLng[city], { icon: markerIcon }).addTo(map);
-
-            marker.bindPopup(`<b>${city}</b><br>Max Price: $${price}`).on('click', function () {
-              map.setView(cityLatLng[city], map.getZoom(), { animate: true });  // Set map view to center on the marker clicked
-            });
-          }
-        }
-      }
-    },  // <-- Missing comma added here to separate success and error blocks
-
-    error: function(xhr, status, error) {
-      console.log('AJAX error:', error); // Log any AJAX errors
-    }
-  });
-}
-
-
-    // Fetch prices and update map when commodity is selected
-    $('#commodityFilter').on('change', function() {
-      var selectedCommodity = $(this).val();
-      updateMap(selectedCommodity);
+      },
+      error: function (xhr, status, error) {
+        console.error("Error fetching seasonal trends data:", error);
+      },
     });
-    // Trigger map render when the tab becomes active
-$('#most-recent-prices-tab').on('shown.bs.tab', function () {
-  map.invalidateSize();
-  updateMap($('#commodityFilter').val());
-});
-    function fetchHistoricalData() {
-      var commodities = $('#historical-commodity').val(); // Get selected commodities (as an array)
-      var cities = $('#historical-city').val(); // Get selected cities (as an array)
-      var start_date = $('#start_date').val();
-      var end_date = $('#end_date').val();
-      var source = $('#historical-source').val();
-  
-      $.ajax({
-          url: "/api/historical_data",  // Adjusted API to support multiple cities/commodities
-          type: 'GET',
-          data: { 
-              commodities: commodities.join(','),  // Convert arrays to comma-separated strings
-              cities: cities.join(','), 
-              start_date: start_date, 
-              end_date: end_date, 
-              source: source 
-          },
-          success: function(response) {
-              var chartData = formatDataForChart(response.historical_data); // Format data for Chart.js
-              updateHistoricalChart(chartData);  // Function to update the line chart
-          }
-      });
   }
-  
-  // Helper function to interpolate missing data
-function interpolateMissingData(dates, prices) {
-  let interpolatedPrices = [];
+</script>
 
-  for (let i = 0; i < dates.length; i++) {
-      if (prices[i] !== undefined) {
-          interpolatedPrices.push(prices[i]);
-      } else {
-          // If the current price is missing, perform linear interpolation
-          let prevPrice = interpolatedPrices[i - 1];
-          let nextPrice = prices.slice(i).find(price => price !== undefined);
+<script>
+  var historicalChart = null;
+  var chart; // Chart.js chart variable
 
-          if (prevPrice !== undefined && nextPrice !== undefined) {
-              let steps = prices.slice(i).findIndex(price => price === nextPrice) + 1;
-              let stepValue = (nextPrice - prevPrice) / steps;
-              interpolatedPrices.push(prevPrice + stepValue);
-          } else {
-              interpolatedPrices.push(null); // If unable to interpolate, leave it as null
-          }
-      }
-  }
-
-  return interpolatedPrices;
-}
-
-// Format data for Chart.js (helper function)
-function formatDataForChart(historicalData) {
-  var dates = [];
-  var datasets = [];
-
-  historicalData.forEach(item => {
-      // Now the date is already in YYYY-MM-DD format from the backend
-      const formattedDate = item.date;
-
-      // Collect unique dates
-      if (!dates.includes(formattedDate)) {
-          dates.push(formattedDate);
-      }
-
-      // Prepare datasets by city and commodity
-      var label = item.city_name + " - " + item.commodity;
-      var existingDataset = datasets.find(d => d.label === label);
-
-      if (existingDataset) {
-          existingDataset.rawData.push(item.price);
-      } else {
-          datasets.push({
-              label: label,
-              rawData: [item.price],
-              data: [],
-              borderColor: getRandomColor(),  // Assign a unique color
-              fill: false
-          });
-      }
+  // Define custom icons
+  var defaultIcon = L.icon({
+    iconUrl:
+      "https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png",
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowUrl:
+      "https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png",
+    shadowSize: [41, 41],
   });
 
-  // Fill missing data with null and interpolate missing values
-  datasets.forEach(dataset => {
-      for (let i = 0; i < dates.length; i++) {
-          let price = dataset.rawData[i] !== undefined ? dataset.rawData[i] : null;
-          dataset.data.push(price);
-      }
-      // Perform interpolation on the dataset
-      dataset.data = interpolateMissingData(dates, dataset.data);
+  var greenIcon = L.icon({
+    iconUrl:
+      "https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png",
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowUrl:
+      "https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png",
+    shadowSize: [41, 41],
   });
+  // Function to format data for Chart.js
+  function formatDataForChart(historicalData) {
+    // Aggregate data by date
+    var datePriceMap = {};
 
-  return { dates: dates, datasets: datasets };
-}
+    historicalData.forEach((item) => {
+      if (datePriceMap[item.date]) {
+        datePriceMap[item.date].sum += parseFloat(item.price);
+        datePriceMap[item.date].count += 1;
+      } else {
+        datePriceMap[item.date] = {
+          sum: parseFloat(item.price),
+          count: 1,
+        };
+      }
+    });
 
+    var labels = [];
+    var data = [];
 
+    // Collect dates and corresponding average prices
+    for (var date in datePriceMap) {
+      labels.push(date);
+      data.push(datePriceMap[date].sum / datePriceMap[date].count);
+    }
 
-// Update the line chart
-function updateHistoricalChart(data) {
-  var ctx = document.getElementById('historicalChart').getContext('2d');
+    // Sort data by date
+    var combined = labels.map(function (label, index) {
+      return { date: label, value: data[index] };
+    });
 
-  // Destroy the chart if it already exists
-  if (historicalChart) {
-      historicalChart.destroy();
+    combined.sort(function (a, b) {
+      return new Date(a.date) - new Date(b.date);
+    });
+
+    // Extract sorted labels and data
+    labels = combined.map(function (item) {
+      return item.date;
+    });
+    data = combined.map(function (item) {
+      return item.value;
+    });
+
+    return { labels: labels, data: data };
   }
 
-  // Create a new chart instance
-  historicalChart = new Chart(ctx, {
-      type: 'line',
+  // Function to update the historical chart
+  function updateHistoricalChart(chartData) {
+    var ctx = document.getElementById("historicalChart").getContext("2d");
+
+    // Destroy existing chart if it exists
+    if (window.historicalChart instanceof Chart) {
+      window.historicalChart.destroy();
+    }
+
+    if (chartData.labels.length === 0) {
+      // Display a message or handle no data scenario
+      ctx.font = "16px Arial";
+      ctx.fillText("No data available for the selected criteria.", 50, 50);
+      return;
+    }
+
+    // Prepare data in the format required by Chart.js 4.x
+    const dataPoints = chartData.labels.map((date, index) => ({
+      x: date, // Date string in 'YYYY-MM-DD' format
+      y: chartData.data[index], // Corresponding data value
+    }));
+
+    // Log the dataPoints
+    console.log("Data Points:", dataPoints);
+
+    // Create a new chart
+    window.historicalChart = new Chart(ctx, {
+      type: "line",
       data: {
-          labels: data.dates,  // X-axis labels (now proper dates)
-          datasets: data.datasets  // Y-axis data (prices for each city/commodity)
+        datasets: [
+          {
+            label: "Average Price",
+            data: dataPoints,
+            backgroundColor: "rgba(75, 192, 192, 0.2)",
+            borderColor: "rgba(75, 192, 192, 1)",
+            borderWidth: 1,
+            fill: false,
+          },
+        ],
       },
       options: {
-          scales: {
-              x: {
-                  title: { display: true, text: 'Date' }
+        responsive: true,
+        // Remove the parsing option
+        // parsing: false,
+        scales: {
+          x: {
+            type: "time",
+            time: {
+              parser: "yyyy-MM-dd",
+              unit: "day",
+              displayFormats: {
+                day: "yyyy-MM-dd",
               },
-              y: {
-                  title: { display: true, text: 'Price' }
-              }
-          }
-      }
-  });
-}
-// Download chart as image and data as Excel
-function downloadChart() {
-  var chart = document.getElementById('historicalChart');
-  var chartImage = chart.toDataURL("image/png");
-  
-  // Download chart image
-  var a = document.createElement('a');
-  a.href = chartImage;
-  a.download = 'historical_chart.png';
-  a.click();
-
-  // Fetch and download data in Excel
-  fetchHistoricalDataForDownload();
-}
-
-function fetchHistoricalDataForDownload() {
-  var commodities = $('#historical-commodity').val();
-  var cities = $('#historical-city').val();
-  var start_date = $('#start_date').val();
-  var end_date = $('#end_date').val();
-  var source = $('#historical-source').val();
-
-  $.ajax({
-      url: "/api/historical_data", 
-      type: 'GET',
-      data: { 
-          commodities: commodities.join(','), 
-          cities: cities.join(','), 
-          start_date: start_date, 
-          end_date: end_date, 
-          source: source 
+            },
+            title: {
+              display: true,
+              text: "Date",
+            },
+          },
+          y: {
+            title: {
+              display: true,
+              text: "Price ($)",
+            },
+          },
+        },
       },
-      success: function(response) {
-          downloadDataAsExcel(response.historical_data);
-      }
-  });
-}
-
-// Convert historical data to Excel format
-function downloadDataAsExcel(historicalData) {
-  var data = historicalData.map(item => ({
-      Date: item.date,
-      City: item.city_name,
-      Commodity: item.commodity,
-      Price: item.price
-  }));
-
-  var wb = XLSX.utils.book_new();
-  var ws = XLSX.utils.json_to_sheet(data);
-  XLSX.utils.book_append_sheet(wb, ws, "Historical Data");
-  XLSX.writeFile(wb, 'historical_data.xlsx');
-}
-
-    
-    jQuery(document).ready(function() {
-      var params = new URLSearchParams(window.location.search);
-      
-      // Pre-fill Best Sell Market filters
-      if (params.has('commodity')) {
-          $('#best-sell-commodity').val(params.get('commodity'));
-      }
-      if (params.has('source')) {
-          $('#best-sell-source').val(params.get('source'));
-      }
-      if (params.has('city')) {
-          $('#best-sell-city').val(params.get('city'));
-      }
-
-      // Pre-fill Most Recent Prices filters
-      if (params.has('commodity')) {
-          $('#most-recent-commodity').val(params.get('commodity'));
-      }
-      if (params.has('source')) {
-          $('#most-recent-source').val(params.get('source'));
-      }
-      if (params.has('city')) {
-          $('#most-recent-city').val(params.get('city'));
-      }
-
-      // Pre-fill Historical Data filters
-      if (params.has('commodity')) {
-          $('#historical-commodity').val(params.get('commodity'));
-      }
-      if (params.has('start_date')) {
-          $('#start_date').val(params.get('start_date'));
-      }
-      if (params.has('end_date')) {
-          $('#end_date').val(params.get('end_date'));
-      }
-      if (params.has('source')) {
-          $('#historical-source').val(params.get('source'));
-      }
-      if (params.has('city')) {
-          $('#historical-city').val(params.get('city'));
-      }
-      var initialCommodity = $('#commodityFilter').val();
-      updateMap(initialCommodity);
-
-      // Trigger default fetches
-      fetchBestSellMarket();
-      fetchMostRecentPrices();
     });
-    function getRandomColor() {
-      const letters = '0123456789ABCDEF';
-      let color = '#';
-      for (let i = 0; i < 6; i++) {
-        color += letters[Math.floor(Math.random() * 16)];
-      }
-      return color;
+  }
+
+  function fetchHistoricalData() {
+    var commodity = $("#commodityFilterUnified").val();
+    var city = $("#cityFilterUnified").val();
+    var start_date = $("#startDateFilterUnified").val();
+    var end_date = $("#endDateFilterUnified").val();
+    var source = $("#sourceFilterUnified").val();
+
+    if (!start_date || !end_date) {
+      alert("Please select both start date and end date.");
+      return;
     }
-// Helper function to convert year-day format to actual date (YYYY-MM-DD)
-function convertYearDayToDate(year, dayOfYear) {
-  // Check if the year and dayOfYear are valid numbers
-  if (isNaN(year) || isNaN(dayOfYear)) {
-      console.error("Invalid year or day: ", year, dayOfYear);
-      return null; // Return null if invalid
+
+    if (new Date(start_date) > new Date(end_date)) {
+      alert("Start date cannot be after end date.");
+      return;
+    }
+
+    $.ajax({
+      url: "/api/historical_data",
+      type: "GET",
+      data: {
+        commodities: commodity,
+        cities: city,
+        start_date: start_date,
+        end_date: end_date,
+        source: source,
+      },
+      success: function (response) {
+        var chartData = formatDataForChart(response.historical_data);
+        updateHistoricalChart(chartData);
+      },
+      error: function (xhr, status, error) {
+        console.error("Error fetching historical data:", error);
+      },
+    });
   }
 
-  try {
-      var date = new Date(year, 0); // January 1st of the given year
-      return new Date(date.setDate(dayOfYear)); // Add days to the date
-  } catch (error) {
-      console.error("Error in converting year-day to date: ", year, dayOfYear, error);
-      return null; // Return null in case of error
-  }
-}
+  function downloadChart() {
+    var chartCanvas = document.getElementById("historicalChart");
+    var chartImage = chartCanvas.toDataURL("image/png");
 
-  </script>
+    // Download chart image
+    var a = document.createElement("a");
+    a.href = chartImage;
+    a.download = "historical_chart.png";
+    a.click();
+
+    // Download data as Excel
+    downloadExcelData();
+  }
+  function downloadExcelData() {
+    var commodity = $("#commodityFilterUnified").val();
+    var city = $("#cityFilterUnified").val();
+    var start_date = $("#startDateFilterUnified").val();
+    var end_date = $("#endDateFilterUnified").val();
+    var source = $("#sourceFilterUnified").val();
+
+    if (!start_date || !end_date) {
+      alert("Please select both start date and end date.");
+      return;
+    }
+
+    if (new Date(start_date) > new Date(end_date)) {
+      alert("Start date cannot be after end date.");
+      return;
+    }
+
+    // Construct the URL with query parameters
+    var url =
+      "/api/download_historical_data?" +
+      $.param({
+        commodities: commodity,
+        cities: city,
+        start_date: start_date,
+        end_date: end_date,
+        source: source,
+      });
+
+    // Initiate the file download
+    window.location.href = url;
+  }
+
+  // Function to create or update the Best Sell Market chart
+  function updateBestSellChart(data) {
+    var cityNames = data.map((item) => item.city_name); // Extract city names
+    var maxPrices = data.map((item) =>
+      item.max_price === "-" ? 0 : item.max_price
+    ); // Extract max prices (use 0 for '-')
+
+    if (chart) {
+      // Update existing chart
+      chart.data.labels = cityNames;
+      chart.data.datasets[0].data = maxPrices;
+      chart.update();
+    } else {
+      // Create a new chart if it doesn't exist
+      var ctx = document.getElementById("bestSellChart").getContext("2d");
+      chart = new Chart(ctx, {
+        type: "bar", // For horizontal bar chart, 'bar' is used with `indexAxis` as 'y'
+        data: {
+          labels: cityNames,
+          datasets: [
+            {
+              label: "Max Price",
+              data: maxPrices,
+              backgroundColor: "rgba(54, 162, 235, 0.6)",
+              borderColor: "rgba(54, 162, 235, 1)",
+              borderWidth: 1,
+            },
+          ],
+        },
+        options: {
+          indexAxis: "y", // Set the index axis to 'y' for horizontal bar chart
+          plugins: {
+            legend: {
+              display: false, // Hide the legend
+            },
+            tooltip: {
+              enabled: true, // Keep tooltips enabled
+            },
+            // Add data labels to each bar
+            datalabels: {
+              display: true, // Enable data labels
+              align: "center", // Align labels inside the bar
+              anchor: "center", // Anchor labels in the center of the bar
+              clip: false, // Prevent labels from getting clipped
+              formatter: function (value, context) {
+                return "$" + value.toFixed(2); // Format price as currency
+              },
+              color: "white", // Set color of labels inside bars
+              font: {
+                weight: "bold", // Make labels bold
+              },
+            },
+          },
+          scales: {
+            x: {
+              // X-axis configuration
+              beginAtZero: true,
+              title: {
+                display: true,
+                text: "Price",
+              },
+              ticks: {
+                callback: function (value) {
+                  return "$" + value.toFixed(2); // Show the price as currency
+                },
+              },
+            },
+            y: {
+              // Y-axis (city names)
+              title: {
+                display: true,
+                text: "City",
+              },
+            },
+          },
+        },
+        plugins: [ChartDataLabels], // Ensure the ChartDataLabels plugin is added
+      });
+    }
+  }
+
+  // Fetch Best Sell Market Data
+  function fetchBestSellMarket(commodity, source, last7Days) {
+    $.ajax({
+      url: "/api/best_sell_market",
+      type: "GET",
+      data: { commodity, source, last7Days: last7Days.toString() },
+      success: function (response) {
+        // Update Table
+        const tableBody = $("#best-sell-market-table tbody");
+        tableBody.empty(); // Clear old rows
+        response.best_market.forEach((item) => {
+          tableBody.append(`<tr>
+                      <td>${item.city_name}</td>
+                      <td>${item.price_range}</td>
+                      <td>${item.date !== "-" ? item.date : "-"}</td>
+                  </tr>`);
+        });
+
+        // Update Chart
+        const ctx = document.getElementById("bestSellChart").getContext("2d");
+        // Check if a chart instance already exists and destroy it before creating a new one
+        if (window.bestSellChart instanceof Chart) {
+          window.bestSellChart.destroy();
+        }
+
+        // Create a new chart
+        window.bestSellChart = new Chart(ctx, {
+          type: "bar",
+          data: {
+            labels: response.best_market.map((item) => item.city_name),
+            datasets: [
+              {
+                label: "Max Price",
+                data: response.best_market.map((item) =>
+                  parseFloat(item.max_price || 0)
+                ),
+                backgroundColor: "rgba(54, 162, 235, 0.6)",
+                borderColor: "rgba(54, 162, 235, 1)",
+                borderWidth: 1,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            scales: {
+              x: { title: { display: true, text: "City" } },
+              y: {
+                title: { display: true, text: "Price ($)" },
+                beginAtZero: true,
+              },
+            },
+          },
+        });
+      },
+      error: function (xhr, status, error) {
+        console.error("Error fetching Best Sell Market data:", error);
+      },
+    });
+  }
+
+  // Removed redundant event listeners to prevent duplicate API calls
+  // Since fetchBestSellMarket is called within updateAllComponents, these are not needed
+  /*
+  $("#best-sell-commodity").on("change", fetchBestSellMarket);
+  $('input[name="source"]').on("change", fetchBestSellMarket);
+  $("#last-7-days").on("change", fetchBestSellMarket);
+  */
+
+  // Fetch Most Recent Prices Data
+  function fetchMostRecentPrices() {
+    $.ajax({
+      url: "/api/most_recent_prices",
+      type: "GET",
+      success: function (response) {
+        console.log("Response received:", response); // Log the full response to verify the structure
+        var tableBody = $("#most-recent-prices-table tbody");
+        tableBody.empty();
+
+        var commodities = [
+          "Anaheim",
+          "Cubanelles",
+          "Fresno",
+          "Habanero",
+          "Hungarian Wax",
+          "Jalapeno",
+          "Long Hot",
+          "Poblano",
+          "Serrano",
+          "Shishito",
+        ];
+        var cities = [
+          "Baltimore",
+          "Boston",
+          "Chicago",
+          "Columbia",
+          "Miami",
+          "New York",
+          "Philadelphia",
+          "Los Angeles",
+        ];
+
+        // Loop over each commodity and populate a row
+        commodities.forEach(function (commodity) {
+          var row = `<tr><td>${commodity}</td>`;
+
+          // Loop over each city to find the price for this commodity
+          cities.forEach(function (city) {
+            var price =
+              response.prices[commodity] && response.prices[commodity][city]
+                ? response.prices[commodity][city]
+                : "-";
+            row += `<td data-city="${city}">${
+              price !== "-" ? "$" + parseFloat(price).toFixed(2) : "-"
+            }</td>`;
+          });
+
+          row += "</tr>";
+          tableBody.append(row);
+        });
+
+        // Highlight the maximum price for each commodity row
+        $("#most-recent-prices-table tbody tr").each(function () {
+          var prices = $(this).find("td").slice(1); // Skip the commodity name (first td)
+          var maxPrice = Math.max.apply(
+            null,
+            prices
+              .map(function () {
+                var priceText = $(this).text().replace("$", "");
+                return parseFloat(priceText) || 0; // Convert price to number or default to 0
+              })
+              .get()
+          );
+
+          // Highlight the cell that has the max price
+          prices.each(function () {
+            var priceText = $(this).text().replace("$", "");
+            if (parseFloat(priceText) === maxPrice) {
+              $(this).css("background-color", "yellow"); // Highlight the max price
+            }
+          });
+        });
+      },
+      error: function (xhr, status, error) {
+        console.log("AJAX error:", error); // Log any AJAX errors
+      },
+    });
+  }
+
+  // Leaflet map initialization
+  var map = L.map("commodityMap").setView([37.8, -96], 4); // Centered on US
+
+  // Load tile layer for the map
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 18,
+  }).addTo(map);
+
+  // City coordinates
+  var cityLatLng = {
+    Baltimore: [39.2904, -76.6122],
+    Boston: [42.3601, -71.0589],
+    Chicago: [41.8781, -87.6298],
+    Columbia: [34.0007, -81.0348],
+    Miami: [25.7617, -80.1918],
+    "New York": [40.7128, -74.006],
+    Philadelphia: [39.9526, -75.1652],
+    "Los Angeles": [34.0522, -118.2437],
+  };
+
+  // Function to update map based on selected commodity
+  function updateMap(commodity) {
+    var source = $("#sourceFilterUnified").val();
+
+    $.ajax({
+      url: "/api/most_recent_prices",
+      type: "GET",
+      data: { source },
+      success: function (response) {
+        // Clear all existing map markers
+        map.eachLayer(function (layer) {
+          if (layer instanceof L.Marker) {
+            map.removeLayer(layer);
+          }
+        });
+
+        // Ensure response contains valid data
+        if (response.prices && response.prices[commodity]) {
+          let maxPrice = -Infinity;
+          let highestCity = null;
+
+          // Find the city with the highest price
+          for (const [city, price] of Object.entries(
+            response.prices[commodity]
+          )) {
+            const parsedPrice = parseFloat(price);
+            if (!isNaN(parsedPrice) && parsedPrice > maxPrice) {
+              maxPrice = parsedPrice;
+              highestCity = city;
+            }
+          }
+
+          // Add markers for each city
+          for (const [city, price] of Object.entries(
+            response.prices[commodity]
+          )) {
+            const parsedPrice = parseFloat(price);
+            if (cityLatLng[city] && !isNaN(parsedPrice)) {
+              const markerIcon = city === highestCity ? greenIcon : defaultIcon;
+              const marker = L.marker(cityLatLng[city], {
+                icon: markerIcon,
+              }).addTo(map);
+
+              marker
+                .bindPopup(
+                  `<b>${city}</b><br>Price: $${parsedPrice.toFixed(2)}`
+                )
+                .on("click", function () {
+                  map.setView(cityLatLng[city], map.getZoom(), {
+                    animate: true,
+                  });
+                });
+            }
+          }
+        } else {
+          console.warn(`No price data available for commodity: ${commodity}`);
+        }
+      },
+      error: function (xhr, status, error) {
+        console.error("Error fetching map data:", error);
+      },
+    });
+  }
+
+  jQuery(document).ready(function () {
+    updateMapComponent();
+    updateBestSellMarketComponents();
+    updateSeasonalChartComponent();
+    updateHistoricalDataComponent(); // Make sure this is included
+    fetchMostRecentPrices();
+  });
+
+  // Sidebar Toggle Functionality
+  document.addEventListener("DOMContentLoaded", function () {
+    const sidebar = document.getElementById("filters-sidebar");
+    const sidebarToggle = document.getElementById("sidebar-toggle");
+    const arrowIcon = sidebarToggle.querySelector(".arrow-icon");
+    const mainContent = document.querySelector(".main-content");
+
+    sidebarToggle.addEventListener("click", function () {
+      sidebar.classList.toggle("collapsed");
+      mainContent.classList.toggle("expanded");
+
+      // Toggle the arrow direction
+      if (sidebar.classList.contains("collapsed")) {
+        arrowIcon.innerHTML = "&rarr;"; // Right arrow when collapsed
+      } else {
+        arrowIcon.innerHTML = "&larr;"; // Left arrow when expanded
+      }
+    });
+  });
+</script>
 
 {% endblock %}
