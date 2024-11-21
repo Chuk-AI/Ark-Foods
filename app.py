@@ -542,6 +542,23 @@ def fetch_daily_data():
             "Shishito",
         ]
 
+        # Standardize the list to lowercase for comparison
+        wanted_commodities = [commodity.lower() for commodity in wanted_commodities]
+
+        # Mapping standardized names back to desired format
+        standardized_name = {
+            "anaheim": "Anaheim",
+            "cubanelles": "Cubanelles",
+            "fresno": "Fresno",
+            "habanero": "Habanero",
+            "hungarian wax": "Hungarian Wax",
+            "jalapeno": "Jalapeno",
+            "long hot": "Long Hot",
+            "poblano": "Poblano",
+            "serrano": "Serrano",
+            "shishito": "Shishito",
+        }
+
         # Get the last fetched date
         start_dt = get_last_fetched_date()
         end_dt = pd.Timestamp.today()  # Fetch data up to today
@@ -612,10 +629,14 @@ def fetch_daily_data():
                 continue
 
             for item in data:
-                variety_name = item.get("varietyName", "").capitalize()
+                # Standardize variety name from the API
+                variety_name = item.get("varietyName", "").strip().lower()
 
-                # Only process if the variety is one of the wanted commodities
+                # Compare in standardized format
                 if variety_name in wanted_commodities:
+                    # Map back to the desired format
+                    variety_name = standardized_name.get(variety_name, variety_name)
+
                     city_name = item.get("terminalMarketCityName")
                     year = item.get("isoYear")
                     day_of_year = item.get("day")
@@ -638,7 +659,7 @@ def fetch_daily_data():
                     # Save to the database
                     price_data = PriceData(
                         city_name=city_name,
-                        commodity=variety_name,  # Insert varietyName into the commodity field
+                        commodity=variety_name,
                         year=year,
                         day=day_of_year,
                         price=price,
@@ -662,6 +683,7 @@ def fetch_daily_data():
             current_dt += pd.Timedelta(days=1)
             data = None  # Release JSON data memory
             gc.collect()  # Explicit garbage collection
+
         logging.info(
             f"Data fetching completed from {start_dt.strftime('%Y-%m-%d')} to {end_dt.strftime('%Y-%m-%d')}."
         )
