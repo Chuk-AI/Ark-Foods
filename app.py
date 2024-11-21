@@ -330,18 +330,13 @@ def fetch_usda_daily_data():
                 response = requests.get(endpoint, headers=headers)
 
                 logging.info(f"API Response Status Code: {response.status_code}")
-                logging.info(
-                    f"API Response Content: {response.text}"
-                )  # Log the entire response
 
                 if response.status_code == 200:
                     json_data = response.json()
                     if json_data.get("results") and isinstance(
                         json_data["results"], list
                     ):
-                        logging.info(
-                            f"Valid data found for {current_date_formatted}: {json_data['results']}"
-                        )
+                        logging.info(f"Valid data found for {current_date_formatted}")
                         process_usda_data(json_data["results"])
                     else:
                         logging.warning(
