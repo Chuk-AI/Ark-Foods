@@ -601,9 +601,7 @@ def fetch_daily_data():
             )
 
             # Log the full response for debugging
-            logging.info(
-                f"API Response for {current_dt.strftime('%Y-%m-%d')}: {response.text}"
-            )
+            logging.info(f"API Response for {current_dt.strftime('%Y-%m-%d')}")
 
             if response.status_code == 200:
                 data = response.json().get("subset", [])
@@ -622,7 +620,7 @@ def fetch_daily_data():
             # Process and save the data
             if not data:
                 logging.error(
-                    f"No data found in the response for {current_dt.strftime('%Y-%m-%d')}. Full response: {response.json()}"
+                    f"No data found in the response for {current_dt.strftime('%Y-%m-%d')}."
                 )
                 # Move to the next day even if no data is found
                 current_dt += pd.Timedelta(days=1)
