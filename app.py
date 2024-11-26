@@ -597,7 +597,7 @@ def fetch_daily_data():
                 f"{base_url}terminal-market-trends",
                 headers=headers,
                 params=params,
-                verify=True,
+                verify=False,
             )
 
             # Log the full response for debugging
