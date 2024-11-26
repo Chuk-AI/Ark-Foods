@@ -471,6 +471,7 @@ def determine_season_from_year_day(year, day_of_year):
 
 
 # PRODUCE IQ DATA FETCHING IS HERE!!
+# This is for pricedata
 # Function to fetch the last fetched date
 def get_last_fetched_date():
     # Step 1: Find the maximum year
