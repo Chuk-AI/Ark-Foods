@@ -185,24 +185,7 @@
   color: white;
 }
 
-/* Most Recent Prices and Map Layout */
-.d-flex.flex-wrap {
-  display: flex;
-  flex-wrap: wrap;
-}
-
-.most-recent-prices,
-.map-container {
-  flex-basis: 48%; /* Approximately half width */
-  margin-right: 2%; /* Space between the two columns */
-  margin-bottom: 20px; /* Add spacing between rows */
-}
-
-.map-container {
-  flex-grow: 1; /* Ensure it expands properly if needed */
-  margin-right: 0; /* Remove right margin from the last item */
-}
-
+/* Table Responsive */
 .table-responsive {
   overflow-x: auto;
 }
@@ -211,17 +194,6 @@
 .highlight-max {
   background-color: var(--sales-highlight-bg);
   font-weight: bold;
-}
-
-/* Weather Dashboard Alignment */
-.weather-dashboard {
-  flex-basis: 100%;
-  margin-bottom: 20px; /* Consistent spacing */
-}
-
-.weather-dashboard .card {
-  height: auto; /* Adjust height as needed */
-  margin-bottom: 20px;
 }
 
 /* Chart Container */
@@ -234,13 +206,6 @@
 
 /* Responsive Adjustments */
 @media (max-width: 768px) {
-  .most-recent-prices,
-  .map-container,
-  .weather-dashboard {
-    flex-basis: 100%; /* Full width for small screens */
-    margin-right: 0;
-  }
-
   /* Adjust main content margins for small screens */
   .main-content {
     margin-left: 0;

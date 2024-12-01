@@ -107,7 +107,7 @@ block head %}
 
   <!-- Main Content -->
   <div class="main-content flex-grow-1">
-    <!-- Row 1: Best Sell Market Table and Graph -->
+    <!-- Row 1: Best Sell Market Table and Market Graph -->
     <div class="row mb-4">
       <!-- Best Sell Market Table -->
       <div class="col-lg-6 mb-4">
@@ -164,73 +164,70 @@ block head %}
       </div>
     </div>
 
-    <!-- Row 2: Most Recent Prices Table and Map -->
+    <!-- Row 2: Most Recent Prices Table -->
     <div class="row mb-4">
-      <div class="d-flex flex-wrap">
-        <!-- Most Recent Prices Table -->
-        <div class="most-recent-prices flex-grow-1">
-          <div class="card resizable-block" id="most-recent-prices-card">
-            <div
-              class="card-header bg-primary text-white d-flex justify-content-between align-items-center"
+      <div class="col-12 mb-4">
+        <div class="card resizable-block" id="most-recent-prices-card">
+          <div
+            class="card-header bg-primary text-white d-flex justify-content-between align-items-center"
+          >
+            <h2>Most Recent Prices</h2>
+            <button
+              class="btn btn-sm btn-outline-light toggle-size"
+              data-block-title="Most Recent Prices"
             >
-              <h2>Most Recent Prices</h2>
-              <button
-                class="btn btn-sm btn-outline-light toggle-size"
-                data-block-title="Most Recent Prices"
-              >
-                Minimize
-              </button>
-            </div>
-            <div class="card-body p-0">
-              <table
-                class="table table-striped table-hover table-bordered"
-                id="most-recent-prices-table"
-              >
-                <thead class="thead-dark">
-                  <tr>
-                    <th>Commodity</th>
-                    <th>Baltimore</th>
-                    <th>Boston</th>
-                    <th>Chicago</th>
-                    <th>Columbia</th>
-                    <th>Miami</th>
-                    <th>New York</th>
-                    <th>Philadelphia</th>
-                    <th>Los Angeles</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <!-- Rows dynamically populated -->
-                </tbody>
-              </table>
-            </div>
+              Minimize
+            </button>
           </div>
-        </div>
-
-        <!-- Map Section -->
-        <div class="map-container flex-grow-1">
-          <div class="card resizable-block" id="map-card">
-            <div
-              class="card-header bg-primary text-white d-flex justify-content-between align-items-center"
+          <div class="card-body p-0">
+            <table
+              class="table table-striped table-hover table-bordered"
+              id="most-recent-prices-table"
             >
-              <h2>Map</h2>
-              <button
-                class="btn btn-sm btn-outline-light toggle-size"
-                data-block-title="Map"
-              >
-                Minimize
-              </button>
-            </div>
-            <div class="card-body p-0">
-              <div id="commodityMap"></div>
-            </div>
+              <thead class="thead-dark">
+                <tr>
+                  <th>Commodity</th>
+                  <th>Baltimore</th>
+                  <th>Boston</th>
+                  <th>Chicago</th>
+                  <th>Columbia</th>
+                  <th>Miami</th>
+                  <th>New York</th>
+                  <th>Philadelphia</th>
+                  <th>Los Angeles</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- Rows dynamically populated -->
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Row 3: Seasonal Trends and Historical Data -->
+    <!-- Row 3: Map and Seasonal Trends -->
     <div class="row mb-4">
+      <!-- Map Section -->
+      <div class="col-lg-6 mb-4">
+        <div class="card resizable-block" id="map-card">
+          <div
+            class="card-header bg-primary text-white d-flex justify-content-between align-items-center"
+          >
+            <h2>Map</h2>
+            <button
+              class="btn btn-sm btn-outline-light toggle-size"
+              data-block-title="Map"
+            >
+              Minimize
+            </button>
+          </div>
+          <div class="card-body p-0">
+            <div id="commodityMap"></div>
+          </div>
+        </div>
+      </div>
+
       <!-- Seasonal Trends -->
       <div class="col-lg-6 mb-4">
         <div class="card resizable-block" id="seasonal-trends-card">
@@ -250,9 +247,11 @@ block head %}
           </div>
         </div>
       </div>
+    </div>
 
-      <!-- Historical Data -->
-      <div class="col-lg-6 mb-4">
+    <!-- Row 4: Historical Data -->
+    <div class="row mb-4">
+      <div class="col-12 mb-4">
         <div class="card resizable-block" id="historical-data-card">
           <div
             class="card-header bg-primary text-white d-flex justify-content-between align-items-center"
@@ -275,20 +274,24 @@ block head %}
       </div>
     </div>
 
-    <!-- Weather Dashboard -->
-    <div class="card resizable-block" id="weather-dashboard-card">
-      <div
-        class="card-header bg-primary text-white d-flex justify-content-between align-items-center"
-      >
-        <h2>Weather Dashboard</h2>
-        <button
-          class="btn btn-sm btn-outline-light toggle-size"
-          data-block-title="Weather Dashboard"
-        >
-          Minimize
-        </button>
+    <!-- Row 5: Weather Dashboard -->
+    <div class="row mb-4">
+      <div class="col-12 mb-4">
+        <div class="card resizable-block" id="weather-dashboard-card">
+          <div
+            class="card-header bg-primary text-white d-flex justify-content-between align-items-center"
+          >
+            <h2>Weather Dashboard</h2>
+            <button
+              class="btn btn-sm btn-outline-light toggle-size"
+              data-block-title="Weather Dashboard"
+            >
+              Minimize
+            </button>
+          </div>
+          <div class="card-body">{% include "weather_dashboard.html" %}</div>
+        </div>
       </div>
-      <div class="card-body">{% include "weather_dashboard.html" %}</div>
     </div>
   </div>
 
