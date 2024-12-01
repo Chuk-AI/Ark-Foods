@@ -223,3 +223,11 @@
 .navbar {
   z-index: 1050; /* Ensure navbar stays above other content */
 }
+
+.filter-form {
+  display: none; /* Hide all filter forms by default */
+}
+
+.filter-form.active {
+  display: block; /* Show the active filter form */
+}
