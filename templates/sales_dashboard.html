@@ -7,128 +7,176 @@ block head %}
 />
 {% endblock %}{% block content %}
 <div class="container-fluid d-flex">
-  <!-- Right Sidebar for Minimized Blocks -->
-  <div id="minimized-sidebar" class="collapsed">
-    <div id="right-sidebar-toggle">
-      <i class="arrow-icon">&rarr;</i>
+  <!-- Left Sidebar -->
+  <div class="sidebar bg-light p-3" id="filters-sidebar">
+    <div id="sidebar-toggle">
+      <i class="arrow-icon">&larr;</i>
     </div>
-    <h3>Minimized Blocks</h3>
-    <ul id="minimized-list" class="list-unstyled"></ul>
+    <div id="filters-content">
+      <h2 class="text-primary">Filters</h2>
+      <form id="unified-filter">
+        <!-- Commodity Filter -->
+        <div class="form-group">
+          <label for="commodityFilterUnified" class="font-weight-bold"
+            >Commodity</label
+          >
+          <select id="commodityFilterUnified" class="form-control">
+            <option value="Anaheim">Anaheim</option>
+            <option value="Cubanelles">Cubanelles</option>
+            <option value="Fresno">Fresno</option>
+            <option value="Habanero">Habanero</option>
+            <option value="Hungarian Wax">Hungarian Wax</option>
+            <option value="Jalapeno">Jalapeno</option>
+            <option value="Long Hot">Long Hot</option>
+            <option value="Poblano">Poblano</option>
+            <option value="Serrano">Serrano</option>
+            <option value="Shishito">Shishito</option>
+          </select>
+        </div>
+
+        <!-- Source Filter -->
+        <div class="form-group">
+          <label for="sourceFilterUnified" class="font-weight-bold"
+            >Source</label
+          >
+          <select id="sourceFilterUnified" class="form-control">
+            <option value="USDA">USDA</option>
+            <option value="ProduceIQ">ProduceIQ</option>
+          </select>
+        </div>
+
+        <!-- City Filter -->
+        <div class="form-group">
+          <label for="cityFilterUnified" class="font-weight-bold">City</label>
+          <select id="cityFilterUnified" class="form-control">
+            <option value="New York">New York</option>
+            <option value="Chicago">Chicago</option>
+            <option value="Los Angeles">Los Angeles</option>
+            <option value="Miami">Miami</option>
+            <option value="Philadelphia">Philadelphia</option>
+            <option value="Boston">Boston</option>
+            <option value="Baltimore">Baltimore</option>
+            <option value="Columbia">Columbia</option>
+          </select>
+        </div>
+
+        <!-- Start Date Filter -->
+        <div class="form-group">
+          <label for="startDateFilterUnified" class="font-weight-bold"
+            >Start Date</label
+          >
+          <input
+            type="date"
+            id="startDateFilterUnified"
+            class="form-control"
+            value="2024-11-01"
+            placeholder="YYYY-MM-DD"
+          />
+        </div>
+
+        <!-- End Date Filter -->
+        <div class="form-group">
+          <label for="endDateFilterUnified" class="font-weight-bold"
+            >End Date</label
+          >
+          <input
+            type="date"
+            id="endDateFilterUnified"
+            class="form-control"
+            value="2024-11-21"
+            placeholder="YYYY-MM-DD"
+          />
+        </div>
+
+        <!-- 7-Day Filter -->
+        <div class="form-group form-check">
+          <input
+            type="checkbox"
+            class="form-check-input"
+            id="last-7-days-unified"
+          />
+          <label
+            class="form-check-label font-weight-bold"
+            for="last-7-days-unified"
+            >Only Last 7 Days</label
+          >
+        </div>
+      </form>
+    </div>
   </div>
 
-  <div class="d-flex">
-    <!-- Collapsible Sidebar Filters -->
-    <div class="sidebar bg-light p-3" id="filters-sidebar">
-      <div id="sidebar-toggle">
-        <i class="arrow-icon">&larr;</i>
+  <!-- Main Content -->
+  <div class="main-content flex-grow-1">
+    <!-- Row 1: Best Sell Market Table and Graph -->
+    <div class="row mb-4">
+      <!-- Best Sell Market Table -->
+      <div class="col-lg-6 mb-4">
+        <div class="card resizable-block" id="best-sell-market-card">
+          <div
+            class="card-header bg-primary text-white d-flex justify-content-between align-items-center"
+          >
+            <h2>Best Sell Market</h2>
+            <button
+              class="btn btn-sm btn-outline-light toggle-size"
+              data-block-title="Best Sell Market"
+            >
+              Minimize
+            </button>
+          </div>
+          <div class="card-body p-0">
+            <table
+              class="table table-striped table-hover table-bordered"
+              id="best-sell-market-table"
+            >
+              <thead class="thead-dark">
+                <tr>
+                  <th>City</th>
+                  <th>Price</th>
+                  <th>Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- Data dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
-      <div id="filters-content">
-        <h2 class="text-primary">Filters</h2>
-        <form id="unified-filter">
-          <!-- Commodity Filter -->
-          <div class="form-group">
-            <label for="commodityFilterUnified" class="font-weight-bold"
-              >Commodity</label
-            >
-            <select id="commodityFilterUnified" class="form-control">
-              <option value="Anaheim">Anaheim</option>
-              <option value="Cubanelles">Cubanelles</option>
-              <option value="Fresno">Fresno</option>
-              <option value="Habanero">Habanero</option>
-              <option value="Hungarian Wax">Hungarian Wax</option>
-              <option value="Jalapeno">Jalapeno</option>
-              <option value="Long Hot">Long Hot</option>
-              <option value="Poblano">Poblano</option>
-              <option value="Serrano">Serrano</option>
-              <option value="Shishito">Shishito</option>
-            </select>
-          </div>
 
-          <!-- Source Filter -->
-          <div class="form-group">
-            <label for="sourceFilterUnified" class="font-weight-bold"
-              >Source</label
+      <!-- Market Graph -->
+      <div class="col-lg-6 mb-4">
+        <div class="card resizable-block" id="market-graph-card">
+          <div
+            class="card-header bg-primary text-white d-flex justify-content-between align-items-center"
+          >
+            <h2>Market Graph</h2>
+            <button
+              class="btn btn-sm btn-outline-light toggle-size"
+              data-block-title="Market Graph"
             >
-            <select id="sourceFilterUnified" class="form-control">
-              <option value="USDA">USDA</option>
-              <option value="ProduceIQ">ProduceIQ</option>
-            </select>
+              Minimize
+            </button>
           </div>
-
-          <!-- City Filter -->
-          <div class="form-group">
-            <label for="cityFilterUnified" class="font-weight-bold">City</label>
-            <select id="cityFilterUnified" class="form-control">
-              <option value="New York">New York</option>
-              <option value="Chicago">Chicago</option>
-              <option value="Los Angeles">Los Angeles</option>
-              <option value="Miami">Miami</option>
-              <option value="Philadelphia">Philadelphia</option>
-              <option value="Boston">Boston</option>
-              <option value="Baltimore">Baltimore</option>
-              <option value="Columbia">Columbia</option>
-            </select>
+          <div class="card-body">
+            <canvas id="bestSellChart" width="400" height="400"></canvas>
           </div>
-
-          <!-- Start Date Filter -->
-          <div class="form-group">
-            <label for="startDateFilterUnified" class="font-weight-bold"
-              >Start Date</label
-            >
-            <input
-              type="date"
-              id="startDateFilterUnified"
-              class="form-control"
-              value="2024-11-01"
-              placeholder="YYYY-MM-DD"
-            />
-          </div>
-
-          <!-- End Date Filter -->
-          <div class="form-group">
-            <label for="endDateFilterUnified" class="font-weight-bold"
-              >End Date</label
-            >
-            <input
-              type="date"
-              id="endDateFilterUnified"
-              class="form-control"
-              value="2024-11-21"
-              placeholder="YYYY-MM-DD"
-            />
-          </div>
-
-          <!-- 7-Day Filter -->
-          <div class="form-group form-check">
-            <input
-              type="checkbox"
-              class="form-check-input"
-              id="last-7-days-unified"
-            />
-            <label
-              class="form-check-label font-weight-bold"
-              for="last-7-days-unified"
-              >Only Last 7 Days</label
-            >
-          </div>
-        </form>
+        </div>
       </div>
     </div>
 
-    <!-- Main Content -->
-    <div class="main-content flex-grow-1">
-      <!-- Row 1: Best Sell Market Table and Graph -->
-      <div class="row mb-4">
-        <!-- Best Sell Market Table -->
-        <div class="col-lg-6 mb-4">
-          <div class="card resizable-block">
+    <!-- Row 2: Most Recent Prices Table and Map -->
+    <div class="row mb-4">
+      <div class="d-flex flex-wrap">
+        <!-- Most Recent Prices Table -->
+        <div class="most-recent-prices flex-grow-1">
+          <div class="card resizable-block" id="most-recent-prices-card">
             <div
               class="card-header bg-primary text-white d-flex justify-content-between align-items-center"
             >
-              <h2>Best Sell Market</h2>
+              <h2>Most Recent Prices</h2>
               <button
                 class="btn btn-sm btn-outline-light toggle-size"
-                data-block-title="Best Sell Market"
+                data-block-title="Most Recent Prices"
               >
                 Minimize
               </button>
@@ -136,170 +184,121 @@ block head %}
             <div class="card-body p-0">
               <table
                 class="table table-striped table-hover table-bordered"
-                id="best-sell-market-table"
+                id="most-recent-prices-table"
               >
                 <thead class="thead-dark">
                   <tr>
-                    <th>City</th>
-                    <th>Price</th>
-                    <th>Date</th>
+                    <th>Commodity</th>
+                    <th>Baltimore</th>
+                    <th>Boston</th>
+                    <th>Chicago</th>
+                    <th>Columbia</th>
+                    <th>Miami</th>
+                    <th>New York</th>
+                    <th>Philadelphia</th>
+                    <th>Los Angeles</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <!-- Data dynamically populated -->
+                  <!-- Rows dynamically populated -->
                 </tbody>
               </table>
             </div>
           </div>
         </div>
 
-        <!-- Market Graph -->
-        <div class="col-lg-6 mb-4">
-          <div class="card resizable-block">
+        <!-- Map Section -->
+        <div class="map-container flex-grow-1">
+          <div class="card resizable-block" id="map-card">
             <div
               class="card-header bg-primary text-white d-flex justify-content-between align-items-center"
             >
-              <h2>Market Graph</h2>
+              <h2>Map</h2>
               <button
                 class="btn btn-sm btn-outline-light toggle-size"
-                data-block-title="Market Graph"
+                data-block-title="Map"
               >
                 Minimize
               </button>
             </div>
-            <div class="card-body">
-              <canvas id="bestSellChart" width="400" height="400"></canvas>
+            <div class="card-body p-0">
+              <div id="commodityMap"></div>
             </div>
           </div>
         </div>
-      </div>
-
-      <!-- Row 2: Most Recent Prices Table and Map -->
-      <div class="row mb-4">
-        <div class="d-flex flex-wrap">
-          <!-- Most Recent Prices Table -->
-          <div class="most-recent-prices flex-grow-1">
-            <div class="card resizable-block">
-              <div
-                class="card-header bg-primary text-white d-flex justify-content-between align-items-center"
-              >
-                <h2>Most Recent Prices</h2>
-                <button
-                  class="btn btn-sm btn-outline-light toggle-size"
-                  data-block-title="Most Recent Prices"
-                >
-                  Minimize
-                </button>
-              </div>
-              <div class="card-body p-0">
-                <table
-                  class="table table-striped table-hover table-bordered"
-                  id="most-recent-prices-table"
-                >
-                  <thead class="thead-dark">
-                    <tr>
-                      <th>Commodity</th>
-                      <th>Baltimore</th>
-                      <th>Boston</th>
-                      <th>Chicago</th>
-                      <th>Columbia</th>
-                      <th>Miami</th>
-                      <th>New York</th>
-                      <th>Philadelphia</th>
-                      <th>Los Angeles</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <!-- Rows dynamically populated -->
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-
-          <!-- Map Section -->
-          <div class="map-container flex-grow-1">
-            <div class="card resizable-block">
-              <div
-                class="card-header bg-primary text-white d-flex justify-content-between align-items-center"
-              >
-                <h2>Map</h2>
-                <button
-                  class="btn btn-sm btn-outline-light toggle-size"
-                  data-block-title="Map"
-                >
-                  Minimize
-                </button>
-              </div>
-              <div class="card-body p-0">
-                <div id="commodityMap"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Row 3: Seasonal Trends and Historical Data -->
-      <div class="row mb-4">
-        <!-- Seasonal Trends -->
-        <div class="col-lg-6 mb-4">
-          <div class="card resizable-block">
-            <div
-              class="card-header bg-primary text-white d-flex justify-content-between align-items-center"
-            >
-              <h2>Seasonal Trends</h2>
-              <button
-                class="btn btn-sm btn-outline-light toggle-size"
-                data-block-title="Seasonal Trends"
-              >
-                Minimize
-              </button>
-            </div>
-            <div class="card-body">
-              <canvas id="seasonalChart" width="400" height="400"></canvas>
-            </div>
-          </div>
-        </div>
-
-        <!-- Historical Data -->
-        <div class="col-lg-6 mb-4">
-          <div class="card resizable-block">
-            <div
-              class="card-header bg-primary text-white d-flex justify-content-between align-items-center"
-            >
-              <h2>Historical Data</h2>
-              <button
-                class="btn btn-sm btn-outline-light toggle-size"
-                data-block-title="Historical Data"
-              >
-                Minimize
-              </button>
-            </div>
-            <div class="card-body">
-              <canvas id="historicalChart" width="400" height="400"></canvas>
-              <button class="btn btn-primary mt-3" onclick="downloadChart()">
-                Download Chart & Data
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-      <!-- Weather Dashboard -->
-      <div class="card resizable-block" id="weather-dashboard-card">
-        <div
-          class="card-header bg-primary text-white d-flex justify-content-between align-items-center"
-        >
-          <h2>Weather Dashboard</h2>
-          <button
-            class="btn btn-sm btn-outline-light toggle-size"
-            data-block-title="Weather Dashboard"
-          >
-            Minimize
-          </button>
-        </div>
-        <div class="card-body">{% include "weather_dashboard.html" %}</div>
       </div>
     </div>
+
+    <!-- Row 3: Seasonal Trends and Historical Data -->
+    <div class="row mb-4">
+      <!-- Seasonal Trends -->
+      <div class="col-lg-6 mb-4">
+        <div class="card resizable-block" id="seasonal-trends-card">
+          <div
+            class="card-header bg-primary text-white d-flex justify-content-between align-items-center"
+          >
+            <h2>Seasonal Trends</h2>
+            <button
+              class="btn btn-sm btn-outline-light toggle-size"
+              data-block-title="Seasonal Trends"
+            >
+              Minimize
+            </button>
+          </div>
+          <div class="card-body">
+            <canvas id="seasonalChart" width="400" height="400"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Historical Data -->
+      <div class="col-lg-6 mb-4">
+        <div class="card resizable-block" id="historical-data-card">
+          <div
+            class="card-header bg-primary text-white d-flex justify-content-between align-items-center"
+          >
+            <h2>Historical Data</h2>
+            <button
+              class="btn btn-sm btn-outline-light toggle-size"
+              data-block-title="Historical Data"
+            >
+              Minimize
+            </button>
+          </div>
+          <div class="card-body">
+            <canvas id="historicalChart" width="400" height="400"></canvas>
+            <button class="btn btn-primary mt-3" onclick="downloadChart()">
+              Download Chart & Data
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Weather Dashboard -->
+    <div class="card resizable-block" id="weather-dashboard-card">
+      <div
+        class="card-header bg-primary text-white d-flex justify-content-between align-items-center"
+      >
+        <h2>Weather Dashboard</h2>
+        <button
+          class="btn btn-sm btn-outline-light toggle-size"
+          data-block-title="Weather Dashboard"
+        >
+          Minimize
+        </button>
+      </div>
+      <div class="card-body">{% include "weather_dashboard.html" %}</div>
+    </div>
+  </div>
+
+  <!-- Right Sidebar for Minimized Blocks -->
+  <div id="minimized-sidebar" class="collapsed">
+    <div id="right-sidebar-toggle">
+      <i class="arrow-icon">&rarr;</i>
+    </div>
+    <h3>Minimized Blocks</h3>
+    <ul id="minimized-list" class="list-unstyled"></ul>
   </div>
 </div>
 

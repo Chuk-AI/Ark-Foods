@@ -151,20 +151,19 @@
 }
 
 /* Sales Dashboard Specific Card Styles */
-.card.sales-card {
+.card.resizable-block {
   background-color: var(--sales-card-bg);
-  border: none;
+  border: 1px solid var(--sales-border-color);
   border-radius: 8px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   margin-bottom: 20px;
   transition: box-shadow 0.3s ease;
 }
 
-.card.sales-card:hover {
+.card.resizable-block:hover {
   box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
 }
 
-.card-header.sales-header {
+.card-header {
   background-color: var(--sales-primary-color);
   color: white;
   font-weight: bold;
@@ -172,19 +171,36 @@
   border-radius: 8px 8px 0 0;
 }
 
-.card-body.sales-body {
+.card-body {
   padding: 20px;
 }
 
+.card-body.p-0 {
+  padding: 0;
+}
+
+.card.resizable-block .toggle-size {
+  background-color: transparent;
+  border: 1px solid white;
+  color: white;
+}
+
 /* Most Recent Prices and Map Layout */
+.d-flex.flex-wrap {
+  display: flex;
+  flex-wrap: wrap;
+}
+
 .most-recent-prices,
 .map-container {
-  flex-basis: 48%; /* 48% width for each block */
+  flex-basis: 48%; /* Approximately half width */
+  margin-right: 2%; /* Space between the two columns */
   margin-bottom: 20px; /* Add spacing between rows */
 }
 
 .map-container {
   flex-grow: 1; /* Ensure it expands properly if needed */
+  margin-right: 0; /* Remove right margin from the last item */
 }
 
 .table-responsive {
@@ -204,7 +220,7 @@
 }
 
 .weather-dashboard .card {
-  height: calc(100% - 20px); /* Adjust height to match other cards */
+  height: auto; /* Adjust height as needed */
   margin-bottom: 20px;
 }
 
@@ -222,6 +238,7 @@
   .map-container,
   .weather-dashboard {
     flex-basis: 100%; /* Full width for small screens */
+    margin-right: 0;
   }
 
   /* Adjust main content margins for small screens */
