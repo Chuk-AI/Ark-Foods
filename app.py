@@ -1541,6 +1541,17 @@ def historical_data():
         )
         avg_cities = request.args.get("averageCities", "false").lower() == "true"
 
+        # Standardize Cubanelles based on source
+        standardized_commodities = []
+        for commodity in commodities:
+            if commodity.lower().startswith("cubanelle"):
+                if source == "USDA":
+                    standardized_commodities.append("Cubanelle")
+                else:  # ProduceIQ
+                    standardized_commodities.append("Cubanelles")
+            else:
+                standardized_commodities.append(commodity)
+
         # Convert dates
         start_dt = datetime.strptime(start_date, "%Y-%m-%d")
         end_dt = datetime.strptime(end_date, "%Y-%m-%d")
@@ -1551,35 +1562,31 @@ def historical_data():
 
         # Query the database with proper date filtering
         query = PriceData.query.filter(
-            PriceData.commodity.in_(commodities),
+            PriceData.commodity.in_(
+                standardized_commodities
+            ),  # Use standardized commodities
             func.upper(PriceData.city_name).in_([city.upper() for city in cities]),
             PriceData.source == source,
         )
 
         # Add year-specific conditions
         if start_dt.year == end_dt.year:
-            # Same year - simple range check
             query = query.filter(
                 PriceData.year == start_dt.year,
                 PriceData.day.between(start_day, end_day),
             )
         else:
-            # Different years - need to handle multiple years
             query = query.filter(
                 or_(
-                    # Start year
                     and_(PriceData.year == start_dt.year, PriceData.day >= start_day),
-                    # End year
                     and_(PriceData.year == end_dt.year, PriceData.day <= end_day),
-                    # Any years in between
                     and_(PriceData.year > start_dt.year, PriceData.year < end_dt.year),
                 )
             )
 
-        # Order the results
         query = query.order_by(PriceData.year.asc(), PriceData.day.asc())
-
         data = query.all()
+
         if not data:
             return jsonify({"labels": [], "datasets": []}), 200
 
@@ -1589,24 +1596,29 @@ def historical_data():
 
         # Group data based on averaging preferences
         for entry in data:
-            # Convert to actual date
             entry_date = datetime(entry.year, 1, 1) + timedelta(days=entry.day - 1)
 
-            # Skip if outside date range
             if entry_date < start_dt or entry_date > end_dt:
                 continue
 
             date_str = entry_date.strftime("%Y-%m-%d")
             all_dates.add(date_str)
 
+            # Standardize display name for Cubanelles
+            display_commodity = (
+                "Cubanelles"
+                if entry.commodity.lower().startswith("cubanelle")
+                else entry.commodity
+            )
+
             if avg_commodities and avg_cities:
                 series_key = "Average Price"
             elif avg_commodities:
                 series_key = entry.city_name
             elif avg_cities:
-                series_key = entry.commodity
+                series_key = display_commodity
             else:
-                series_key = f"{entry.commodity} - {entry.city_name}"
+                series_key = f"{display_commodity} - {entry.city_name}"
 
             if series_key not in price_series:
                 price_series[series_key] = {}
