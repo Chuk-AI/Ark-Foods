@@ -1545,66 +1545,82 @@ def historical_data():
         start_dt = datetime.strptime(start_date, "%Y-%m-%d")
         end_dt = datetime.strptime(end_date, "%Y-%m-%d")
 
-        # Query the database
+        # Calculate day of year for both dates
+        start_day = start_dt.timetuple().tm_yday
+        end_day = end_dt.timetuple().tm_yday
+
+        # Query the database with proper date filtering
         query = PriceData.query.filter(
             PriceData.commodity.in_(commodities),
             func.upper(PriceData.city_name).in_([city.upper() for city in cities]),
             PriceData.source == source,
-            PriceData.year.between(start_dt.year, end_dt.year),
-            or_(
-                and_(
-                    PriceData.year == start_dt.year,
-                    PriceData.day >= start_dt.timetuple().tm_yday,
-                ),
-                and_(
-                    PriceData.year == end_dt.year,
-                    PriceData.day <= end_dt.timetuple().tm_yday,
-                ),
-            ),
-        ).order_by(PriceData.year.asc(), PriceData.day.asc())
+        )
+
+        # Add year-specific conditions
+        if start_dt.year == end_dt.year:
+            # Same year - simple range check
+            query = query.filter(
+                PriceData.year == start_dt.year,
+                PriceData.day.between(start_day, end_day),
+            )
+        else:
+            # Different years - need to handle multiple years
+            query = query.filter(
+                or_(
+                    # Start year
+                    and_(PriceData.year == start_dt.year, PriceData.day >= start_day),
+                    # End year
+                    and_(PriceData.year == end_dt.year, PriceData.day <= end_day),
+                    # Any years in between
+                    and_(PriceData.year > start_dt.year, PriceData.year < end_dt.year),
+                )
+            )
+
+        # Order the results
+        query = query.order_by(PriceData.year.asc(), PriceData.day.asc())
 
         data = query.all()
         if not data:
             return jsonify({"labels": [], "datasets": []}), 200
 
-        # Initialize data structures
+        # Process data with dates we actually have
         price_series = {}
         all_dates = set()
 
         # Group data based on averaging preferences
         for entry in data:
-            entry_date = (
-                datetime(entry.year, 1, 1) + timedelta(days=entry.day - 1)
-            ).strftime("%Y-%m-%d")
-            all_dates.add(entry_date)
+            # Convert to actual date
+            entry_date = datetime(entry.year, 1, 1) + timedelta(days=entry.day - 1)
+
+            # Skip if outside date range
+            if entry_date < start_dt or entry_date > end_dt:
+                continue
+
+            date_str = entry_date.strftime("%Y-%m-%d")
+            all_dates.add(date_str)
 
             if avg_commodities and avg_cities:
-                # Single trend line for everything averaged
                 series_key = "Average Price"
             elif avg_commodities:
-                # One trend line per city
                 series_key = entry.city_name
             elif avg_cities:
-                # One trend line per commodity
                 series_key = entry.commodity
             else:
-                # One trend line per commodity-city combination
                 series_key = f"{entry.commodity} - {entry.city_name}"
 
             if series_key not in price_series:
                 price_series[series_key] = {}
 
-            if entry_date not in price_series[series_key]:
-                price_series[series_key][entry_date] = {"sum": 0, "count": 0}
+            if date_str not in price_series[series_key]:
+                price_series[series_key][date_str] = {"sum": 0, "count": 0}
 
-            price_series[series_key][entry_date]["sum"] += entry.price
-            price_series[series_key][entry_date]["count"] += 1
+            price_series[series_key][date_str]["sum"] += entry.price
+            price_series[series_key][date_str]["count"] += 1
 
         # Sort dates
         sorted_dates = sorted(list(all_dates))
 
         # Create datasets for each series
-        datasets = []
         colors = [
             "#FF6384",
             "#36A2EB",
@@ -1615,6 +1631,7 @@ def historical_data():
             "#FF6384",
             "#4BC0C0",
         ]
+        datasets = []
 
         for idx, (series_name, date_data) in enumerate(price_series.items()):
             series_data = []
