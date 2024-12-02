@@ -40,6 +40,10 @@
   pointer-events: none;
 }
 
+#current-section-title {
+  margin-bottom: 20px;
+}
+
 /* Improve form spacing */
 .filter-form {
   margin-bottom: 30px;
