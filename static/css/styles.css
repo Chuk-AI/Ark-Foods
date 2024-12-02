@@ -241,3 +241,45 @@ footer::before {
     border: 1px solid #ddd;
   }
 }
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.date-range,
+#weather-city-select,
+#weather-temperature-unit {
+  margin-right: 10px;
+}
+
+.date-range {
+  display: flex;
+  align-items: center;
+}
+
+.date-range input,
+.date-range button {
+  margin-right: 10px;
+}
+
+.chart-container {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.chart {
+  width: 48%;
+  height: 300px; /* Decreased height */
+}
+
+.chart canvas {
+  height: 100%; /* Ensure the canvas fills the container */
+}
+
+.chart-container:last-child {
+  margin-top: 20px;
+}
