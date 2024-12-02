@@ -1529,93 +1529,115 @@ def api_most_recent_prices():
 
 @app.route("/api/historical_data", methods=["GET"])
 def historical_data():
-    # Fetch the parameters from the frontend
-    commodities = request.args.get("commodities").split(",")
-    cities = request.args.get("cities").split(",")
-    start_date = request.args.get("start_date")
-    end_date = request.args.get("end_date")
-    source = request.args.get("source")
+    try:
+        # Fetch parameters from the frontend
+        commodities = request.args.get("commodities", "").split(",")
+        cities = request.args.get("cities", "").split(",")
+        start_date = request.args.get("start_date")
+        end_date = request.args.get("end_date")
+        source = request.args.get("source")
+        avg_commodities = (
+            request.args.get("averageCommodities", "false").lower() == "true"
+        )
+        avg_cities = request.args.get("averageCities", "false").lower() == "true"
 
-    # Handle special case for "Cubanelles"
-    commodities = [
-        "Cubanelle" if commodity == "Cubanelles" and source == "USDA" else commodity
-        for commodity in commodities
-    ]
+        # Convert dates
+        start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+        end_dt = datetime.strptime(end_date, "%Y-%m-%d")
 
-    # Convert start_date and end_date into year and day of the year
-    start_dt = datetime.strptime(start_date, "%Y-%m-%d")
-    end_dt = datetime.strptime(end_date, "%Y-%m-%d")
-    start_year = start_dt.year
-    start_day = start_dt.timetuple().tm_yday
-    end_year = end_dt.year
-    end_day = end_dt.timetuple().tm_yday
-    print("start day:", start_day)
-    print("start year:", start_year)
-    print("end day:", end_day)
-    print("end year:", end_year)
-
-    # Build the query based on whether dates are in the same year or span multiple years
-    if start_year == end_year:
-        # Dates are within the same year
+        # Query the database
         query = PriceData.query.filter(
             PriceData.commodity.in_(commodities),
             func.upper(PriceData.city_name).in_([city.upper() for city in cities]),
             PriceData.source == source,
-            PriceData.year == start_year,
-            PriceData.day >= start_day,
-            PriceData.day <= end_day,
-        ).order_by(PriceData.year.asc(), PriceData.day.asc())
-    else:
-        # Dates span multiple years
-        query = PriceData.query.filter(
-            PriceData.commodity.in_(commodities),
-            func.upper(PriceData.city_name).in_([city.upper() for city in cities]),
-            PriceData.source == source,
+            PriceData.year.between(start_dt.year, end_dt.year),
             or_(
                 and_(
-                    PriceData.year == start_year,
-                    PriceData.day >= start_day,
+                    PriceData.year == start_dt.year,
+                    PriceData.day >= start_dt.timetuple().tm_yday,
                 ),
                 and_(
-                    PriceData.year == end_year,
-                    PriceData.day <= end_day,
-                ),
-                and_(
-                    PriceData.year > start_year,
-                    PriceData.year < end_year,
+                    PriceData.year == end_dt.year,
+                    PriceData.day <= end_dt.timetuple().tm_yday,
                 ),
             ),
         ).order_by(PriceData.year.asc(), PriceData.day.asc())
 
-    # Extract the data from the query
-    data = query.all()
+        data = query.all()
+        if not data:
+            return jsonify({"labels": [], "datasets": []}), 200
 
-    # Convert year-day to proper date format
-    historical_data = []
-    for entry in data:
-        try:
-            # Convert year-day to date using '%Y-%j'
-            actual_date = datetime.strptime(
-                f"{entry.year}-{entry.day}", "%Y-%j"
+        # Initialize data structures
+        price_series = {}
+        all_dates = set()
+
+        # Group data based on averaging preferences
+        for entry in data:
+            entry_date = (
+                datetime(entry.year, 1, 1) + timedelta(days=entry.day - 1)
             ).strftime("%Y-%m-%d")
-            historical_data.append(
+            all_dates.add(entry_date)
+
+            if avg_commodities and avg_cities:
+                # Single trend line for everything averaged
+                series_key = "Average Price"
+            elif avg_commodities:
+                # One trend line per city
+                series_key = entry.city_name
+            elif avg_cities:
+                # One trend line per commodity
+                series_key = entry.commodity
+            else:
+                # One trend line per commodity-city combination
+                series_key = f"{entry.commodity} - {entry.city_name}"
+
+            if series_key not in price_series:
+                price_series[series_key] = {}
+
+            if entry_date not in price_series[series_key]:
+                price_series[series_key][entry_date] = {"sum": 0, "count": 0}
+
+            price_series[series_key][entry_date]["sum"] += entry.price
+            price_series[series_key][entry_date]["count"] += 1
+
+        # Sort dates
+        sorted_dates = sorted(list(all_dates))
+
+        # Create datasets for each series
+        datasets = []
+        colors = [
+            "#FF6384",
+            "#36A2EB",
+            "#FFCE56",
+            "#4BC0C0",
+            "#9966FF",
+            "#FF9F40",
+            "#FF6384",
+            "#4BC0C0",
+        ]
+
+        for idx, (series_name, date_data) in enumerate(price_series.items()):
+            series_data = []
+            for date in sorted_dates:
+                if date in date_data:
+                    avg_price = date_data[date]["sum"] / date_data[date]["count"]
+                    series_data.append(round(avg_price, 2))
+                else:
+                    series_data.append(None)
+
+            datasets.append(
                 {
-                    "date": actual_date,
-                    "city_name": entry.city_name,
-                    "commodity": entry.commodity,
-                    "price": entry.price,
+                    "label": series_name,
+                    "data": series_data,
+                    "borderColor": colors[idx % len(colors)],
+                    "backgroundColor": colors[idx % len(colors)],
                 }
             )
-        except Exception as e:
-            print(
-                f"Error converting date for {entry.city_name}, {entry.commodity}: {e}"
-            )
-            continue
 
-    # Log the historical data before returning
-    logging.info(f"Sending Historical Data: {json.dumps(historical_data, indent=2)}")
+        return jsonify({"labels": sorted_dates, "datasets": datasets})
 
-    return jsonify(historical_data=historical_data)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/download_historical_data", methods=["GET"])

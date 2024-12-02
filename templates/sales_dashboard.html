@@ -470,34 +470,30 @@ block head %}
 
 {% endblock %} {%block scripts%}
 <!-- Include jQuery if not already included -->
+<!-- Include jQuery -->
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
 <!-- Include Chart.js 4.4.0 -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
+<script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/min/moment.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment@1.1.0/dist/chartjs-adapter-moment.umd.min.js"></script>
+
 <!-- Include Luxon 3.3.0 -->
 <script src="https://cdn.jsdelivr.net/npm/luxon@3.3.0/build/global/luxon.min.js"></script>
 
-<!-- Include Chart.js adapter for Luxon 1.3.0 -->
-<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.0/dist/chartjs-adapter-luxon.umd.min.js"></script>
+<!-- Include Chart.js adapter for Luxon 1.3.1 -->
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1/dist/chartjs-adapter-luxon.umd.min.js"></script>
+
+<!-- Include other dependencies -->
 <link
   rel="stylesheet"
   href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"
 />
-
-<!-- Include other dependencies -->
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
 
-<script>
-  // Log version info for debugging
-  console.log("Chart.js version:", Chart.version);
-  console.log(
-    "Luxon version:",
-    luxon.DateTime.now().toFormat("yyyy-MM-dd HH:mm:ss")
-  );
-</script>
 <script>
   // Document Ready Function
   $(document).ready(function () {
@@ -743,7 +739,6 @@ block head %}
       url: "/api/most_recent_prices",
       type: "GET",
       success: function (response) {
-        console.log("Most Recent Prices API Response:", response);
         updateMostRecentPricesTable(response.prices);
       },
       error: function (xhr, status, error) {
@@ -1033,7 +1028,8 @@ block head %}
 
 <script>
   /* ---- Historical Data ---- */
-  // Fetch Historical Data from the API
+  let historicalChartInstance;
+
   function fetchHistoricalData(
     commodities,
     cities,
@@ -1043,6 +1039,9 @@ block head %}
     averageCommodities,
     averageCities
   ) {
+    const chartContainer = document.getElementById("historicalChart");
+    chartContainer.style.opacity = "0.5";
+
     // Input validation
     if (!start_date || !end_date) {
       alert("Please select both start and end dates.");
@@ -1053,7 +1052,12 @@ block head %}
       return;
     }
 
-    // AJAX request to fetch data
+    // Clean up existing chart
+    if (historicalChartInstance) {
+      historicalChartInstance.destroy();
+      historicalChartInstance = null;
+    }
+
     $.ajax({
       url: "/api/historical_data",
       type: "GET",
@@ -1063,293 +1067,211 @@ block head %}
         start_date,
         end_date,
         source,
+        averageCommodities,
+        averageCities,
       },
       success: function (response) {
-        console.log("Historical Data API Response:", response);
-        const chartData = formatDataForChart(
-          response.historical_data || [],
-          averageCommodities,
-          averageCities
-        );
-        updateHistoricalChart(chartData);
+        updateHistoricalChart(response);
+        chartContainer.style.opacity = "1";
       },
       error: function (xhr, status, error) {
         console.error("Error fetching historical data:", error);
         alert("Failed to load historical data. Please try again.");
+        chartContainer.style.opacity = "1";
       },
     });
   }
 
-  // Format Data for the Historical Chart
-  function formatDataForChart(
-    historicalData,
-    averageCommodities,
-    averageCities
-  ) {
-    console.log("Received historical data:", historicalData);
-
-    const dataMap = {};
-
-    historicalData.forEach((item) => {
-      const date = item.date;
-      const commodity = item.commodity;
-      const city = item.city_name; // Updated key name
-      const price = parseFloat(item.price);
-
-      if (isNaN(price)) return;
-
-      let key = date;
-
-      if (!averageCommodities && !averageCities) {
-        key = `${commodity}-${city}-${date}`;
-      } else if (!averageCommodities && averageCities) {
-        key = `${commodity}-${date}`;
-      } else if (averageCommodities && !averageCities) {
-        key = `${city}-${date}`;
-      } else if (averageCommodities && averageCities) {
-        key = `${date}`;
-      }
-
-      if (!dataMap[key]) {
-        dataMap[key] = { sum: price, count: 1 };
-      } else {
-        dataMap[key].sum += price;
-        dataMap[key].count += 1;
-      }
-    });
-
-    console.log("Processed dataMap:", dataMap);
-
-    // Build datasets
-    const datasetsMap = {};
-
-    Object.keys(dataMap).forEach((key) => {
-      const parts = key.split("-");
-      let date, label;
-
-      if (!averageCommodities && !averageCities) {
-        // key = 'commodity-city-date'
-        const [commodity, city, datePart] = parts;
-        date = datePart;
-        label = `${commodity} - ${city}`;
-      } else if (!averageCommodities && averageCities) {
-        // key = 'commodity-date'
-        const [commodity, datePart] = parts;
-        date = datePart;
-        label = `${commodity}`;
-      } else if (averageCommodities && !averageCities) {
-        // key = 'city-date'
-        const [city, datePart] = parts;
-        date = datePart;
-        label = `${city}`;
-      } else if (averageCommodities && averageCities) {
-        // key = 'date'
-        date = parts[0];
-        label = "Average Price";
-      }
-
-      const avgPrice = dataMap[key].sum / dataMap[key].count;
-
-      if (!datasetsMap[label]) {
-        datasetsMap[label] = {};
-      }
-
-      datasetsMap[label][date] = avgPrice;
-    });
-
-    // Build the labels (dates) array
-    const datesSet = new Set();
-    historicalData.forEach((item) => {
-      datesSet.add(item.date);
-    });
-    const labels = Array.from(datesSet)
-      .sort()
-      .map((dateStr) => new Date(dateStr));
-
-    // Build the datasets array
-    const datasets = [];
-
-    const colorPalette = [
-      "rgba(75,192,192,1)",
-      "rgba(54,162,235,1)",
-      "rgba(255,99,132,1)",
-      "rgba(255,206,86,1)",
-      "rgba(153,102,255,1)",
-      "rgba(255,159,64,1)",
-      // Add more colors as needed
-    ];
-
-    let colorIndex = 0;
-
-    Object.keys(datasetsMap).forEach((label) => {
-      const dataPoints = [];
-      labels.forEach((dateObj) => {
-        const dateStr = dateObj.toISOString().split("T")[0]; // Convert Date object back to 'YYYY-MM-DD'
-        const value = datasetsMap[label][dateStr] || null;
-        dataPoints.push(value);
-      });
-
-      const dataset = {
-        label: label,
-        data: dataPoints,
-        borderColor: colorPalette[colorIndex % colorPalette.length],
-        fill: false,
-      };
-      datasets.push(dataset);
-      colorIndex++;
-    });
-
-    console.log("Generated datasets:", datasets);
-
-    return { labels, datasets };
-  }
-
-  let historicalChartInstance; // Declare the variable at the appropriate scope
-
   function updateHistoricalChart(chartData) {
     const ctx = document.getElementById("historicalChart").getContext("2d");
 
-    console.log(
-      "historicalChartInstance before destroy:",
-      historicalChartInstance
-    );
-    console.log(
-      "Type of historicalChartInstance.destroy:",
-      typeof historicalChartInstance?.destroy
-    );
-
-    if (
-      historicalChartInstance &&
-      typeof historicalChartInstance.destroy === "function"
-    ) {
+    // Clean up existing chart
+    if (historicalChartInstance) {
       historicalChartInstance.destroy();
     }
 
-    if (chartData.labels.length === 0 || chartData.datasets.length === 0) {
+    if (!chartData.labels.length || !chartData.datasets.length) {
       alert("No historical data available for the selected criteria.");
-      console.error("No data available for the chart.");
       return;
     }
 
-    try {
-      historicalChartInstance = new Chart(ctx, {
-        type: "line",
-        data: {
-          labels: chartData.labels,
-          datasets: chartData.datasets,
-        },
-        options: {
-          responsive: true,
-          parsing: false,
-          scales: {
-            x: {
-              type: "time",
-              adapters: {
-                date: {
-                  zone: "utc",
-                },
-              },
-              time: {
-                unit: "day",
-                tooltipFormat: "yyyy-MM-dd",
-                displayFormats: {
-                  day: "yyyy-MM-dd",
-                },
-              },
-              title: { display: true, text: "Date" },
+    // Set fixed dimensions
+    const chartContainer = ctx.canvas.parentNode;
+    chartContainer.style.height = "400px";
+
+    // Configure datasets with consistent styling
+    const datasets = chartData.datasets.map((dataset, index) => ({
+      ...dataset,
+      fill: false,
+      tension: 0.1,
+      borderWidth: 2,
+      pointRadius: 3,
+      pointHoverRadius: 5,
+      spanGaps: true,
+      borderColor: dataset.borderColor || getColor(index),
+      backgroundColor: dataset.backgroundColor || getColor(index),
+    }));
+
+    historicalChartInstance = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels: chartData.labels,
+        datasets: datasets,
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: {
+            display: true,
+            type: "category", // Changed from 'time' to 'category'
+            grid: {
+              display: true,
+              drawBorder: true,
+              color: "#E0E0E0",
             },
-            y: {
-              title: { display: true, text: "Price ($)" },
-              beginAtZero: true,
+            ticks: {
+              display: true,
+              maxTicksLimit: 10,
+              color: "#666666",
+              padding: 10,
+              autoSkip: true,
+              maxRotation: 45,
+              minRotation: 45,
+            },
+            title: {
+              display: true,
+              text: "Date",
+              color: "#666666",
+              padding: { top: 10, bottom: 10 },
+            },
+          },
+          y: {
+            display: true,
+            position: "left",
+            grid: {
+              display: true,
+              drawBorder: true,
+              color: "#E0E0E0",
+            },
+            ticks: {
+              display: true,
+              color: "#666666",
+              padding: 10,
+              callback: (value) => `$${value.toFixed(2)}`,
+            },
+            title: {
+              display: true,
+              text: "Price ($)",
+              color: "#666666",
+              padding: { top: 10, bottom: 10 },
             },
           },
         },
-      });
-      console.log(
-        "historicalChartInstance after creation:",
-        historicalChartInstance
-      );
-      console.log("Historical chart updated successfully.");
-    } catch (error) {
-      console.error("Error rendering historical chart:", error);
-    }
+        plugins: {
+          tooltip: {
+            enabled: true,
+            mode: "index",
+            intersect: false,
+            backgroundColor: "rgba(255, 255, 255, 0.9)",
+            titleColor: "#666666",
+            bodyColor: "#666666",
+            borderColor: "#E0E0E0",
+            borderWidth: 1,
+            padding: 10,
+            callbacks: {
+              title: (context) => {
+                const label = context[0].label;
+                return moment(label).format("MMM D, YYYY");
+              },
+              label: (context) =>
+                `${context.dataset.label}: $${context.parsed.y.toFixed(2)}`,
+            },
+          },
+          legend: {
+            display: true,
+            position: "top",
+            align: "center",
+            labels: {
+              boxWidth: 12,
+              padding: 15,
+              color: "#666666",
+              font: {
+                size: 11,
+              },
+            },
+          },
+        },
+        interaction: {
+          mode: "index",
+          intersect: false,
+        },
+      },
+    });
   }
 
-  // Apply filters for Historical Data
+  // Helper function to get colors for datasets
+  function getColor(index) {
+    const colors = [
+      "#FF6384", // red
+      "#36A2EB", // blue
+      "#FFCE56", // yellow
+      "#4BC0C0", // turquoise
+      "#9966FF", // purple
+      "#FF9F40", // orange
+      "#FF6384", // red
+      "#4BC0C0", // turquoise
+    ];
+    return colors[index % colors.length];
+  }
+
+  // Initialize Historical Data when document is ready
   $(document).ready(function () {
-    // Select all commodities and cities by default
+    // Preselect all commodities and cities
     $("#commodityFilterHistorical option").prop("selected", true);
     $("#cityFilterHistorical option").prop("selected", true);
 
-    // Trigger change event to ensure any event handlers are activated
-    $("#commodityFilterHistorical").trigger("change");
-    $("#cityFilterHistorical").trigger("change");
+    // Calculate default date range (last 30 days)
+    const today = moment();
+    const past30Days = moment().subtract(30, "days");
 
-    // Compute date range for the past 30 days
-    const today = new Date();
-    const past30Days = new Date();
-    past30Days.setDate(today.getDate() - 30);
+    // Set default date values
+    $("#startDateFilterHistorical").val(past30Days.format("YYYY-MM-DD"));
+    $("#endDateFilterHistorical").val(today.format("YYYY-MM-DD"));
 
-    // Format dates to 'YYYY-MM-DD'
-    const defaultStartDate = past30Days.toISOString().split("T")[0];
-    const defaultEndDate = today.toISOString().split("T")[0];
-
-    // Set the values in the date inputs
-    $("#startDateFilterHistorical").val(defaultStartDate);
-    $("#endDateFilterHistorical").val(defaultEndDate);
-
-    // Get default selections
-    const defaultCommodities = $("#commodityFilterHistorical").val();
-    const defaultCities = $("#cityFilterHistorical").val();
-    const defaultSource = $("#sourceFilterHistorical").val();
-
-    // Both average checkboxes are checked by default
-    const defaultAverageCommodities = $("#averageCommodities").is(":checked");
-    const defaultAverageCities = $("#averageCities").is(":checked");
-
-    // Fetch and update the Historical Data based on the default selections
+    // Initial data fetch
     fetchHistoricalData(
-      defaultCommodities,
-      defaultCities,
-      defaultSource,
-      defaultStartDate,
-      defaultEndDate,
-      defaultAverageCommodities,
-      defaultAverageCities
+      $("#commodityFilterHistorical").val(),
+      $("#cityFilterHistorical").val(),
+      $("#sourceFilterHistorical").val(),
+      past30Days.format("YYYY-MM-DD"),
+      today.format("YYYY-MM-DD"),
+      $("#averageCommodities").is(":checked"),
+      $("#averageCities").is(":checked")
     );
 
     // Event handler for Apply Filters button
     $("#filters-historical-data").on("click", "button", function () {
-      const commodities = $("#commodityFilterHistorical").val(); // Array of selected commodities
-      const cities = $("#cityFilterHistorical").val(); // Array of selected cities
-      const source = $("#sourceFilterHistorical").val();
-      const startDate = $("#startDateFilterHistorical").val();
-      const endDate = $("#endDateFilterHistorical").val();
-
-      // Validate dates
-      if (!startDate || !endDate) {
-        alert("Please select both start and end dates.");
-        return;
-      }
-      if (new Date(startDate) > new Date(endDate)) {
-        alert("Start date cannot be after end date.");
-        return;
-      }
-
-      // Get the averaging options
-      const averageCommodities = $("#averageCommodities").is(":checked");
-      const averageCities = $("#averageCities").is(":checked");
-
-      // Fetch and update the Historical Data based on the selected filters
       fetchHistoricalData(
-        commodities,
-        cities,
-        source,
-        startDate,
-        endDate,
-        averageCommodities,
-        averageCities
+        $("#commodityFilterHistorical").val(),
+        $("#cityFilterHistorical").val(),
+        $("#sourceFilterHistorical").val(),
+        $("#startDateFilterHistorical").val(),
+        $("#endDateFilterHistorical").val(),
+        $("#averageCommodities").is(":checked"),
+        $("#averageCities").is(":checked")
       );
+    });
+
+    // Download functionality
+    $("#historical-data-card .btn-primary").on("click", function () {
+      if (historicalChartInstance) {
+        const canvas = document.getElementById("historicalChart");
+        const imageLink = document.createElement("a");
+        imageLink.download = "historical_prices_chart.png";
+        imageLink.href = canvas.toDataURL("image/png");
+        imageLink.click();
+      }
     });
   });
 </script>

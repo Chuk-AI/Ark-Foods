@@ -43,8 +43,6 @@
         fetch(apiUrl)
           .then((response) => response.json())
           .then((data) => {
-            console.log("Weather data: ", data);
-
             // Re-format daily climatology data to match forecast dates
             const convertedData = convertTemperatureData(data, unit);
             const formattedClimatology = formatClimatologyData(
@@ -168,11 +166,6 @@
           .slice()
           .sort((a, b) => b - a);
 
-        console.log(
-          "Rendering Ensemble Analysis Chart with Data:",
-          sortedEnsembleTotals
-        );
-
         const climatologyValue =
           data.accumulation_data.accumulated_climo_precip || 0;
         const belowClimatology = sortedEnsembleTotals.filter(
@@ -284,9 +277,6 @@
           }
           return dataset;
         });
-
-        console.log(`Creating Line Chart for ${canvasId} with labels:`, labels);
-        console.log(`Datasets for ${canvasId}:`, datasetArray);
 
         return new Chart(weatherctx, {
           type: "line",

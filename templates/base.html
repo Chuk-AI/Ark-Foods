@@ -52,22 +52,13 @@
               >Admin Dashboard</a
             >
           </li>
-          <li class="nav-item">
-            <a class="nav-link" href="{{ url_for('weather_dashboard') }}"
-              >Weather Dashboard</a
-            >
-          </li>
           {% elif current_user.is_owner() %}
           <li class="nav-item">
             <a class="nav-link" href="{{ url_for('owner_dashboard') }}"
               >Owner Dashboard</a
             >
           </li>
-          <li class="nav-item">
-            <a class="nav-link" href="{{ url_for('weather_dashboard') }}"
-              >Weather Dashboard</a
-            >
-          </li>
+
           {% endif %}
           <!-- All user roles can access the Sales Dashboard -->
           <li class="nav-item">
