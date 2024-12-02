@@ -304,3 +304,14 @@ select.form-control {
 .form-check {
   margin-bottom: 10px;
 }
+
+/* Map Styles */
+.leaflet-marker-icon.leaflet-div-icon {
+  background-color: transparent;
+  border: none;
+}
+
+.leaflet-marker-icon.leaflet-div-icon img {
+  width: 25px;
+  height: 41px;
+}

@@ -863,7 +863,15 @@ block head %}
 <script>
   /* ---- Map ---- */
 
-  let map; // Global map instance
+  // Leaflet map initialization
+  let map = L.map("commodityMap").setView([37.8, -96], 4); // Centered on US
+
+  // Load tile layer for the map
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 18,
+  }).addTo(map);
+
+  // Sample city coordinates (replace these with actual city coordinates)
   const cityLatLng = {
     Baltimore: [39.2904, -76.6122],
     Boston: [42.3601, -71.0589],
@@ -875,111 +883,82 @@ block head %}
     "Los Angeles": [34.0522, -118.2437],
   };
 
-  // Default marker icon
+  // Define custom icons
   const defaultIcon = L.icon({
     iconUrl:
-      "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png",
-    shadowUrl:
-      "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
+      "https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png",
     iconSize: [25, 41],
     iconAnchor: [12, 41],
     popupAnchor: [1, -34],
+    shadowUrl:
+      "https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png",
     shadowSize: [41, 41],
   });
 
-  // Green marker icon for the highest price
   const greenIcon = L.icon({
     iconUrl:
-      "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-green.png",
-    shadowUrl:
-      "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
+      "https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png",
     iconSize: [25, 41],
     iconAnchor: [12, 41],
     popupAnchor: [1, -34],
+    shadowUrl:
+      "https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png",
     shadowSize: [41, 41],
   });
 
-  // Initialize the map
-  function initializeMap() {
-    if (!map) {
-      map = L.map("commodityMap").setView([37.8, -96], 4); // Centered on the US
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 18,
-        attribution:
-          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-      }).addTo(map);
-    }
-    map.invalidateSize(); // Ensure the map resizes correctly
-  }
-
-  // Update the map based on the selected commodity
+  // Function to update map based on selected commodity
   function updateMap(commodity) {
-    initializeMap();
-
     $.ajax({
       url: "/api/most_recent_prices",
       type: "GET",
+      data: { commodity: commodity },
       success: function (response) {
-        const prices = response.prices;
+        // Clear all map markers
+        map.eachLayer(
+          (layer) => layer instanceof L.Marker && map.removeLayer(layer)
+        );
 
-        // Remove all existing markers
-        map.eachLayer((layer) => {
-          if (layer instanceof L.Marker) {
-            map.removeLayer(layer);
+        // Ensure response.prices[commodity] exists
+        if (response.prices && response.prices[commodity]) {
+          let maxPrice = -Infinity;
+          let maxCity = null;
+
+          // Find the city with the highest price
+          for (const [city, price] of Object.entries(
+            response.prices[commodity]
+          )) {
+            if (parseFloat(price) > maxPrice) {
+              maxPrice = parseFloat(price);
+              maxCity = city;
+            }
           }
-        });
 
-        if (!prices[commodity]) {
-          console.warn("No data available for the selected commodity.");
-          return;
-        }
-
-        let maxPrice = -Infinity;
-        let maxCity = null;
-
-        // Find the city with the highest price
-        for (const city in prices[commodity]) {
-          const price = parseFloat(prices[commodity][city]);
-          if (!isNaN(price) && price > maxPrice) {
-            maxPrice = price;
-            maxCity = city;
-          }
-        }
-
-        // Add markers for all cities with valid prices
-        for (const city in prices[commodity]) {
-          const price = parseFloat(prices[commodity][city]);
-
-          if (!isNaN(price) && cityLatLng[city]) {
-            const markerIcon = city === maxCity ? greenIcon : defaultIcon;
-
-            L.marker(cityLatLng[city], { icon: markerIcon })
-              .addTo(map)
-              .bindPopup(
-                `<b>${commodity}</b><br><b>${city}:</b> $${price.toFixed(2)}`
-              );
+          // Add markers for each city
+          for (const [city, price] of Object.entries(
+            response.prices[commodity]
+          )) {
+            if (cityLatLng[city]) {
+              const markerIcon = city === maxCity ? greenIcon : defaultIcon;
+              L.marker(cityLatLng[city], { icon: markerIcon })
+                .addTo(map)
+                .bindPopup(`<b>${city}</b><br>Max Price: $${price}`);
+            }
           }
         }
       },
-      error: function (xhr, status, error) {
-        console.error("Error updating map:", error);
-      },
+      error: (xhr, status, error) => console.log("AJAX error:", error),
     });
   }
 
-  // Trigger map updates on commodity filter changes
-  $(document).ready(function () {
-    initializeMap();
+  // Fetch prices and update map when commodity is selected
+  $("#commodityFilterMap").on("change", function () {
+    updateMap($(this).val());
+  });
 
-    // Update map when the filter changes
-    $("#commodityFilterMap").on("change", function () {
-      const selectedCommodity = $(this).val();
-      updateMap(selectedCommodity);
-    });
-
-    // Initial map update
-    const initialCommodity = $("#commodityFilterMap").val();
-    updateMap(initialCommodity);
+  // Trigger map update when the tab becomes active
+  $("#most-recent-prices-tab").on("shown.bs.tab", () => {
+    map.invalidateSize();
+    updateMap($("#commodityFilterMap").val());
   });
 </script>
 
