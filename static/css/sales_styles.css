@@ -10,15 +10,16 @@
 /* Left Sidebar Styles */
 .sidebar {
   position: fixed;
-  top: 56px; /* Adjust based on navbar height */
+  top: 56px;
   left: 0;
   bottom: 0;
   width: 250px;
   background-color: var(--sales-card-bg);
   border-right: 1px solid var(--sales-border-color);
-  overflow: hidden;
   z-index: 1000;
   transition: width 0.3s ease;
+  overflow-y: auto;
+  height: calc(100vh - 56px);
 }
 
 .sidebar.collapsed {
@@ -28,11 +29,53 @@
 #filters-content {
   opacity: 1;
   transition: opacity 0.3s ease;
+  padding: 15px;
+  padding-bottom: 100px;
+  height: 100%;
+  overflow-y: auto;
 }
 
 .sidebar.collapsed #filters-content {
   opacity: 0;
   pointer-events: none;
+}
+
+/* Improve form spacing */
+.filter-form {
+  margin-bottom: 30px;
+  display: none;
+}
+
+.filter-form.active {
+  display: block;
+}
+
+/* Adjust form group spacing */
+.form-group {
+  margin-bottom: 15px;
+}
+
+/* Make multi-select boxes more compact */
+select[multiple] {
+  height: 120px !important;
+}
+
+/* Style scrollbar */
+.sidebar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover {
+  background: #555;
 }
 
 #sidebar-toggle {
@@ -48,6 +91,7 @@
   justify-content: center;
   align-items: center;
   cursor: pointer;
+  z-index: 1001;
 }
 
 .arrow-icon {
@@ -58,7 +102,7 @@
 /* Right Sidebar Styles */
 #minimized-sidebar {
   position: fixed;
-  top: 56px; /* Adjust based on navbar height */
+  top: 56px;
   right: 0;
   bottom: 0;
   width: 250px;
@@ -110,47 +154,32 @@
   background-color: var(--sales-hover-color);
 }
 
-@media (max-width: 768px) {
-  #minimized-sidebar {
-    width: 100%;
-    top: auto;
-    bottom: 0;
-    height: auto;
-  }
-
-  #right-sidebar-toggle {
-    top: -15px;
-    left: 10px;
-    transform: rotate(90deg);
-  }
-}
-
 /* Main Content Adjustment */
 .main-content {
-  margin-left: 270px; /* Left sidebar width when expanded */
-  margin-right: 0; /* No right margin by default */
-  margin-top: 56px; /* Adjust based on navbar height */
+  margin-left: 270px;
+  margin-right: 0;
+  margin-top: 56px;
   transition: margin 0.3s ease;
 }
 
 .sidebar.collapsed ~ .main-content {
-  margin-left: 70px; /* Left sidebar width when collapsed */
+  margin-left: 70px;
 }
 
 #minimized-sidebar:not(.collapsed) ~ .main-content {
-  margin-right: 250px; /* Right sidebar width when open */
+  margin-right: 250px;
 }
 
 #minimized-sidebar.collapsed ~ .main-content {
-  margin-right: 0; /* No right margin when right sidebar is collapsed */
+  margin-right: 0;
 }
 
-/* Hide minimized cards from the main content area */
+/* Hide minimized cards */
 .resizable-block.minimized {
   display: none;
 }
 
-/* Sales Dashboard Specific Card Styles */
+/* Card Styles */
 .card.resizable-block {
   background-color: var(--sales-card-bg);
   border: 1px solid var(--sales-border-color);
@@ -185,18 +214,27 @@
   color: white;
 }
 
-/* Table Responsive */
+/* Form Styles */
+.form-control {
+  max-width: 100%;
+}
+
+.form-check-label {
+  white-space: normal;
+  line-height: 1.4;
+}
+
+/* Table Styles */
 .table-responsive {
   overflow-x: auto;
 }
 
-/* Highlight the highest price cell */
 .highlight-max {
   background-color: var(--sales-highlight-bg);
   font-weight: bold;
 }
 
-/* Chart Container */
+/* Chart Styles */
 #commodityMap {
   height: 400px;
   border-radius: 8px;
@@ -204,9 +242,13 @@
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
+/* Navbar */
+.navbar {
+  z-index: 1050;
+}
+
 /* Responsive Adjustments */
 @media (max-width: 768px) {
-  /* Adjust main content margins for small screens */
   .main-content {
     margin-left: 0;
     margin-right: 0;
@@ -217,17 +259,44 @@
     margin-left: 0;
     margin-right: 0;
   }
+
+  #minimized-sidebar {
+    width: 100%;
+    top: auto;
+    bottom: 0;
+    height: auto;
+  }
+
+  #right-sidebar-toggle {
+    top: -15px;
+    left: 10px;
+    transform: rotate(90deg);
+  }
 }
 
-/* Adjust z-index of the navbar if necessary */
-.navbar {
-  z-index: 1050; /* Ensure navbar stays above other content */
+@media (max-height: 768px) {
+  #filters-content {
+    padding-bottom: 120px;
+  }
+
+  select[multiple] {
+    height: 100px !important;
+  }
 }
 
-.filter-form {
-  display: none; /* Hide all filter forms by default */
+/* Additional Filter Form Styles */
+.sidebar h2 {
+  margin-bottom: 20px;
 }
 
-.filter-form.active {
-  display: block; /* Show the active filter form */
+.filter-form .btn {
+  margin-top: 10px;
+}
+
+select.form-control {
+  margin-bottom: 10px;
+}
+
+.form-check {
+  margin-bottom: 10px;
 }
