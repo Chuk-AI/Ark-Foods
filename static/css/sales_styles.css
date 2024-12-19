@@ -1,10 +1,11 @@
-/* General Styles for Sales Dashboard */
+General Styles for Sales Dashboard
 :root {
   --sales-card-bg: #ffffff;
   --sales-border-color: #e0e0e0;
   --sales-hover-color: #f1f3f5;
   --sales-primary-color: #3498db;
   --sales-highlight-bg: #ffef96;
+  background-color: black;
 }
 
 /* Left Sidebar Styles */
@@ -13,7 +14,7 @@
   top: 56px;
   left: 0;
   bottom: 0;
-  width: 250px;
+  width: 220px;
   background-color: var(--sales-card-bg);
   border-right: 1px solid var(--sales-border-color);
   z-index: 1000;
@@ -85,9 +86,10 @@ select[multiple] {
 #sidebar-toggle {
   position: absolute;
   top: 10px;
-  right: -15px;
+  right: 10px;
   background-color: var(--sales-primary-color);
   color: white;
+  /* color: red; */
   border-radius: 50%;
   width: 30px;
   height: 30px;
@@ -102,6 +104,10 @@ select[multiple] {
   font-size: 18px;
   line-height: 0;
 }
+.rightbar-icon{
+  width: 100px;
+  height: 200px;
+}
 
 /* Right Sidebar Styles */
 #minimized-sidebar {
@@ -109,7 +115,7 @@ select[multiple] {
   top: 56px;
   right: 0;
   bottom: 0;
-  width: 250px;
+  width: 220px;
   background-color: var(--sales-card-bg);
   border-left: 1px solid var(--sales-border-color);
   overflow-y: auto;
@@ -126,7 +132,8 @@ select[multiple] {
   top: 10px;
   left: -15px;
   background-color: var(--sales-primary-color);
-  color: white;
+  /* color: white; */
+  color: red;
   border-radius: 50%;
   width: 30px;
   height: 30px;
@@ -141,7 +148,7 @@ select[multiple] {
   line-height: 0;
 }
 
-#minimized-sidebar h3 {
+#minimized-sidebar h2 {
   padding: 15px;
   margin: 0;
   background-color: var(--sales-primary-color);
@@ -152,11 +159,14 @@ select[multiple] {
   padding: 10px 15px;
   border-bottom: 1px solid var(--sales-border-color);
   cursor: pointer;
+  margin-bottom: 10px;
 }
+
 
 #minimized-list li:hover {
   background-color: var(--sales-hover-color);
 }
+
 
 /* Main Content Adjustment */
 .main-content {
@@ -291,6 +301,7 @@ select[multiple] {
 /* Additional Filter Form Styles */
 .sidebar h2 {
   margin-bottom: 20px;
+
 }
 
 .filter-form .btn {

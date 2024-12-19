@@ -26,7 +26,7 @@
 }
 
 /* Enhanced Navbar */
-.navbar {
+.navbar { 
   background-color: var(--header-bg) !important;
   box-shadow: var(--shadow-nav);
   height: 70px;

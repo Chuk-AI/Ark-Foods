@@ -100,10 +100,16 @@ print(f"Endpoint: https://api.ibm.com/geospatial/run/na/core/v3/query")
 
 
 # Enable CORS
-CORS(app)
+CORS(app, supports_credentials=True, origins=["http://localhost:3000"])
+
 
 # Set the secret key for session handling
 app.config["SECRET_KEY"] = "your_secret_key_here"
+
+# Set session cookie options
+app.config["SESSION_COOKIE_HTTPONLY"] = True  # Prevent access to cookies via JS
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"  # Adjust SameSite based on needs
+app.config["SESSION_COOKIE_SECURE"] = False   # Set to True in production with HTTPS
 
 # Check if DATABASE_URL is present for Heroku's PostgreSQL, otherwise use SQLite for local development
 DATABASE_URL = os.environ.get("DATABASE_URL")
@@ -121,8 +127,8 @@ else:
 # Configure other Flask settings
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(
-    minutes=30
-)  # Session timeout after 30 minutes
+    days=1
+)  # Session timeout after 1 day
 # for uploading data
 UPLOAD_FOLDER = "uploads"
 ALLOWED_EXTENSIONS = {"csv"}
@@ -1147,6 +1153,7 @@ admin.add_view(ModelView(PriceData, db.session))  # Add PriceData to Admin panel
 # User loader for Flask-Login
 @login_manager.user_loader
 def load_user(user_id):
+
     return User.query.get(int(user_id))
 
 
@@ -1180,11 +1187,38 @@ class LoginForm(FlaskForm):
     password = PasswordField("Password", validators=[InputRequired(), Length(min=8)])
     submit = SubmitField("Login")
 
+# # testing db connection
+# @app.route("/test_db")
+# def test_db():
+#     try:
+#         # Fetch the first 5 users from the database
+#         users = User.query.all()
+#         if users:
+#             # Create a response string with usernames and passwords
+#             response = "First 5 users:\n"
+#             for user in users:
+#                 response += f"Username: {user.email}, Password: {user.password}\n"
+#             return response
+#         else:
+#             return "Database is connected, but no users found."
+#     except Exception as e:
+#         return f"Error: {e}"
+
+# @app.route("/api/test_users", methods=["GET"])
+# def test_users():
+#     users = User.query.all()
+#     user_list = [
+#         {"id": user.id, "username": user.username, "email": user.email, "role": user.role, "password": user.password}
+#         for user in users
+#     ]
+#     return jsonify(user_list)
+
 
 # Home page
 @app.route("/")
 @login_required
 def index():
+    print("test1")
     if current_user.is_admin():
         return redirect(url_for("admin_dashboard"))
     elif current_user.is_owner():
@@ -1193,11 +1227,52 @@ def index():
         return redirect(url_for("sales_dashboard"))
 
 
+
+# Current user route
+@app.route("/current_user", methods=["GET"])
+def get_current_user():
+    print("Current User:", current_user)  # Debugging
+    print("Is Authenticated:", current_user.is_authenticated)  # Check if true
+    if current_user.is_authenticated:
+        return jsonify({
+            "isAuthenticated": True,
+            "isAdmin": current_user.is_admin(),
+            "isOwner": current_user.is_owner(),
+            "username": current_user.username
+        })
+    return jsonify({
+        "isAuthenticated": False,
+        "isAdmin": False,
+        "isOwner": False,
+        "username": None
+    })
+
+
+
 # Dashboards
-@app.route("/admin_dashboard")
+@app.route("/admin_dashboard", methods=["GET"])
 @login_required
 def admin_dashboard():
-    return render_template("admin_dashboard.html")
+    try:
+        # Ensure current_user is available and authenticated
+        if not current_user.is_authenticated:
+            return jsonify({"error": "User not authenticated"}), 401
+
+        # Return admin-specific data
+        return jsonify({
+            "message": "Welcome to the Admin Dashboard!",
+            "username": current_user.username,
+            "role": current_user.role,
+        }), 200
+    except Exception as e:
+        # Log the exception
+        app.logger.error(f"Error in /admin_dashboard: {str(e)}")
+        return jsonify({"error": "Internal Server Error"}), 500
+
+# @app.route("/admin_dashboard")
+# @login_required
+# def admin_dashboard():
+#     return render_template("admin_dashboard.html")
 
 
 @app.route("/owner_dashboard")
@@ -1212,9 +1287,56 @@ def weather_dashboard():
     return render_template("weather_dashboard.html")
 
 
+# @app.route("/sales_dashboard", methods=["GET"])
+# # @login_required
+# def sales_dashboard():
+#     selected_commodity = request.args.get("commodity", "Jalapeno")
+#     selected_source = request.args.get("source", "Historical")
+
+#     # Get the most recent year and day
+#     latest_year = db.session.query(db.func.max(PriceData.year)).scalar()
+#     latest_day = (
+#         db.session.query(db.func.max(PriceData.day))
+#         .filter_by(year=latest_year)
+#         .scalar()
+#     )
+
+#     # Query the best sell market (city with the highest recent price)
+#     best_market = (
+#         db.session.query(
+#             PriceData.city_name,
+#             db.func.max(PriceData.price).label("max_price"),
+#             PriceData.year,
+#             PriceData.day,
+#         )
+#         .filter(
+#             PriceData.commodity == selected_commodity,
+#             PriceData.source == selected_source,
+#             PriceData.year == latest_year,
+#             PriceData.day == latest_day,
+#         )
+#         .group_by(PriceData.city_name, PriceData.year, PriceData.day)
+#         .order_by(db.desc("max_price"))
+#         .all()
+#     )
+
+#     # Check if query was successful
+#     if not best_market:
+#         best_market = []
+
+#     # Render the template and pass the variables
+#     return render_template(
+#         "sales_dashboard.html",
+#         best_market=best_market,  # Make sure to pass this variable
+#         selected_commodity=selected_commodity,
+#         selected_source=selected_source,
+#         datetime=datetime,  # Pass datetime to handle date formatting in the template
+#     )
+
+
 @app.route("/sales_dashboard", methods=["GET"])
 @login_required
-def sales_dashboard():
+def sales_dashboard_api():
     selected_commodity = request.args.get("commodity", "Jalapeno")
     selected_source = request.args.get("source", "Historical")
 
@@ -1245,73 +1367,161 @@ def sales_dashboard():
         .all()
     )
 
-    # Check if query was successful
-    if not best_market:
-        best_market = []
+    # Format the result into a JSON-compatible structure
+    formatted_best_market = [
+        {
+            "city_name": item.city_name,
+            "max_price": item.max_price,
+            "year": item.year,
+            "day": item.day,
+            "formatted_date": datetime(item.year, 1, 1) + timedelta(days=item.day - 1)
+        }
+        for item in best_market
+    ] if best_market else []
 
-    # Render the template and pass the variables
-    return render_template(
-        "sales_dashboard.html",
-        best_market=best_market,  # Make sure to pass this variable
-        selected_commodity=selected_commodity,
-        selected_source=selected_source,
-        datetime=datetime,  # Pass datetime to handle date formatting in the template
-    )
+    # Return the result as JSON
+    return jsonify({
+        "best_market": formatted_best_market,
+        "selected_commodity": selected_commodity,
+        "selected_source": selected_source,
+    })
 
 
 # Registration route
-@app.route("/register", methods=["GET", "POST"])
+@app.route("/register", methods=["POST"])
 def register():
-    form = RegisterForm()
-    if form.validate_on_submit():
-        hashed_password = generate_password_hash(form.password.data, method="scrypt")
+    try:
+        # Parse JSON data from the request
+        data = request.json
+        username = data.get("username")
+        email = data.get("email")
+        password = data.get("password")
+        confirm_password = data.get("confirmPassword")
+        role = data.get("role")
+
+        # Validate the input data
+        if not username or not email or not password or not confirm_password or not role:
+            return jsonify({"error": "All fields are required"}), 400
+
+        if password != confirm_password:
+            return jsonify({"error": "Passwords do not match"}), 400
+
+        # Check if the email already exists
+        existing_user = User.query.filter_by(email=email).first()
+        if existing_user:
+            return jsonify({"error": "Email is already registered"}), 400
+
+        # Hash the password
+        hashed_password = generate_password_hash(password)
+
+        # Create a new user instance
         new_user = User(
-            username=form.username.data,
-            email=form.email.data,
+            username=username,
+            email=email,
             password=hashed_password,
-            role=form.role.data,
-            approved=False,
+            role=role,
+            approved=False,  # Default to not approved
         )
+        logging.info(f"Received registration data: {data}")
+
+
+        # Add the new user to the database
         db.session.add(new_user)
         db.session.commit()
-        flash(
-            f"Registration successful! You registered as {form.role.data}. Your account must be approved by an admin or owner.",
-            "success",
-        )
-        return redirect(url_for("login"))
-    return render_template("register.html", form=form)
+
+        return jsonify({"message": "Registration successful!"}), 201
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# @app.route("/register", methods=["GET", "POST"])
+# def register():
+#     form = RegisterForm()
+#     if form.validate_on_submit():
+#         hashed_password = generate_password_hash(form.password.data, method="scrypt")
+#         new_user = User(
+#             username=form.username.data,
+#             email=form.email.data,
+#             password=hashed_password,
+#             role=form.role.data,
+#             approved=False,
+#         )
+#         db.session.add(new_user)
+#         db.session.commit()
+#         flash(
+#             f"Registration successful! You registered as {form.role.data}. Your account must be approved by an admin or owner.",
+#             "success",
+#         )
+#         return redirect(url_for("login"))
+#     return render_template("register.html", form=form)
 
 
 # Login route with proper handling for session
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    form = LoginForm()
-    if form.validate_on_submit():
-        user = User.query.filter_by(email=form.email.data).first()
-        if user and check_password_hash(user.password, form.password.data):
+    try:
+        data = request.json
+        email = data.get("email")
+        password = data.get("password")
+
+        # Validate email and password
+        user = User.query.filter_by(email=email).first()
+        if user and check_password_hash(user.password, password):
             if not user.approved:
-                flash(
-                    "Your account is not approved yet. Please wait for approval from an admin or owner.",
-                    "warning",
-                )
-                return redirect(url_for("login"))
+                return jsonify({"error": "Account not approved."}), 403
 
-            login_user(user)  # Log in the user through Flask-Login
+            login_user(user)
 
-            # Create a session
-            session["username"] = user.username
-            session["role"] = user.role
-            session.permanent = (
-                True  # Set session to use the PERMANENT_SESSION_LIFETIME config
-            )
-
-            flash("Login successful!", "success")
-
-            next_page = request.args.get("next")
-            return redirect(next_page) if next_page else redirect(url_for("index"))
+            return jsonify({
+                "message": "Login successful!",
+                "role": user.role,  # Returns 'owner', 'sales', or 'admin'
+                "username": user.username
+            }), 200
         else:
-            flash("Invalid email or password.", "danger")
-    return render_template("login.html", form=form)
+            return jsonify({"error": "Invalid credentials."}), 401
+    except Exception as e:
+        app.logger.error(f"Login error: {str(e)}")
+        return jsonify({"error": "An unexpected error occurred"}), 500
+
+
+# @app.route("/login", methods=["GET", "POST"])
+# def login():
+#     try:
+#         # Parse JSON data from the request
+#         data = request.json
+#         email = data.get("email")
+#         password = data.get("password")
+
+#         # Check if email and password are provided
+#         if not email or not password:
+#             return jsonify({"error": "Email and password are required"}), 400
+
+#         # Fetch the user from the database
+#         user = User.query.filter_by(email=email).first()
+
+#         # Validate the user and password
+#         if user and check_password_hash(user.password, password):
+#             if not user.approved:
+#                 return jsonify({"error": "Your account is not approved yet. Please wait for approval."}), 403
+
+#             # Log the user in
+#             login_user(user)
+
+#             # Set session variables
+#             session["username"] = user.username
+#             session["role"] = user.role
+#             session.permanent = True
+
+#             return jsonify({
+#                 "message": "Login successful!",
+#                 "role": user.role,
+#                 "username": user.username
+#             }), 200
+#         else:
+#             return jsonify({"error": "Invalid email or password"}), 401
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 500
+
 
 
 # Logout route
@@ -1526,7 +1736,6 @@ def api_most_recent_prices():
 
     return jsonify({"prices": recent_prices})
 
-
 @app.route("/api/historical_data", methods=["GET"])
 def historical_data():
     try:
@@ -1541,6 +1750,13 @@ def historical_data():
         )
         avg_cities = request.args.get("averageCities", "false").lower() == "true"
 
+        # Debug: Log received parameters
+        app.logger.info(f"Commodities: {commodities}")
+        app.logger.info(f"Cities: {cities}")
+        app.logger.info(f"Start Date: {start_date}, End Date: {end_date}")
+        app.logger.info(f"Source: {source}")
+        app.logger.info(f"Avg Commodities: {avg_commodities}, Avg Cities: {avg_cities}")
+
         # Standardize Cubanelles based on source
         standardized_commodities = []
         for commodity in commodities:
@@ -1552,6 +1768,9 @@ def historical_data():
             else:
                 standardized_commodities.append(commodity)
 
+        # Debug: Log standardized commodities
+        app.logger.info(f"Standardized Commodities: {standardized_commodities}")
+
         # Convert dates
         start_dt = datetime.strptime(start_date, "%Y-%m-%d")
         end_dt = datetime.strptime(end_date, "%Y-%m-%d")
@@ -1560,11 +1779,12 @@ def historical_data():
         start_day = start_dt.timetuple().tm_yday
         end_day = end_dt.timetuple().tm_yday
 
+        # Debug: Log date range
+        app.logger.info(f"Start Day: {start_day}, End Day: {end_day}")
+
         # Query the database with proper date filtering
         query = PriceData.query.filter(
-            PriceData.commodity.in_(
-                standardized_commodities
-            ),  # Use standardized commodities
+            PriceData.commodity.in_(standardized_commodities),
             func.upper(PriceData.city_name).in_([city.upper() for city in cities]),
             PriceData.source == source,
         )
@@ -1587,6 +1807,9 @@ def historical_data():
         query = query.order_by(PriceData.year.asc(), PriceData.day.asc())
         data = query.all()
 
+        # Debug: Log raw query results
+        app.logger.info(f"Query Results: {data}")
+
         if not data:
             return jsonify({"labels": [], "datasets": []}), 200
 
@@ -1604,7 +1827,6 @@ def historical_data():
             date_str = entry_date.strftime("%Y-%m-%d")
             all_dates.add(date_str)
 
-            # Standardize display name for Cubanelles
             display_commodity = (
                 "Cubanelles"
                 if entry.commodity.lower().startswith("cubanelle")
@@ -1629,20 +1851,14 @@ def historical_data():
             price_series[series_key][date_str]["sum"] += entry.price
             price_series[series_key][date_str]["count"] += 1
 
+        # Debug: Log processed series
+        app.logger.info(f"Price Series: {price_series}")
+
         # Sort dates
         sorted_dates = sorted(list(all_dates))
 
         # Create datasets for each series
-        colors = [
-            "#FF6384",
-            "#36A2EB",
-            "#FFCE56",
-            "#4BC0C0",
-            "#9966FF",
-            "#FF9F40",
-            "#FF6384",
-            "#4BC0C0",
-        ]
+        colors = ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40"]
         datasets = []
 
         for idx, (series_name, date_data) in enumerate(price_series.items()):
@@ -1663,10 +1879,15 @@ def historical_data():
                 }
             )
 
+        # Debug: Log datasets
+        app.logger.info(f"Datasets: {datasets}")
+
         return jsonify({"labels": sorted_dates, "datasets": datasets})
 
     except Exception as e:
+        app.logger.error(f"Error: {str(e)}")
         return jsonify({"error": str(e)}), 500
+
 
 
 @app.route("/api/download_historical_data", methods=["GET"])
@@ -2024,14 +2245,16 @@ def calculate_forecasted_price(variety, city, start_date, forecast_date):
 
 
 @app.route("/api/calculate_forecast", methods=["POST"])
-@login_required
 def calculate_forecast():
+    # Parse JSON data from the request body
+    data = request.json
+
     # Extract the form data
-    variety = request.form.get("variety")
-    city = request.form.get("city")
-    start_date = request.form.get("start_date")
-    forecast_date = request.form.get("forecast_date")
-    yield_per_acre = request.form.get("yield_per_acre")
+    variety = data.get("variety")
+    city = data.get("city")
+    start_date = data.get("start_date")
+    forecast_date = data.get("forecast_date")
+    yield_per_acre = data.get("yield_per_acre")
 
     # Validate the form inputs
     if not all([variety, city, start_date, forecast_date, yield_per_acre]):
@@ -2062,7 +2285,6 @@ def calculate_forecast():
             "season": season,
         }
     )
-
 
 # API FOR Forecast visual
 @app.route("/api/seasonal_prices", methods=["GET"])
@@ -2308,6 +2530,92 @@ def upload_historical():
         logging.error(f"Error during upload: {str(e)}")
         return f"Error during upload: {str(e)}", 500
 
+
+# @app.route("/api/upload_historical", methods=["POST"])
+# def upload_historical():
+#     try:
+#         # Check if a file and commodity are provided in the request
+#         if "file" not in request.files or "commodity" not in request.form:
+#             return jsonify({"error": "File and commodity are required"}), 400
+
+#         file = request.files["file"]
+#         commodity = request.form["commodity"]
+
+#         # Validate file
+#         if file.filename == "":
+#             return jsonify({"error": "No file selected"}), 400
+
+#         if not file.filename.endswith(".csv"):
+#             return jsonify({"error": "Invalid file type. Only CSV files are allowed"}), 400
+
+#         # Save the file temporarily for processing
+#         file_path = os.path.join(CSV_DIRECTORY, secure_filename(file.filename))
+#         file.save(file_path)
+
+#         # Process the uploaded CSV file
+#         logging.info(f"Processing uploaded file: {file.filename}")
+#         with open(file_path, newline="", encoding="utf-8") as csvfile:
+#             reader = csv.DictReader(csvfile)
+
+#             for row in reader:
+#                 city_name = row["CityName"]
+#                 year = int(row["Year"])
+#                 day = int(row["Day"])
+#                 price_str = row["Price"]
+
+#                 # Skip rows with invalid or empty price
+#                 if price_str.strip() == "":
+#                     logging.warning(
+#                         f"Skipping row with empty price for {city_name} on day {day} in year {year}"
+#                     )
+#                     continue
+
+#                 try:
+#                     price = float(price_str)
+#                 except ValueError:
+#                     logging.error(
+#                         f"Invalid price value: {price_str} for {city_name} on day {day} in year {year}"
+#                     )
+#                     continue
+
+#                 source = "ProduceIQ"
+
+#                 # Determine season using year and day of the year
+#                 try:
+#                     report_date = datetime.strptime(f"{year}-{day}", "%Y-%j")
+#                     season = determine_season(
+#                         report_date.strftime("%m/%d/%Y")
+#                     )  # Convert to MM/DD/YYYY format
+#                 except Exception as e:
+#                     logging.error(
+#                         f"Error converting year-day to date for {year}-{day}: {str(e)}"
+#                     )
+#                     continue
+
+#                 # Insert the data into the database
+#                 new_price_data = PriceData(
+#                     city_name=city_name,
+#                     commodity=commodity,
+#                     year=year,
+#                     day=day,
+#                     price=price,
+#                     source=source,
+#                     season=season,
+#                 )
+#                 db.session.add(new_price_data)
+
+#         # Commit all data after processing the file
+#         db.session.commit()
+#         logging.info(f"Data for {commodity} uploaded successfully from {file.filename}")
+
+#         # Delete the file after processing
+#         os.remove(file_path)
+
+#         return jsonify({"message": f"File {file.filename} uploaded successfully for {commodity}"}), 200
+
+#     except Exception as e:
+#         logging.error(f"Error during upload: {str(e)}")
+#         return jsonify({"error": f"Error during upload: {str(e)}"}), 500
 
 # Run the app
 if __name__ == "__main__":
