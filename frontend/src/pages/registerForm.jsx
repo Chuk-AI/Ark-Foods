@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom"; // Import useNavigate
 import axios from "axios";
 import Footer from "../components/footer";
 import Header from "../components/header";
@@ -15,6 +16,7 @@ function RegisterForm() {
   });
   const [messages, setMessages] = useState(null);
   const [error, setError] = useState(null);
+  const navigate = useNavigate(); // Initialize useNavigate
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -24,9 +26,18 @@ function RegisterForm() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-      // Log the form data to the console for debugging
-  console.log("Form Data Submitted:", form);
+    console.log("Form Data Submitted:", form); // Debugging log
 
+    // Validate form fields
+    if (!form.username || !form.email || !form.password || !form.confirmPassword || !form.role) {
+      setError("All fields are required.");
+      return;
+    }
+
+    if (form.password !== form.confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
 
     try {
       const response = await axios.post("/register", form, {
@@ -39,7 +50,7 @@ function RegisterForm() {
       setMessages(response.data.message);
       setError(null);
 
-      // Redirect or clear form
+      // Clear form
       setForm({
         username: "",
         email: "",
@@ -47,11 +58,9 @@ function RegisterForm() {
         confirmPassword: "",
         role: "",
       });
-      if (!form.username || !form.email || !form.password || !form.confirmPassword || !form.role) {
-        setError("All fields are required.");
-        return;
-      }
-    
+
+      // Redirect to login page
+      navigate("/login");
     } catch (err) {
       // Handle errors
       setMessages(null);
@@ -125,21 +134,16 @@ function RegisterForm() {
               onChange={handleChange}
               required
             >
-               <option value="">Select a role</option>
+              <option value="">Select a role</option>
               <option value="sales">Sales</option>
               <option value="owner">Owner</option>
               <option value="admin">Admin</option>
             </select>
           </div>
           <button type="submit" className="btn btn-primary mt-3">
-              
             Register
-            
           </button>
-          
         </form>
-
-
       </div>
       <Footer />
     </>

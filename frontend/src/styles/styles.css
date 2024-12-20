@@ -295,3 +295,6 @@ footer::before {
   flex-direction: column;
   /* gap: 20px; */
 }
+#navbarNav{
+  justify-content: flex-end;
+}

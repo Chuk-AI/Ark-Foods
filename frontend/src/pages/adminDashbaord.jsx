@@ -4,7 +4,7 @@ import Chart from "chart.js/auto";
 import ChartDataLabels from "chartjs-plugin-datalabels";
 import Header from "../components/header";
 import Footer from "../components/footer";
-
+import { Link } from "react-router-dom";
 // Register Chart.js plugins
 Chart.register(ChartDataLabels);
 
@@ -17,12 +17,23 @@ function AdminDashboard() {
   });
 
   useEffect(() => {
-    // Fetch user session from backend
     const fetchUser = async () => {
       try {
-        const response = await axios.get("/current_user"); // Adjust endpoint
+        // Retrieve JWT token from localStorage
+        const token = localStorage.getItem("authToken");
+        if (!token) {
+          throw new Error("No token found");
+        }
+  
+        // Fetch user data with Authorization header
+        const response = await axios.get("/current_user", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+  
         const userData = response.data;
-
+  
         setUser({
           isAuthenticated: true,
           isAdmin: userData.role === "admin",
@@ -30,12 +41,24 @@ function AdminDashboard() {
         });
       } catch (error) {
         console.error("Error fetching user data:", error);
+  
+        // Handle token expiration or invalid token
+        if (error.response && error.response.status === 401) {
+          alert("Session expired. Please log in again.");
+          localStorage.removeItem("authToken");
+          setUser({ isAuthenticated: false, isAdmin: false, isOwner: false });
+          return;
+        }
+  
+        // Set user to unauthenticated state in case of other errors
         setUser({ isAuthenticated: false, isAdmin: false, isOwner: false });
       }
     };
-
+  
     fetchUser();
   }, []);
+  
+  
 
   const [variety, setVariety] = useState("Shishito");
   const [city, setCity] = useState("BALTIMORE");
@@ -58,28 +81,38 @@ function AdminDashboard() {
       alert("Please select both variety and city!");
       return;
     }
-
+  
     try {
+      // Retrieve JWT token from localStorage
+      const token = localStorage.getItem("authToken");
+      if (!token) {
+        throw new Error("No token found");
+      }
+  
+      // Fetch seasonal prices with Authorization header
       const response = await axios.get(`/api/seasonal_prices`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
         params: { variety, city },
       });
+  
       const data = response.data;
-
+  
       // Ensure canvas exists
       const canvas = document.getElementById("seasonPriceChart");
       if (!canvas) {
         console.error("Canvas element not found");
         return;
       }
-
+  
       const ctx = canvas.getContext("2d");
-
-   
-         // Properly destroy the existing chart instance
-    if (chart) {
-      chart.destroy();
-    }
-
+  
+      // Properly destroy the existing chart instance
+      if (chart) {
+        chart.destroy();
+      }
+  
       // Create new chart
       const newChart = new Chart(ctx, {
         type: "bar",
@@ -92,8 +125,8 @@ function AdminDashboard() {
               backgroundColor: ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0"],
               borderColor: ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0"],
               borderWidth: 0.3,
-              barPercentage: 0.4, // Reduce bar width (default is 1)
-              categoryPercentage: 1, // Adjust category spacing (default is 1)
+              barPercentage: 0.4,
+              categoryPercentage: 1,
             },
           ],
         },
@@ -117,42 +150,54 @@ function AdminDashboard() {
           },
         },
       });
-
+  
       setChart(newChart);
     } catch (error) {
       console.error("Error fetching seasonal prices:", error);
+  
+      // Handle token expiration or invalid token
+      if (error.response && error.response.status === 401) {
+        alert("Session expired. Please log in again.");
+        localStorage.removeItem("authToken");
+        window.location.href = "/login"; // Redirect to login page
+        return;
+      }
+  
     }
   };
+  
 
   // Handle form submission and forecast calculation
   const handleSubmit = async (e) => {
     e.preventDefault();
   
-    // Check required fields
-    if (!variety || !city || !formData.startDate || !formData.forecastDate || !formData.yieldPerAcre) {
-      alert("Please fill in all required fields!");
-      return;
-    }
-  
-
     try {
-      // Make POST request to backend
-      const response = await axios.post('/api/calculate_forecast', {
-        variety,
-        city,
-        start_date: formData.startDate,
-        forecast_date: formData.forecastDate,
-        yield_per_acre: formData.yieldPerAcre,
-      });
+      const token = localStorage.getItem("authToken");
+      if (!token) throw new Error("No token found");
   
+      const response = await axios.post(
+        "/api/calculate_forecast",
+        {
+          variety,
+          city,
+          start_date: formData.startDate,
+          forecast_date: formData.forecastDate,
+          yield_per_acre: formData.yieldPerAcre,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
   
-      // Set the forecast data
       setForecastData(response.data);
     } catch (error) {
       console.error("Error calculating forecast:", error.response?.data || error.message);
       alert(`Error: ${error.response?.data?.error || "Unable to calculate forecast."}`);
     }
   };
+  
   
 
   // Fetch chart data on variety or city change
@@ -170,9 +215,12 @@ function AdminDashboard() {
       />
       <div className="container">
         <div className="mt-3 mb-3">
-          <a href="/approve_users" className="btn btn-primary">
-            Approve Users
-          </a>
+
+        <Link to="/approve_users" className="btn btn-primary">
+  Approve Users
+</Link>
+
+          
         </div>
         <h1 className="mt-4">Admin Dashboard</h1>
         <p>Welcome, Admin! You have Admin privileges.</p>

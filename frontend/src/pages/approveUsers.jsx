@@ -1,79 +1,166 @@
-import React, { useState, useEffect } from 'react';
+// import React, { useState, useEffect, useContext } from 'react';
+// import axios from 'axios';
+// import Footer from '../components/footer';
+// import Header from '../components/header';
+// import { UserContext } from '../components/userContext'; // Update the path to the correct location
+
+// function ApproveUsers() {
+//   const { isAuthenticated, userRole } = useContext(UserContext);
+//   const [users, setUsers] = useState([]);
+
+//   useEffect(() => {
+//     if (isAuthenticated === true && userRole === 'owner') {
+//       const fetchUsers = async () => {
+//         try {
+//           const response = await axios.get('http://127.0.0.1:5500/users', { withCredentials: true}); // Replace with your API endpoint
+//           setUsers(response.data.users);
+//         } catch (error) {
+//           console.error('Error fetching users:', error);
+//         }
+//       };
+
+//       fetchUsers();
+//     }
+//   }, [isAuthenticated, userRole]);
+
+//   const handleApprove = async (userId) => {
+//     try {
+//       const response = await axios.post(`/approve_user/${userId}`); // Backend route for approving users
+//       console.log(response.data.message);
+//       setUsers(users.filter((user) => user.id !== userId));
+//     } catch (error) {
+//       console.error('Error approving user:', error);
+//     }
+//   };
+
+//   if (!isAuthenticated || userRole !== 'owner') {
+//     return <div>Access Denied. You do not have permission to view this page.</div>;
+//   }
+
+//   return (
+//     <div>
+//       <Header />
+//       <div className="container">
+//         <h2>Approve Users</h2>
+//         <table className="table">
+//           <thead>
+//             <tr>
+//               <th>Username</th>
+//               <th>Email</th>
+//               <th>Role</th>
+//               <th>Action</th>
+//             </tr>
+//           </thead>
+//           <tbody>
+//             {users.map((user) => (
+//               <tr key={user.id}>
+//                 <td>{user.username}</td>
+//                 <td>{user.email}</td>
+//                 <td>{user.role}</td>
+//                 <td>
+//                   <button
+//                     type="button"
+//                     className="btn btn-success"
+//                     onClick={() => handleApprove(user.id)}
+//                   >
+//                     Approve
+//                   </button>
+//                 </td>
+//               </tr>
+//             ))}
+//           </tbody>
+//         </table>
+//       </div>
+//       <Footer />
+//     </div>
+//   );
+// }
+
+// export default ApproveUsers;
+import React, { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
 import Footer from '../components/footer';
 import Header from '../components/header';
+import { UserContext } from '../components/userContext';
 
 function ApproveUsers() {
-//   const [users, setUsers] = useState([]);
+  const { isAuthenticated, userRole } = useContext(UserContext);
+  const [users, setUsers] = useState([]);
 
-    const [users, setUsers] = useState([
-    { id: 1, username: 'Asad', email: 'qqqqq@example.com', role: 'User' },
-    { id: 2, username: 'Asad 2', email: 'aaaaa@example.com', role: 'Admin' },
-    { id: 3, username: 'Asad 3', email: 'sssss@example.com', role: 'Moderator' },
-  ]);
-
-  // Fetch users data from the backend
   useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        const response = await axios.get('/api/users'); // Replace with your API endpoint
-        setUsers(response.data.users); // Adjust according to your API's response structure
-      } catch (error) {
-        console.error('Error fetching users:', error);
-      }
-    };
+    if (isAuthenticated === true && userRole === 'owner') {
+      const fetchUsers = async () => {
+        try {
+          const token = localStorage.getItem('authToken');
+          const response = await axios.get('http://127.0.0.1:5500/users', {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
+          setUsers(response.data.users);
+        } catch (error) {
+          console.error('Error fetching users:', error);
+        }
+      };
 
-    fetchUsers();
-  }, []);
+      fetchUsers();
+    }
+  }, [isAuthenticated, userRole]);
 
-  // Approve user action
   const handleApprove = async (userId) => {
     try {
-      const response = await axios.post(`/approve_user/${userId}`); // Replace with your API endpoint
+      const token = localStorage.getItem('authToken');
+      const response = await axios.post(`/approve_user/${userId}`, {}, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
       console.log(response.data.message);
-      // Remove approved user from the list
       setUsers(users.filter((user) => user.id !== userId));
     } catch (error) {
       console.error('Error approving user:', error);
     }
   };
 
+  if (!isAuthenticated || userRole !== 'owner') {
+    return <div>Access Denied. You do not have permission to view this page.</div>;
+  }
+
   return (
-      <div>
-          <Header/>
-    <div className="container">
-      <h2>Approve Users</h2>
-      <table className="table">
-        <thead>
-          <tr>
-            <th>Username</th>
-            <th>Email</th>
-            <th>Role</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          {users.map((user) => (
-            <tr key={user.id}>
-              <td>{user.username}</td>
-              <td>{user.email}</td>
-              <td>{user.role}</td>
-          
-              <td>
-                <button
-                  type="button"
-                  className="btn btn-success"
-                  onClick={() => handleApprove(user.id)}
-                >
-                  Approve
-                </button>
-              </td>
+    <div>
+      <Header />
+      <div className="container">
+        <h2>Approve Users</h2>
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Username</th>
+              <th>Email</th>
+              <th>Role</th>
+              <th>Action</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-    <Footer/>
+          </thead>
+          <tbody>
+            {users.map((user) => (
+              <tr key={user.id}>
+                <td>{user.username}</td>
+                <td>{user.email}</td>
+                <td>{user.role}</td>
+                <td>
+                  <button
+                    type="button"
+                    className="btn btn-success"
+                    onClick={() => handleApprove(user.id)}
+                  >
+                    Approve
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <Footer />
     </div>
   );
 }

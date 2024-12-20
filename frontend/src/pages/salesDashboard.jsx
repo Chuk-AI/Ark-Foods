@@ -148,6 +148,17 @@ const handleAverageCitiesChange = (e) => {
       setCurrentSectionTitle(sectionTitles[sectionId] || 'Unknown Section');
     };
   
+
+//If the user is not authenticated, redirect them to the login page
+    useEffect(() => {
+      const token = localStorage.getItem("authToken");
+      if (!token) {
+        alert("You need to log in to access this dashboard.");
+        window.location.href = "/login";
+      }
+    }, []);
+
+    
     // Scroll Event Listener to Update Active Section
     useEffect(() => {
       const handleScroll = () => {
@@ -227,26 +238,60 @@ const handleAverageCitiesChange = (e) => {
     };
     
 
+    // const fetchBestSellMarket = async (filters) => {
+    //   const { commodity, source, last7Days } = filters;
+    
+    //   try {
+    //     const response = await fetch(
+    //       `/api/best_sell_market?commodity=${commodity}&source=${source}&last7Days=${last7Days}`
+    //     );
+    //     if (!response.ok) {
+    //       throw new Error("Failed to fetch Best Sell Market data");
+    //     }
+    //     const data = await response.json();
+    //     console.log("Fetched Best Sell Market Data:", data.best_market);
+    
+    //     // Update table and chart
+    //     setBestMarketData(data.best_market);
+    //     updateBestSellChart(data.best_market);
+    //   } catch (error) {
+    //     console.error("Error fetching Best Sell Market data:", error);
+    //   }
+    // };
+
     const fetchBestSellMarket = async (filters) => {
       const { commodity, source, last7Days } = filters;
     
       try {
+        const token = localStorage.getItem("authToken"); // Retrieve JWT token
+        if (!token) throw new Error("No token found");
+    
         const response = await fetch(
-          `/api/best_sell_market?commodity=${commodity}&source=${source}&last7Days=${last7Days}`
+          `/api/best_sell_market?commodity=${commodity}&source=${source}&last7Days=${last7Days}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
         );
+    
         if (!response.ok) {
+          if (response.status === 401) {
+            alert("Session expired. Please log in again.");
+            localStorage.removeItem("authToken");
+            window.location.href = "/login";
+          }
           throw new Error("Failed to fetch Best Sell Market data");
         }
-        const data = await response.json();
-        console.log("Fetched Best Sell Market Data:", data.best_market);
     
-        // Update table and chart
+        const data = await response.json();
         setBestMarketData(data.best_market);
         updateBestSellChart(data.best_market);
       } catch (error) {
         console.error("Error fetching Best Sell Market data:", error);
       }
     };
+    
     
       // Update Best Sell Market Chart
       const bestSellChartRef = useRef(null); // Ref for Best Sell Chart
@@ -311,21 +356,48 @@ const handleAverageCitiesChange = (e) => {
   // Fetch Most Recent Prices Data
   const fetchMostRecentPrices = async () => {
     try {
-      const response = await fetch("/api/most_recent_prices");
-      console.log("API Response Status:", response.status);
-
+      const token = localStorage.getItem("authToken");
+      if (!token) throw new Error("No token found");
+  
+      const response = await fetch("/api/most_recent_prices", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+  
       if (!response.ok) {
+        if (response.status === 401) {
+          alert("Session expired. Please log in again.");
+          localStorage.removeItem("authToken");
+          window.location.href = "/login";
+        }
         throw new Error("Failed to fetch most recent prices");
       }
+  
       const data = await response.json();
-      console.log("Fetched Data:", data);
-
       setPrices(data.prices);
     } catch (error) {
       console.error("Error fetching most recent prices:", error);
-      // alert("Failed to load most recent prices. Please try again.");
     }
   };
+  
+  // const fetchMostRecentPrices = async () => {
+  //   try {
+  //     const response = await fetch("/api/most_recent_prices");
+  //     console.log("API Response Status:", response.status);
+
+  //     if (!response.ok) {
+  //       throw new Error("Failed to fetch most recent prices");
+  //     }
+  //     const data = await response.json();
+  //     console.log("Fetched Data:", data);
+
+  //     setPrices(data.prices);
+  //   } catch (error) {
+  //     console.error("Error fetching most recent prices:", error);
+  //     // alert("Failed to load most recent prices. Please try again.");
+  //   }
+  // };
 
  
 
@@ -571,7 +643,6 @@ const handleAverageCitiesChange = (e) => {
     setHistoricalChart(newChart);
   };
   
-
   const fetchHistoricalData = async (filters) => {
     const {
       commodities,
@@ -582,34 +653,75 @@ const handleAverageCitiesChange = (e) => {
       averageCommodities,
       averageCities,
     } = filters;
-
-    if (!startDate || !endDate) {
-      // alert("Please select both start and end dates.");
-      return;
-    }
-
-    if (new Date(startDate) > new Date(endDate)) {
-      // alert("Start date cannot be after the end date.");
-      return;
-    }
-
+  
     try {
-      const response = await fetch( 
-        `/api/historical_data?commodities=${commodities.join(",")}&cities=${cities.join(",")}&source=${source}&start_date=${startDate}&end_date=${endDate}&averageCommodities=${averageCommodities}&averageCities=${averageCities}`
+      const token = localStorage.getItem("authToken");
+      if (!token) throw new Error("No token found");
+  
+      const response = await fetch(
+        `/api/historical_data?commodities=${commodities.join(",")}&cities=${cities.join(",")}&source=${source}&start_date=${startDate}&end_date=${endDate}&averageCommodities=${averageCommodities}&averageCities=${averageCities}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
       );
+  
       if (!response.ok) {
+        if (response.status === 401) {
+          alert("Session expired. Please log in again.");
+          localStorage.removeItem("authToken");
+          window.location.href = "/login";
+        }
         throw new Error("Failed to fetch historical data");
       }
-
+  
       const data = await response.json();
-      console.log("API Response:", data);
-
       updateHistoricalChart(data);
     } catch (error) {
       console.error("Error fetching historical data:", error);
-      // alert("Failed to load historical data. Please try again.");
     }
   };
+  
+
+  // const fetchHistoricalData = async (filters) => {
+  //   const {
+  //     commodities,
+  //     cities,
+  //     source,
+  //     startDate,
+  //     endDate,
+  //     averageCommodities,
+  //     averageCities,
+  //   } = filters;
+
+  //   if (!startDate || !endDate) {
+  //     // alert("Please select both start and end dates.");
+  //     return;
+  //   }
+
+  //   if (new Date(startDate) > new Date(endDate)) {
+  //     // alert("Start date cannot be after the end date.");
+  //     return;
+  //   }
+
+  //   try {
+  //     const response = await fetch( 
+  //       `/api/historical_data?commodities=${commodities.join(",")}&cities=${cities.join(",")}&source=${source}&start_date=${startDate}&end_date=${endDate}&averageCommodities=${averageCommodities}&averageCities=${averageCities}`
+  //     );
+  //     if (!response.ok) {
+  //       throw new Error("Failed to fetch historical data");
+  //     }
+
+  //     const data = await response.json();
+  //     console.log("API Response:", data);
+
+  //     updateHistoricalChart(data);
+  //   } catch (error) {
+  //     console.error("Error fetching historical data:", error);
+  //     // alert("Failed to load historical data. Please try again.");
+  //   }
+  // };
 
   const handleDownloadChart = () => {
     if (historicalChart) {

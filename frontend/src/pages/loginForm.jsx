@@ -21,33 +21,33 @@ function LoginForm() {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault(); // Prevent default form submission behavior
-
+    e.preventDefault();
+  
     try {
       const response = await axios.post('http://127.0.0.1:5500/login', form, {
         headers: {
           'Content-Type': 'application/json',
         },
       });
-
-      // Handle successful login
-      setMessages(response.data.message); // Display success message
+  
+      const { token, role, message } = response.data;
+      localStorage.setItem('authToken', token); // Save the token
+      setMessages(message);
       setError(null);
-
-      const { role } = response.data;
-
-      // Update context with login state and redirect
-      login(role);
-      if (role === UserRole.ADMIN) navigate('/admin_dashboard');
-      else if (role === UserRole.OWNER) navigate('/admin_dashboard');
+  
+      login(token); // Call login function to update context
+  
+      // Redirect based on role
+      if (role === UserRole.OWNER) navigate('/admin_dashboard');
+      else if (role === UserRole.ADMIN) navigate('/admin_dashboard');
       else if (role === UserRole.SALES) navigate('/sales_dashboard');
     } catch (err) {
-      // Handle errors
       setMessages(null);
       setError(err.response?.data?.error || 'An error occurred during login.');
       console.error('Login Error:', err.response || err.message);
     }
   };
+  
 
   return (
     <>

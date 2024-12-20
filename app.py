@@ -77,12 +77,27 @@ from dateutil.relativedelta import relativedelta
 import ibmpairs.query as query
 from ibmpairs.client import get_client
 import logging
+from functools import wraps
+from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity, get_jwt
+from sqlalchemy.exc import SQLAlchemyError
+
+
 
 CSV_DIRECTORY = "data/"
 
 # Initialize Flask app
 app = Flask(__name__)
+app.config['JWT_SECRET_KEY'] = 'your_secret_key'  # Replace with a strong secret key
+jwt = JWTManager(app)
 
+
+CORS(app, supports_credentials=True, resources={r"/*": {"origins": "http://localhost:3000"}})
+
+
+
+@jwt.unauthorized_loader
+def custom_unauthorized_response(err):
+    return jsonify({"error": "Unauthorized. Please log in."}), 401
 
 load_dotenv()
 
@@ -100,16 +115,29 @@ print(f"Endpoint: https://api.ibm.com/geospatial/run/na/core/v3/query")
 
 
 # Enable CORS
-CORS(app, supports_credentials=True, origins=["http://localhost:3000"])
+CORS(app, supports_credentials=True, origins=["http://localhost:3000", "http://127.0.0.1"])
 
 
 # Set the secret key for session handling
-app.config["SECRET_KEY"] = "your_secret_key_here"
 
+
+# app.config["SECRET_KEY"] = "your_secret_key_here"
+
+app.config['JWT_BLACKLIST_ENABLED'] = True
+app.config['JWT_BLACKLIST_TOKEN_CHECKS'] = ['access']
+app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=5)
+
+
+blacklist = set()
+
+@jwt.token_in_blocklist_loader
+def check_if_token_in_blacklist(jwt_header, jwt_payload):
+    return jwt_payload['jti'] in blacklist
 # Set session cookie options
-app.config["SESSION_COOKIE_HTTPONLY"] = True  # Prevent access to cookies via JS
-app.config["SESSION_COOKIE_SAMESITE"] = "Lax"  # Adjust SameSite based on needs
-app.config["SESSION_COOKIE_SECURE"] = False   # Set to True in production with HTTPS
+# app.config["SESSION_COOKIE_HTTPONLY"] = True  # Prevent access to cookies via JS
+# app.config["SESSION_COOKIE_SAMESITE"] = "Lax"  # Adjust SameSite based on needs
+# app.config["SESSION_COOKIE_SECURE"] = False   # Set to True in production with HTTPS
+
 
 # Check if DATABASE_URL is present for Heroku's PostgreSQL, otherwise use SQLite for local development
 DATABASE_URL = os.environ.get("DATABASE_URL")
@@ -145,6 +173,14 @@ login_manager.login_view = "login"
 # Initialize Bootstrap for front-end styling
 Bootstrap(app)
 
+
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
 
 # Data Base Models
 class User(UserMixin, db.Model):
@@ -1216,7 +1252,7 @@ class LoginForm(FlaskForm):
 
 # Home page
 @app.route("/")
-@login_required
+@jwt_required()
 def index():
     print("test1")
     if current_user.is_admin():
@@ -1251,7 +1287,7 @@ def get_current_user():
 
 # Dashboards
 @app.route("/admin_dashboard", methods=["GET"])
-@login_required
+@jwt_required()
 def admin_dashboard():
     try:
         # Ensure current_user is available and authenticated
@@ -1276,13 +1312,13 @@ def admin_dashboard():
 
 
 @app.route("/owner_dashboard")
-@login_required
+@jwt_required()
 def owner_dashboard():
     return render_template("owner_dashboard.html")
 
 
 @app.route("/weather_dashboard")
-@login_required
+@jwt_required()
 def weather_dashboard():
     return render_template("weather_dashboard.html")
 
@@ -1334,57 +1370,68 @@ def weather_dashboard():
 #     )
 
 
+
 @app.route("/sales_dashboard", methods=["GET"])
-@login_required
+@jwt_required()
 def sales_dashboard_api():
-    selected_commodity = request.args.get("commodity", "Jalapeno")
-    selected_source = request.args.get("source", "Historical")
+    current_user = get_jwt_identity()
 
-    # Get the most recent year and day
-    latest_year = db.session.query(db.func.max(PriceData.year)).scalar()
-    latest_day = (
-        db.session.query(db.func.max(PriceData.day))
-        .filter_by(year=latest_year)
-        .scalar()
-    )
+    # Role validation (optional)
+    if current_user.get("role") not in ["admin", "sales"]:
+        return jsonify({"error": "Access denied"}), 403
 
-    # Query the best sell market (city with the highest recent price)
-    best_market = (
-        db.session.query(
-            PriceData.city_name,
-            db.func.max(PriceData.price).label("max_price"),
-            PriceData.year,
-            PriceData.day,
+    try:
+        selected_commodity = request.args.get("commodity", "Jalapeno")
+        selected_source = request.args.get("source", "Historical")
+
+        # Get the most recent year and day
+        latest_year = db.session.query(db.func.max(PriceData.year)).scalar()
+        latest_day = (
+            db.session.query(db.func.max(PriceData.day))
+            .filter_by(year=latest_year)
+            .scalar()
         )
-        .filter(
-            PriceData.commodity == selected_commodity,
-            PriceData.source == selected_source,
-            PriceData.year == latest_year,
-            PriceData.day == latest_day,
+
+        # Query the best sell market
+        best_market = (
+            db.session.query(
+                PriceData.city_name,
+                db.func.max(PriceData.price).label("max_price"),
+                PriceData.year,
+                PriceData.day,
+            )
+            .filter(
+                PriceData.commodity == selected_commodity,
+                PriceData.source == selected_source,
+                PriceData.year == latest_year,
+                PriceData.day == latest_day,
+            )
+            .group_by(PriceData.city_name, PriceData.year, PriceData.day)
+            .order_by(db.desc("max_price"))
+            .all()
         )
-        .group_by(PriceData.city_name, PriceData.year, PriceData.day)
-        .order_by(db.desc("max_price"))
-        .all()
-    )
 
-    # Format the result into a JSON-compatible structure
-    formatted_best_market = [
-        {
-            "city_name": item.city_name,
-            "max_price": item.max_price,
-            "year": item.year,
-            "day": item.day,
-            "formatted_date": datetime(item.year, 1, 1) + timedelta(days=item.day - 1)
-        }
-        for item in best_market
-    ] if best_market else []
+        # Format the result
+        formatted_best_market = [
+            {
+                "city_name": item.city_name,
+                "max_price": item.max_price,
+                "year": item.year,
+                "day": item.day,
+                "formatted_date": (datetime(item.year, 1, 1) + timedelta(days=item.day - 1)).strftime("%Y-%m-%d"),
+            }
+            for item in best_market
+        ] if best_market else []
 
-    # Return the result as JSON
-    return jsonify({
-        "best_market": formatted_best_market,
-        "selected_commodity": selected_commodity,
-        "selected_source": selected_source,
-    })
+        return jsonify({
+            "best_market": formatted_best_market,
+            "selected_commodity": selected_commodity,
+            "selected_source": selected_source,
+        })
+
+    except SQLAlchemyError as e:
+        return jsonify({"error": "Database query failed", "details": str(e)}), 500
+
 
 
 # Registration route
@@ -1456,32 +1503,6 @@ def register():
 #     return render_template("register.html", form=form)
 
 
-# Login route with proper handling for session
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    try:
-        data = request.json
-        email = data.get("email")
-        password = data.get("password")
-
-        # Validate email and password
-        user = User.query.filter_by(email=email).first()
-        if user and check_password_hash(user.password, password):
-            if not user.approved:
-                return jsonify({"error": "Account not approved."}), 403
-
-            login_user(user)
-
-            return jsonify({
-                "message": "Login successful!",
-                "role": user.role,  # Returns 'owner', 'sales', or 'admin'
-                "username": user.username
-            }), 200
-        else:
-            return jsonify({"error": "Invalid credentials."}), 401
-    except Exception as e:
-        app.logger.error(f"Login error: {str(e)}")
-        return jsonify({"error": "An unexpected error occurred"}), 500
 
 
 # @app.route("/login", methods=["GET", "POST"])
@@ -1511,58 +1532,154 @@ def login():
 #             session["username"] = user.username
 #             session["role"] = user.role
 #             session.permanent = True
+#             session['user_id'] = user.id
 
 #             return jsonify({
 #                 "message": "Login successful!",
 #                 "role": user.role,
-#                 "username": user.username
+#                 "username": user.username,
+#                 "user_id": user.id,
 #             }), 200
 #         else:
 #             return jsonify({"error": "Invalid email or password"}), 401
 #     except Exception as e:
 #         return jsonify({"error": str(e)}), 500
 
+@app.route("/protected", methods=["GET"])
+@jwt_required()
+def protected():
+    current_user = get_jwt_identity()
+    return jsonify({"logged_in_as": current_user}), 200
+
+
+from flask_jwt_extended import create_access_token
+from datetime import timedelta
+
+@app.route("/login", methods=["POST"])
+def login():
+    try:
+        # Parse JSON data from the request
+        data = request.json
+        email = data.get("email")
+        password = data.get("password")
+
+        # Check if email and password are provided
+        if not email or not password:
+            return jsonify({"error": "Email and password are required"}), 400
+
+        # Fetch the user from the database
+        user = User.query.filter_by(email=email).first()
+
+        # Validate the user and password
+        if user and check_password_hash(user.password, password):
+            if not user.approved:
+                return jsonify({"error": "Your account is not approved yet. Please wait for approval."}), 403
+
+            # Create a JWT access token with an expiration time
+        
+            access_token = create_access_token(
+    identity=str(user.id),  # Use user.id or a unique string identifier
+    additional_claims={"username": user.username, "role": user.role},
+    expires_delta=timedelta(hours=5)
+)
+
+            return jsonify({
+                "message": "Login successful!",
+                "token": access_token,
+                "role": user.role,
+                "username": user.username,
+                "user_id": user.id,
+            }), 200
+        else:
+            return jsonify({"error": "Invalid email or password"}), 401
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 
 # Logout route
-@app.route("/logout")
-@login_required
-def logout():
-    session.clear()  # Clear the session on logout
-    logout_user()
-    flash("You have been logged out.", "info")
-    return redirect(url_for("login"))
 
+@app.route("/logout", methods=["POST"])
+@jwt_required()
+def logout():
+    # Add the token's JTI (unique identifier) to the blacklist
+    jti = get_jwt()["jti"]
+    blacklist.add(jti)
+    return jsonify({"message": "Successfully logged out"}), 200
 
 # Route for approving users
-@app.route("/approve_users")
-@login_required
-def approve_users():
-    if not current_user.is_admin() and not current_user.is_owner():
-        flash("Access denied! You do not have permission to approve users.", "danger")
-        return redirect(url_for("index"))
 
-    unapproved_users = User.query.filter_by(approved=False).all()
-    return render_template("approve_users.html", users=unapproved_users)
+
+@app.route("/users", methods=["GET"])
+@jwt_required()
+def approve_users():
+    try:
+        current_user_id = get_jwt_identity()  # Fetch the identity (user ID)
+        claims = get_jwt()  # Fetch additional claims
+
+        # Check role
+        if claims['role'] not in ['admin', 'owner']:
+            return jsonify({"error": "Access denied"}), 403
+
+        # Fetch unapproved users
+        unapproved_users = User.query.filter_by(approved=False).all()
+        users = [{"id": user.id, "username": user.username, "email": user.email, "role": user.role} for user in unapproved_users]
+
+        return jsonify({"users": users}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 
 @app.route("/approve_user/<int:user_id>", methods=["POST"])
-@login_required
+@jwt_required()
 def approve_user(user_id):
-    if not current_user.is_admin() and not current_user.is_owner():
-        flash("Access denied! You do not have permission to approve users.", "danger")
-        return redirect(url_for("index"))
+    try:
+        current_user = get_jwt_identity()  # Fetch identity from the token
+        claims = get_jwt()  # Fetch additional claims
 
-    user = User.query.get_or_404(user_id)
-    user.approved = True
-    db.session.commit()
-    flash(f"{user.username} has been approved.", "success")
-    return redirect(url_for("approve_users"))
+        # Check if the current user is an owner
+        if claims['role'] != 'owner':
+            return jsonify({"error": "Access denied"}), 403
+
+        # Fetch the user to be approved
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+
+        user.approved = True  # Approve the user
+        db.session.commit()
+
+        return jsonify({"message": f"User {user.username} approved successfully."}), 200
+    except Exception as e:
+        print(f"Error approving user: {e}")  # Debug log
+        return jsonify({"error": "An error occurred while approving the user."}), 500
+
+
+
+# @app.route("/users", methods=["GET"])
+# # @login_required
+# def approve_users():
+#     # Check if the user is authenticated
+#     if not current_user.is_authenticated:
+#         return jsonify({"error": "User not authenticated"}), 401
+
+#     # Check if the user is an admin or owner
+#     if not current_user.is_admin() and not current_user.is_owner():
+#         return jsonify({"error": "Access denied!"}), 403
+
+#     # Fetch unapproved users
+#     unapproved_users = User.query.filter_by(approved=False).all()
+#     users = [
+#         {"id": user.id, "username": user.username, "email": user.email, "role": user.role}
+#         for user in unapproved_users
+#     ]
+#     return jsonify({"users": users}), 200
 
 
 # FrontEND API internal
 @app.route("/api/best_sell_market", methods=["GET"])
-@login_required
+@jwt_required()
 def api_best_sell_market():
     selected_commodity = request.args.get("commodity", "Jalapeno")
     selected_source = request.args.get("source", "USDA")  # Default to USDA
@@ -1666,7 +1783,7 @@ def api_best_sell_market():
 
 
 @app.route("/api/most_recent_prices", methods=["GET"])
-@login_required
+@jwt_required()
 def api_most_recent_prices():
     # List of cities and commodities
     cities = [
@@ -2288,7 +2405,7 @@ def calculate_forecast():
 
 # API FOR Forecast visual
 @app.route("/api/seasonal_prices", methods=["GET"])
-@login_required
+@jwt_required()
 def get_seasonal_prices():
     variety = request.args.get("variety")
     city = request.args.get("city")
@@ -2337,7 +2454,7 @@ def get_seasonal_prices():
 
 
 @app.route("/api/sales_seasonal_prices", methods=["GET"])
-@login_required
+@jwt_required()
 def get_sales_seasonal_prices():
     commodities_str = request.args.get("commodities")
     cities_str = request.args.get("cities")

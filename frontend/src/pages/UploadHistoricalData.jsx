@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import 'bootstrap/dist/css/bootstrap.min.css'; // Import Bootstrap CSS directly
 import '../styles/styles.css'
+import Layout from '../components/layout';
 
 function UploadHistoricalData() {
   const [commodity, setCommodity] = useState('');
@@ -42,7 +43,8 @@ function UploadHistoricalData() {
 
   return (
 
-    
+    <Layout isAuthenticated={true} isAdmin={true} isOwner={false}>
+
     <div className="container mt-5">
       <h1 className="text-center">Upload Historical Data</h1>
       <hr />
@@ -103,6 +105,8 @@ function UploadHistoricalData() {
       </form>
       
     </div>
+    </Layout>
+
   );
 }
 
