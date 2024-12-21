@@ -88,7 +88,7 @@ logging.basicConfig(
 CSV_DIRECTORY = "data/"
 
 # Initialize Flask app
-app = Flask(__name__, static_folder="./frontend/build")
+app = Flask(__name__, static_folder= 'frontend/build', static_url_path="/")
 app.config['JWT_SECRET_KEY'] = 'your_secret_key'  # Replace with a strong secret key
 jwt = JWTManager(app)
 
