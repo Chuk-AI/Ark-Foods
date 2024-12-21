@@ -40,9 +40,16 @@
   overflow-y: auto; 
   
 }
-#seasonalChart{
- position: relative;
- left: 350px;
+
+#seasonalChart {
+  width: 800px !important;
+  height: 500px !important;
+  
+}
+.seasonal-body {
+  display: flex;
+  justify-content: center; /* Centers horizontally */
+  align-items: center;    /* Centers vertically */
 }
 .sidebar.collapsed #filters-content {
   opacity: 0;

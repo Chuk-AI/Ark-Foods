@@ -11,6 +11,7 @@ import { useEffect, useState, useRef } from 'react';
 import '../styles/sales_styles.css'
 import Header from "../components/header";
 import Footer from '../components/footer'
+import '../styles/sales_styles.css';
 
 
 function SalesDashboard() {
@@ -149,7 +150,7 @@ const handleAverageCitiesChange = (e) => {
     };
   
 
-//If the user is not authenticated, redirect them to the login page
+//
     useEffect(() => {
       const token = localStorage.getItem("authToken");
       if (!token) {
@@ -493,6 +494,9 @@ const handleAverageCitiesChange = (e) => {
               label: "Average Seasonal Prices",
               data: [data.Spring || 0, data.Summer || 0, data.Autumn || 0, data.Winter || 0],
               backgroundColor: ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0"],
+              borderWidth: 0.3,
+              barPercentage: 0.4,
+              categoryPercentage: 1,
             },
           ],
         },
@@ -679,7 +683,7 @@ const handleAverageCitiesChange = (e) => {
       const data = await response.json();
       updateHistoricalChart(data);
     } catch (error) {
-      console.error("Error fetching historical data:", error);
+      console.log(" historical data");
     }
   };
   
@@ -750,15 +754,7 @@ const handleAverageCitiesChange = (e) => {
   
 
   const handleApplyHistoricalFilters = () => {
-    console.log("Current Filters:", {
-      commodities,
-      cities,
-      source,
-      startDate,
-      endDate,
-      averageCommodities,
-      averageCities,
-    });
+ 
   
    
     setAppliedHistoricalFilters(historicalFilterState); // Apply current filter state
@@ -1063,7 +1059,6 @@ const handleAverageCitiesChange = (e) => {
           type="date"
           id="startDateFilterHistorical"
           className="form-control"
-          defaultValue="2024-11-01"
           placeholder="YYYY-MM-DD"
           value={historicalFilterState.startDate}
           onChange={handleHistoricalStartDateChange}
@@ -1080,7 +1075,6 @@ const handleAverageCitiesChange = (e) => {
           type="date"
           id="endDateFilterHistorical"
           className="form-control"
-          defaultValue="2024-11-21"
           placeholder="YYYY-MM-DD"
           value={historicalFilterState.endDate}
           onChange={handleHistoricalEndDateChange}
@@ -1233,8 +1227,7 @@ const handleAverageCitiesChange = (e) => {
               </button>
             </div>
             <div className="card-body seasonal-body">
-              {/* <canvas id="seasonalChart" width="400" height="400"></canvas> */}
-              <canvas id="seasonalChart" ref={seasonalChartRef} width="400" height="400"></canvas>
+              <canvas id="seasonalChart" ref={seasonalChartRef} width="100" height="100"></canvas>
 
             </div>
           </div>

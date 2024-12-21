@@ -2474,7 +2474,7 @@ def get_seasonal_prices():
 
 
 @app.route("/api/sales_seasonal_prices", methods=["GET"])
-@jwt_required()
+# @jwt_required()
 def get_sales_seasonal_prices():
     commodities_str = request.args.get("commodities")
     cities_str = request.args.get("cities")

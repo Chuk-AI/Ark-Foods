@@ -298,3 +298,6 @@ footer::before {
 #navbarNav{
   justify-content: flex-end;
 }
+.logo{
+  margin-top: 15px;
+}
