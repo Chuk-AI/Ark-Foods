@@ -15,7 +15,7 @@ import Header from './components/header';
 import ProtectedRoute from './components/protectedRoute'
 
 // Axios Defaults
-axios.defaults.baseURL = "http://127.0.0.1:5500";
+axios.defaults.baseURL = "https://ark-foods-0594c413a329.herokuapp.com"; // Heroku backend
 axios.defaults.withCredentials = true;
 
 // Add Authorization header for all requests
