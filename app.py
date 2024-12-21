@@ -100,14 +100,16 @@ def serve(path):
     else:
         return send_from_directory(app.static_folder, "index.html")
 
+
+
 CORS(
     app,
     supports_credentials=True,
     resources={
         r"/api/*": {
             "origins": [
-                "http://localhost:3000",  # Local development frontend
-                "https://ark-foods-0594c413a329.herokuapp.com",  # Deployed frontend on Heroku
+                "http://localhost:3000",  # Local frontend
+                "https://ark-foods-0594c413a329.herokuapp.com",  # Production frontend
             ]
         }
     },
