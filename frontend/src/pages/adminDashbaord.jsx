@@ -26,7 +26,7 @@ function AdminDashboard() {
         }
   
         // Fetch user data with Authorization header
-        const response = await axios.get("/current_user", {
+        const response = await axios.get("/api/current_user", {
           headers: {
             Authorization: `Bearer ${token}`,
           },

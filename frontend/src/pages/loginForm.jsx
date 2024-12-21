@@ -24,7 +24,7 @@ function LoginForm() {
     e.preventDefault();
   
     try {
-      const response = await axios.post('http://127.0.0.1:5500/login', form, {
+      const response = await axios.post('/api/login', form, {
         headers: {
           'Content-Type': 'application/json',
         },

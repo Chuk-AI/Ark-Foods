@@ -55,11 +55,6 @@ import json
 from dateutil.relativedelta import relativedelta
 
 
-# Configuration for Logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
-
 # Imports for Weather Forecasting
 import time
 import numpy as np
@@ -80,16 +75,30 @@ import logging
 from functools import wraps
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity, get_jwt
 from sqlalchemy.exc import SQLAlchemyError
+from flask import send_from_directory
 
+
+
+# Configuration for Logging
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 
 CSV_DIRECTORY = "data/"
 
 # Initialize Flask app
-app = Flask(__name__)
+app = Flask(__name__, static_folder="frontend/build")
 app.config['JWT_SECRET_KEY'] = 'your_secret_key'  # Replace with a strong secret key
 jwt = JWTManager(app)
 
+@app.route("/", defaults={"path": ""})
+@app.route("/<path:path>")
+def serve(path):
+    if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
+        return send_from_directory(app.static_folder, path)
+    else:
+        return send_from_directory(app.static_folder, "index.html")
 
 CORS(app, supports_credentials=True, resources={r"/*": {"origins": "http://localhost:3000"}})
 
@@ -1250,8 +1259,9 @@ class LoginForm(FlaskForm):
 #     return jsonify(user_list)
 
 
+
 # Home page
-@app.route("/")
+@app.route("/api/")
 @jwt_required()
 def index():
     print("test1")
@@ -1265,7 +1275,7 @@ def index():
 
 
 # Current user route
-@app.route("/current_user", methods=["GET"])
+@app.route("/api/current_user", methods=["GET"])
 def get_current_user():
     print("Current User:", current_user)  # Debugging
     print("Is Authenticated:", current_user.is_authenticated)  # Check if true
@@ -1286,7 +1296,7 @@ def get_current_user():
 
 
 # Dashboards
-@app.route("/admin_dashboard", methods=["GET"])
+@app.route("/api/admin_dashboard", methods=["GET"])
 @jwt_required()
 def admin_dashboard():
     try:
@@ -1311,13 +1321,13 @@ def admin_dashboard():
 #     return render_template("admin_dashboard.html")
 
 
-@app.route("/owner_dashboard")
+@app.route("/api/owner_dashboard")
 @jwt_required()
 def owner_dashboard():
     return render_template("owner_dashboard.html")
 
 
-@app.route("/weather_dashboard")
+@app.route("/api/weather_dashboard")
 @jwt_required()
 def weather_dashboard():
     return render_template("weather_dashboard.html")
@@ -1371,7 +1381,7 @@ def weather_dashboard():
 
 
 
-@app.route("/sales_dashboard", methods=["GET"])
+@app.route("/api/sales_dashboard", methods=["GET"])
 @jwt_required()
 def sales_dashboard_api():
     current_user = get_jwt_identity()
@@ -1435,7 +1445,7 @@ def sales_dashboard_api():
 
 
 # Registration route
-@app.route("/register", methods=["POST"])
+@app.route("/api/register", methods=["POST"])
 def register():
     try:
         # Parse JSON data from the request
@@ -1545,7 +1555,7 @@ def register():
 #     except Exception as e:
 #         return jsonify({"error": str(e)}), 500
 
-@app.route("/protected", methods=["GET"])
+@app.route("/api/protected", methods=["GET"])
 @jwt_required()
 def protected():
     current_user = get_jwt_identity()
@@ -1555,7 +1565,7 @@ def protected():
 from flask_jwt_extended import create_access_token
 from datetime import timedelta
 
-@app.route("/login", methods=["POST"])
+@app.route("/api/login", methods=["POST"])
 def login():
     try:
         # Parse JSON data from the request
@@ -1599,7 +1609,7 @@ def login():
 
 # Logout route
 
-@app.route("/logout", methods=["POST"])
+@app.route("/api/logout", methods=["POST"])
 @jwt_required()
 def logout():
     # Add the token's JTI (unique identifier) to the blacklist
@@ -1610,7 +1620,7 @@ def logout():
 # Route for approving users
 
 
-@app.route("/users", methods=["GET"])
+@app.route("/api/users", methods=["GET"])
 @jwt_required()
 def approve_users():
     try:
@@ -1631,7 +1641,7 @@ def approve_users():
 
 
 
-@app.route("/approve_user/<int:user_id>", methods=["POST"])
+@app.route("/api/approve_user/<int:user_id>", methods=["POST"])
 @jwt_required()
 def approve_user(user_id):
     try:
@@ -2551,7 +2561,7 @@ def get_sales_seasonal_prices():
 
 
 # TEST ROUTE
-@app.route("/trigger_usda_fetch", methods=["GET"])
+@app.route("/api/trigger_usda_fetch", methods=["GET"])
 def trigger_usda_fetch():
     fetch_usda_daily_data()
     fetch_daily_data()
@@ -2564,7 +2574,7 @@ def allowed_file(filename):
 
 
 # Route for uploading historical data automatically on route trigger
-@app.route("/upload_historical", methods=["GET"])
+@app.route("/api/upload_historical", methods=["GET"])
 def upload_historical():
     try:
         # Log when the upload process starts

@@ -92,7 +92,7 @@ function ApproveUsers() {
       const fetchUsers = async () => {
         try {
           const token = localStorage.getItem('authToken');
-          const response = await axios.get('http://127.0.0.1:5500/users', {
+          const response = await axios.get('/api/users', {
             headers: {
               Authorization: `Bearer ${token}`,
             },
@@ -110,7 +110,7 @@ function ApproveUsers() {
   const handleApprove = async (userId) => {
     try {
       const token = localStorage.getItem('authToken');
-      const response = await axios.post(`/approve_user/${userId}`, {}, {
+      const response = await axios.post(`/api/approve_user/${userId}`, {}, {
         headers: {
           Authorization: `Bearer ${token}`,
         },

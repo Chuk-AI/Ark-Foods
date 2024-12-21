@@ -40,7 +40,7 @@ function RegisterForm() {
     }
 
     try {
-      const response = await axios.post("/register", form, {
+      const response = await axios.post("/api/register", form, {
         headers: {
           "Content-Type": "application/json",
         },
