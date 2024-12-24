@@ -14,7 +14,6 @@ import WeatherPage from './pages/WeatherPage'
 
 // Axios Defaults
 axios.defaults.baseURL = "https://ark-foods-0594c413a329.herokuapp.com"; // Heroku backend
-axios.defaults.baseURL = "http://127.0.0.1:5500"
 
 // Add Authorization header for all requests
 axios.interceptors.request.use((config) => {
