@@ -146,7 +146,7 @@ CORS(app, supports_credentials=True, origins=["http://localhost:3000", "http://1
 
 app.config['JWT_BLACKLIST_ENABLED'] = True
 app.config['JWT_BLACKLIST_TOKEN_CHECKS'] = ['access']
-app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=5)
+app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1)
 
 
 blacklist = set()

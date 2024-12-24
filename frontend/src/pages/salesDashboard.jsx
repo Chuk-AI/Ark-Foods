@@ -12,7 +12,6 @@ import '../styles/sales_styles.css'
 import Header from "../components/header";
 import Footer from '../components/footer'
 import '../styles/sales_styles.css';
-import WeatherDashboard from "../components/WeatherCharts";
 
 
 function SalesDashboard() {
@@ -45,7 +44,7 @@ function SalesDashboard() {
     const [averageCommodities, setAverageCommodities] = useState(false);
     const [averageCities, setAverageCities] = useState(false);
     const [historicalChart, setHistoricalChart] = useState(null);  
-    const [shippingPointPriceChart, setShippingPointPriceChart] = useState(null);
+    // const [shippingPointPriceChart, setShippingPointPriceChart] = useState(null);
 
     const [filterState, setFilterState] = useState({
       commodity: "Anaheim",
@@ -80,15 +79,6 @@ function SalesDashboard() {
       averageCities: false,
     });
 
-    const [weatherCity, setWeatherCity] = useState("26.4187,-81.4173");
-    const [weatherStartDate, setWeatherStartDate] = useState("");
-    const [weatherEndDate, setWeatherEndDate] = useState("");
-    const [temperatureUnit, setTemperatureUnit] = useState("C");
-  
-    // Refs for Charts
-    const weatherPrecipChartRef = useRef(null);
-    const weatherTempChartRef = useRef(null);
-    const weatherEnsembleChartRef = useRef(null);
     
 // best sell market
     const handleCommodityChange = (e) => {
@@ -151,7 +141,6 @@ const handleAverageCitiesChange = (e) => {
       'best-sell-market-section': 'Best Sell Market',
       'seasonal-trends-section': 'Seasonal Trends',
       'historical-data-section': 'Historical Data',
-      'weather-dashboard-section': 'Weather Dashboard',
       'most-recent-price-section': 'Most Recent Price',
     };
   
@@ -779,151 +768,151 @@ const handleAverageCitiesChange = (e) => {
   }, []);
   
   
-  const shippingPointPriceChartRef = useRef(null);
+  // const shippingPointPriceChartRef = useRef(null);
 
-  const updateShippingPointPriceChart = (chartData) => {
-    if (!shippingPointPriceChartRef.current) {
-      console.error("Canvas element not found");
-      return;
-    }
+  // const updateShippingPointPriceChart = (chartData) => {
+  //   if (!shippingPointPriceChartRef.current) {
+  //     console.error("Canvas element not found");
+  //     return;
+  //   }
   
-    const ctx = shippingPointPriceChartRef.current.getContext("2d");
+  //   const ctx = shippingPointPriceChartRef.current.getContext("2d");
   
-    if (shippingPointPriceChart) {
-      shippingPointPriceChart.destroy();
-    }
+  //   if (shippingPointPriceChart) {
+  //     shippingPointPriceChart.destroy();
+  //   }
   
-    if (!chartData.labels.length || !chartData.datasets.length) {
-      alert("No data available for the Shipping Point Price chart.");
-      return;
-    }
+  //   if (!chartData.labels.length || !chartData.datasets.length) {
+  //     alert("No data available for the Shipping Point Price chart.");
+  //     return;
+  //   }
   
-    const datasets = chartData.datasets.map((dataset, index) => ({
-      ...dataset,
-      fill: false,
-      tension: 0.1,
-      borderWidth: 2,
-      pointRadius: 3,
-      pointHoverRadius: 5,
-      spanGaps: true,
-      borderColor: dataset.borderColor || getColor(index),
-      backgroundColor: dataset.backgroundColor || getColor(index),
-    }));
+  //   const datasets = chartData.datasets.map((dataset, index) => ({
+  //     ...dataset,
+  //     fill: false,
+  //     tension: 0.1,
+  //     borderWidth: 2,
+  //     pointRadius: 3,
+  //     pointHoverRadius: 5,
+  //     spanGaps: true,
+  //     borderColor: dataset.borderColor || getColor(index),
+  //     backgroundColor: dataset.backgroundColor || getColor(index),
+  //   }));
   
-    const newChart = new Chart(ctx, {
-      type: "line",
-      data: {
-        labels: chartData.labels,
-        datasets: datasets,
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-          x: {
-            display: true,
-            type: "category",
-            grid: { display: true, drawBorder: true, color: "#E0E0E0" },
-            ticks: {
-              display: true,
-              maxTicksLimit: 10,
-              color: "#666666",
-              padding: 10,
-              autoSkip: true,
-              maxRotation: 45,
-              minRotation: 45,
-            },
-            title: {
-              display: true,
-              text: "Date",
-              color: "#666666",
-              padding: { top: 10, bottom: 10 },
-            },
-          },
-          y: {
-            display: true,
-            position: "left",
-            grid: { display: true, drawBorder: true, color: "#E0E0E0" },
-            ticks: {
-              display: true,
-              color: "#666666",
-              padding: 10,
-              callback: (value) => `$${value.toFixed(2)}`,
-            },
-            title: {
-              display: true,
-              text: "Price ($)",
-              color: "#666666",
-              padding: { top: 10, bottom: 10 },
-            },
-          },
-        },
-        plugins: {
-          tooltip: {
-            enabled: true,
-            mode: "index",
-            intersect: false,
-            backgroundColor: "rgba(255, 255, 255, 0.9)",
-            titleColor: "#666666",
-            bodyColor: "#666666",
-            borderColor: "#E0E0E0",
-            borderWidth: 1,
-            padding: 10,
-            callbacks: {
-              title: (context) => moment(context[0].label).format("MMM D, YYYY"),
-              label: (context) =>
-                `${context.dataset.label}: $${context.parsed.y.toFixed(2)}`,
-            },
-          },
-          legend: {
-            display: true,
-            position: "top",
-            align: "center",
-            labels: {
-              boxWidth: 12,
-              padding: 15,
-              color: "#666666",
-              font: { size: 11 },
-            },
-          },
-        },
-        interaction: { mode: "index", intersect: false },
-      },
-    });
+  //   const newChart = new Chart(ctx, {
+  //     type: "line",
+  //     data: {
+  //       labels: chartData.labels,
+  //       datasets: datasets,
+  //     },
+  //     options: {
+  //       responsive: true,
+  //       maintainAspectRatio: false,
+  //       scales: {
+  //         x: {
+  //           display: true,
+  //           type: "category",
+  //           grid: { display: true, drawBorder: true, color: "#E0E0E0" },
+  //           ticks: {
+  //             display: true,
+  //             maxTicksLimit: 10,
+  //             color: "#666666",
+  //             padding: 10,
+  //             autoSkip: true,
+  //             maxRotation: 45,
+  //             minRotation: 45,
+  //           },
+  //           title: {
+  //             display: true,
+  //             text: "Date",
+  //             color: "#666666",
+  //             padding: { top: 10, bottom: 10 },
+  //           },
+  //         },
+  //         y: {
+  //           display: true,
+  //           position: "left",
+  //           grid: { display: true, drawBorder: true, color: "#E0E0E0" },
+  //           ticks: {
+  //             display: true,
+  //             color: "#666666",
+  //             padding: 10,
+  //             callback: (value) => `$${value.toFixed(2)}`,
+  //           },
+  //           title: {
+  //             display: true,
+  //             text: "Price ($)",
+  //             color: "#666666",
+  //             padding: { top: 10, bottom: 10 },
+  //           },
+  //         },
+  //       },
+  //       plugins: {
+  //         tooltip: {
+  //           enabled: true,
+  //           mode: "index",
+  //           intersect: false,
+  //           backgroundColor: "rgba(255, 255, 255, 0.9)",
+  //           titleColor: "#666666",
+  //           bodyColor: "#666666",
+  //           borderColor: "#E0E0E0",
+  //           borderWidth: 1,
+  //           padding: 10,
+  //           callbacks: {
+  //             title: (context) => moment(context[0].label).format("MMM D, YYYY"),
+  //             label: (context) =>
+  //               `${context.dataset.label}: $${context.parsed.y.toFixed(2)}`,
+  //           },
+  //         },
+  //         legend: {
+  //           display: true,
+  //           position: "top",
+  //           align: "center",
+  //           labels: {
+  //             boxWidth: 12,
+  //             padding: 15,
+  //             color: "#666666",
+  //             font: { size: 11 },
+  //           },
+  //         },
+  //       },
+  //       interaction: { mode: "index", intersect: false },
+  //     },
+  //   });
   
-    setShippingPointPriceChart(newChart);
-  };
+  //   setShippingPointPriceChart(newChart);
+  // };
 
-  const fetchShippingPointPriceData = async (filters) => {
-    try {
-      const token = localStorage.getItem("authToken");
-      if (!token) throw new Error("No token found");
+  // const fetchShippingPointPriceData = async (filters) => {
+  //   try {
+  //     const token = localStorage.getItem("authToken");
+  //     if (!token) throw new Error("No token found");
   
-      const response = await fetch(`/api/shipping_point_price_data`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+  //     const response = await fetch(`/api/shipping_point_price_data`, {
+  //       headers: {
+  //         Authorization: `Bearer ${token}`,
+  //       },
+  //     });
   
-      if (!response.ok) {
-        if (response.status === 401) {
-          alert("Session expired. Please log in again.");
-          localStorage.removeItem("authToken");
-          window.location.href = "/login";
-        }
-        throw new Error("Failed to fetch Shipping Point Price data");
-      }
+  //     if (!response.ok) {
+  //       if (response.status === 401) {
+  //         alert("Session expired. Please log in again.");
+  //         localStorage.removeItem("authToken");
+  //         window.location.href = "/login";
+  //       }
+  //       throw new Error("Failed to fetch Shipping Point Price data");
+  //     }
   
-      const data = await response.json();
-      updateShippingPointPriceChart(data);
-    } catch (error) {
-      console.error("Error fetching Shipping Point Price data:", error);
-    }
-  };
+  //     const data = await response.json();
+  //     updateShippingPointPriceChart(data);
+  //   } catch (error) {
+  //     console.error("Error fetching Shipping Point Price data:", error);
+  //   }
+  // };
 
-  useEffect(() => {
-    fetchShippingPointPriceData();
-  }, []);
+  // useEffect(() => {
+  //   fetchShippingPointPriceData();
+  // }, []);
   
   return (
       <div>
