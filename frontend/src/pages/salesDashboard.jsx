@@ -556,7 +556,7 @@ const handleAverageCitiesChange = (e) => {
       fill: false,
       tension: 0.1,
       borderWidth: 2,
-      pointRadius: 3,
+      pointRadius: 0,
       pointHoverRadius: 5,
       spanGaps: true,
       borderColor: dataset.borderColor || getColor(index),
@@ -586,6 +586,7 @@ const handleAverageCitiesChange = (e) => {
               maxRotation: 45,
               minRotation: 45,
             },
+
             title: {
               display: true,
               text: "Date",
@@ -639,6 +640,10 @@ const handleAverageCitiesChange = (e) => {
               font: { size: 11 },
             },
           },
+          
+        datalabels: {
+          display: false, // Globally disable datalabels
+        },
         },
         interaction: { mode: "index", intersect: false },
       },

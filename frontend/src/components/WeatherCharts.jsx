@@ -111,7 +111,6 @@ const WeatherCharts = () => {
 
     return data;
   };
-
   const renderCharts = (data) => {
     console.log("Data passed to renderCharts:", data);
 
@@ -132,7 +131,7 @@ const WeatherCharts = () => {
     } else {
       console.error("Missing precipitation data.");
     }
-  
+
     // Render Temperature Chart if data is available
     if (data.forecast_data.TAVG && data.forecast_data.TAVG.dates?.length) {
       const tempLabel = unit === "C" ? "Temperature (°C)" : "Temperature (°F)";
@@ -151,32 +150,33 @@ const WeatherCharts = () => {
     } else {
       console.error("Missing temperature data.");
     }
-  
+
     // Render Ensemble Analysis Chart if data is available
     const sortedEnsembleTotals = data.accumulation_data?.ensemble_totals || [];
     const climatologyValue = data.accumulation_data?.accumulated_climo_precip || 0;
-  
+
     if (sortedEnsembleTotals.length) {
       createBarChart(ensembleChartRef, sortedEnsembleTotals, climatologyValue);
     } else {
       console.error("No ensemble totals available.");
     }
   };
-  
+
   const createLineChart = (ref, labels, datasets, label, colors) => {
     if (ref.current.chartInstance) {
       ref.current.chartInstance.destroy();
     }
-  
+
     const ctx = ref.current.getContext("2d");
-  
+
     const datasetArray = Object.keys(datasets).map((key, index) => ({
       label: key,
-      data: datasets[key] || [], // Default to empty array if data is missing
+      data: datasets[key] || [],
       borderColor: colors[index],
       fill: false,
+      pointRadius: 0, // Remove points on the line
     }));
-  
+
     ref.current.chartInstance = new Chart(ctx, {
       type: "line",
       data: { labels, datasets: datasetArray },
@@ -185,22 +185,21 @@ const WeatherCharts = () => {
           x: { type: "time", time: { unit: "day" } },
           y: { title: { display: true, text: label } },
         },
-        plugins: { legend: { display: true, position: "top" } },
+        plugins: {
+          legend: { display: true, position: "top" },
+          datalabels: { display: false }, // Disable datalabels globally
+        },
       },
     });
   };
-  
+
   const createBarChart = (ref, totals, climatologyValue) => {
     if (ref.current.chartInstance) {
       ref.current.chartInstance.destroy();
     }
-  
+
     const ctx = ref.current.getContext("2d");
-    const belowClimatology = totals.filter((val) => val < climatologyValue).length;
-    const aboveClimatology = totals.length - belowClimatology;
-    const probability = (Math.max(belowClimatology, aboveClimatology) / totals.length) * 100;
-    const probabilityText = `Probability: ${probability.toFixed(2)}% chance of exceeding climatology.`;
-  
+
     ref.current.chartInstance = new Chart(ctx, {
       type: "bar",
       data: {
@@ -213,6 +212,7 @@ const WeatherCharts = () => {
             type: "line",
             borderColor: "blue",
             borderWidth: 2,
+            pointRadius: 0, // Remove points on the line
           },
         ],
       },
@@ -220,9 +220,10 @@ const WeatherCharts = () => {
         plugins: {
           tooltip: {
             callbacks: {
-              afterBody: () => probabilityText,
+              afterBody: () => `Probability: Calculated dynamically.`,
             },
           },
+          datalabels: { display: false }, // Disable datalabels globally
         },
         scales: {
           x: { title: { display: true, text: "Ensemble Members" } },
@@ -231,7 +232,7 @@ const WeatherCharts = () => {
       },
     });
   };
-  
+
   
   return (
     <div>
@@ -261,11 +262,21 @@ const WeatherCharts = () => {
         </select>
       </div>
 
-      <div>
-        <canvas ref={precipChartRef} width="400" height="300"></canvas>
-        <canvas ref={tempChartRef} width="400" height="300"></canvas>
-        <canvas ref={ensembleChartRef} width="400" height="300"></canvas>
-      </div>
+      <div className="chart-container">
+  <div className="row-charts">
+      <div className="row-charts">
+
+    <canvas ref={precipChartRef} width="200" height="150"></canvas>
+    <canvas ref={tempChartRef} width="200" height="150"></canvas>
+    </div>
+
+  </div>
+  <div className="third-chart">
+
+  <canvas ref={ensembleChartRef} width="400" height="300"></canvas>
+  </div>
+
+</div>
     </div>
   );
 };

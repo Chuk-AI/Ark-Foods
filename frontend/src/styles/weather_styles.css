@@ -3,3 +3,39 @@
   margin-right: 100px; /* Add spacing between elements */
   padding: 100px;
 }
+
+.chart-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.row-charts {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.row-charts canvas {
+  width: 52% !important; /* Adjust the width so both charts fit in a row */
+  height: auto !important; /* Automatically adjust the height based on width */
+}
+
+canvas {
+  display: block; /* Ensure proper rendering in all browsers */
+}
+.third-chart {
+  display: flex;
+  justify-content: center; /* Horizontal centering */
+  align-items: center; /* Vertical centering */
+  margin-top: 20px; /* Space above the third chart */
+  width: 100%; /* Take full width to allow proper centering */
+}
+
+.third-chart canvas {
+  height: 500px !important; /* Automatically adjust the height based on width */
+  width: 82% !important; /* Adjust the width so both charts fit in a row */
+  display: block; /* Ensure proper rendering */
+  margin: 0 auto; /* Center the canvas inside the parent */
+
+}
