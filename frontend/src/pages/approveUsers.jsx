@@ -44,10 +44,10 @@ function ApproveUsers() {
     }
   };
 
-  if (!isAuthenticated || userRole !== 'owner') {
+  if (!isAuthenticated || (userRole !== 'owner' && userRole !== 'admin')) {
     return <div>Access Denied. You do not have permission to view this page.</div>;
   }
-
+  
   return (
     <div>
       <Header />
