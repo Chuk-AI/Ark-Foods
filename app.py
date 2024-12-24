@@ -2185,20 +2185,19 @@ def fetch_forecast_data(lat, lon, start_date, end_date):
 
 # Calculate the accumulated climatology for the date range (blue line) and ensemble totals (gray bars)
 def calculate_accumulated_precipitation(lat, lon, start_date, end_date):
-    # Get daily climatology for precipitation (average per historical record per day of the year)
+    # Get daily climatology for precipitation
     daily_precip_climatology = get_daily_precip_climatology(lat, lon)
 
-    # Calculate the accumulated climatology precipitation for the date range
+    # Calculate accumulated climatology precipitation
     accumulated_climo_precip = 0
     date = start_date
     while date <= end_date:
         day_of_year = date.strftime("%m-%d")
         if day_of_year in daily_precip_climatology:
             accumulated_climo_precip += daily_precip_climatology[day_of_year]
-            print(accumulated_climo_precip)
         date += timedelta(days=1)
 
-    # Calculate accumulated precipitation for each ensemble across the entire date range
+    # Query forecasts
     forecasts = (
         WeatherForecast.query.filter_by(latitude=lat, longitude=lon, variable="PRECIP")
         .filter(
@@ -2208,15 +2207,30 @@ def calculate_accumulated_precipitation(lat, lon, start_date, end_date):
         .all()
     )
 
-    # Initialize ensemble totals as a dictionary
+    if not forecasts:
+        print("Warning: No forecast data found for the given range.")
+        return {
+            "accumulated_climo_precip": accumulated_climo_precip,
+            "ensemble_totals": [],
+            "probability_below_climo": None,
+        }
+
+    # Initialize ensemble totals
     ensemble_totals = {}
     for f in forecasts:
         if f.ensemble_member not in ensemble_totals:
             ensemble_totals[f.ensemble_member] = 0
-        # Accumulate values for each ensemble member over the entire date range
         ensemble_totals[f.ensemble_member] += f.forecasted_value
 
-    # Calculate the probability (percentage) of ensembles predicting lower than climatology
+    if len(ensemble_totals) == 0:
+        print("Warning: No ensemble data available.")
+        return {
+            "accumulated_climo_precip": accumulated_climo_precip,
+            "ensemble_totals": [],
+            "probability_below_climo": None,
+        }
+
+    # Calculate probability
     ensembles_below_climo = sum(
         1 for total in ensemble_totals.values() if total < accumulated_climo_precip
     )
@@ -2227,6 +2241,50 @@ def calculate_accumulated_precipitation(lat, lon, start_date, end_date):
         "ensemble_totals": list(ensemble_totals.values()),
         "probability_below_climo": probability_below_climo,
     }
+
+# def calculate_accumulated_precipitation(lat, lon, start_date, end_date):
+#     # Get daily climatology for precipitation (average per historical record per day of the year)
+#     daily_precip_climatology = get_daily_precip_climatology(lat, lon)
+
+#     # Calculate the accumulated climatology precipitation for the date range
+#     accumulated_climo_precip = 0
+#     date = start_date
+#     while date <= end_date:
+#         day_of_year = date.strftime("%m-%d")
+#         if day_of_year in daily_precip_climatology:
+#             accumulated_climo_precip += daily_precip_climatology[day_of_year]
+#             print(accumulated_climo_precip)
+#         date += timedelta(days=1)
+
+#     # Calculate accumulated precipitation for each ensemble across the entire date range
+#     forecasts = (
+#         WeatherForecast.query.filter_by(latitude=lat, longitude=lon, variable="PRECIP")
+#         .filter(
+#             WeatherForecast.forecast_date >= start_date,
+#             WeatherForecast.forecast_date <= end_date,
+#         )
+#         .all()
+#     )
+
+#     # Initialize ensemble totals as a dictionary
+#     ensemble_totals = {}
+#     for f in forecasts:
+#         if f.ensemble_member not in ensemble_totals:
+#             ensemble_totals[f.ensemble_member] = 0
+#         # Accumulate values for each ensemble member over the entire date range
+#         ensemble_totals[f.ensemble_member] += f.forecasted_value
+
+#     # Calculate the probability (percentage) of ensembles predicting lower than climatology
+#     ensembles_below_climo = sum(
+#         1 for total in ensemble_totals.values() if total < accumulated_climo_precip
+#     )
+#     probability_below_climo = (ensembles_below_climo / len(ensemble_totals)) * 100
+
+#     return {
+#         "accumulated_climo_precip": accumulated_climo_precip,
+#         "ensemble_totals": list(ensemble_totals.values()),
+#         "probability_below_climo": probability_below_climo,
+#     }
 
 
 # Helper function to aggregate temperature climatology data across all years for each day of the year
@@ -2272,47 +2330,101 @@ def get_daily_precip_climatology_v2(lat, lon):
     return avg_daily_climatology
 
 
-# Main API route: Serve aggregated forecast and climatology data
+
+
+# # Main API route: Serve aggregated forecast and climatology data
+# @app.route("/api/weather_forecasts", methods=["GET"])
+# def api_weather_forecasts():
+#     lat = float(request.args.get("lat"))
+#     lon = float(request.args.get("lon"))
+#     start = request.args.get("start")
+#     end = request.args.get("end")
+
+#     # Set default date range if start or end dates are not provided
+#     if not start:
+#         start_date = datetime.now()
+#     else:
+#         start_date = datetime.strptime(start, "%Y-%m-%d")
+
+#     if not end:
+#         end_date = start_date + timedelta(
+#             days=30
+#         )  # Default to 30 days from start date if end date is not provided
+#     else:
+#         end_date = datetime.strptime(end, "%Y-%m-%d")
+
+#     try:
+#         # Fetch forecast data with min, max, std_dev for TAVG and PRECIP
+#         forecast_data = fetch_forecast_data(lat, lon, start_date, end_date)
+
+#         # Fetch climatology data for temperature and precipitation
+#         daily_tavg_climatology = get_daily_tavg_climatology_v2(lat, lon)
+#         daily_precip_climatology = get_daily_precip_climatology_v2(lat, lon)
+
+#         # Combine TAVG and PRECIP into daily_climatology
+#         daily_climatology = {
+#             "TAVG": daily_tavg_climatology,
+#             "PRECIP": daily_precip_climatology,
+#         }
+
+#         # Calculate accumulated precipitation and ensemble analysis for the selected date range
+#         accumulation_data = calculate_accumulated_precipitation(
+#             lat, lon, start_date, end_date
+#         )
+
+#         # Format response JSON
+#         return jsonify(
+#             {
+#                 "forecast_data": forecast_data,
+#                 "daily_climatology": daily_climatology,
+#                 "accumulation_data": accumulation_data,
+#             }
+#         )
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/weather_forecasts", methods=["GET"])
 def api_weather_forecasts():
-    lat = float(request.args.get("lat"))
-    lon = float(request.args.get("lon"))
-    start = request.args.get("start")
-    end = request.args.get("end")
-
-    # Set default date range if start or end dates are not provided
-    if not start:
-        start_date = datetime.now()
-    else:
-        start_date = datetime.strptime(start, "%Y-%m-%d")
-
-    if not end:
-        end_date = start_date + timedelta(
-            days=30
-        )  # Default to 30 days from start date if end date is not provided
-    else:
-        end_date = datetime.strptime(end, "%Y-%m-%d")
-
     try:
-        # Fetch forecast data with min, max, std_dev for TAVG and PRECIP
-        forecast_data = fetch_forecast_data(lat, lon, start_date, end_date)
+        lat = float(request.args.get("lat"))
+        lon = float(request.args.get("lon"))
+        start = request.args.get("start")
+        end = request.args.get("end")
 
-        # Fetch climatology data for temperature and precipitation
+        print(f"Request Params - lat: {lat}, lon: {lon}, start: {start}, end: {end}")
+
+        # Set default date range if start or end dates are not provided
+        if not start:
+            start_date = datetime.now()
+        else:
+            start_date = datetime.strptime(start, "%Y-%m-%d")
+
+        if not end:
+            end_date = start_date + timedelta(days=30)
+        else:
+            end_date = datetime.strptime(end, "%Y-%m-%d")
+
+        print(f"Date Range - start_date: {start_date}, end_date: {end_date}")
+
+        # Fetch data
+        forecast_data = fetch_forecast_data(lat, lon, start_date, end_date)
+        print("Forecast Data:", forecast_data)
+
         daily_tavg_climatology = get_daily_tavg_climatology_v2(lat, lon)
         daily_precip_climatology = get_daily_precip_climatology_v2(lat, lon)
 
-        # Combine TAVG and PRECIP into daily_climatology
         daily_climatology = {
             "TAVG": daily_tavg_climatology,
             "PRECIP": daily_precip_climatology,
         }
+        print("Daily Climatology:", daily_climatology)
 
-        # Calculate accumulated precipitation and ensemble analysis for the selected date range
         accumulation_data = calculate_accumulated_precipitation(
             lat, lon, start_date, end_date
         )
+        print("Accumulation Data:", accumulation_data)
 
-        # Format response JSON
         return jsonify(
             {
                 "forecast_data": forecast_data,
@@ -2321,7 +2433,9 @@ def api_weather_forecasts():
             }
         )
     except Exception as e:
+        print("Error in /api/weather_forecasts:", str(e))
         return jsonify({"error": str(e)}), 500
+
 
 
 # City list for dropdowns

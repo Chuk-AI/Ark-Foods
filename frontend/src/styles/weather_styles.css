@@ -1,0 +1,5 @@
+.input-group input,
+.input-group select {
+  margin-right: 100px; /* Add spacing between elements */
+  padding: 100px;
+}

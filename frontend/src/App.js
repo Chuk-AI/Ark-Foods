@@ -1,6 +1,3 @@
-
-
-
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import ApproveUsers from './pages/approveUsers';
 import LoginForm from './pages/loginForm';
@@ -13,10 +10,11 @@ import React, { useContext } from "react";
 import axios from "axios";
 import Header from './components/header';
 import ProtectedRoute from './components/protectedRoute'
+import WeatherPage from './pages/WeatherPage'
 
 // Axios Defaults
 axios.defaults.baseURL = "https://ark-foods-0594c413a329.herokuapp.com"; // Heroku backend
-axios.defaults.withCredentials = true;
+axios.defaults.baseURL = "http://127.0.0.1:5500"
 
 // Add Authorization header for all requests
 axios.interceptors.request.use((config) => {
@@ -42,6 +40,8 @@ const App = () => {
           <Route path="/admin_dashboard" element={<ProtectedRoute roles={["admin", "owner"]}><AdminDashboard /></ProtectedRoute>} />
           <Route path="/upload_historical" element={<ProtectedRoute roles={["owner","sales"]}><UploadHistoricalData /></ProtectedRoute>} />
           <Route path="/approve_users" element={<ProtectedRoute roles={["admin", "owner"]}><ApproveUsers /></ProtectedRoute>} />
+          <Route path="/weather_dashboard" element={<ProtectedRoute roles={["admin", "owner"]}><WeatherPage /></ProtectedRoute>} />
+
         </Routes>
       </UserProvider>
     </Router>

@@ -76,6 +76,13 @@ function Header() {
                     </Link>
                   </li>
                 )}
+                    {hasAccess([ UserRole.OWNER, UserRole.ADMIN]) && (
+                  <li className="nav-item">
+                    <Link className="nav-link" to="/weather_dashboard">
+                      Weather Dashboard
+                    </Link>
+                  </li>
+                )}
 
                 {/* Logout */}
                 <li className="nav-item">
