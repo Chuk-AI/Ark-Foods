@@ -79,6 +79,7 @@ from flask import send_from_directory
 
 
 
+
 # Configuration for Logging
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -233,6 +234,17 @@ class PriceData(db.Model):
     price = db.Column(db.Float, nullable=False)
     source = db.Column(db.String(50), nullable=False)
     season = db.Column(db.String(20), nullable=False)
+
+class ShippingPriceData(db.Model):
+    __tablename__ = 'shipping_price_data'  # Match the actual table name in the database
+
+    id = db.Column(db.Integer, primary_key=True)
+    commodity = db.Column(db.String, nullable=False)
+    region_name = db.Column(db.String, nullable=False)
+    year = db.Column(db.Integer, nullable=False)
+    day = db.Column(db.Integer, nullable=False)
+    source = db.Column(db.String, nullable=False)
+    price = db.Column(db.Float)
 
 
 class WeatherForecast(db.Model):
@@ -416,6 +428,8 @@ def fetch_usda_daily_data():
             current_dt += timedelta(days=1)
             json_data = None
             gc.collect()
+
+
 
 
 # Process and store USDA data in the database, filtered by interested commodities and cities
@@ -2029,6 +2043,153 @@ def historical_data():
 
 
 
+@app.route('/api/test_db_connection')
+def test_db_connection():
+    try:
+        test_query = ShippingPriceData.query.first()
+        return jsonify({"success": bool(test_query)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+
+#  route for the shipping point price
+@app.route("/api/shipping_point_price", methods=["GET"])
+def shipping_point_price():
+    try:
+        # Fetch parameters from the frontend
+        commodities = request.args.get("commodities", "").split(",")
+        regions = request.args.get("regions", "").split(",")
+        start_date = request.args.get("start_date")
+        end_date = request.args.get("end_date")
+        source = request.args.get("source")
+        avg_commodities = (
+            request.args.get("averageCommodities", "false").lower() == "true"
+        )
+        avg_regions = request.args.get("averageRegions", "false").lower() == "true"
+
+        # Debug: Log received parameters
+        app.logger.info(f"Commodities: {commodities}")
+        app.logger.info(f"Regions: {regions}")
+        app.logger.info(f"Start Date: {start_date}, End Date: {end_date}")
+        app.logger.info(f"Source: {source}")
+        app.logger.info(f"Avg Commodities: {avg_commodities}, Avg Regions: {avg_regions}")
+
+        # Convert dates
+        start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+        end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+
+        # Calculate day of year for both dates
+        start_day = start_dt.timetuple().tm_yday
+        end_day = end_dt.timetuple().tm_yday
+
+        # Debug: Log date range
+        app.logger.info(f"Start Day: {start_day}, End Day: {end_day}")
+
+        # Query the database with proper date filtering
+        query = ShippingPriceData.query.filter(
+            ShippingPriceData.commodity.in_(commodities),
+            func.upper(ShippingPriceData.region_name).in_(
+                [region.upper() for region in regions]
+            ),
+            ShippingPriceData.source == source,
+        )
+
+        # Add year-specific conditions
+        if start_dt.year == end_dt.year:
+            query = query.filter(
+                ShippingPriceData.year == start_dt.year,
+                ShippingPriceData.day.between(start_day, end_day),
+            )
+        else:
+            query = query.filter(
+                or_(
+                    and_(ShippingPriceData.year == start_dt.year, ShippingPriceData.day >= start_day),
+                    and_(ShippingPriceData.year == end_dt.year, ShippingPriceData.day <= end_day),
+                    and_(ShippingPriceData.year > start_dt.year, ShippingPriceData.year < end_dt.year),
+                )
+            )
+
+        query = query.order_by(ShippingPriceData.year.asc(), ShippingPriceData.day.asc())
+        data = query.all()
+
+        # Debug: Log raw query results
+        app.logger.info(f"Query Results: {data}")
+
+        if not data:
+            return jsonify({"labels": [], "datasets": []}), 200
+
+        # Process data with dates we actually have
+        price_series = {}
+        all_dates = set()
+
+        # Group data based on averaging preferences
+        for entry in data:
+            entry_date = datetime(entry.year, 1, 1) + timedelta(days=entry.day - 1)
+
+            if entry_date < start_dt or entry_date > end_dt:
+                continue
+
+            date_str = entry_date.strftime("%Y-%m-%d")
+            all_dates.add(date_str)
+
+            if avg_commodities and avg_regions:
+                series_key = "Average Price"
+            elif avg_commodities:
+                series_key = entry.region_name
+            elif avg_regions:
+                series_key = entry.commodity
+            else:
+                series_key = f"{entry.commodity} - {entry.region_name}"
+
+            if series_key not in price_series:
+                price_series[series_key] = {}
+
+            if date_str not in price_series[series_key]:
+                price_series[series_key][date_str] = {"sum": 0, "count": 0}
+
+            price_series[series_key][date_str]["sum"] += entry.price
+            price_series[series_key][date_str]["count"] += 1
+
+        # Debug: Log processed series
+        app.logger.info(f"Price Series: {price_series}")
+
+        # Sort dates
+        sorted_dates = sorted(list(all_dates))
+
+        # Create datasets for each series
+        colors = ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40"]
+        datasets = []
+
+        for idx, (series_name, date_data) in enumerate(price_series.items()):
+            series_data = []
+            for date in sorted_dates:
+                if date in date_data:
+                    avg_price = date_data[date]["sum"] / date_data[date]["count"]
+                    series_data.append(round(avg_price, 2))
+                else:
+                    series_data.append(None)
+
+            datasets.append(
+                {
+                    "label": series_name,
+                    "data": series_data,
+                    "borderColor": colors[idx % len(colors)],
+                    "backgroundColor": colors[idx % len(colors)],
+                }
+            )
+
+        # Debug: Log datasets
+        app.logger.info(f"Datasets: {datasets}")
+
+        return jsonify({"labels": sorted_dates, "datasets": datasets})
+
+    except Exception as e:
+        app.logger.error(f"Error: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+
+
 @app.route("/api/download_historical_data", methods=["GET"])
 def download_historical_data():
     # Fetch the parameters from the frontend
@@ -2783,92 +2944,6 @@ def upload_historical():
         logging.error(f"Error during upload: {str(e)}")
         return f"Error during upload: {str(e)}", 500
 
-
-# @app.route("/api/upload_historical", methods=["POST"])
-# def upload_historical():
-#     try:
-#         # Check if a file and commodity are provided in the request
-#         if "file" not in request.files or "commodity" not in request.form:
-#             return jsonify({"error": "File and commodity are required"}), 400
-
-#         file = request.files["file"]
-#         commodity = request.form["commodity"]
-
-#         # Validate file
-#         if file.filename == "":
-#             return jsonify({"error": "No file selected"}), 400
-
-#         if not file.filename.endswith(".csv"):
-#             return jsonify({"error": "Invalid file type. Only CSV files are allowed"}), 400
-
-#         # Save the file temporarily for processing
-#         file_path = os.path.join(CSV_DIRECTORY, secure_filename(file.filename))
-#         file.save(file_path)
-
-#         # Process the uploaded CSV file
-#         logging.info(f"Processing uploaded file: {file.filename}")
-#         with open(file_path, newline="", encoding="utf-8") as csvfile:
-#             reader = csv.DictReader(csvfile)
-
-#             for row in reader:
-#                 city_name = row["CityName"]
-#                 year = int(row["Year"])
-#                 day = int(row["Day"])
-#                 price_str = row["Price"]
-
-#                 # Skip rows with invalid or empty price
-#                 if price_str.strip() == "":
-#                     logging.warning(
-#                         f"Skipping row with empty price for {city_name} on day {day} in year {year}"
-#                     )
-#                     continue
-
-#                 try:
-#                     price = float(price_str)
-#                 except ValueError:
-#                     logging.error(
-#                         f"Invalid price value: {price_str} for {city_name} on day {day} in year {year}"
-#                     )
-#                     continue
-
-#                 source = "ProduceIQ"
-
-#                 # Determine season using year and day of the year
-#                 try:
-#                     report_date = datetime.strptime(f"{year}-{day}", "%Y-%j")
-#                     season = determine_season(
-#                         report_date.strftime("%m/%d/%Y")
-#                     )  # Convert to MM/DD/YYYY format
-#                 except Exception as e:
-#                     logging.error(
-#                         f"Error converting year-day to date for {year}-{day}: {str(e)}"
-#                     )
-#                     continue
-
-#                 # Insert the data into the database
-#                 new_price_data = PriceData(
-#                     city_name=city_name,
-#                     commodity=commodity,
-#                     year=year,
-#                     day=day,
-#                     price=price,
-#                     source=source,
-#                     season=season,
-#                 )
-#                 db.session.add(new_price_data)
-
-#         # Commit all data after processing the file
-#         db.session.commit()
-#         logging.info(f"Data for {commodity} uploaded successfully from {file.filename}")
-
-#         # Delete the file after processing
-#         os.remove(file_path)
-
-#         return jsonify({"message": f"File {file.filename} uploaded successfully for {commodity}"}), 200
-
-#     except Exception as e:
-#         logging.error(f"Error during upload: {str(e)}")
-#         return jsonify({"error": f"Error during upload: {str(e)}"}), 500
 
 # Run the app
 if __name__ == "__main__":

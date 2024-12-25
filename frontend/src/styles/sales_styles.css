@@ -37,19 +37,17 @@
   height: 100%;
   margin-top: 10px;
   max-height: 90%; /* Restrict scrolling area */
-  overflow-y: auto; 
-  
+  overflow-y: auto;
 }
 
 #seasonalChart {
   width: 800px !important;
   height: 500px !important;
-  
 }
 .seasonal-body {
   display: flex;
   justify-content: center; /* Centers horizontally */
-  align-items: center;    /* Centers vertically */
+  align-items: center; /* Centers vertically */
 }
 .sidebar.collapsed #filters-content {
   opacity: 0;
@@ -68,6 +66,8 @@
 
 .filter-form.active {
   display: block;
+  visibility: visible;
+  opacity: 1;
 }
 
 /* Adjust form group spacing */
@@ -147,7 +147,7 @@ select[multiple] {
   border: 1px solid #ddd;
   border-radius: 4px;
 }
-.minimized-item  {
+.minimized-item {
   margin-bottom: 20px;
 }
 .minimized-item:hover {
@@ -168,7 +168,6 @@ select[multiple] {
 } */
 #minimized-sidebar.collapsed {
   width: 50px;
-
 }
 #minimized-sidebar.collapsed h2,
 #minimized-sidebar.collapsed ul li {
@@ -176,11 +175,9 @@ select[multiple] {
   opacity: 0; /* Make it invisible */
 }
 
-
-
 #right-sidebar-toggle {
-    background-color: var(--sales-primary-color);
-    cursor: pointer;
+  background-color: var(--sales-primary-color);
+  cursor: pointer;
   position: absolute;
   top: 10px;
   left: 16px;
@@ -192,16 +189,14 @@ select[multiple] {
   align-items: center;
   justify-content: center;
   z-index: 1050; /* Ensure it appears above other elements */
-  text-align:center;
+  text-align: center;
   transition: left 0.3s ease; /* Smooth transition */
-
 }
 
 .rightbar-icon {
   font-size: 18px;
   line-height: 0;
 }
-
 
 #right-sidebar-toggle .rightbar-icon {
   font-size: 18px;
@@ -213,11 +208,9 @@ select[multiple] {
   padding: 15px;
   margin: 0;
   color: #32a99f;
-  font-size:20px;
+  font-size: 20px;
   font-weight: 600;
   margin-top: 40px;
-
-
 }
 
 .minimized-block-item {
@@ -236,8 +229,8 @@ select[multiple] {
   list-style: none; /* Remove bullets */
   border: solid 1px #33b2a8;
 }
-#minimized-list{
-  padding:0;
+#minimized-list {
+  padding: 0;
 }
 
 #minimized-list li:hover {
@@ -300,7 +293,7 @@ select[multiple] {
   align-content: center;
 }
 
-#current-section-title{
+#current-section-title {
   font-size: 20px;
   font-weight: 600;
   color: #32a99f;
@@ -384,12 +377,11 @@ select[multiple] {
     height: 100px !important;
   }
 }
-.sidebar{
+.sidebar {
   border-radius: 10px;
   margin-top: 68px;
   border: solid 1px #33b2a8;
   width: 220px;
-  
 }
 /* Additional Filter Form Styles */
 .sidebar h2 {
@@ -418,7 +410,6 @@ select.form-control {
   width: 25px;
   height: 41px;
 }
-.sales-Body{
+.sales-Body {
   width: 98%;
 }
-

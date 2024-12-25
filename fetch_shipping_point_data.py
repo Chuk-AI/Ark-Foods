@@ -1,7 +1,7 @@
 import requests
 import pandas as pd
 import logging
-import os
+from app import app, db, ShippingPriceData
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -19,21 +19,16 @@ def fetch_shipping_point_data():
 
     standardized_name = {
         "anaheim": "Anaheim", "cubanelles": "Cubanelles", "fresno": "Fresno",
-        "habanero": "Habanero", "hungarian wax": "Hungarian Wax", 
-        "jalapeno": "Jalapeno", "long hot": "Long Hot", 
+        "habanero": "Habanero", "hungarian wax": "Hungarian Wax",
+        "jalapeno": "Jalapeno", "long hot": "Long Hot",
         "poblano": "Poblano", "serrano": "Serrano", "shishito": "Shishito",
     }
 
     # Define date range
-    start_date = pd.Timestamp("2020-01-01")  # Adjust as needed
+    start_date = pd.Timestamp("2024-01-01")  # Adjust as needed
     end_date = pd.Timestamp.today()
 
-    # Output CSV file
-    output_file = "shipping_point_prices.csv"
-    save_to_csv = not os.path.exists(output_file)
-
     current_date = start_date
-    all_data = []
 
     while current_date <= end_date:
         params = {
@@ -66,24 +61,22 @@ def fetch_shipping_point_data():
                 if variety_name in wanted_commodities:
                     variety_name = standardized_name[variety_name]
 
-                    processed_record = {
-                        "City Name": item.get("regionName"),
-                        "Commodity": variety_name,
-                        "Year": item.get("isoYear"),
-                        "Day": item.get("day"),
-                        "Price": item.get("price"),
-                        "Source": "ProduceIQ",
-                        "Season": determine_season(item.get("isoYear"), item.get("month")),
-                    }
-                    all_data.append(processed_record)
+                    shipping_price_data = ShippingPriceData(
+                        region_name=item.get("regionName"),
+                        commodity=variety_name,
+                        year=item.get("isoYear"),
+                        day=item.get("day"),
+                        price=item.get("price"),
+                        source="ProduceIQ",
+                        season=determine_season(item.get("isoYear"), item.get("month")),
+                    )
+                    db.session.add(shipping_price_data)
 
-            # Save incrementally to CSV
-            if all_data:
-                df = pd.DataFrame(all_data)
-                df.to_csv(output_file, mode="a", header=save_to_csv, index=False)
-                save_to_csv = False  # Avoid writing headers multiple times
-                all_data = []  # Clear memory after saving
+  
 
+
+            # Commit data to the database
+            db.session.commit()
         else:
             logging.error(
                 f"Failed to fetch data for {params['from']}. Status code: {response.status_code}"
@@ -92,7 +85,7 @@ def fetch_shipping_point_data():
         # Move to the next day
         current_date += pd.Timedelta(days=7)  # Iterate day-by-day
 
-    logging.info(f"Data fetching completed. Saved to {output_file}.")
+    logging.info("Data fetching completed and stored in the database.")
 
 def determine_season(year, month):
     """Calculate season based on the month."""
@@ -106,4 +99,5 @@ def determine_season(year, month):
         return "Winter"
 
 if __name__ == "__main__":
-    fetch_shipping_point_data()
+    with app.app_context():  # Wrap all operations in the app context
+        fetch_shipping_point_data()
