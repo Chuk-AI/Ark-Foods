@@ -197,18 +197,30 @@ const WeatherCharts = () => {
     if (ref.current.chartInstance) {
       ref.current.chartInstance.destroy();
     }
-
+  
+    // Sort totals in descending order and adjust labels accordingly
+    const sortedData = totals
+      .map((value, index) => ({ label: `Ensemble ${index + 1}`, value })) // Combine labels and data
+      .sort((a, b) => b.value - a.value); // Sort by value in descending order
+  
+    const sortedLabels = sortedData.map(item => item.label); // Extract sorted labels
+    const sortedTotals = sortedData.map(item => item.value); // Extract sorted values
+  
     const ctx = ref.current.getContext("2d");
-
+  
     ref.current.chartInstance = new Chart(ctx, {
       type: "bar",
       data: {
-        labels: totals.map((_, i) => `Ensemble ${i + 1}`),
+        labels: sortedLabels, // Use sorted labels
         datasets: [
-          { label: "Ensemble Totals", data: totals, backgroundColor: "gray" },
+          {
+            label: "Ensemble Totals",
+            data: sortedTotals, // Use sorted data
+            backgroundColor: "gray",
+          },
           {
             label: "Climatology",
-            data: Array(totals.length).fill(climatologyValue),
+            data: Array(sortedTotals.length).fill(climatologyValue),
             type: "line",
             borderColor: "blue",
             borderWidth: 2,
@@ -232,7 +244,7 @@ const WeatherCharts = () => {
       },
     });
   };
-
+  
   
   return (
     <div>
