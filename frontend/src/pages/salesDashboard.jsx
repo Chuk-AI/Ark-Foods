@@ -301,7 +301,7 @@ function SalesDashboard() {
     'seasonal-trends-section': 'Seasonal Trends',
     'historical-data-section': 'Historical Data',
     'most-recent-price-section': 'Most Recent Price',
-    'most-recent-shipping-price-section': 'Most Recent Shipping Price',
+    'shipping-point-price-section': 'Shipping Point Price',
     'terminal-voilin-plot-section': 'Terminal Voilin Plot',
     'shipping-voilin-plot-section': 'Shipping Voilin Plot',
     'terminal-empricial-probability-section': 'Terminal Empricial Probability',
@@ -1716,60 +1716,66 @@ function SalesDashboard() {
               <div id="terminal-empricial-probability-section" className="section">
                 <div style={{ marginTop: '100px' }}>
                   <h1>Terminal Empirical Probability Distribution</h1>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-around' }}>
-                    {terminalEmpiricalData.map((item, index) => {
-                      const mean = item.mean;
-                      const std_dev = item.std_dev;
 
-                      return (
-                        <div key={index} style={{ margin: '20px', width: '400px' }}>
-                          <h3>{item.commodity}</h3>
-                          <Plot
-                            data={[
-                              // Histogram for prices
-                              {
-                                x: item.price,
-                                type: 'histogram',
-                                name: item.commodity,
-                                marker: { color: colors[index % colors.length] },
-                                opacity: 0.75,
-                                nbinsx: 50, // Number of bins
-                              },
-                              // Line for mean
-                              {
-                                x: [mean, mean],
-                                y: [0, 50], // Adjust the y-range dynamically if needed
-                                type: 'scatter',
-                                mode: 'lines',
-                                line: { color: 'red', dash: 'dash' },
-                                name: 'Mean',
+                  {/* Show loading text if data is still being fetched */}
+                  {terminalEmpiricalLoading ? (
+                    <p>Loading charts, please wait...</p>
+                  ) : (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-around' }}>
+                      {terminalEmpiricalData.map((item, index) => {
+                        const mean = item.mean;
+                        const std_dev = item.std_dev;
+
+                        return (
+                          <div key={index} style={{ margin: '20px', width: '400px' }}>
+                            <h3>{item.commodity}</h3>
+                            <Plot
+                              data={[
+                                // Histogram for prices
+                                {
+                                  x: item.price,
+                                  type: 'histogram',
+                                  name: item.commodity,
+                                  marker: { color: colors[index % colors.length] },
+                                  opacity: 0.75,
+                                  nbinsx: 50, // Number of bins
+                                },
+                                // Line for mean
+                                {
+                                  x: [mean, mean],
+                                  y: [0, 50], // Adjust the y-range dynamically if needed
+                                  type: 'scatter',
+                                  mode: 'lines',
+                                  line: { color: 'red', dash: 'dash' },
+                                  name: 'Mean',
+                                  showlegend: false,
+                                },
+                                // Markers for standard deviation
+                                {
+                                  x: [mean - std_dev, mean + std_dev],
+                                  y: [0, 0],
+                                  type: 'scatter',
+                                  mode: 'markers',
+                                  marker: { color: 'blue', size: 8, symbol: 'cross' },
+                                  name: 'Std Dev',
+                                  showlegend: false,
+                                },
+                              ]}
+                              layout={{
+                                title: `Distribution of ${item.commodity}`,
+                                xaxis: { title: 'Price' },
+                                yaxis: { title: 'Frequency' },
+                                height: 400,
+                                width: 400,
                                 showlegend: false,
-                              },
-                              // Markers for standard deviation
-                              {
-                                x: [mean - std_dev, mean + std_dev],
-                                y: [0, 0],
-                                type: 'scatter',
-                                mode: 'markers',
-                                marker: { color: 'blue', size: 8, symbol: 'cross' },
-                                name: 'Std Dev',
-                                showlegend: false,
-                              },
-                            ]}
-                            layout={{
-                              title: `Distribution of ${item.commodity}`,
-                              xaxis: { title: 'Price' },
-                              yaxis: { title: 'Frequency' },
-                              height: 400,
-                              width: 400,
-                              showlegend: false,
-                            }}
-                            config={{ responsive: true }}
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
+                              }}
+                              config={{ responsive: true }}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1793,70 +1799,75 @@ function SalesDashboard() {
                       }}
                     />
                   ) : (
-                    <p>Loading or no data available...</p>
+                    <p>Loading...</p>
                   )}
                 </div>
               </div>
 
               {/* Empirical Probability for shipping prices */}
-
               <div id="shipping-empricial-probability-section" className="section">
                 <div style={{ marginTop: '100px' }}>
                   <h1>Shipping Empirical Probability Distribution</h1>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-around' }}>
-                    {shippingEmpiricalData.map((item, index) => {
-                      const mean = item.mean;
-                      const std_dev = item.std_dev;
 
-                      return (
-                        <div key={index} style={{ margin: '20px', width: '400px' }}>
-                          <h3>{item.commodity}</h3>
-                          <Plot
-                            data={[
-                              // Histogram for prices
-                              {
-                                x: item.price,
-                                type: 'histogram',
-                                name: item.commodity,
-                                marker: { color: colorPalette[index % colorPalette.length] },
-                                opacity: 0.75,
-                                nbinsx: 50, // Number of bins
-                              },
-                              // Line for mean
-                              {
-                                x: [mean, mean],
-                                y: [0, 50], // Adjust the y-range dynamically if needed
-                                type: 'scatter',
-                                mode: 'lines',
-                                line: { color: 'red', dash: 'dash' },
-                                name: 'Mean',
+                  {/* Show loading text if data is still being fetched */}
+                  {shippingEmpiricalLoading ? (
+                    <p>Loading charts, please wait...</p>
+                  ) : (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-around' }}>
+                      {shippingEmpiricalData.map((item, index) => {
+                        const mean = item.mean;
+                        const std_dev = item.std_dev;
+
+                        return (
+                          <div key={index} style={{ margin: '20px', width: '400px' }}>
+                            <h3>{item.commodity}</h3>
+                            <Plot
+                              data={[
+                                // Histogram for prices
+                                {
+                                  x: item.price,
+                                  type: 'histogram',
+                                  name: item.commodity,
+                                  marker: { color: colorPalette[index % colorPalette.length] },
+                                  opacity: 0.75,
+                                  nbinsx: 50, // Number of bins
+                                },
+                                // Line for mean
+                                {
+                                  x: [mean, mean],
+                                  y: [0, 50], // Adjust the y-range dynamically if needed
+                                  type: 'scatter',
+                                  mode: 'lines',
+                                  line: { color: 'red', dash: 'dash' },
+                                  name: 'Mean',
+                                  showlegend: false,
+                                },
+                                // Markers for standard deviation
+                                {
+                                  x: [mean - std_dev, mean + std_dev],
+                                  y: [0, 0],
+                                  type: 'scatter',
+                                  mode: 'markers',
+                                  marker: { color: 'blue', size: 8, symbol: 'cross' },
+                                  name: 'Std Dev',
+                                  showlegend: false,
+                                },
+                              ]}
+                              layout={{
+                                title: `Distribution of ${item.commodity}`,
+                                xaxis: { title: 'Price' },
+                                yaxis: { title: 'Frequency' },
+                                height: 400,
+                                width: 400,
                                 showlegend: false,
-                              },
-                              // Markers for standard deviation
-                              {
-                                x: [mean - std_dev, mean + std_dev],
-                                y: [0, 0],
-                                type: 'scatter',
-                                mode: 'markers',
-                                marker: { color: 'blue', size: 8, symbol: 'cross' },
-                                name: 'Std Dev',
-                                showlegend: false,
-                              },
-                            ]}
-                            layout={{
-                              title: `Distribution of ${item.commodity}`,
-                              xaxis: { title: 'Price' },
-                              yaxis: { title: 'Frequency' },
-                              height: 400,
-                              width: 400,
-                              showlegend: false,
-                            }}
-                            config={{ responsive: true }}
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
+                              }}
+                              config={{ responsive: true }}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
 
