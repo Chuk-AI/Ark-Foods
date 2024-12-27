@@ -1,0 +1,19 @@
+.chart-grid {
+    display: flex;
+    flex-wrap: wrap; /* Wrap to the next row */
+    justify-content: space-around; 
+  }
+  
+  .chart-item {
+    width: 48%; /* Each chart takes ~half the row */
+    margin-bottom: 20px; /* Space between rows */
+  }
+
+  .chart-title {
+    text-align: left; /* Ensure the title aligns to the left */
+    margin: 0 0 20px 0; /* Add space below the title, remove any horizontal margins */
+  }
+  .chart-container {
+    display: block; /* Ensure the container doesn't inherit flex styles */
+    text-align: left; /* Align all content in this container to the left */
+  }

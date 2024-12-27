@@ -13,6 +13,7 @@ import Header from '../components/header';
 import Footer from '../components/footer';
 import '../styles/sales_styles.css';
 import Plot from 'react-plotly.js';
+import EmpiricalChart from '../components/empirical';
 
 function SalesDashboard() {
   const [commodities, setCommodities] = useState([]);
@@ -87,9 +88,14 @@ function SalesDashboard() {
   // const [terminalEmpiricalLoading, setTerminalEmpiricalLoading] = useState(true);
   // const [terminalEmpiricalError, setTerminalEmpiricalError] = useState(null);
 
-  const [shippingEmpiricalData, setShippingEmpiricalData] = useState([]);
-  const [shippingEmpiricalLoading, setShippingEmpiricalLoading] = useState(true);
-  const [shippingEmpiricalError, setShippingEmpiricalError] = useState(null);
+  // const [shippingEmpiricalData, setShippingEmpiricalData] = useState([]);
+  // const [shippingEmpiricalLoading, setShippingEmpiricalLoading] = useState(true);
+  // const [shippingEmpiricalError, setShippingEmpiricalError] = useState(null);
+
+
+  const terminalColors = ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40"];
+  const shippingColors = ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40"];
+
 
   // best sell market
   const handleCommodityChange = (e) => {
@@ -1053,73 +1059,7 @@ function SalesDashboard() {
 
   // for shipping empricial probability charts
 
-  useEffect(() => {
-    // Fetch data from the backend API
-    const fetchData = async () => {
-      try {
-        const response = await fetch('/api/shipping_empricial_probability');
-        if (!response.ok) throw new Error('Failed to fetch data');
-
-        const result = await response.json();
-        setShippingEmpiricalData(result);
-        setShippingEmpiricalLoading(false);
-      } catch (err) {
-        setShippingEmpiricalError(err.message);
-        setShippingEmpiricalLoading(false);
-      }
-    };
-
-    fetchData();
-  }, []);
-
-  if (shippingEmpiricalLoading) {
-    console.log('Shipping Empirical Loading');
-  }
-
-  if (shippingEmpiricalError) {
-    console.log('Shipping Empirical Error:', shippingEmpiricalError);
-  }
-
-  // Renamed `colors` to `colorPalette` to avoid conflicts
-  const colorPalette = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
-
-  // Renamed `traces` to `shippingTraces` to avoid conflicts
-  const shippingTraces = shippingEmpiricalData.flatMap((item, index) => {
-    const mean = item.mean;
-    const std_dev = item.std_dev;
-
-    return [
-      // Histogram for prices
-      {
-        x: item.price,
-        type: 'histogram',
-        name: item.commodity,
-        marker: { color: colorPalette[index % colorPalette.length] },
-        opacity: 0.75,
-        nbinsx: 50, // Number of bins
-      },
-      // Line for mean
-      {
-        x: [mean, mean],
-        y: [0, 50], // Adjust the y-range dynamically if needed
-        type: 'scatter',
-        mode: 'lines',
-        line: { color: 'red', dash: 'dash' },
-        name: `${item.commodity} Mean`,
-        showlegend: false,
-      },
-      // Markers for standard deviation
-      {
-        x: [mean - std_dev, mean + std_dev],
-        y: [0, 0],
-        type: 'scatter',
-        mode: 'markers',
-        marker: { color: 'blue', size: 8, symbol: 'cross' },
-        name: `${item.commodity} Std Dev`,
-        showlegend: false,
-      },
-    ];
-  });
+  
 
   return (
     <div>
@@ -1700,69 +1640,17 @@ function SalesDashboard() {
 
 
               {/* // Empirical Probability for Terminal prices * */}
-              {/* <div id="terminal-empricial-probability-section" className="section">
-                <div style={{ marginTop: '100px' }}>
-                  <h1>Terminal Empirical Probability Distribution</h1>
-                  {terminalEmpiricalLoading ? (
-                    <p>Loading charts, please wait...</p>
-                  ) : (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-around' }}>
-                      {terminalEmpiricalData.map((item, index) => {
-                        const mean = item.mean;
-                        const std_dev = item.std_dev;
+              <div className="container-fluid d-flex">
+        <div className="main-content flex-grow-1">
+          <EmpiricalChart
+            apiEndpoint="/api/terminal_empricial_probability"
+            title="Terminal Empirical Probability"
+            colors={terminalColors}
+          />
 
-                        return (
-                          <div key={index} style={{ margin: '20px', width: '400px' }}>
-                            <h3>{item.commodity}</h3>
-                            <Plot
-                              data={[
-                                // Histogram for prices
-                                {
-                                  x: item.price,
-                                  type: 'histogram',
-                                  name: item.commodity,
-                                  marker: { color: colors[index % colors.length] },
-                                  opacity: 0.75,
-                                  nbinsx: 50, // Number of bins
-                                },
-                                // Line for mean
-                                {
-                                  x: [mean, mean],
-                                  y: [0, 50], // Adjust the y-range dynamically if needed
-                                  type: 'scatter',
-                                  mode: 'lines',
-                                  line: { color: 'red', dash: 'dash' },
-                                  name: 'Mean',
-                                  showlegend: false,
-                                },
-                                // Markers for standard deviation
-                                {
-                                  x: [mean - std_dev, mean + std_dev],
-                                  y: [0, 0],
-                                  type: 'scatter',
-                                  mode: 'markers',
-                                  marker: { color: 'blue', size: 8, symbol: 'cross' },
-                                  name: 'Std Dev',
-                                  showlegend: false,
-                                },
-                              ]}
-                              layout={{
-                                title: `Distribution of ${item.commodity}`,
-                                xaxis: { title: 'Price' },
-                                yaxis: { title: 'Frequency' },
-                                height: 400,
-                                width: 400,
-                                showlegend: false,
-                              }}
-                              config={{ responsive: true }}
-                            />
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              </div> */}
+    
+        </div>
+      </div>
 
 
               {/* shipping voilin plot */}
@@ -1789,70 +1677,19 @@ function SalesDashboard() {
                 </div>
               </div>
               {/*  Empirical Probability for shipping prices */}
-              <div id="shipping-empricial-probability-section" className="section">
-                <div style={{ marginTop: '100px' }}>
-                  <h1>Shipping Empirical Probability Distribution</h1>
-                  {/* // Show loading text if data is still being fetched */}
-                  {shippingEmpiricalLoading ? (
-                    <p>Loading charts, please wait...</p>
-                  ) : (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-around' }}>
-                      {shippingEmpiricalData.map((item, index) => {
-                        const mean = item.mean;
-                        const std_dev = item.std_dev;
+             
+              <div className="container-fluid d-flex">
+        <div className="main-content flex-grow-1">      
 
-                        return (
-                          <div key={index} style={{ margin: '20px', width: '400px' }}>
-                            <h3>{item.commodity}</h3>
-                            <Plot
-                              data={[
-                                // Histogram for prices
-                                {
-                                  x: item.price,
-                                  type: 'histogram',
-                                  name: item.commodity,
-                                  marker: { color: colorPalette[index % colorPalette.length] },
-                                  opacity: 0.75,
-                                  nbinsx: 50, // Number of bins
-                                },
-                                // Line for mean
-                                {
-                                  x: [mean, mean],
-                                  y: [0, 50], // Adjust the y-range dynamically if needed
-                                  type: 'scatter',
-                                  mode: 'lines',
-                                  line: { color: 'red', dash: 'dash' },
-                                  name: 'Mean',
-                                  showlegend: false,
-                                },
-                                // Markers for standard deviation
-                                {
-                                  x: [mean - std_dev, mean + std_dev],
-                                  y: [0, 0],
-                                  type: 'scatter',
-                                  mode: 'markers',
-                                  marker: { color: 'blue', size: 8, symbol: 'cross' },
-                                  name: 'Std Dev',
-                                  showlegend: false,
-                                },
-                              ]}
-                              layout={{
-                                title: `Distribution of ${item.commodity}`,
-                                xaxis: { title: 'Price' },
-                                yaxis: { title: 'Frequency' },
-                                height: 400,
-                                width: 400,
-                                showlegend: false,
-                              }}
-                              config={{ responsive: true }}
-                            />
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              </div>
+          {/* Shipping Empirical Probability Chart */}
+          <EmpiricalChart
+            apiEndpoint="/api/shipping_empricial_probability"
+            title="Shipping Empirical Probability"
+            colors={shippingColors}
+          />
+        </div>
+      </div>
+
               {/* Right Sidebar for Minimized Blocks */}
               <div ref={rightSidebarRef} id="minimized-sidebar" className=" collapsed">
                 <div id="right-sidebar-toggle" onClick={toggleRightSidebar}>

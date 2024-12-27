@@ -3043,6 +3043,57 @@ def shipping_price_violin():
 
 
 # terminal empricial probability chart fetch
+@app.route('/api/terminal_empricial_probability', methods=['GET'])
+def get_terminal_empricial_probability():
+    try:
+        # Query the database to fetch specific fields (commodity and price)
+        data = db.session.query(PriceData.commodity, PriceData.price).all()
+        if not data:
+            return jsonify([])  # Return empty list if no data
+        
+        # Convert the data to a DataFrame
+        df = pd.DataFrame(data, columns=['commodity', 'price'])
+        if df.empty:
+            return jsonify([])
+
+        # Ensure 'price' is numeric
+        df['price'] = pd.to_numeric(df['price'], errors='coerce')
+        df = df.dropna(subset=['price'])
+
+        # Prepare chart-ready data
+        result = []
+        grouped = df.groupby('commodity')
+
+        for commodity, group in grouped:
+            prices = group['price'].values
+            if len(prices) == 0:
+                continue
+
+            mean = prices.mean()
+            std_dev = prices.std()
+            hist, bin_edges = np.histogram(prices, bins=50)
+            histogram = {
+                "x": bin_edges[:-1].tolist(),
+                "y": hist.tolist(),
+            }
+
+            result.append({
+                "commodity": commodity,
+                "mean": float(mean),
+                "std_dev": float(std_dev),
+                "histogram": histogram,
+            })
+
+        return jsonify(result)
+    except Exception as e:
+        # Use traceback to capture the full error details
+        import traceback
+        error_message = traceback.format_exc()
+        print("Error Traceback:", error_message)
+        return jsonify({"error": str(e)}), 500
+
+
+
 # @app.route('/api/terminal_empricial_probability', methods=['GET'])
 
 # def get_terminal_empricial_probability():
@@ -3070,28 +3121,79 @@ def shipping_price_violin():
 
 # shipping empricial probability chart fetch
 @app.route('/api/shipping_empricial_probability', methods=['GET'])
-
 def get_shipping_empricial_probability():
     try:
-        # Query the database to fetch all shipping price data
-        data = ShippingPriceData.query.all()
-        
+        # Query the database to fetch specific fields (commodity and price)
+        data = db.session.query(ShippingPriceData.commodity, ShippingPriceData.price).all()
+
         # Convert the data to a DataFrame
-        df = pd.DataFrame([(d.commodity, d.price) for d in data], columns=['commodity', 'price'])
+        df = pd.DataFrame(data, columns=['commodity', 'price'])
+        print("DataFrame Contents:", df.head())  # Debugging
 
-        # Group prices by commodity
-        grouped_data = df.groupby('commodity')['price'].apply(list).reset_index()
+        # Prepare chart-ready data
+        result = []
+        grouped = df.groupby('commodity')
 
-        # Add statistics (mean, std_dev) to each commodity
-        grouped_data['mean'] = grouped_data['price'].apply(lambda x: sum(x) / len(x))
-        grouped_data['std_dev'] = grouped_data['price'].apply(lambda x: pd.Series(x).std())
+        # Iterate over each group
+        for commodity, group in grouped:
+            print(f"Processing Commodity: {commodity}")  # Debugging
+            prices = group['price'].values  # Extract prices as a NumPy array or list
 
-        # Convert to dictionary for JSON response
-        result = grouped_data.to_dict(orient='records')
+            if len(prices) == 0:
+                continue
+
+            # Compute statistics
+            mean = prices.mean()  # NumPy or Pandas mean
+            std_dev = prices.std()  # NumPy or Pandas std
+
+            # Compute histogram bins
+            hist, bin_edges = np.histogram(prices, bins=50)  # Use NumPy for histograms
+            histogram = {
+                "x": bin_edges[:-1].tolist(),  # Bin edges
+                "y": hist.tolist(),  # Frequencies
+            }
+
+            # Prepare chart-ready trace data
+            result.append({
+                "commodity": commodity,
+                "mean": float(mean),  # Convert NumPy float to Python float
+                "std_dev": float(std_dev),  # Convert NumPy float to Python float
+                "histogram": histogram,
+            })
 
         return jsonify(result)
     except Exception as e:
+        print("Error:", str(e))  # Debugging
         return jsonify({"error": str(e)}), 500
+
+
+
+
+
+
+# @app.route('/api/shipping_empricial_probability', methods=['GET'])
+
+# def get_shipping_empricial_probability():
+#     try:
+#         # Query the database to fetch all shipping price data
+#         data = ShippingPriceData.query.all()
+        
+#         # Convert the data to a DataFrame
+#         df = pd.DataFrame([(d.commodity, d.price) for d in data], columns=['commodity', 'price'])
+
+#         # Group prices by commodity
+#         grouped_data = df.groupby('commodity')['price'].apply(list).reset_index()
+
+#         # Add statistics (mean, std_dev) to each commodity
+#         grouped_data['mean'] = grouped_data['price'].apply(lambda x: sum(x) / len(x))
+#         grouped_data['std_dev'] = grouped_data['price'].apply(lambda x: pd.Series(x).std())
+
+#         # Convert to dictionary for JSON response
+#         result = grouped_data.to_dict(orient='records')
+
+#         return jsonify(result)
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 500
 
 
 
