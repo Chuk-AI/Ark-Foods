@@ -1682,14 +1682,14 @@ function SalesDashboard() {
               </div>
 
               {/* terminal voilin plot */}
-
+              {/* 
               <div id="terminal-voilin-plot-section" className="section">
                 <div>
                   <h2>Terminal Violin Plot</h2>
 
                   {terminalViolinData.length > 0 ? (
                     <>
-                      {console.log('Final TerminalplotData:', TerminalplotData)} {/* Add this line */}
+                      {console.log('Final TerminalplotData:', TerminalplotData)} 
                       <Plot
                         data={TerminalplotData}
                         layout={{
@@ -1711,13 +1711,13 @@ function SalesDashboard() {
                 </div>
               </div>
 
-              {/* Empirical Probability for Terminal prices */}
+              // Empirical Probability for Terminal prices *
 
               <div id="terminal-empricial-probability-section" className="section">
                 <div style={{ marginTop: '100px' }}>
                   <h1>Terminal Empirical Probability Distribution</h1>
 
-                  {/* Show loading text if data is still being fetched */}
+                  //  Show loading text if data is still being fetched *
                   {terminalEmpiricalLoading ? (
                     <p>Loading charts, please wait...</p>
                   ) : (
@@ -1779,7 +1779,7 @@ function SalesDashboard() {
                 </div>
               </div>
 
-              {/* shipping voilin plot */}
+              // shipping voilin plot 
 
               <div id="shipping-voilin-plot-section" className="section" style={{ marginTop: '100px' }}>
                 <div>
@@ -1804,12 +1804,12 @@ function SalesDashboard() {
                 </div>
               </div>
 
-              {/* Empirical Probability for shipping prices */}
+              //  Empirical Probability for shipping prices 
               <div id="shipping-empricial-probability-section" className="section">
                 <div style={{ marginTop: '100px' }}>
                   <h1>Shipping Empirical Probability Distribution</h1>
 
-                  {/* Show loading text if data is still being fetched */}
+                  //  Show loading text if data is still being fetched
                   {shippingEmpiricalLoading ? (
                     <p>Loading charts, please wait...</p>
                   ) : (
@@ -1869,7 +1869,7 @@ function SalesDashboard() {
                     </div>
                   )}
                 </div>
-              </div>
+              </div> */}
 
               {/* Right Sidebar for Minimized Blocks */}
               <div ref={rightSidebarRef} id="minimized-sidebar" className=" collapsed">
