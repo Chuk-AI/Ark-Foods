@@ -80,16 +80,16 @@ function SalesDashboard() {
     averageCommodities: false,
     averageCities: false,
   });
-  // const [terminalViolinData, setTerminalViolinData] = useState([]);
-  // const [shippingViolinData, setShippingViolinData] = useState([]);
+  const [terminalViolinData, setTerminalViolinData] = useState([]);
+  const [shippingViolinData, setShippingViolinData] = useState([]);
 
-  // const [terminalEmpiricalData, setTerminalEmpiricalData] = useState([]);
-  // const [terminalEmpiricalLoading, setTerminalEmpiricalLoading] = useState(true);
-  // const [terminalEmpiricalError, setTerminalEmpiricalError] = useState(null);
+  const [terminalEmpiricalData, setTerminalEmpiricalData] = useState([]);
+  const [terminalEmpiricalLoading, setTerminalEmpiricalLoading] = useState(true);
+  const [terminalEmpiricalError, setTerminalEmpiricalError] = useState(null);
 
-  // const [shippingEmpiricalData, setShippingEmpiricalData] = useState([]);
-  // const [shippingEmpiricalLoading, setShippingEmpiricalLoading] = useState(true);
-  // const [shippingEmpiricalError, setShippingEmpiricalError] = useState(null);
+  const [shippingEmpiricalData, setShippingEmpiricalData] = useState([]);
+  const [shippingEmpiricalLoading, setShippingEmpiricalLoading] = useState(true);
+  const [shippingEmpiricalError, setShippingEmpiricalError] = useState(null);
 
   // best sell market
   const handleCommodityChange = (e) => {
@@ -208,92 +208,92 @@ function SalesDashboard() {
     }));
   };
 
-  // // Prepare data for Plotly
-  // const fetchTerminalViolinData = async () => {
-  //   try {
-  //     const response = await fetch('/api/terminal_price_violin');
-  //     console.log('Terminal API Response Status:', response.status);
+  // Prepare data for Plotly
+  const fetchTerminalViolinData = async () => {
+    try {
+      const response = await fetch('/api/terminal_price_violin');
+      console.log('Terminal API Response Status:', response.status);
 
-  //     if (!response.ok) {
-  //       throw new Error('Failed to fetch terminal violin plot data');
-  //     }
+      if (!response.ok) {
+        throw new Error('Failed to fetch terminal violin plot data');
+      }
 
-  //     const data = await response.json();
-  //     console.log('Fetched Terminal Data:', data); // Log the fetched data
-  //     setTerminalViolinData(data);
-  //   } catch (error) {
-  //     console.error('Error fetching terminal violin data:', error);
-  //   }
-  // };
+      const data = await response.json();
+      console.log('Fetched Terminal Data:', data); // Log the fetched data
+      setTerminalViolinData(data);
+    } catch (error) {
+      console.error('Error fetching terminal violin data:', error);
+    }
+  };
 
-  // useEffect(() => {
-  //   fetchTerminalViolinData();
-  // }, []);
+  useEffect(() => {
+    fetchTerminalViolinData();
+  }, []);
 
-  // // Fetch data for the shipping violin plot
-  // const fetchShippingViolinData = async () => {
-  //   try {
-  //     const response = await fetch('/api/shipping_price_violin');
-  //     console.log('Shipping API Response Status:', response.status);
+  // Fetch data for the shipping violin plot
+  const fetchShippingViolinData = async () => {
+    try {
+      const response = await fetch('/api/shipping_price_violin');
+      console.log('Shipping API Response Status:', response.status);
 
-  //     if (!response.ok) {
-  //       throw new Error('Failed to fetch shipping violin plot data');
-  //     }
+      if (!response.ok) {
+        throw new Error('Failed to fetch shipping violin plot data');
+      }
 
-  //     const data = await response.json();
-  //     console.log('Fetched Shipping Data:', data); // Log the fetched data
-  //     setShippingViolinData(data);
-  //   } catch (error) {
-  //     console.error('Error fetching shipping violin data:', error);
-  //   }
-  // };
+      const data = await response.json();
+      console.log('Fetched Shipping Data:', data); // Log the fetched data
+      setShippingViolinData(data);
+    } catch (error) {
+      console.error('Error fetching shipping violin data:', error);
+    }
+  };
 
-  // useEffect(() => {
-  //   fetchShippingViolinData();
-  // }, []);
+  useEffect(() => {
+    fetchShippingViolinData();
+  }, []);
 
-  // // Prepare data for the terminal violin plot
-  // const TerminalplotData = Object.values(
-  //   terminalViolinData.reduce((acc, item) => {
-  //     const { varietyName, price } = item;
+  // Prepare data for the terminal violin plot
+  const TerminalplotData = Object.values(
+    terminalViolinData.reduce((acc, item) => {
+      const { varietyName, price } = item;
 
-  //     // Ensure unique grouping by varietyName
-  //     if (!acc[varietyName]) {
-  //       acc[varietyName] = {
-  //         type: 'violin',
-  //         y: [], // Initialize prices array
-  //         name: varietyName, // x-axis label
-  //         box: { visible: true },
-  //         meanline: { visible: true },
-  //         marker: { color: '#636efa' },
-  //       };
-  //     }
+      // Ensure unique grouping by varietyName
+      if (!acc[varietyName]) {
+        acc[varietyName] = {
+          type: 'violin',
+          y: [], // Initialize prices array
+          name: varietyName, // x-axis label
+          box: { visible: true },
+          meanline: { visible: true },
+          marker: { color: '#636efa' },
+        };
+      }
 
-  //     // Add price to the corresponding variety
-  //     acc[varietyName].y.push(price);
+      // Add price to the corresponding variety
+      acc[varietyName].y.push(price);
 
-  //     return acc;
-  //   }, {})
-  // );
+      return acc;
+    }, {})
+  );
 
-  // // Prepare data for the shipping violin plot
-  // const ShippingplotData = shippingViolinData.reduce((acc, item) => {
-  //   const { varietyName, price } = item;
-  //   const existingEntry = acc.find((entry) => entry.name === varietyName);
-  //   if (existingEntry) {
-  //     existingEntry.y.push(price);
-  //   } else {
-  //     acc.push({
-  //       type: 'violin',
-  //       y: [price],
-  //       name: varietyName,
-  //       box: { visible: true },
-  //       meanline: { visible: true },
-  //       marker: { color: '#00cc96' }, // Color for shipping plot
-  //     });
-  //   }
-  //   return acc;
-  // }, []);
+  // Prepare data for the shipping violin plot
+  const ShippingplotData = shippingViolinData.reduce((acc, item) => {
+    const { varietyName, price } = item;
+    const existingEntry = acc.find((entry) => entry.name === varietyName);
+    if (existingEntry) {
+      existingEntry.y.push(price);
+    } else {
+      acc.push({
+        type: 'violin',
+        y: [price],
+        name: varietyName,
+        box: { visible: true },
+        meanline: { visible: true },
+        marker: { color: '#00cc96' }, // Color for shipping plot
+      });
+    }
+    return acc;
+  }, []);
 
   // Section Titles
   const sectionTitles = {
@@ -301,7 +301,7 @@ function SalesDashboard() {
     'seasonal-trends-section': 'Seasonal Trends',
     'historical-data-section': 'Historical Data',
     'most-recent-price-section': 'Most Recent Price',
-    'shipping-point-price-section': 'Shipping Point Price',
+    'most-recent-shipping-price-section': 'Most Recent Shipping Price',
     'terminal-voilin-plot-section': 'Terminal Voilin Plot',
     'shipping-voilin-plot-section': 'Shipping Voilin Plot',
     'terminal-empricial-probability-section': 'Terminal Empricial Probability',
@@ -801,322 +801,322 @@ function SalesDashboard() {
     fetchHistoricalData(historicalFilterState); // Fetch data using new filters
   };
 
-  // const handleApplyShippingPointFilters = () => {
-  //   setAppliedShippingPointFilters(shippingPointFilterState); // Apply current filter state
+  const handleApplyShippingPointFilters = () => {
+    setAppliedShippingPointFilters(shippingPointFilterState); // Apply current filter state
 
-  //   fetchShippingPointPriceData(shippingPointFilterState); // Fetch data using new filters
-  // };
+    fetchShippingPointPriceData(shippingPointFilterState); // Fetch data using new filters
+  };
 
-  // useEffect(() => {
-  //   if (filters.shippingPointPrice) {
-  //     fetchShippingPointPriceData(shippingPointFilterState);
-  //   }
-  // }, [filters.shippingPointPrice]);
+  useEffect(() => {
+    if (filters.shippingPointPrice) {
+      fetchShippingPointPriceData(shippingPointFilterState);
+    }
+  }, [filters.shippingPointPrice]);
 
-  // const shippingPointPriceChartRef = useRef(null);
+  const shippingPointPriceChartRef = useRef(null);
 
-  // const updateShippingPointPriceChart = (chartData) => {
-  //   if (!shippingPointPriceChartRef.current) {
-  //     console.error('Canvas element not found');
-  //     return;
-  //   }
+  const updateShippingPointPriceChart = (chartData) => {
+    if (!shippingPointPriceChartRef.current) {
+      console.error('Canvas element not found');
+      return;
+    }
 
-  //   const ctx = shippingPointPriceChartRef.current.getContext('2d');
+    const ctx = shippingPointPriceChartRef.current.getContext('2d');
 
-  //   if (shippingPointPriceChart) {
-  //     shippingPointPriceChart.destroy();
-  //   }
+    if (shippingPointPriceChart) {
+      shippingPointPriceChart.destroy();
+    }
 
-  //   if (!chartData.labels.length || !chartData.datasets.length) {
-  //     // alert('No data available for the Shipping Point Price chart.');
-  //     return;
-  //   }
+    if (!chartData.labels.length || !chartData.datasets.length) {
+      // alert('No data available for the Shipping Point Price chart.');
+      return;
+    }
 
-  //   const datasets = chartData.datasets.map((dataset, index) => ({
-  //     ...dataset,
-  //     fill: false,
-  //     tension: 0.1,
-  //     borderWidth: 2,
-  //     pointRadius: 3,
-  //     pointHoverRadius: 5,
-  //     spanGaps: true,
-  //     borderColor: dataset.borderColor || getColor(index),
-  //     backgroundColor: dataset.backgroundColor || getColor(index),
-  //   }));
+    const datasets = chartData.datasets.map((dataset, index) => ({
+      ...dataset,
+      fill: false,
+      tension: 0.1,
+      borderWidth: 2,
+      pointRadius: 3,
+      pointHoverRadius: 5,
+      spanGaps: true,
+      borderColor: dataset.borderColor || getColor(index),
+      backgroundColor: dataset.backgroundColor || getColor(index),
+    }));
 
-  //   const newChart = new Chart(ctx, {
-  //     type: 'line',
-  //     data: {
-  //       labels: chartData.labels,
-  //       datasets: datasets,
-  //     },
-  //     options: {
-  //       responsive: true,
-  //       maintainAspectRatio: false,
-  //       scales: {
-  //         x: {
-  //           display: true,
-  //           type: 'category',
-  //           grid: { display: true, drawBorder: true, color: '#E0E0E0' },
-  //           ticks: {
-  //             display: true,
-  //             maxTicksLimit: 10,
-  //             color: '#666666',
-  //             padding: 10,
-  //             autoSkip: true,
-  //             maxRotation: 45,
-  //             minRotation: 45,
-  //           },
-  //           title: {
-  //             display: true,
-  //             text: 'Date',
-  //             color: '#666666',
-  //             padding: { top: 10, bottom: 10 },
-  //           },
-  //         },
-  //         y: {
-  //           display: true,
-  //           position: 'left',
-  //           grid: { display: true, drawBorder: true, color: '#E0E0E0' },
-  //           ticks: {
-  //             display: true,
-  //             color: '#666666',
-  //             padding: 10,
-  //             callback: (value) => `$${value.toFixed(2)}`,
-  //           },
-  //           title: {
-  //             display: true,
-  //             text: 'Price ($)',
-  //             color: '#666666',
-  //             padding: { top: 10, bottom: 10 },
-  //           },
-  //         },
-  //       },
-  //       plugins: {
-  //         tooltip: {
-  //           enabled: true,
-  //           mode: 'index',
-  //           intersect: false,
-  //           backgroundColor: 'rgba(255, 255, 255, 0.9)',
-  //           titleColor: '#666666',
-  //           bodyColor: '#666666',
-  //           borderColor: '#E0E0E0',
-  //           borderWidth: 1,
-  //           padding: 10,
-  //           callbacks: {
-  //             title: (context) => moment(context[0].label).format('MMM D, YYYY'),
-  //             label: (context) => `${context.dataset.label}: $${context.parsed.y.toFixed(2)}`,
-  //           },
-  //         },
-  //         legend: {
-  //           display: true,
-  //           position: 'top',
-  //           align: 'center',
-  //           labels: {
-  //             boxWidth: 12,
-  //             padding: 15,
-  //             color: '#666666',
-  //             font: { size: 11 },
-  //           },
-  //         },
-  //       },
-  //       interaction: { mode: 'index', intersect: false },
-  //     },
-  //   });
+    const newChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: chartData.labels,
+        datasets: datasets,
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: {
+            display: true,
+            type: 'category',
+            grid: { display: true, drawBorder: true, color: '#E0E0E0' },
+            ticks: {
+              display: true,
+              maxTicksLimit: 10,
+              color: '#666666',
+              padding: 10,
+              autoSkip: true,
+              maxRotation: 45,
+              minRotation: 45,
+            },
+            title: {
+              display: true,
+              text: 'Date',
+              color: '#666666',
+              padding: { top: 10, bottom: 10 },
+            },
+          },
+          y: {
+            display: true,
+            position: 'left',
+            grid: { display: true, drawBorder: true, color: '#E0E0E0' },
+            ticks: {
+              display: true,
+              color: '#666666',
+              padding: 10,
+              callback: (value) => `$${value.toFixed(2)}`,
+            },
+            title: {
+              display: true,
+              text: 'Price ($)',
+              color: '#666666',
+              padding: { top: 10, bottom: 10 },
+            },
+          },
+        },
+        plugins: {
+          tooltip: {
+            enabled: true,
+            mode: 'index',
+            intersect: false,
+            backgroundColor: 'rgba(255, 255, 255, 0.9)',
+            titleColor: '#666666',
+            bodyColor: '#666666',
+            borderColor: '#E0E0E0',
+            borderWidth: 1,
+            padding: 10,
+            callbacks: {
+              title: (context) => moment(context[0].label).format('MMM D, YYYY'),
+              label: (context) => `${context.dataset.label}: $${context.parsed.y.toFixed(2)}`,
+            },
+          },
+          legend: {
+            display: true,
+            position: 'top',
+            align: 'center',
+            labels: {
+              boxWidth: 12,
+              padding: 15,
+              color: '#666666',
+              font: { size: 11 },
+            },
+          },
+        },
+        interaction: { mode: 'index', intersect: false },
+      },
+    });
 
-  //   setShippingPointPriceChart(newChart);
-  // };
+    setShippingPointPriceChart(newChart);
+  };
 
-  // const fetchShippingPointPriceData = async (filters = {}) => {
-  //   const { commodities = [], regions = [], source = '', startDate = '', endDate = '', averageCommodities = false, averageRegions = false } = filters;
-  //   try {
-  //     console.log('Filters:', filters); // Log filters
+  const fetchShippingPointPriceData = async (filters = {}) => {
+    const { commodities = [], regions = [], source = '', startDate = '', endDate = '', averageCommodities = false, averageRegions = false } = filters;
+    try {
+      console.log('Filters:', filters); // Log filters
 
-  //     const token = localStorage.getItem('authToken');
-  //     if (!token) throw new Error('No token found');
+      const token = localStorage.getItem('authToken');
+      if (!token) throw new Error('No token found');
 
-  //     // Construct query parameters
-  //     const params = new URLSearchParams({
-  //       commodities: commodities.join(','),
-  //       regions: regions.join(','),
-  //       source,
-  //       start_date: startDate,
-  //       end_date: endDate,
-  //       averageCommodities: averageCommodities.toString(),
-  //       averageRegions: averageRegions.toString(),
-  //     });
+      // Construct query parameters
+      const params = new URLSearchParams({
+        commodities: commodities.join(','),
+        regions: regions.join(','),
+        source,
+        start_date: startDate,
+        end_date: endDate,
+        averageCommodities: averageCommodities.toString(),
+        averageRegions: averageRegions.toString(),
+      });
 
-  //     // Fetch data from backend
-  //     const response = await fetch(`/api/shipping_point_price?${params.toString()}`, {
-  //       headers: {
-  //         Authorization: `Bearer ${token}`,
-  //       },
-  //     });
+      // Fetch data from backend
+      const response = await fetch(`/api/shipping_point_price?${params.toString()}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
-  //     if (!response.ok) {
-  //       if (response.status === 401) {
-  //         alert('Session expired. Please log in again.');
-  //         localStorage.removeItem('authToken');
-  //         window.location.href = '/login';
-  //       }
-  //       throw new Error('Failed to fetch Shipping Point Price data');
-  //     }
+      if (!response.ok) {
+        if (response.status === 401) {
+          alert('Session expired. Please log in again.');
+          localStorage.removeItem('authToken');
+          window.location.href = '/login';
+        }
+        throw new Error('Failed to fetch Shipping Point Price data');
+      }
 
-  //     const data = await response.json();
-  //     updateShippingPointPriceChart(data); // Update chart with the fetched data
-  //   } catch (error) {
-  //     console.error('Error fetching Shipping Point Price data:', error);
-  //   }
-  // };
+      const data = await response.json();
+      updateShippingPointPriceChart(data); // Update chart with the fetched data
+    } catch (error) {
+      console.error('Error fetching Shipping Point Price data:', error);
+    }
+  };
 
-  // useEffect(() => {
-  //   fetchShippingPointPriceData({
-  //     commodities: ['Jalapeno'], // Default commodity for testing
-  //     regions: ['mexico crossings through texas'], // Default region for testing
-  //     source: 'ProduceIQ',
-  //     startDate: '2020-01-01',
-  //     endDate: '2020-12-31',
-  //   });
-  // }, []);
+  useEffect(() => {
+    fetchShippingPointPriceData({
+      commodities: ['Jalapeno'], // Default commodity for testing
+      regions: ['mexico crossings through texas'], // Default region for testing
+      source: 'ProduceIQ',
+      startDate: '2020-01-01',
+      endDate: '2020-12-31',
+    });
+  }, []);
 
   // for terminal empricial probability charts
 
-  // useEffect(() => {
-  //   // Fetch data from the backend API
-  //   const fetchData = async () => {
-  //     try {
-  //       const response = await fetch('/api/terminal_empricial_probability');
-  //       if (!response.ok) throw new Error('Failed to fetch data');
+  useEffect(() => {
+    // Fetch data from the backend API
+    const fetchData = async () => {
+      try {
+        const response = await fetch('/api/terminal_empricial_probability');
+        if (!response.ok) throw new Error('Failed to fetch data');
 
-  //       const result = await response.json();
-  //       setTerminalEmpiricalData(result);
-  //       setTerminalEmpiricalLoading(false);
-  //     } catch (err) {
-  //       setTerminalEmpiricalError(err.message);
-  //       setTerminalEmpiricalLoading(false);
-  //     }
-  //   };
+        const result = await response.json();
+        setTerminalEmpiricalData(result);
+        setTerminalEmpiricalLoading(false);
+      } catch (err) {
+        setTerminalEmpiricalError(err.message);
+        setTerminalEmpiricalLoading(false);
+      }
+    };
 
-  //   fetchData();
-  // }, []);
+    fetchData();
+  }, []);
 
-  // if (terminalEmpiricalLoading) {
-  //   console.log('terminal Empirical Loading');
-  // }
+  if (terminalEmpiricalLoading) {
+    console.log('terminal Empirical Loading');
+  }
 
-  // if (terminalEmpiricalError) {
-  //   console.log('terminal Empirical Error');
-  // }
+  if (terminalEmpiricalError) {
+    console.log('terminal Empirical Error');
+  }
 
-  // const colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
+  const colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
 
-  // // Generate subplots for each commodity
-  // const traces = terminalEmpiricalData.map((item, index) => {
-  //   const mean = item.mean;
-  //   const std_dev = item.std_dev;
+  // Generate subplots for each commodity
+  const traces = terminalEmpiricalData.map((item, index) => {
+    const mean = item.mean;
+    const std_dev = item.std_dev;
 
-  //   return [
-  //     // Histogram for prices
-  //     {
-  //       x: item.price,
-  //       type: 'histogram',
-  //       name: item.commodity,
-  //       marker: { color: colors[index % colors.length] },
-  //       opacity: 0.75,
-  //       nbinsx: 50, // Number of bins
-  //     },
-  //     // Line for mean
-  //     {
-  //       x: [mean, mean],
-  //       y: [0, 50], // Adjust the y-range dynamically if needed
-  //       type: 'scatter',
-  //       mode: 'lines',
-  //       line: { color: 'red', dash: 'dash' },
-  //       name: `${item.commodity} Mean`,
-  //       showlegend: false,
-  //     },
-  //     // Markers for standard deviation
-  //     {
-  //       x: [mean - std_dev, mean + std_dev],
-  //       y: [0, 0],
-  //       type: 'scatter',
-  //       mode: 'markers',
-  //       marker: { color: 'blue', size: 8, symbol: 'cross' },
-  //       name: `${item.commodity} Std Dev`,
-  //       showlegend: false,
-  //     },
-  //   ];
-  // });
+    return [
+      // Histogram for prices
+      {
+        x: item.price,
+        type: 'histogram',
+        name: item.commodity,
+        marker: { color: colors[index % colors.length] },
+        opacity: 0.75,
+        nbinsx: 50, // Number of bins
+      },
+      // Line for mean
+      {
+        x: [mean, mean],
+        y: [0, 50], // Adjust the y-range dynamically if needed
+        type: 'scatter',
+        mode: 'lines',
+        line: { color: 'red', dash: 'dash' },
+        name: `${item.commodity} Mean`,
+        showlegend: false,
+      },
+      // Markers for standard deviation
+      {
+        x: [mean - std_dev, mean + std_dev],
+        y: [0, 0],
+        type: 'scatter',
+        mode: 'markers',
+        marker: { color: 'blue', size: 8, symbol: 'cross' },
+        name: `${item.commodity} Std Dev`,
+        showlegend: false,
+      },
+    ];
+  });
 
-  // // for shipping empricial probability charts
+  // for shipping empricial probability charts
 
-  // useEffect(() => {
-  //   // Fetch data from the backend API
-  //   const fetchData = async () => {
-  //     try {
-  //       const response = await fetch('/api/shipping_empricial_probability');
-  //       if (!response.ok) throw new Error('Failed to fetch data');
+  useEffect(() => {
+    // Fetch data from the backend API
+    const fetchData = async () => {
+      try {
+        const response = await fetch('/api/shipping_empricial_probability');
+        if (!response.ok) throw new Error('Failed to fetch data');
 
-  //       const result = await response.json();
-  //       setShippingEmpiricalData(result);
-  //       setShippingEmpiricalLoading(false);
-  //     } catch (err) {
-  //       setShippingEmpiricalError(err.message);
-  //       setShippingEmpiricalLoading(false);
-  //     }
-  //   };
+        const result = await response.json();
+        setShippingEmpiricalData(result);
+        setShippingEmpiricalLoading(false);
+      } catch (err) {
+        setShippingEmpiricalError(err.message);
+        setShippingEmpiricalLoading(false);
+      }
+    };
 
-  //   fetchData();
-  // }, []);
+    fetchData();
+  }, []);
 
-  // if (shippingEmpiricalLoading) {
-  //   console.log('Shipping Empirical Loading');
-  // }
+  if (shippingEmpiricalLoading) {
+    console.log('Shipping Empirical Loading');
+  }
 
-  // if (shippingEmpiricalError) {
-  //   console.log('Shipping Empirical Error:', shippingEmpiricalError);
-  // }
+  if (shippingEmpiricalError) {
+    console.log('Shipping Empirical Error:', shippingEmpiricalError);
+  }
 
-  // // Renamed `colors` to `colorPalette` to avoid conflicts
-  // const colorPalette = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
+  // Renamed `colors` to `colorPalette` to avoid conflicts
+  const colorPalette = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
 
-  // // Renamed `traces` to `shippingTraces` to avoid conflicts
-  // const shippingTraces = shippingEmpiricalData.flatMap((item, index) => {
-  //   const mean = item.mean;
-  //   const std_dev = item.std_dev;
+  // Renamed `traces` to `shippingTraces` to avoid conflicts
+  const shippingTraces = shippingEmpiricalData.flatMap((item, index) => {
+    const mean = item.mean;
+    const std_dev = item.std_dev;
 
-  //   return [
-  //     // Histogram for prices
-  //     {
-  //       x: item.price,
-  //       type: 'histogram',
-  //       name: item.commodity,
-  //       marker: { color: colorPalette[index % colorPalette.length] },
-  //       opacity: 0.75,
-  //       nbinsx: 50, // Number of bins
-  //     },
-  //     // Line for mean
-  //     {
-  //       x: [mean, mean],
-  //       y: [0, 50], // Adjust the y-range dynamically if needed
-  //       type: 'scatter',
-  //       mode: 'lines',
-  //       line: { color: 'red', dash: 'dash' },
-  //       name: `${item.commodity} Mean`,
-  //       showlegend: false,
-  //     },
-  //     // Markers for standard deviation
-  //     {
-  //       x: [mean - std_dev, mean + std_dev],
-  //       y: [0, 0],
-  //       type: 'scatter',
-  //       mode: 'markers',
-  //       marker: { color: 'blue', size: 8, symbol: 'cross' },
-  //       name: `${item.commodity} Std Dev`,
-  //       showlegend: false,
-  //     },
-  //   ];
-  // });
+    return [
+      // Histogram for prices
+      {
+        x: item.price,
+        type: 'histogram',
+        name: item.commodity,
+        marker: { color: colorPalette[index % colorPalette.length] },
+        opacity: 0.75,
+        nbinsx: 50, // Number of bins
+      },
+      // Line for mean
+      {
+        x: [mean, mean],
+        y: [0, 50], // Adjust the y-range dynamically if needed
+        type: 'scatter',
+        mode: 'lines',
+        line: { color: 'red', dash: 'dash' },
+        name: `${item.commodity} Mean`,
+        showlegend: false,
+      },
+      // Markers for standard deviation
+      {
+        x: [mean - std_dev, mean + std_dev],
+        y: [0, 0],
+        type: 'scatter',
+        mode: 'markers',
+        marker: { color: 'blue', size: 8, symbol: 'cross' },
+        name: `${item.commodity} Std Dev`,
+        showlegend: false,
+      },
+    ];
+  });
 
   return (
     <div>
@@ -1379,7 +1379,8 @@ function SalesDashboard() {
               </button>
             </form>
 
-            {/* <form id="filters-shipping-point-price" className={`filter-form ${filters.shippingPointPrice ? 'active' : 'd-none'}`}>
+            <form id="filters-shipping-point-price" className={`filter-form ${filters.shippingPointPrice ? 'active' : 'd-none'}`}>
+              {/* Commodity Multi-Select Filter */}
 
               <div className="form-group">
                 <label htmlFor="commodityFilterShipping" className="font-weight-bold">
@@ -1415,6 +1416,7 @@ function SalesDashboard() {
                 </label>
               </div>
 
+              {/* Region Multi-Select Filter */}
               <div className="form-group">
                 <label htmlFor="regionFilterShipping" className="font-weight-bold">
                   Region
@@ -1447,6 +1449,7 @@ function SalesDashboard() {
                 </label>
               </div>
 
+              {/* Source Filter */}
               <div className="form-group">
                 <label htmlFor="sourceFilterShipping" className="font-weight-bold">
                   Source
@@ -1460,6 +1463,7 @@ function SalesDashboard() {
                 </select>
               </div>
 
+              {/* Start Date Filter */}
               <div className="form-group">
                 <label htmlFor="startDateFilterShipping" className="font-weight-bold">
                   Start Date
@@ -1474,6 +1478,7 @@ function SalesDashboard() {
                 />
               </div>
 
+              {/* End Date Filter */}
               <div className="form-group">
                 <label htmlFor="endDateFilterShipping" className="font-weight-bold">
                   End Date
@@ -1488,12 +1493,15 @@ function SalesDashboard() {
                 />
               </div>
 
+              {/* Apply Filters Button */}
               <button type="button" className="btn btn-primary btn-block" onClick={handleApplyShippingPointFilters}>
                 Apply Filters
               </button>
-            </form> */}
+            </form>
           </div>
         </div>
+
+        {/* Shipping Point Price Filters */}
 
         {/* Main Content */}
         <div className="main-content flex-grow-1">
@@ -1650,7 +1658,7 @@ function SalesDashboard() {
               </div>
 
               {/* Shipping Point Price */}
-              {/* 
+
               <div id="shipping-point-price-section" className="section">
                 <div className="row mb-4 salesBody">
                   <div className="col-12 mb-4">
@@ -1671,17 +1679,17 @@ function SalesDashboard() {
                     </div>
                   </div>
                 </div>
-              </div> */}
+              </div>
 
               {/* terminal voilin plot */}
-              {/* 
+
               <div id="terminal-voilin-plot-section" className="section">
                 <div>
                   <h2>Terminal Violin Plot</h2>
 
                   {terminalViolinData.length > 0 ? (
                     <>
-                      {console.log('Final TerminalplotData:', TerminalplotData)} 
+                      {console.log('Final TerminalplotData:', TerminalplotData)} {/* Add this line */}
                       <Plot
                         data={TerminalplotData}
                         layout={{
@@ -1703,75 +1711,69 @@ function SalesDashboard() {
                 </div>
               </div>
 
-              // Empirical Probability for Terminal prices *
+              {/* Empirical Probability for Terminal prices */}
 
               <div id="terminal-empricial-probability-section" className="section">
                 <div style={{ marginTop: '100px' }}>
                   <h1>Terminal Empirical Probability Distribution</h1>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-around' }}>
+                    {terminalEmpiricalData.map((item, index) => {
+                      const mean = item.mean;
+                      const std_dev = item.std_dev;
 
-                  //  Show loading text if data is still being fetched *
-                  {terminalEmpiricalLoading ? (
-                    <p>Loading charts, please wait...</p>
-                  ) : (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-around' }}>
-                      {terminalEmpiricalData.map((item, index) => {
-                        const mean = item.mean;
-                        const std_dev = item.std_dev;
-
-                        return (
-                          <div key={index} style={{ margin: '20px', width: '400px' }}>
-                            <h3>{item.commodity}</h3>
-                            <Plot
-                              data={[
-                                // Histogram for prices
-                                {
-                                  x: item.price,
-                                  type: 'histogram',
-                                  name: item.commodity,
-                                  marker: { color: colors[index % colors.length] },
-                                  opacity: 0.75,
-                                  nbinsx: 50, // Number of bins
-                                },
-                                // Line for mean
-                                {
-                                  x: [mean, mean],
-                                  y: [0, 50], // Adjust the y-range dynamically if needed
-                                  type: 'scatter',
-                                  mode: 'lines',
-                                  line: { color: 'red', dash: 'dash' },
-                                  name: 'Mean',
-                                  showlegend: false,
-                                },
-                                // Markers for standard deviation
-                                {
-                                  x: [mean - std_dev, mean + std_dev],
-                                  y: [0, 0],
-                                  type: 'scatter',
-                                  mode: 'markers',
-                                  marker: { color: 'blue', size: 8, symbol: 'cross' },
-                                  name: 'Std Dev',
-                                  showlegend: false,
-                                },
-                              ]}
-                              layout={{
-                                title: `Distribution of ${item.commodity}`,
-                                xaxis: { title: 'Price' },
-                                yaxis: { title: 'Frequency' },
-                                height: 400,
-                                width: 400,
+                      return (
+                        <div key={index} style={{ margin: '20px', width: '400px' }}>
+                          <h3>{item.commodity}</h3>
+                          <Plot
+                            data={[
+                              // Histogram for prices
+                              {
+                                x: item.price,
+                                type: 'histogram',
+                                name: item.commodity,
+                                marker: { color: colors[index % colors.length] },
+                                opacity: 0.75,
+                                nbinsx: 50, // Number of bins
+                              },
+                              // Line for mean
+                              {
+                                x: [mean, mean],
+                                y: [0, 50], // Adjust the y-range dynamically if needed
+                                type: 'scatter',
+                                mode: 'lines',
+                                line: { color: 'red', dash: 'dash' },
+                                name: 'Mean',
                                 showlegend: false,
-                              }}
-                              config={{ responsive: true }}
-                            />
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                              },
+                              // Markers for standard deviation
+                              {
+                                x: [mean - std_dev, mean + std_dev],
+                                y: [0, 0],
+                                type: 'scatter',
+                                mode: 'markers',
+                                marker: { color: 'blue', size: 8, symbol: 'cross' },
+                                name: 'Std Dev',
+                                showlegend: false,
+                              },
+                            ]}
+                            layout={{
+                              title: `Distribution of ${item.commodity}`,
+                              xaxis: { title: 'Price' },
+                              yaxis: { title: 'Frequency' },
+                              height: 400,
+                              width: 400,
+                              showlegend: false,
+                            }}
+                            config={{ responsive: true }}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
 
-              // shipping voilin plot 
+              {/* shipping voilin plot */}
 
               <div id="shipping-voilin-plot-section" className="section" style={{ marginTop: '100px' }}>
                 <div>
@@ -1791,77 +1793,72 @@ function SalesDashboard() {
                       }}
                     />
                   ) : (
-                    <p>Loading...</p>
+                    <p>Loading or no data available...</p>
                   )}
                 </div>
               </div>
 
-              //  Empirical Probability for shipping prices 
+              {/* Empirical Probability for shipping prices */}
+
               <div id="shipping-empricial-probability-section" className="section">
                 <div style={{ marginTop: '100px' }}>
                   <h1>Shipping Empirical Probability Distribution</h1>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-around' }}>
+                    {shippingEmpiricalData.map((item, index) => {
+                      const mean = item.mean;
+                      const std_dev = item.std_dev;
 
-                  //  Show loading text if data is still being fetched
-                  {shippingEmpiricalLoading ? (
-                    <p>Loading charts, please wait...</p>
-                  ) : (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-around' }}>
-                      {shippingEmpiricalData.map((item, index) => {
-                        const mean = item.mean;
-                        const std_dev = item.std_dev;
-
-                        return (
-                          <div key={index} style={{ margin: '20px', width: '400px' }}>
-                            <h3>{item.commodity}</h3>
-                            <Plot
-                              data={[
-                                // Histogram for prices
-                                {
-                                  x: item.price,
-                                  type: 'histogram',
-                                  name: item.commodity,
-                                  marker: { color: colorPalette[index % colorPalette.length] },
-                                  opacity: 0.75,
-                                  nbinsx: 50, // Number of bins
-                                },
-                                // Line for mean
-                                {
-                                  x: [mean, mean],
-                                  y: [0, 50], // Adjust the y-range dynamically if needed
-                                  type: 'scatter',
-                                  mode: 'lines',
-                                  line: { color: 'red', dash: 'dash' },
-                                  name: 'Mean',
-                                  showlegend: false,
-                                },
-                                // Markers for standard deviation
-                                {
-                                  x: [mean - std_dev, mean + std_dev],
-                                  y: [0, 0],
-                                  type: 'scatter',
-                                  mode: 'markers',
-                                  marker: { color: 'blue', size: 8, symbol: 'cross' },
-                                  name: 'Std Dev',
-                                  showlegend: false,
-                                },
-                              ]}
-                              layout={{
-                                title: `Distribution of ${item.commodity}`,
-                                xaxis: { title: 'Price' },
-                                yaxis: { title: 'Frequency' },
-                                height: 400,
-                                width: 400,
+                      return (
+                        <div key={index} style={{ margin: '20px', width: '400px' }}>
+                          <h3>{item.commodity}</h3>
+                          <Plot
+                            data={[
+                              // Histogram for prices
+                              {
+                                x: item.price,
+                                type: 'histogram',
+                                name: item.commodity,
+                                marker: { color: colorPalette[index % colorPalette.length] },
+                                opacity: 0.75,
+                                nbinsx: 50, // Number of bins
+                              },
+                              // Line for mean
+                              {
+                                x: [mean, mean],
+                                y: [0, 50], // Adjust the y-range dynamically if needed
+                                type: 'scatter',
+                                mode: 'lines',
+                                line: { color: 'red', dash: 'dash' },
+                                name: 'Mean',
                                 showlegend: false,
-                              }}
-                              config={{ responsive: true }}
-                            />
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                              },
+                              // Markers for standard deviation
+                              {
+                                x: [mean - std_dev, mean + std_dev],
+                                y: [0, 0],
+                                type: 'scatter',
+                                mode: 'markers',
+                                marker: { color: 'blue', size: 8, symbol: 'cross' },
+                                name: 'Std Dev',
+                                showlegend: false,
+                              },
+                            ]}
+                            layout={{
+                              title: `Distribution of ${item.commodity}`,
+                              xaxis: { title: 'Price' },
+                              yaxis: { title: 'Frequency' },
+                              height: 400,
+                              width: 400,
+                              showlegend: false,
+                            }}
+                            config={{ responsive: true }}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div> */}
+              </div>
 
               {/* Right Sidebar for Minimized Blocks */}
               <div ref={rightSidebarRef} id="minimized-sidebar" className=" collapsed">

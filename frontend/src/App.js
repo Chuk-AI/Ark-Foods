@@ -2,7 +2,7 @@ import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-d
 import ApproveUsers from './pages/approveUsers';
 import LoginForm from './pages/loginForm';
 import UploadHistoricalData from './pages/UploadHistoricalData';
-import AdminDashboard from './pages/adminDashbaord';
+import AdminDashboard from './pages/adminDashboard';
 import RegisterForm from './pages/registerForm';
 import SalesDashboard from './pages/salesDashboard';
 import { UserProvider, UserContext } from './components/userContext';
