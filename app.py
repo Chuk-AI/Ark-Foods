@@ -787,18 +787,20 @@ def fetch_daily_data():
         
 from flask import Response
 
+
 @app.route('/fetch-shipping', methods=['GET'])
 def fetch_shipping():
     def generate():
         yield "Starting data fetch...\n"
-        # Add your logic here
         try:
-            fetch_shipping_point_data()
+            with app.app_context():
+                fetch_shipping_point_data()  # Ensure app context is active here
             yield "Data fetch completed successfully.\n"
         except Exception as e:
             yield f"Error during data fetch: {str(e)}\n"
 
     return Response(generate(), content_type="text/plain")
+
 
 
 
