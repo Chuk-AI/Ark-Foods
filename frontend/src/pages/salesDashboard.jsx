@@ -83,9 +83,9 @@ function SalesDashboard() {
   const [terminalViolinData, setTerminalViolinData] = useState([]);
   const [shippingViolinData, setShippingViolinData] = useState([]);
 
-  const [terminalEmpiricalData, setTerminalEmpiricalData] = useState([]);
-  const [terminalEmpiricalLoading, setTerminalEmpiricalLoading] = useState(true);
-  const [terminalEmpiricalError, setTerminalEmpiricalError] = useState(null);
+  // const [terminalEmpiricalData, setTerminalEmpiricalData] = useState([]);
+  // const [terminalEmpiricalLoading, setTerminalEmpiricalLoading] = useState(true);
+  // const [terminalEmpiricalError, setTerminalEmpiricalError] = useState(null);
 
   const [shippingEmpiricalData, setShippingEmpiricalData] = useState([]);
   const [shippingEmpiricalLoading, setShippingEmpiricalLoading] = useState(true);
@@ -984,72 +984,72 @@ function SalesDashboard() {
 
   // for terminal empricial probability charts
 
-  useEffect(() => {
-    // Fetch data from the backend API
-    const fetchData = async () => {
-      try {
-        const response = await fetch('/api/terminal_empricial_probability');
-        if (!response.ok) throw new Error('Failed to fetch data');
+  // useEffect(() => {
+  //   // Fetch data from the backend API
+  //   const fetchData = async () => {
+  //     try {
+  //       const response = await fetch('/api/terminal_empricial_probability');
+  //       if (!response.ok) throw new Error('Failed to fetch data');
 
-        const result = await response.json();
-        setTerminalEmpiricalData(result);
-        setTerminalEmpiricalLoading(false);
-      } catch (err) {
-        setTerminalEmpiricalError(err.message);
-        setTerminalEmpiricalLoading(false);
-      }
-    };
+  //       const result = await response.json();
+  //       setTerminalEmpiricalData(result);
+  //       setTerminalEmpiricalLoading(false);
+  //     } catch (err) {
+  //       setTerminalEmpiricalError(err.message);
+  //       setTerminalEmpiricalLoading(false);
+  //     }
+  //   };
 
-    fetchData();
-  }, []);
+  //   fetchData();
+  // }, []);
 
-  if (terminalEmpiricalLoading) {
-    console.log('terminal Empirical Loading');
-  }
+  // if (terminalEmpiricalLoading) {
+  //   console.log('terminal Empirical Loading');
+  // }
 
-  if (terminalEmpiricalError) {
-    console.log('terminal Empirical Error');
-  }
+  // if (terminalEmpiricalError) {
+  //   console.log('terminal Empirical Error');
+  // }
 
-  const colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
+  // const colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
 
-  // Generate subplots for each commodity
-  const traces = terminalEmpiricalData.map((item, index) => {
-    const mean = item.mean;
-    const std_dev = item.std_dev;
+  // // Generate subplots for each commodity
+  // const traces = terminalEmpiricalData.map((item, index) => {
+  //   const mean = item.mean;
+  //   const std_dev = item.std_dev;
 
-    return [
-      // Histogram for prices
-      {
-        x: item.price,
-        type: 'histogram',
-        name: item.commodity,
-        marker: { color: colors[index % colors.length] },
-        opacity: 0.75,
-        nbinsx: 50, // Number of bins
-      },
-      // Line for mean
-      {
-        x: [mean, mean],
-        y: [0, 50], // Adjust the y-range dynamically if needed
-        type: 'scatter',
-        mode: 'lines',
-        line: { color: 'red', dash: 'dash' },
-        name: `${item.commodity} Mean`,
-        showlegend: false,
-      },
-      // Markers for standard deviation
-      {
-        x: [mean - std_dev, mean + std_dev],
-        y: [0, 0],
-        type: 'scatter',
-        mode: 'markers',
-        marker: { color: 'blue', size: 8, symbol: 'cross' },
-        name: `${item.commodity} Std Dev`,
-        showlegend: false,
-      },
-    ];
-  });
+  //   return [
+  //     // Histogram for prices
+  //     {
+  //       x: item.price,
+  //       type: 'histogram',
+  //       name: item.commodity,
+  //       marker: { color: colors[index % colors.length] },
+  //       opacity: 0.75,
+  //       nbinsx: 50, // Number of bins
+  //     },
+  //     // Line for mean
+  //     {
+  //       x: [mean, mean],
+  //       y: [0, 50], // Adjust the y-range dynamically if needed
+  //       type: 'scatter',
+  //       mode: 'lines',
+  //       line: { color: 'red', dash: 'dash' },
+  //       name: `${item.commodity} Mean`,
+  //       showlegend: false,
+  //     },
+  //     // Markers for standard deviation
+  //     {
+  //       x: [mean - std_dev, mean + std_dev],
+  //       y: [0, 0],
+  //       type: 'scatter',
+  //       mode: 'markers',
+  //       marker: { color: 'blue', size: 8, symbol: 'cross' },
+  //       name: `${item.commodity} Std Dev`,
+  //       showlegend: false,
+  //     },
+  //   ];
+  // });
 
   // for shipping empricial probability charts
 
@@ -1697,11 +1697,12 @@ function SalesDashboard() {
                   )}
                 </div>
               </div>
+
+
               {/* // Empirical Probability for Terminal prices * */}
-              <div id="terminal-empricial-probability-section" className="section">
+              {/* <div id="terminal-empricial-probability-section" className="section">
                 <div style={{ marginTop: '100px' }}>
                   <h1>Terminal Empirical Probability Distribution</h1>
-                  {/* // Show loading text if data is still being fetched * */}
                   {terminalEmpiricalLoading ? (
                     <p>Loading charts, please wait...</p>
                   ) : (
@@ -1761,7 +1762,9 @@ function SalesDashboard() {
                     </div>
                   )}
                 </div>
-              </div>
+              </div> */}
+
+
               {/* shipping voilin plot */}
               <div id="shipping-voilin-plot-section" className="section" style={{ marginTop: '100px' }}>
                 <div>
@@ -1878,3 +1881,5 @@ function SalesDashboard() {
 }
 
 export default SalesDashboard;
+
+

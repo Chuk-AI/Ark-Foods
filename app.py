@@ -3043,29 +3043,29 @@ def shipping_price_violin():
 
 
 # terminal empricial probability chart fetch
-@app.route('/api/terminal_empricial_probability', methods=['GET'])
+# @app.route('/api/terminal_empricial_probability', methods=['GET'])
 
-def get_terminal_empricial_probability():
-    try:
-        # Query the database to fetch all price data
-        data = PriceData.query.all()
+# def get_terminal_empricial_probability():
+#     try:
+#         # Query the database to fetch all price data
+#         data = PriceData.query.all()
         
-        # Convert the data to a DataFrame
-        df = pd.DataFrame([(d.commodity, d.price) for d in data], columns=['commodity', 'price'])
+#         # Convert the data to a DataFrame
+#         df = pd.DataFrame([(d.commodity, d.price) for d in data], columns=['commodity', 'price'])
 
-        # Group prices by commodity
-        grouped_data = df.groupby('commodity')['price'].apply(list).reset_index()
+#         # Group prices by commodity
+#         grouped_data = df.groupby('commodity')['price'].apply(list).reset_index()
 
-        # Add statistics (mean, std_dev) to each commodity
-        grouped_data['mean'] = grouped_data['price'].apply(lambda x: sum(x) / len(x))
-        grouped_data['std_dev'] = grouped_data['price'].apply(lambda x: pd.Series(x).std())
+#         # Add statistics (mean, std_dev) to each commodity
+#         grouped_data['mean'] = grouped_data['price'].apply(lambda x: sum(x) / len(x))
+#         grouped_data['std_dev'] = grouped_data['price'].apply(lambda x: pd.Series(x).std())
 
-        # Convert to dictionary for JSON response
-        result = grouped_data.to_dict(orient='records')
+#         # Convert to dictionary for JSON response
+#         result = grouped_data.to_dict(orient='records')
 
-        return jsonify(result)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+#         return jsonify(result)
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 500
 
 
 # shipping empricial probability chart fetch
