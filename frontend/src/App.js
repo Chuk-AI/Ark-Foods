@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
+import { HashRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import ApproveUsers from './pages/approveUsers';
 import LoginForm from './pages/loginForm';
 import UploadHistoricalData from './pages/UploadHistoricalData';
