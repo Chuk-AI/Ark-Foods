@@ -784,16 +784,15 @@ def fetch_daily_data():
 
 
 
-        
 import threading
 
-
 def async_fetch_shipping_data():
-    try:
-        fetch_shipping_point_data()  # Long-running task
-        print("Data fetch completed successfully.")
-    except Exception as e:
-        print(f"Error: {str(e)}")
+    with app.app_context():  # Ensure Flask app context is active
+        try:
+            fetch_shipping_point_data()  # Long-running task
+            print("Data fetch completed successfully.")
+        except Exception as e:
+            print(f"Error: {str(e)}")
 
 @app.route('/fetch-shipping', methods=['GET'])
 def fetch_shipping():
