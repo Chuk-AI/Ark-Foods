@@ -81,7 +81,7 @@ def fetch_shipping_point_data():
             )
 
         # Move to the next day
-        current_date += pd.Timedelta(days=7)  # Iterate day-by-day
+        current_date += pd.Timedelta(days=1)  # Iterate day-by-day
 
     logging.info("Data fetching completed and stored in the database.")
 

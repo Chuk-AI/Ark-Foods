@@ -247,7 +247,7 @@ class ShippingPriceData(db.Model):
     day = db.Column(db.Integer, nullable=False)
     source = db.Column(db.String, nullable=False)
     price = db.Column(db.Float)
-    season = db.Column(db.String(50))
+    season = db.Column(db.String, nullable=True)  
 
     
 

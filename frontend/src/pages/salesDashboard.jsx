@@ -918,6 +918,9 @@ function SalesDashboard() {
               color: '#666666',
               font: { size: 11 },
             },
+            datalabels: {
+              display: false, // Globally disable datalabels
+            },
           },
         },
         interaction: { mode: 'index', intersect: false },
