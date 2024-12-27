@@ -80,16 +80,16 @@ function SalesDashboard() {
     averageCommodities: false,
     averageCities: false,
   });
-  const [terminalViolinData, setTerminalViolinData] = useState([]);
-  const [shippingViolinData, setShippingViolinData] = useState([]);
+  // const [terminalViolinData, setTerminalViolinData] = useState([]);
+  // const [shippingViolinData, setShippingViolinData] = useState([]);
 
-  const [terminalEmpiricalData, setTerminalEmpiricalData] = useState([]);
-  const [terminalEmpiricalLoading, setTerminalEmpiricalLoading] = useState(true);
-  const [terminalEmpiricalError, setTerminalEmpiricalError] = useState(null);
+  // const [terminalEmpiricalData, setTerminalEmpiricalData] = useState([]);
+  // const [terminalEmpiricalLoading, setTerminalEmpiricalLoading] = useState(true);
+  // const [terminalEmpiricalError, setTerminalEmpiricalError] = useState(null);
 
-  const [shippingEmpiricalData, setShippingEmpiricalData] = useState([]);
-  const [shippingEmpiricalLoading, setShippingEmpiricalLoading] = useState(true);
-  const [shippingEmpiricalError, setShippingEmpiricalError] = useState(null);
+  // const [shippingEmpiricalData, setShippingEmpiricalData] = useState([]);
+  // const [shippingEmpiricalLoading, setShippingEmpiricalLoading] = useState(true);
+  // const [shippingEmpiricalError, setShippingEmpiricalError] = useState(null);
 
   // best sell market
   const handleCommodityChange = (e) => {
@@ -208,92 +208,92 @@ function SalesDashboard() {
     }));
   };
 
-  // Prepare data for Plotly
-  const fetchTerminalViolinData = async () => {
-    try {
-      const response = await fetch('/api/terminal_price_violin');
-      console.log('Terminal API Response Status:', response.status);
+  // // Prepare data for Plotly
+  // const fetchTerminalViolinData = async () => {
+  //   try {
+  //     const response = await fetch('/api/terminal_price_violin');
+  //     console.log('Terminal API Response Status:', response.status);
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch terminal violin plot data');
-      }
+  //     if (!response.ok) {
+  //       throw new Error('Failed to fetch terminal violin plot data');
+  //     }
 
-      const data = await response.json();
-      console.log('Fetched Terminal Data:', data); // Log the fetched data
-      setTerminalViolinData(data);
-    } catch (error) {
-      console.error('Error fetching terminal violin data:', error);
-    }
-  };
+  //     const data = await response.json();
+  //     console.log('Fetched Terminal Data:', data); // Log the fetched data
+  //     setTerminalViolinData(data);
+  //   } catch (error) {
+  //     console.error('Error fetching terminal violin data:', error);
+  //   }
+  // };
 
-  useEffect(() => {
-    fetchTerminalViolinData();
-  }, []);
+  // useEffect(() => {
+  //   fetchTerminalViolinData();
+  // }, []);
 
-  // Fetch data for the shipping violin plot
-  const fetchShippingViolinData = async () => {
-    try {
-      const response = await fetch('/api/shipping_price_violin');
-      console.log('Shipping API Response Status:', response.status);
+  // // Fetch data for the shipping violin plot
+  // const fetchShippingViolinData = async () => {
+  //   try {
+  //     const response = await fetch('/api/shipping_price_violin');
+  //     console.log('Shipping API Response Status:', response.status);
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch shipping violin plot data');
-      }
+  //     if (!response.ok) {
+  //       throw new Error('Failed to fetch shipping violin plot data');
+  //     }
 
-      const data = await response.json();
-      console.log('Fetched Shipping Data:', data); // Log the fetched data
-      setShippingViolinData(data);
-    } catch (error) {
-      console.error('Error fetching shipping violin data:', error);
-    }
-  };
+  //     const data = await response.json();
+  //     console.log('Fetched Shipping Data:', data); // Log the fetched data
+  //     setShippingViolinData(data);
+  //   } catch (error) {
+  //     console.error('Error fetching shipping violin data:', error);
+  //   }
+  // };
 
-  useEffect(() => {
-    fetchShippingViolinData();
-  }, []);
+  // useEffect(() => {
+  //   fetchShippingViolinData();
+  // }, []);
 
-  // Prepare data for the terminal violin plot
-  const TerminalplotData = Object.values(
-    terminalViolinData.reduce((acc, item) => {
-      const { varietyName, price } = item;
+  // // Prepare data for the terminal violin plot
+  // const TerminalplotData = Object.values(
+  //   terminalViolinData.reduce((acc, item) => {
+  //     const { varietyName, price } = item;
 
-      // Ensure unique grouping by varietyName
-      if (!acc[varietyName]) {
-        acc[varietyName] = {
-          type: 'violin',
-          y: [], // Initialize prices array
-          name: varietyName, // x-axis label
-          box: { visible: true },
-          meanline: { visible: true },
-          marker: { color: '#636efa' },
-        };
-      }
+  //     // Ensure unique grouping by varietyName
+  //     if (!acc[varietyName]) {
+  //       acc[varietyName] = {
+  //         type: 'violin',
+  //         y: [], // Initialize prices array
+  //         name: varietyName, // x-axis label
+  //         box: { visible: true },
+  //         meanline: { visible: true },
+  //         marker: { color: '#636efa' },
+  //       };
+  //     }
 
-      // Add price to the corresponding variety
-      acc[varietyName].y.push(price);
+  //     // Add price to the corresponding variety
+  //     acc[varietyName].y.push(price);
 
-      return acc;
-    }, {})
-  );
+  //     return acc;
+  //   }, {})
+  // );
 
-  // Prepare data for the shipping violin plot
-  const ShippingplotData = shippingViolinData.reduce((acc, item) => {
-    const { varietyName, price } = item;
-    const existingEntry = acc.find((entry) => entry.name === varietyName);
-    if (existingEntry) {
-      existingEntry.y.push(price);
-    } else {
-      acc.push({
-        type: 'violin',
-        y: [price],
-        name: varietyName,
-        box: { visible: true },
-        meanline: { visible: true },
-        marker: { color: '#00cc96' }, // Color for shipping plot
-      });
-    }
-    return acc;
-  }, []);
+  // // Prepare data for the shipping violin plot
+  // const ShippingplotData = shippingViolinData.reduce((acc, item) => {
+  //   const { varietyName, price } = item;
+  //   const existingEntry = acc.find((entry) => entry.name === varietyName);
+  //   if (existingEntry) {
+  //     existingEntry.y.push(price);
+  //   } else {
+  //     acc.push({
+  //       type: 'violin',
+  //       y: [price],
+  //       name: varietyName,
+  //       box: { visible: true },
+  //       meanline: { visible: true },
+  //       marker: { color: '#00cc96' }, // Color for shipping plot
+  //     });
+  //   }
+  //   return acc;
+  // }, []);
 
   // Section Titles
   const sectionTitles = {
@@ -981,142 +981,142 @@ function SalesDashboard() {
 
   // for terminal empricial probability charts
 
-  useEffect(() => {
-    // Fetch data from the backend API
-    const fetchData = async () => {
-      try {
-        const response = await fetch('/api/terminal_empricial_probability');
-        if (!response.ok) throw new Error('Failed to fetch data');
+  // useEffect(() => {
+  //   // Fetch data from the backend API
+  //   const fetchData = async () => {
+  //     try {
+  //       const response = await fetch('/api/terminal_empricial_probability');
+  //       if (!response.ok) throw new Error('Failed to fetch data');
 
-        const result = await response.json();
-        setTerminalEmpiricalData(result);
-        setTerminalEmpiricalLoading(false);
-      } catch (err) {
-        setTerminalEmpiricalError(err.message);
-        setTerminalEmpiricalLoading(false);
-      }
-    };
+  //       const result = await response.json();
+  //       setTerminalEmpiricalData(result);
+  //       setTerminalEmpiricalLoading(false);
+  //     } catch (err) {
+  //       setTerminalEmpiricalError(err.message);
+  //       setTerminalEmpiricalLoading(false);
+  //     }
+  //   };
 
-    fetchData();
-  }, []);
+  //   fetchData();
+  // }, []);
 
-  if (terminalEmpiricalLoading) {
-    console.log('terminal Empirical Loading');
-  }
+  // if (terminalEmpiricalLoading) {
+  //   console.log('terminal Empirical Loading');
+  // }
 
-  if (terminalEmpiricalError) {
-    console.log('terminal Empirical Error');
-  }
+  // if (terminalEmpiricalError) {
+  //   console.log('terminal Empirical Error');
+  // }
 
-  const colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
+  // const colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
 
-  // Generate subplots for each commodity
-  const traces = terminalEmpiricalData.map((item, index) => {
-    const mean = item.mean;
-    const std_dev = item.std_dev;
+  // // Generate subplots for each commodity
+  // const traces = terminalEmpiricalData.map((item, index) => {
+  //   const mean = item.mean;
+  //   const std_dev = item.std_dev;
 
-    return [
-      // Histogram for prices
-      {
-        x: item.price,
-        type: 'histogram',
-        name: item.commodity,
-        marker: { color: colors[index % colors.length] },
-        opacity: 0.75,
-        nbinsx: 50, // Number of bins
-      },
-      // Line for mean
-      {
-        x: [mean, mean],
-        y: [0, 50], // Adjust the y-range dynamically if needed
-        type: 'scatter',
-        mode: 'lines',
-        line: { color: 'red', dash: 'dash' },
-        name: `${item.commodity} Mean`,
-        showlegend: false,
-      },
-      // Markers for standard deviation
-      {
-        x: [mean - std_dev, mean + std_dev],
-        y: [0, 0],
-        type: 'scatter',
-        mode: 'markers',
-        marker: { color: 'blue', size: 8, symbol: 'cross' },
-        name: `${item.commodity} Std Dev`,
-        showlegend: false,
-      },
-    ];
-  });
+  //   return [
+  //     // Histogram for prices
+  //     {
+  //       x: item.price,
+  //       type: 'histogram',
+  //       name: item.commodity,
+  //       marker: { color: colors[index % colors.length] },
+  //       opacity: 0.75,
+  //       nbinsx: 50, // Number of bins
+  //     },
+  //     // Line for mean
+  //     {
+  //       x: [mean, mean],
+  //       y: [0, 50], // Adjust the y-range dynamically if needed
+  //       type: 'scatter',
+  //       mode: 'lines',
+  //       line: { color: 'red', dash: 'dash' },
+  //       name: `${item.commodity} Mean`,
+  //       showlegend: false,
+  //     },
+  //     // Markers for standard deviation
+  //     {
+  //       x: [mean - std_dev, mean + std_dev],
+  //       y: [0, 0],
+  //       type: 'scatter',
+  //       mode: 'markers',
+  //       marker: { color: 'blue', size: 8, symbol: 'cross' },
+  //       name: `${item.commodity} Std Dev`,
+  //       showlegend: false,
+  //     },
+  //   ];
+  // });
 
-  // for shipping empricial probability charts
+  // // for shipping empricial probability charts
 
-  useEffect(() => {
-    // Fetch data from the backend API
-    const fetchData = async () => {
-      try {
-        const response = await fetch('/api/shipping_empricial_probability');
-        if (!response.ok) throw new Error('Failed to fetch data');
+  // useEffect(() => {
+  //   // Fetch data from the backend API
+  //   const fetchData = async () => {
+  //     try {
+  //       const response = await fetch('/api/shipping_empricial_probability');
+  //       if (!response.ok) throw new Error('Failed to fetch data');
 
-        const result = await response.json();
-        setShippingEmpiricalData(result);
-        setShippingEmpiricalLoading(false);
-      } catch (err) {
-        setShippingEmpiricalError(err.message);
-        setShippingEmpiricalLoading(false);
-      }
-    };
+  //       const result = await response.json();
+  //       setShippingEmpiricalData(result);
+  //       setShippingEmpiricalLoading(false);
+  //     } catch (err) {
+  //       setShippingEmpiricalError(err.message);
+  //       setShippingEmpiricalLoading(false);
+  //     }
+  //   };
 
-    fetchData();
-  }, []);
+  //   fetchData();
+  // }, []);
 
-  if (shippingEmpiricalLoading) {
-    console.log('Shipping Empirical Loading');
-  }
+  // if (shippingEmpiricalLoading) {
+  //   console.log('Shipping Empirical Loading');
+  // }
 
-  if (shippingEmpiricalError) {
-    console.log('Shipping Empirical Error:', shippingEmpiricalError);
-  }
+  // if (shippingEmpiricalError) {
+  //   console.log('Shipping Empirical Error:', shippingEmpiricalError);
+  // }
 
-  // Renamed `colors` to `colorPalette` to avoid conflicts
-  const colorPalette = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
+  // // Renamed `colors` to `colorPalette` to avoid conflicts
+  // const colorPalette = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
 
-  // Renamed `traces` to `shippingTraces` to avoid conflicts
-  const shippingTraces = shippingEmpiricalData.flatMap((item, index) => {
-    const mean = item.mean;
-    const std_dev = item.std_dev;
+  // // Renamed `traces` to `shippingTraces` to avoid conflicts
+  // const shippingTraces = shippingEmpiricalData.flatMap((item, index) => {
+  //   const mean = item.mean;
+  //   const std_dev = item.std_dev;
 
-    return [
-      // Histogram for prices
-      {
-        x: item.price,
-        type: 'histogram',
-        name: item.commodity,
-        marker: { color: colorPalette[index % colorPalette.length] },
-        opacity: 0.75,
-        nbinsx: 50, // Number of bins
-      },
-      // Line for mean
-      {
-        x: [mean, mean],
-        y: [0, 50], // Adjust the y-range dynamically if needed
-        type: 'scatter',
-        mode: 'lines',
-        line: { color: 'red', dash: 'dash' },
-        name: `${item.commodity} Mean`,
-        showlegend: false,
-      },
-      // Markers for standard deviation
-      {
-        x: [mean - std_dev, mean + std_dev],
-        y: [0, 0],
-        type: 'scatter',
-        mode: 'markers',
-        marker: { color: 'blue', size: 8, symbol: 'cross' },
-        name: `${item.commodity} Std Dev`,
-        showlegend: false,
-      },
-    ];
-  });
+  //   return [
+  //     // Histogram for prices
+  //     {
+  //       x: item.price,
+  //       type: 'histogram',
+  //       name: item.commodity,
+  //       marker: { color: colorPalette[index % colorPalette.length] },
+  //       opacity: 0.75,
+  //       nbinsx: 50, // Number of bins
+  //     },
+  //     // Line for mean
+  //     {
+  //       x: [mean, mean],
+  //       y: [0, 50], // Adjust the y-range dynamically if needed
+  //       type: 'scatter',
+  //       mode: 'lines',
+  //       line: { color: 'red', dash: 'dash' },
+  //       name: `${item.commodity} Mean`,
+  //       showlegend: false,
+  //     },
+  //     // Markers for standard deviation
+  //     {
+  //       x: [mean - std_dev, mean + std_dev],
+  //       y: [0, 0],
+  //       type: 'scatter',
+  //       mode: 'markers',
+  //       marker: { color: 'blue', size: 8, symbol: 'cross' },
+  //       name: `${item.commodity} Std Dev`,
+  //       showlegend: false,
+  //     },
+  //   ];
+  // });
 
   return (
     <div>
