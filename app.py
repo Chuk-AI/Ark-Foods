@@ -110,7 +110,7 @@ CORS(
     resources={
         r"/api/*": {
             "origins": [
-                # "http://localhost:3000",  # Local frontend
+                "http://localhost:3000",  # Local frontend
                 "https://ark-foods-0594c413a329.herokuapp.com/",  # Production frontend
             ]
         }
@@ -2991,107 +2991,107 @@ from sqlalchemy.sql import text  # Import `text` from SQLAlchemy
 
 # voilin plot for terminal data
 
-# @app.route("/api/terminal_price_violin", methods=["GET"])
+@app.route("/api/terminal_price_violin", methods=["GET"])
 
-# def terminal_price_violin():
-#     try:
-#         app.logger.info("Fetching data for terminal violin plot...")
+def terminal_price_violin():
+    try:
+        app.logger.info("Fetching data for terminal violin plot...")
 
-#         # Correct SQL query wrapped in `text`
-#         query = text("""
-#         SELECT commodity AS varietyName, price
-#         FROM price_data
-#         WHERE price IS NOT NULL
-#         """)
+        # Correct SQL query wrapped in `text`
+        query = text("""
+        SELECT commodity AS varietyName, price
+        FROM price_data
+        WHERE price IS NOT NULL
+        """)
 
-#         # Fetch and log results
-#         result = db.session.execute(query).fetchall()
+        # Fetch and log results
+        result = db.session.execute(query).fetchall()
 
-#         # Transform into JSON format
-#         data = [{"varietyName": row[0], "price": row[1]} for row in result]
+        # Transform into JSON format
+        data = [{"varietyName": row[0], "price": row[1]} for row in result]
 
-#         return jsonify(data), 200
-#     except Exception as e:
-#         app.logger.error(f"Error fetching data for terminal violin plot: {str(e)}")
-#         return jsonify({"error": "Failed to fetch terminal data"}), 500
-
-
-# # voilin plot for shipping data
-# @app.route("/api/shipping_price_violin", methods=["GET"])
-
-# def shipping_price_violin():
-#     try:
-#         app.logger.info("Fetching data for shipping violin plot...")
-
-#         # Correct SQL query wrapped in `text`
-#         query = text("""
-#         SELECT commodity AS varietyName, price
-#         FROM shipping_price_data
-#         WHERE price IS NOT NULL
-#         """)
-
-#         # Fetch and log results
-#         result = db.session.execute(query).fetchall()
-
-#         # Transform into JSON format
-#         data = [{"varietyName": row[0], "price": row[1]} for row in result]
-
-#         return jsonify(data), 200
-#     except Exception as e:
-#         app.logger.error(f"Error fetching data for shipping violin plot: {str(e)}")
-#         return jsonify({"error": "Failed to fetch shipping data"}), 500
+        return jsonify(data), 200
+    except Exception as e:
+        app.logger.error(f"Error fetching data for terminal violin plot: {str(e)}")
+        return jsonify({"error": "Failed to fetch terminal data"}), 500
 
 
-# # terminal empricial probability chart fetch
-# @app.route('/api/terminal_empricial_probability', methods=['GET'])
+# voilin plot for shipping data
+@app.route("/api/shipping_price_violin", methods=["GET"])
 
-# def get_terminal_empricial_probability():
-#     try:
-#         # Query the database to fetch all price data
-#         data = PriceData.query.all()
+def shipping_price_violin():
+    try:
+        app.logger.info("Fetching data for shipping violin plot...")
+
+        # Correct SQL query wrapped in `text`
+        query = text("""
+        SELECT commodity AS varietyName, price
+        FROM shipping_price_data
+        WHERE price IS NOT NULL
+        """)
+
+        # Fetch and log results
+        result = db.session.execute(query).fetchall()
+
+        # Transform into JSON format
+        data = [{"varietyName": row[0], "price": row[1]} for row in result]
+
+        return jsonify(data), 200
+    except Exception as e:
+        app.logger.error(f"Error fetching data for shipping violin plot: {str(e)}")
+        return jsonify({"error": "Failed to fetch shipping data"}), 500
+
+
+# terminal empricial probability chart fetch
+@app.route('/api/terminal_empricial_probability', methods=['GET'])
+
+def get_terminal_empricial_probability():
+    try:
+        # Query the database to fetch all price data
+        data = PriceData.query.all()
         
-#         # Convert the data to a DataFrame
-#         df = pd.DataFrame([(d.commodity, d.price) for d in data], columns=['commodity', 'price'])
+        # Convert the data to a DataFrame
+        df = pd.DataFrame([(d.commodity, d.price) for d in data], columns=['commodity', 'price'])
 
-#         # Group prices by commodity
-#         grouped_data = df.groupby('commodity')['price'].apply(list).reset_index()
+        # Group prices by commodity
+        grouped_data = df.groupby('commodity')['price'].apply(list).reset_index()
 
-#         # Add statistics (mean, std_dev) to each commodity
-#         grouped_data['mean'] = grouped_data['price'].apply(lambda x: sum(x) / len(x))
-#         grouped_data['std_dev'] = grouped_data['price'].apply(lambda x: pd.Series(x).std())
+        # Add statistics (mean, std_dev) to each commodity
+        grouped_data['mean'] = grouped_data['price'].apply(lambda x: sum(x) / len(x))
+        grouped_data['std_dev'] = grouped_data['price'].apply(lambda x: pd.Series(x).std())
 
-#         # Convert to dictionary for JSON response
-#         result = grouped_data.to_dict(orient='records')
+        # Convert to dictionary for JSON response
+        result = grouped_data.to_dict(orient='records')
 
-#         return jsonify(result)
-#     except Exception as e:
-#         return jsonify({"error": str(e)}), 500
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
-# # shipping empricial probability chart fetch
-# @app.route('/api/shipping_empricial_probability', methods=['GET'])
+# shipping empricial probability chart fetch
+@app.route('/api/shipping_empricial_probability', methods=['GET'])
 
-# def get_shipping_empricial_probability():
-#     try:
-#         # Query the database to fetch all shipping price data
-#         data = ShippingPriceData.query.all()
+def get_shipping_empricial_probability():
+    try:
+        # Query the database to fetch all shipping price data
+        data = ShippingPriceData.query.all()
         
-#         # Convert the data to a DataFrame
-#         df = pd.DataFrame([(d.commodity, d.price) for d in data], columns=['commodity', 'price'])
+        # Convert the data to a DataFrame
+        df = pd.DataFrame([(d.commodity, d.price) for d in data], columns=['commodity', 'price'])
 
-#         # Group prices by commodity
-#         grouped_data = df.groupby('commodity')['price'].apply(list).reset_index()
+        # Group prices by commodity
+        grouped_data = df.groupby('commodity')['price'].apply(list).reset_index()
 
-#         # Add statistics (mean, std_dev) to each commodity
-#         grouped_data['mean'] = grouped_data['price'].apply(lambda x: sum(x) / len(x))
-#         grouped_data['std_dev'] = grouped_data['price'].apply(lambda x: pd.Series(x).std())
+        # Add statistics (mean, std_dev) to each commodity
+        grouped_data['mean'] = grouped_data['price'].apply(lambda x: sum(x) / len(x))
+        grouped_data['std_dev'] = grouped_data['price'].apply(lambda x: pd.Series(x).std())
 
-#         # Convert to dictionary for JSON response
-#         result = grouped_data.to_dict(orient='records')
+        # Convert to dictionary for JSON response
+        result = grouped_data.to_dict(orient='records')
 
-#         return jsonify(result)
-#     except Exception as e:
-#         return jsonify({"error": str(e)}), 500
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 
