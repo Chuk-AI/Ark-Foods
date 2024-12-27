@@ -77,8 +77,7 @@ from flask_jwt_extended import JWTManager, create_access_token, jwt_required, ge
 from sqlalchemy.exc import SQLAlchemyError
 from flask import send_from_directory
 from notebook import get_best_start_dates, fetch_data_from_api
-
-
+from fetch_shipping_point_data import fetch_shipping_point_data  # Replace with the correct module name
 
 
 
@@ -111,8 +110,8 @@ CORS(
     resources={
         r"/api/*": {
             "origins": [
-                "http://localhost:3000",  # Local frontend
-                # "https://ark-foods-0594c413a329.herokuapp.com",  # Production frontend
+                # "http://localhost:3000",  # Local frontend
+                "https://ark-foods-0594c413a329.herokuapp.com",  # Production frontend
             ]
         }
     },
@@ -228,6 +227,8 @@ class User(UserMixin, db.Model):
 
 
 class PriceData(db.Model):
+    __tablename__ = 'price_data'  # Match the actual table name in the database
+
     id = db.Column(db.Integer, primary_key=True)
     city_name = db.Column(db.String(100), nullable=False)
     commodity = db.Column(db.String(100), nullable=False)
@@ -238,7 +239,6 @@ class PriceData(db.Model):
     season = db.Column(db.String(20), nullable=False)
 
 class ShippingPriceData(db.Model):
-    __tablename__ = 'shipping_price_data'  # Match the actual table name in the database
 
     id = db.Column(db.Integer, primary_key=True)
     commodity = db.Column(db.String, nullable=False)
@@ -247,6 +247,9 @@ class ShippingPriceData(db.Model):
     day = db.Column(db.Integer, nullable=False)
     source = db.Column(db.String, nullable=False)
     price = db.Column(db.Float)
+    season = db.Column(db.String(50))
+
+    
 
 
 class WeatherForecast(db.Model):
@@ -777,6 +780,22 @@ def fetch_daily_data():
         )
 
 
+
+
+
+
+@app.route('/fetch-shipping', methods=['GET'])
+def trigger_fetch():
+    try:
+        with app.app_context():
+            fetch_shipping_point_data()  # Call your function
+        return jsonify({"status": "success", "message": "Data fetch triggered successfully"}), 200
+    except Exception as e:
+        logging.error(f"Error triggering fetch: {str(e)}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+
 import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
@@ -1301,7 +1320,7 @@ class LoginForm(FlaskForm):
 
 # Home page
 @app.route("/api/")
-@jwt_required()
+# @jwt_required()
 def index():
     print("test1")
     if current_user.is_admin():
@@ -1336,7 +1355,7 @@ def get_current_user():
 
 # Dashboards
 @app.route("/api/admin_dashboard", methods=["GET"])
-@jwt_required()
+# # @jwt_required()
 def admin_dashboard():
     try:
         # Ensure current_user is available and authenticated
@@ -1361,13 +1380,13 @@ def admin_dashboard():
 
 
 @app.route("/api/owner_dashboard")
-@jwt_required()
+# # @jwt_required()
 def owner_dashboard():
     return render_template("owner_dashboard.html")
 
 
 @app.route("/api/weather_dashboard")
-@jwt_required()
+# # @jwt_required()
 def weather_dashboard():
     return render_template("weather_dashboard.html")
 
@@ -1421,7 +1440,7 @@ def weather_dashboard():
 
 
 @app.route("/api/sales_dashboard", methods=["GET"])
-@jwt_required()
+# @jwt_required()
 def sales_dashboard_api():
     current_user = get_jwt_identity()
 
@@ -1595,7 +1614,7 @@ def register():
 #         return jsonify({"error": str(e)}), 500
 
 @app.route("/api/protected", methods=["GET"])
-@jwt_required()
+# @jwt_required()
 def protected():
     current_user = get_jwt_identity()
     return jsonify({"logged_in_as": current_user}), 200
@@ -1649,7 +1668,7 @@ def login():
 # Logout route
 
 @app.route("/api/logout", methods=["POST"])
-@jwt_required()
+# @jwt_required()
 def logout():
     # Add the token's JTI (unique identifier) to the blacklist
     jti = get_jwt()["jti"]
@@ -1660,7 +1679,7 @@ def logout():
 
 
 @app.route("/api/users", methods=["GET"])
-@jwt_required()
+# @jwt_required()
 def approve_users():
     try:
         current_user_id = get_jwt_identity()  # Fetch the identity (user ID)
@@ -1681,7 +1700,7 @@ def approve_users():
 
 
 @app.route("/api/approve_user/<int:user_id>", methods=["POST"])
-@jwt_required()
+# @jwt_required()
 def approve_user(user_id):
     try:
         current_user = get_jwt_identity()  # Fetch identity from the token
@@ -1728,7 +1747,7 @@ def approve_user(user_id):
 
 # FrontEND API internal
 @app.route("/api/best_sell_market", methods=["GET"])
-@jwt_required()
+# @jwt_required()
 def api_best_sell_market():
     selected_commodity = request.args.get("commodity", "Jalapeno")
     selected_source = request.args.get("source", "USDA")  # Default to USDA
@@ -1832,7 +1851,7 @@ def api_best_sell_market():
 
 
 @app.route("/api/most_recent_prices", methods=["GET"])
-@jwt_required()
+# @jwt_required()
 def api_most_recent_prices():
     # List of cities and commodities
     cities = [
@@ -1903,78 +1922,10 @@ def api_most_recent_prices():
     return jsonify({"prices": recent_prices})
 
 
-    # shipping most recent prices
-@app.route("/api/most_recent_shipping_prices", methods=["GET"])
-@jwt_required()
-def api_most_recent_shipping_prices():
-    # List of regions and commodities
-    regions = [
-        "Central and South Florida",
-        "Mexico Crossings Through Nogales Arizona",
-        "Mexico Crossings Through Texas",
-        "South Georgia",
-        "Virginia"
-    ]
-    commodities = [
-        "Anaheim",
-        "Cubanelles",
-        "Fresno",
-        "Habanero",
-        "Hungarian Wax",
-        "Jalapeno",
-        "Long Hot",
-        "Poblano",
-        "Serrano",
-        "Shishito",
-    ]
-
-    # Get source from request, default to 'USDA'
-    selected_source = request.args.get("source", "USDA")
-
-    # Calculate the date 7 days ago
-    seven_days_ago = datetime.now(timezone("US/Pacific")) - timedelta(days=7)
-
-    recent_prices = {commodity: {} for commodity in commodities}
-
-    # Fetch the most recent maximum prices for each commodity and region within the last 7 days
-    for commodity in commodities:
-        # Handle special case: If the commodity is "Cubanelles" and the source is "USDA", search for "Cubanelle"
-        if commodity == "Cubanelles" and selected_source == "USDA":
-            commodity_to_query = "Cubanelle"
-        else:
-            commodity_to_query = commodity
-
-        for region in regions:
-            price_entry = (
-                db.session.query(
-                    func.max(ShippingPriceData.price).label("max_price"),
-                    ShippingPriceData.year,
-                    ShippingPriceData.day,
-                )
-                .filter(
-                    ShippingPriceData.commodity
-                    == commodity_to_query,  # Use the adjusted commodity name
-                    func.upper(ShippingPriceData.region_name) == region.upper(),
-                    ShippingPriceData.year >= seven_days_ago.year,
-                    ShippingPriceData.day >= seven_days_ago.timetuple().tm_yday,
-                    ShippingPriceData.source == selected_source,
-                )
-                .group_by(ShippingPriceData.year, ShippingPriceData.day)
-                .order_by(ShippingPriceData.year.desc(), ShippingPriceData.day.desc())
-                .first()
-            )
-
-            # If a price is found, store it; otherwise, store '-'
-            if price_entry:
-                recent_prices[commodity][region] = price_entry.max_price
-            else:
-                recent_prices[commodity][region] = "-"
-
-    return jsonify({"prices": recent_prices})
-
-
+  
 
 @app.route("/api/historical_data", methods=["GET"])
+# @jwt_required()
 def historical_data():
     try:
         # Fetch parameters from the frontend
@@ -2140,6 +2091,8 @@ def test_db_connection():
 
 #  route for the shipping point price
 @app.route("/api/shipping_point_price", methods=["GET"])
+# @jwt_required()
+
 def shipping_point_price():
     try:
         # Fetch parameters from the frontend
@@ -2787,7 +2740,7 @@ def calculate_forecast():
 
 # API FOR Forecast visual
 @app.route("/api/seasonal_prices", methods=["GET"])
-@jwt_required()
+# @jwt_required()
 def get_seasonal_prices():
     variety = request.args.get("variety")
     city = request.args.get("city")
@@ -2836,7 +2789,7 @@ def get_seasonal_prices():
 
 
 @app.route("/api/sales_seasonal_prices", methods=["GET"])
-# @jwt_required()
+# # @jwt_required()
 def get_sales_seasonal_prices():
     commodities_str = request.args.get("commodities")
     cities_str = request.args.get("cities")
@@ -2936,6 +2889,7 @@ def get_sales_seasonal_prices():
 @app.route("/api/trigger_usda_fetch", methods=["GET"])
 def trigger_usda_fetch():
     fetch_usda_daily_data()
+    # fetch_shipping_point_data()
     fetch_daily_data()
     return "USDA Data Fetch Triggered"
 
@@ -3028,6 +2982,117 @@ def upload_historical():
     except Exception as e:
         logging.error(f"Error during upload: {str(e)}")
         return f"Error during upload: {str(e)}", 500
+
+
+
+
+from sqlalchemy.sql import text  # Import `text` from SQLAlchemy
+
+
+# voilin plot for terminal data
+
+# @app.route("/api/terminal_price_violin", methods=["GET"])
+
+# def terminal_price_violin():
+#     try:
+#         app.logger.info("Fetching data for terminal violin plot...")
+
+#         # Correct SQL query wrapped in `text`
+#         query = text("""
+#         SELECT commodity AS varietyName, price
+#         FROM price_data
+#         WHERE price IS NOT NULL
+#         """)
+
+#         # Fetch and log results
+#         result = db.session.execute(query).fetchall()
+
+#         # Transform into JSON format
+#         data = [{"varietyName": row[0], "price": row[1]} for row in result]
+
+#         return jsonify(data), 200
+#     except Exception as e:
+#         app.logger.error(f"Error fetching data for terminal violin plot: {str(e)}")
+#         return jsonify({"error": "Failed to fetch terminal data"}), 500
+
+
+# # voilin plot for shipping data
+# @app.route("/api/shipping_price_violin", methods=["GET"])
+
+# def shipping_price_violin():
+#     try:
+#         app.logger.info("Fetching data for shipping violin plot...")
+
+#         # Correct SQL query wrapped in `text`
+#         query = text("""
+#         SELECT commodity AS varietyName, price
+#         FROM shipping_price_data
+#         WHERE price IS NOT NULL
+#         """)
+
+#         # Fetch and log results
+#         result = db.session.execute(query).fetchall()
+
+#         # Transform into JSON format
+#         data = [{"varietyName": row[0], "price": row[1]} for row in result]
+
+#         return jsonify(data), 200
+#     except Exception as e:
+#         app.logger.error(f"Error fetching data for shipping violin plot: {str(e)}")
+#         return jsonify({"error": "Failed to fetch shipping data"}), 500
+
+
+# # terminal empricial probability chart fetch
+# @app.route('/api/terminal_empricial_probability', methods=['GET'])
+
+# def get_terminal_empricial_probability():
+#     try:
+#         # Query the database to fetch all price data
+#         data = PriceData.query.all()
+        
+#         # Convert the data to a DataFrame
+#         df = pd.DataFrame([(d.commodity, d.price) for d in data], columns=['commodity', 'price'])
+
+#         # Group prices by commodity
+#         grouped_data = df.groupby('commodity')['price'].apply(list).reset_index()
+
+#         # Add statistics (mean, std_dev) to each commodity
+#         grouped_data['mean'] = grouped_data['price'].apply(lambda x: sum(x) / len(x))
+#         grouped_data['std_dev'] = grouped_data['price'].apply(lambda x: pd.Series(x).std())
+
+#         # Convert to dictionary for JSON response
+#         result = grouped_data.to_dict(orient='records')
+
+#         return jsonify(result)
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 500
+
+
+# # shipping empricial probability chart fetch
+# @app.route('/api/shipping_empricial_probability', methods=['GET'])
+
+# def get_shipping_empricial_probability():
+#     try:
+#         # Query the database to fetch all shipping price data
+#         data = ShippingPriceData.query.all()
+        
+#         # Convert the data to a DataFrame
+#         df = pd.DataFrame([(d.commodity, d.price) for d in data], columns=['commodity', 'price'])
+
+#         # Group prices by commodity
+#         grouped_data = df.groupby('commodity')['price'].apply(list).reset_index()
+
+#         # Add statistics (mean, std_dev) to each commodity
+#         grouped_data['mean'] = grouped_data['price'].apply(lambda x: sum(x) / len(x))
+#         grouped_data['std_dev'] = grouped_data['price'].apply(lambda x: pd.Series(x).std())
+
+#         # Convert to dictionary for JSON response
+#         result = grouped_data.to_dict(orient='records')
+
+#         return jsonify(result)
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 500
+
 
 
 # Run the app
