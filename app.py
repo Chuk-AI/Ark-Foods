@@ -80,6 +80,8 @@ from notebook import get_best_start_dates, fetch_data_from_api
 
 
 
+
+
 # Configuration for Logging
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -109,8 +111,8 @@ CORS(
     resources={
         r"/api/*": {
             "origins": [
-                # "http://localhost:3000",  # Local frontend
-                "https://ark-foods-0594c413a329.herokuapp.com",  # Production frontend
+                "http://localhost:3000",  # Local frontend
+                # "https://ark-foods-0594c413a329.herokuapp.com",  # Production frontend
             ]
         }
     },
@@ -137,7 +139,7 @@ print(f"Endpoint: https://api.ibm.com/geospatial/run/na/core/v3/query")
 
 
 # Enable CORS
-CORS(app, supports_credentials=True, origins=["http://localhost:3000", "http://127.0.0.1", "https://ark-foods-0594c413a329.herokuapp.com"])
+CORS(app, supports_credentials=True, origins=["http://localhost:3000", "http://127.0.0.1"])
 
 
 # Set the secret key for session handling
@@ -226,8 +228,6 @@ class User(UserMixin, db.Model):
 
 
 class PriceData(db.Model):
-    __tablename__ = 'price_data'  # Match the actual table name in the database
-
     id = db.Column(db.Integer, primary_key=True)
     city_name = db.Column(db.String(100), nullable=False)
     commodity = db.Column(db.String(100), nullable=False)
@@ -238,6 +238,7 @@ class PriceData(db.Model):
     season = db.Column(db.String(20), nullable=False)
 
 class ShippingPriceData(db.Model):
+    __tablename__ = 'shipping_price_data'  # Match the actual table name in the database
 
     id = db.Column(db.Integer, primary_key=True)
     commodity = db.Column(db.String, nullable=False)
@@ -774,120 +775,6 @@ def fetch_daily_data():
         logging.info(
             f"Data fetching completed from {start_dt.strftime('%Y-%m-%d')} to {end_dt.strftime('%Y-%m-%d')}."
         )
-
-
-
-
-
-def fetch_shipping_point_data():
-    base_url = "https://api.produceiq.com/index/v2/trends/shipping-point-trends"
-    headers = {"Api-Subscription-Key": "5aa11f87fed04300b05addd031c56ffa"}
-
-    # Define the specific commodities to filter by
-    wanted_commodities = [
-        "Anaheim", "Cubanelles", "Fresno", "Habanero", "Hungarian Wax",
-        "Jalapeno", "Long Hot", "Poblano", "Serrano", "Shishito",
-    ]
-    wanted_commodities = [commodity.lower() for commodity in wanted_commodities]
-
-    standardized_name = {
-        "anaheim": "Anaheim", "cubanelles": "Cubanelles", "fresno": "Fresno",
-        "habanero": "Habanero", "hungarian wax": "Hungarian Wax",
-        "jalapeno": "Jalapeno", "long hot": "Long Hot",
-        "poblano": "Poblano", "serrano": "Serrano", "shishito": "Shishito",
-    }
-
-    # Define date range
-    start_date = pd.Timestamp("2020-01-01")  # Adjust as needed
-    end_date = pd.Timestamp.today()
-
-    current_date = start_date
-
-    while current_date <= end_date:
-        params = {
-            "from": current_date.strftime("%Y-%m-%d"),
-            "to": current_date.strftime("%Y-%m-%d"),
-        }
-        logging.info(f"Fetching data for {params['from']}...")
-
-        response = requests.get(base_url, headers=headers, params=params, verify=False)
-
-        if response.status_code == 200:
-            data = response.json().get("subset", [])
-            logging.info(f"Fetched {len(data)} records for {params['from']}.")
-
-            # Filter and process data
-            for item in data:
-                # Safely handle varietyName
-                variety_name = item.get("varietyName", "")
-                if variety_name:
-                    variety_name = variety_name.strip().lower()
-                else:
-                    variety_name = ""
-
-                # Skip entries without a valid variety name
-                if not variety_name:
-                    logging.warning(f"Skipping entry with missing varietyName: {item}")
-                    continue
-
-                # Compare in standardized format
-                if variety_name in wanted_commodities:
-                    variety_name = standardized_name[variety_name]
-
-                    shipping_price_data = ShippingPriceData(
-                        region_name=item.get("regionName"),
-                        commodity=variety_name,
-                        year=item.get("isoYear"),
-                        day=item.get("day"),
-                        price=item.get("price"),
-                        source="ProduceIQ",
-                        season=determine_season(item.get("isoYear"), item.get("month")),
-                    )
-                    db.session.add(shipping_price_data)
-
-  
-
-
-            # Commit data to the database
-            db.session.commit()
-        else:
-            logging.error(
-                f"Failed to fetch data for {params['from']}. Status code: {response.status_code}"
-            )
-
-        # Move to the next day
-        current_date += pd.Timedelta(days=1)  # Iterate day-by-day
-
-    logging.info("Data fetching completed and stored in the database.")
-
-def determine_season(year, month):
-    """Calculate season based on the month."""
-    if month in [3, 4, 5]:
-        return "Spring"
-    elif month in [6, 7, 8]:
-        return "Summer"
-    elif month in [9, 10, 11]:
-        return "Autumn"
-    else:
-        return "Winter"
-
-if __name__ == "__main__":
-    with app.app_context():  # Wrap all operations in the app context
-        fetch_shipping_point_data()
-
-
-
-@app.route("/fetch-shipping-point-data", methods=["GET"])
-def trigger_fetch_shipping_point_data():
-    try:
-        fetch_shipping_point_data()
-        return {"status": "success", "message": "Data fetched successfully."}, 200
-    except Exception as e:
-        logging.error(f"Error during fetch: {e}")
-        return {"status": "error", "message": str(e)}, 500
-
-
-
 
 
 import numpy as np
@@ -1534,7 +1421,7 @@ def weather_dashboard():
 
 
 @app.route("/api/sales_dashboard", methods=["GET"])
-# @jwt_required()
+@jwt_required()
 def sales_dashboard_api():
     current_user = get_jwt_identity()
 
@@ -2016,10 +1903,78 @@ def api_most_recent_prices():
     return jsonify({"prices": recent_prices})
 
 
-  
+    # shipping most recent prices
+@app.route("/api/most_recent_shipping_prices", methods=["GET"])
+@jwt_required()
+def api_most_recent_shipping_prices():
+    # List of regions and commodities
+    regions = [
+        "Central and South Florida",
+        "Mexico Crossings Through Nogales Arizona",
+        "Mexico Crossings Through Texas",
+        "South Georgia",
+        "Virginia"
+    ]
+    commodities = [
+        "Anaheim",
+        "Cubanelles",
+        "Fresno",
+        "Habanero",
+        "Hungarian Wax",
+        "Jalapeno",
+        "Long Hot",
+        "Poblano",
+        "Serrano",
+        "Shishito",
+    ]
+
+    # Get source from request, default to 'USDA'
+    selected_source = request.args.get("source", "USDA")
+
+    # Calculate the date 7 days ago
+    seven_days_ago = datetime.now(timezone("US/Pacific")) - timedelta(days=7)
+
+    recent_prices = {commodity: {} for commodity in commodities}
+
+    # Fetch the most recent maximum prices for each commodity and region within the last 7 days
+    for commodity in commodities:
+        # Handle special case: If the commodity is "Cubanelles" and the source is "USDA", search for "Cubanelle"
+        if commodity == "Cubanelles" and selected_source == "USDA":
+            commodity_to_query = "Cubanelle"
+        else:
+            commodity_to_query = commodity
+
+        for region in regions:
+            price_entry = (
+                db.session.query(
+                    func.max(ShippingPriceData.price).label("max_price"),
+                    ShippingPriceData.year,
+                    ShippingPriceData.day,
+                )
+                .filter(
+                    ShippingPriceData.commodity
+                    == commodity_to_query,  # Use the adjusted commodity name
+                    func.upper(ShippingPriceData.region_name) == region.upper(),
+                    ShippingPriceData.year >= seven_days_ago.year,
+                    ShippingPriceData.day >= seven_days_ago.timetuple().tm_yday,
+                    ShippingPriceData.source == selected_source,
+                )
+                .group_by(ShippingPriceData.year, ShippingPriceData.day)
+                .order_by(ShippingPriceData.year.desc(), ShippingPriceData.day.desc())
+                .first()
+            )
+
+            # If a price is found, store it; otherwise, store '-'
+            if price_entry:
+                recent_prices[commodity][region] = price_entry.max_price
+            else:
+                recent_prices[commodity][region] = "-"
+
+    return jsonify({"prices": recent_prices})
+
+
 
 @app.route("/api/historical_data", methods=["GET"])
-@jwt_required()
 def historical_data():
     try:
         # Fetch parameters from the frontend
@@ -2185,8 +2140,6 @@ def test_db_connection():
 
 #  route for the shipping point price
 @app.route("/api/shipping_point_price", methods=["GET"])
-@jwt_required()
-
 def shipping_point_price():
     try:
         # Fetch parameters from the frontend
@@ -2983,7 +2936,6 @@ def get_sales_seasonal_prices():
 @app.route("/api/trigger_usda_fetch", methods=["GET"])
 def trigger_usda_fetch():
     fetch_usda_daily_data()
-    # fetch_shipping_point_data()
     fetch_daily_data()
     return "USDA Data Fetch Triggered"
 
@@ -3076,117 +3028,6 @@ def upload_historical():
     except Exception as e:
         logging.error(f"Error during upload: {str(e)}")
         return f"Error during upload: {str(e)}", 500
-
-
-
-
-from sqlalchemy.sql import text  # Import `text` from SQLAlchemy
-
-
-# voilin plot for terminal data
-
-# @app.route("/api/terminal_price_violin", methods=["GET"])
-
-# def terminal_price_violin():
-#     try:
-#         app.logger.info("Fetching data for terminal violin plot...")
-
-#         # Correct SQL query wrapped in `text`
-#         query = text("""
-#         SELECT commodity AS varietyName, price
-#         FROM price_data
-#         WHERE price IS NOT NULL
-#         """)
-
-#         # Fetch and log results
-#         result = db.session.execute(query).fetchall()
-
-#         # Transform into JSON format
-#         data = [{"varietyName": row[0], "price": row[1]} for row in result]
-
-#         return jsonify(data), 200
-#     except Exception as e:
-#         app.logger.error(f"Error fetching data for terminal violin plot: {str(e)}")
-#         return jsonify({"error": "Failed to fetch terminal data"}), 500
-
-
-# # voilin plot for shipping data
-# @app.route("/api/shipping_price_violin", methods=["GET"])
-
-# def shipping_price_violin():
-#     try:
-#         app.logger.info("Fetching data for shipping violin plot...")
-
-#         # Correct SQL query wrapped in `text`
-#         query = text("""
-#         SELECT commodity AS varietyName, price
-#         FROM shipping_price_data
-#         WHERE price IS NOT NULL
-#         """)
-
-#         # Fetch and log results
-#         result = db.session.execute(query).fetchall()
-
-#         # Transform into JSON format
-#         data = [{"varietyName": row[0], "price": row[1]} for row in result]
-
-#         return jsonify(data), 200
-#     except Exception as e:
-#         app.logger.error(f"Error fetching data for shipping violin plot: {str(e)}")
-#         return jsonify({"error": "Failed to fetch shipping data"}), 500
-
-
-# # terminal empricial probability chart fetch
-# @app.route('/api/terminal_empricial_probability', methods=['GET'])
-
-# def get_terminal_empricial_probability():
-#     try:
-#         # Query the database to fetch all price data
-#         data = PriceData.query.all()
-        
-#         # Convert the data to a DataFrame
-#         df = pd.DataFrame([(d.commodity, d.price) for d in data], columns=['commodity', 'price'])
-
-#         # Group prices by commodity
-#         grouped_data = df.groupby('commodity')['price'].apply(list).reset_index()
-
-#         # Add statistics (mean, std_dev) to each commodity
-#         grouped_data['mean'] = grouped_data['price'].apply(lambda x: sum(x) / len(x))
-#         grouped_data['std_dev'] = grouped_data['price'].apply(lambda x: pd.Series(x).std())
-
-#         # Convert to dictionary for JSON response
-#         result = grouped_data.to_dict(orient='records')
-
-#         return jsonify(result)
-#     except Exception as e:
-#         return jsonify({"error": str(e)}), 500
-
-
-# # shipping empricial probability chart fetch
-# @app.route('/api/shipping_empricial_probability', methods=['GET'])
-
-# def get_shipping_empricial_probability():
-#     try:
-#         # Query the database to fetch all shipping price data
-#         data = ShippingPriceData.query.all()
-        
-#         # Convert the data to a DataFrame
-#         df = pd.DataFrame([(d.commodity, d.price) for d in data], columns=['commodity', 'price'])
-
-#         # Group prices by commodity
-#         grouped_data = df.groupby('commodity')['price'].apply(list).reset_index()
-
-#         # Add statistics (mean, std_dev) to each commodity
-#         grouped_data['mean'] = grouped_data['price'].apply(lambda x: sum(x) / len(x))
-#         grouped_data['std_dev'] = grouped_data['price'].apply(lambda x: pd.Series(x).std())
-
-#         # Convert to dictionary for JSON response
-#         result = grouped_data.to_dict(orient='records')
-
-#         return jsonify(result)
-#     except Exception as e:
-#         return jsonify({"error": str(e)}), 500
-
 
 
 # Run the app
