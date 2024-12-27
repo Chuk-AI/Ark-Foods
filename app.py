@@ -785,21 +785,22 @@ def fetch_daily_data():
 
 
         
-from flask import Response
+import threading
 
+
+def async_fetch_shipping_data():
+    try:
+        fetch_shipping_point_data()  # Long-running task
+        print("Data fetch completed successfully.")
+    except Exception as e:
+        print(f"Error: {str(e)}")
 
 @app.route('/fetch-shipping', methods=['GET'])
 def fetch_shipping():
-    def generate():
-        yield "Starting data fetch...\n"
-        try:
-            with app.app_context():
-                fetch_shipping_point_data()  # Ensure app context is active here
-            yield "Data fetch completed successfully.\n"
-        except Exception as e:
-            yield f"Error during data fetch: {str(e)}\n"
+    thread = threading.Thread(target=async_fetch_shipping_data)
+    thread.start()
+    return jsonify({"status": "success", "message": "Task started in background"}), 202
 
-    return Response(generate(), content_type="text/plain")
 
 
 
