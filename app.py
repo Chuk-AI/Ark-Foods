@@ -785,16 +785,20 @@ def fetch_daily_data():
 
 
         
+from flask import Response
+
 @app.route('/fetch-shipping', methods=['GET'])
 def fetch_shipping():
-    try:
-        # Simulate a task (e.g., fetching shipping data)
-        fetch_shipping_point_data()
-        return jsonify({"status": "success", "message": "Task completed successfully"}), 200
-    except Exception as e:
-        # Log the error and skip the task
-        logging.error(f"Task failed: {str(e)}")
-        return jsonify({"status": "error", "message": f"Task failed and skipped: {str(e)}"}), 200
+    def generate():
+        yield "Starting data fetch...\n"
+        # Add your logic here
+        try:
+            fetch_shipping_point_data()
+            yield "Data fetch completed successfully.\n"
+        except Exception as e:
+            yield f"Error during data fetch: {str(e)}\n"
+
+    return Response(generate(), content_type="text/plain")
 
 
 
