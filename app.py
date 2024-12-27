@@ -77,10 +77,8 @@ from flask_jwt_extended import JWTManager, create_access_token, jwt_required, ge
 from sqlalchemy.exc import SQLAlchemyError
 from flask import send_from_directory
 from notebook import get_best_start_dates, fetch_data_from_api
-from fetch_shipping_point_data import fetch_shipping_point_data 
-from celery import Celery
-from celery import current_task
-from celery.result import AsyncResult
+from fetch_shipping_point_data import fetch_shipping_point_data  # Replace with the correct module name
+
 
 
 
@@ -119,25 +117,6 @@ CORS(
         }
     },
 )
-
-
-# Celery configuration
-app.config['CELERY_BROKER_URL'] = 'redis://localhost:6379/0'  # Redis URL
-app.config['CELERY_RESULT_BACKEND'] = 'redis://localhost:6379/0'
-
-# Initialize Celery
-from celery import Celery
-
-def make_celery(app):
-    celery = Celery(
-        app.import_name,
-        backend=app.config['CELERY_RESULT_BACKEND'],
-        broker=app.config['CELERY_BROKER_URL']
-    )
-    celery.conf.update(app.config)
-    return celery
-
-celery = make_celery(app)
 
 
 @jwt.unauthorized_loader
@@ -803,33 +782,19 @@ def fetch_daily_data():
 
 
 
-@celery.task
-def fetch_shipping_data_task():
-    try:
-        logging.info("Fetching shipping data...")
-        fetch_shipping_point_data()  # Call your original function
-        logging.info("Shipping data fetched successfully.")
-        return {"status": "success", "message": "Shipping data fetched successfully"}
-    except Exception as e:
-        logging.error(f"Error in fetch_shipping_data_task: {str(e)}")
-        return {"status": "error", "message": str(e)}
 
 
-
+        
 @app.route('/fetch-shipping', methods=['GET'])
-def trigger_fetch():
+def fetch_shipping():
     try:
-        # Trigger Celery task
-        task = fetch_shipping_data_task.apply_async()
-        return jsonify({
-            "status": "success",
-            "message": "Data fetch task triggered successfully",
-            "task_id": task.id
-        }), 202
+        # Simulate a task (e.g., fetching shipping data)
+        fetch_shipping_point_data()
+        return jsonify({"status": "success", "message": "Task completed successfully"}), 200
     except Exception as e:
-        logging.error(f"Error triggering fetch: {str(e)}")
-        return jsonify({"status": "error", "message": str(e)}), 500
-
+        # Log the error and skip the task
+        logging.error(f"Task failed: {str(e)}")
+        return jsonify({"status": "error", "message": f"Task failed and skipped: {str(e)}"}), 200
 
 
 
