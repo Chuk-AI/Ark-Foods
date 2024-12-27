@@ -111,7 +111,7 @@ CORS(
         r"/api/*": {
             "origins": [
                 # "http://localhost:3000",  # Local frontend
-                "https://ark-foods-0594c413a329.herokuapp.com",  # Production frontend
+                "https://ark-foods-0594c413a329.herokuapp.com/",  # Production frontend
             ]
         }
     },
