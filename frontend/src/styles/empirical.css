@@ -1,19 +1,45 @@
-.chart-grid {
-    display: flex;
-    flex-wrap: wrap; /* Wrap to the next row */
-    justify-content: space-around; 
-  }
-  
-  .chart-item {
-    width: 48%; /* Each chart takes ~half the row */
-    margin-bottom: 20px; /* Space between rows */
-  }
+.empirical-chart-container {
+  padding: 10px; /* Reduced padding */
+  background-color: #f8f9fa; /* Light background color */
+  border-radius: 10px; /* Add rounded corners */
+  box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1); /* Subtle shadow */
+  margin-top: 50px;
+}
 
-  .chart-title {
-    text-align: left; /* Ensure the title aligns to the left */
-    margin: 0 0 20px 0; /* Add space below the title, remove any horizontal margins */
-  }
-  .chart-container {
-    display: block; /* Ensure the container doesn't inherit flex styles */
-    text-align: left; /* Align all content in this container to the left */
-  }
+.chart-title {
+  text-align: left; /* Align the title to the left */
+  font-size: 1.5rem;
+  font-weight: bold;
+  margin-bottom: 10px; /* Space below the title */
+}
+
+.chart-grid {
+  display: flex;
+  flex-wrap: wrap; /* Wrap charts to the next row if needed */
+  gap: 15px; /* Space between each chart */
+  justify-content: center; /* Center-align charts within the container */
+  margin-left: 0; /* Remove any left margin */
+  padding: 0; /* Remove extra padding */
+
+  display: flex;
+  justify-content: center;
+ align-items: center;
+ align-content: center;
+
+
+ border-radius: 15px; /* Adjust the radius as needed */
+ overflow: hidden;    /* Ensures content respects the border-radius */
+ box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Optional: Add a shadow effect */
+ background: #33b1a7; /* Match this with `paper_bgcolor` */
+ padding: 10px;     
+}
+
+.chart-item {
+  width: 30%; /* Smaller width for each chart */
+  min-width: 250px; /* Prevent charts from becoming too small */
+  background-color: #ffffff; /* Background for individual charts */
+  border-radius: 8px; /* Rounded corners for charts */
+  padding: 10px; /* Reduced padding inside the chart box */
+  box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.1); /* Subtle shadow */
+  text-align: center; /* Center-align chart content */
+}

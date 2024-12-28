@@ -1,0 +1,48 @@
+@import url('https://fonts.googleapis.com/css2?family=Ubuntu:ital,wght@0,300;0,400;0,500;0,700;1,300;1,400;1,500;1,700&display=swap');
+
+
+body{
+    font-family: "Ubuntu", serif;
+  font-weight: 300;
+  font-style: normal;
+  margin: 20px;
+  background-color: #f8f9fa;
+}
+.terminal-voilin-wrapper{
+    display: flex;
+    justify-content: center;
+   align-items: center;
+   align-content: center;
+
+
+   border-radius: 15px; /* Adjust the radius as needed */
+   overflow: hidden;    /* Ensures content respects the border-radius */
+   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Optional: Add a shadow effect */
+   background: #e6e6fa; /* Match this with `paper_bgcolor` */
+   padding: 10px;     
+}
+#terminal-voilin-plot-section{
+    margin-top: 100px;
+}
+.terminal-empricial-container{
+    margin-top: 50px;
+}
+
+
+
+.shipping-voilin-wrapper{
+    display: flex;
+    justify-content: center;
+   align-items: center;
+   align-content: center;
+
+
+   border-radius: 15px; /* Adjust the radius as needed */
+   overflow: hidden;    /* Ensures content respects the border-radius */
+   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Optional: Add a shadow effect */
+   background: #e6e6fa; /* Match this with `paper_bgcolor` */
+   padding: 10px;     
+}
+#shipping-voilin-plot-section{
+    margin-top: 50px;
+}

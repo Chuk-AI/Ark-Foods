@@ -8,7 +8,6 @@ import 'leaflet/dist/leaflet.css';
 import XLSX from 'xlsx'; // For handling Excel files
 import moment from 'moment'; // For date-time handling
 import { useEffect, useState, useRef } from 'react';
-import '../styles/sales_styles.css';
 import Header from '../components/header';
 import Footer from '../components/footer';
 import '../styles/sales_styles.css';
@@ -81,20 +80,14 @@ function SalesDashboard() {
     averageCommodities: false,
     averageCities: false,
   });
-  const [terminalViolinData, setTerminalViolinData] = useState([]);
-  const [shippingViolinData, setShippingViolinData] = useState([]);
-
-  // const [terminalEmpiricalData, setTerminalEmpiricalData] = useState([]);
-  // const [terminalEmpiricalLoading, setTerminalEmpiricalLoading] = useState(true);
-  // const [terminalEmpiricalError, setTerminalEmpiricalError] = useState(null);
-
-  // const [shippingEmpiricalData, setShippingEmpiricalData] = useState([]);
-  // const [shippingEmpiricalLoading, setShippingEmpiricalLoading] = useState(true);
-  // const [shippingEmpiricalError, setShippingEmpiricalError] = useState(null);
+  // const [terminalViolinData, setTerminalViolinData] = useState([]);
+  // const [shippingViolinData, setShippingViolinData] = useState([]);
 
 
-  const terminalColors = ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40"];
-  const shippingColors = ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40"];
+
+
+  // const terminalColors = ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40"];
+  // const shippingColors = ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40"];
 
 
   // best sell market
@@ -214,92 +207,92 @@ function SalesDashboard() {
     }));
   };
 
-  // Prepare data for Plotly
-  const fetchTerminalViolinData = async () => {
-    try {
-      const response = await fetch('/api/terminal_price_violin');
-      console.log('Terminal API Response Status:', response.status);
+  // // Prepare data for Plotly
+  // const fetchTerminalViolinData = async () => {
+  //   try {
+  //     const response = await fetch('/api/terminal_price_violin');
+  //     console.log('Terminal API Response Status:', response.status);
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch terminal violin plot data');
-      }
+  //     if (!response.ok) {
+  //       throw new Error('Failed to fetch terminal violin plot data');
+  //     }
 
-      const data = await response.json();
-      console.log('Fetched Terminal Data:', data); // Log the fetched data
-      setTerminalViolinData(data);
-    } catch (error) {
-      console.error('Error fetching terminal violin data:', error);
-    }
-  };
+  //     const data = await response.json();
+  //     console.log('Fetched Terminal Data:', data); // Log the fetched data
+  //     setTerminalViolinData(data);
+  //   } catch (error) {
+  //     console.error('Error fetching terminal violin data:', error);
+  //   }
+  // };
 
-  useEffect(() => {
-    fetchTerminalViolinData();
-  }, []);
+  // useEffect(() => {
+  //   fetchTerminalViolinData();
+  // }, []);
 
-  // Fetch data for the shipping violin plot
-  const fetchShippingViolinData = async () => {
-    try {
-      const response = await fetch('/api/shipping_price_violin');
-      console.log('Shipping API Response Status:', response.status);
+  // // Fetch data for the shipping violin plot
+  // const fetchShippingViolinData = async () => {
+  //   try {
+  //     const response = await fetch('/api/shipping_price_violin');
+  //     console.log('Shipping API Response Status:', response.status);
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch shipping violin plot data');
-      }
+  //     if (!response.ok) {
+  //       throw new Error('Failed to fetch shipping violin plot data');
+  //     }
 
-      const data = await response.json();
-      console.log('Fetched Shipping Data:', data); // Log the fetched data
-      setShippingViolinData(data);
-    } catch (error) {
-      console.error('Error fetching shipping violin data:', error);
-    }
-  };
+  //     const data = await response.json();
+  //     console.log('Fetched Shipping Data:', data); // Log the fetched data
+  //     setShippingViolinData(data);
+  //   } catch (error) {
+  //     console.error('Error fetching shipping violin data:', error);
+  //   }
+  // };
 
-  useEffect(() => {
-    fetchShippingViolinData();
-  }, []);
+  // useEffect(() => {
+  //   fetchShippingViolinData();
+  // }, []);
 
-  // Prepare data for the terminal violin plot
-  const TerminalplotData = Object.values(
-    terminalViolinData.reduce((acc, item) => {
-      const { varietyName, price } = item;
+  // // Prepare data for the terminal violin plot
+  // const TerminalplotData = Object.values(
+  //   terminalViolinData.reduce((acc, item) => {
+  //     const { varietyName, price } = item;
 
-      // Ensure unique grouping by varietyName
-      if (!acc[varietyName]) {
-        acc[varietyName] = {
-          type: 'violin',
-          y: [], // Initialize prices array
-          name: varietyName, // x-axis label
-          box: { visible: true },
-          meanline: { visible: true },
-          marker: { color: '#636efa' },
-        };
-      }
+  //     // Ensure unique grouping by varietyName
+  //     if (!acc[varietyName]) {
+  //       acc[varietyName] = {
+  //         type: 'violin',
+  //         y: [], // Initialize prices array
+  //         name: varietyName, // x-axis label
+  //         box: { visible: true },
+  //         meanline: { visible: true },
+  //         marker: { color: '#636efa' },
+  //       };
+  //     }
 
-      // Add price to the corresponding variety
-      acc[varietyName].y.push(price);
+  //     // Add price to the corresponding variety
+  //     acc[varietyName].y.push(price);
 
-      return acc;
-    }, {})
-  );
+  //     return acc;
+  //   }, {})
+  // );
 
-  // Prepare data for the shipping violin plot
-  const ShippingplotData = shippingViolinData.reduce((acc, item) => {
-    const { varietyName, price } = item;
-    const existingEntry = acc.find((entry) => entry.name === varietyName);
-    if (existingEntry) {
-      existingEntry.y.push(price);
-    } else {
-      acc.push({
-        type: 'violin',
-        y: [price],
-        name: varietyName,
-        box: { visible: true },
-        meanline: { visible: true },
-        marker: { color: '#00cc96' }, // Color for shipping plot
-      });
-    }
-    return acc;
-  }, []);
+  // // Prepare data for the shipping violin plot
+  // const ShippingplotData = shippingViolinData.reduce((acc, item) => {
+  //   const { varietyName, price } = item;
+  //   const existingEntry = acc.find((entry) => entry.name === varietyName);
+  //   if (existingEntry) {
+  //     existingEntry.y.push(price);
+  //   } else {
+  //     acc.push({
+  //       type: 'violin',
+  //       y: [price],
+  //       name: varietyName,
+  //       box: { visible: true },
+  //       meanline: { visible: true },
+  //       marker: { color: '#00cc96' }, // Color for shipping plot
+  //     });
+  //   }
+  //   return acc;
+  // }, []);
 
   // Section Titles
   const sectionTitles = {
@@ -843,7 +836,7 @@ function SalesDashboard() {
       fill: false,
       tension: 0.1,
       borderWidth: 2,
-      pointRadius: 3,
+      pointRadius: 0,
       pointHoverRadius: 5,
       spanGaps: true,
       borderColor: dataset.borderColor || getColor(index),
@@ -924,9 +917,10 @@ function SalesDashboard() {
               color: '#666666',
               font: { size: 11 },
             },
-            datalabels: {
-              display: false, // Globally disable datalabels
-            },
+          
+          },
+          datalabels: {
+            display: false, // Globally disable datalabels
           },
         },
         interaction: { mode: 'index', intersect: false },
@@ -988,78 +982,6 @@ function SalesDashboard() {
     });
   }, []);
 
-  // for terminal empricial probability charts
-
-  // useEffect(() => {
-  //   // Fetch data from the backend API
-  //   const fetchData = async () => {
-  //     try {
-  //       const response = await fetch('/api/terminal_empricial_probability');
-  //       if (!response.ok) throw new Error('Failed to fetch data');
-
-  //       const result = await response.json();
-  //       setTerminalEmpiricalData(result);
-  //       setTerminalEmpiricalLoading(false);
-  //     } catch (err) {
-  //       setTerminalEmpiricalError(err.message);
-  //       setTerminalEmpiricalLoading(false);
-  //     }
-  //   };
-
-  //   fetchData();
-  // }, []);
-
-  // if (terminalEmpiricalLoading) {
-  //   console.log('terminal Empirical Loading');
-  // }
-
-  // if (terminalEmpiricalError) {
-  //   console.log('terminal Empirical Error');
-  // }
-
-  // const colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
-
-  // // Generate subplots for each commodity
-  // const traces = terminalEmpiricalData.map((item, index) => {
-  //   const mean = item.mean;
-  //   const std_dev = item.std_dev;
-
-  //   return [
-  //     // Histogram for prices
-  //     {
-  //       x: item.price,
-  //       type: 'histogram',
-  //       name: item.commodity,
-  //       marker: { color: colors[index % colors.length] },
-  //       opacity: 0.75,
-  //       nbinsx: 50, // Number of bins
-  //     },
-  //     // Line for mean
-  //     {
-  //       x: [mean, mean],
-  //       y: [0, 50], // Adjust the y-range dynamically if needed
-  //       type: 'scatter',
-  //       mode: 'lines',
-  //       line: { color: 'red', dash: 'dash' },
-  //       name: `${item.commodity} Mean`,
-  //       showlegend: false,
-  //     },
-  //     // Markers for standard deviation
-  //     {
-  //       x: [mean - std_dev, mean + std_dev],
-  //       y: [0, 0],
-  //       type: 'scatter',
-  //       mode: 'markers',
-  //       marker: { color: 'blue', size: 8, symbol: 'cross' },
-  //       name: `${item.commodity} Std Dev`,
-  //       showlegend: false,
-  //     },
-  //   ];
-  // });
-
-  // for shipping empricial probability charts
-
-  
 
   return (
     <div>
@@ -1368,7 +1290,7 @@ function SalesDashboard() {
                   value={shippingPointFilterState.regions}
                   onChange={handleShippingRegionChange}
                 >
-                  {['Central and South Florida', 'Texas', 'California', 'Arizona', 'New Mexico', 'Georgia', 'North Carolina', 'Virginia'].map((region) => (
+                  {['Central and South Florida', 'south georgia', 'mexico crossings through texas', 'mexico crossings through nogales arizona', 'Virginia'].map((region) => (
                     <option key={region} value={region}>
                       {region}
                     </option>
@@ -1609,7 +1531,7 @@ function SalesDashboard() {
                   </div>
                 </div>
               </div>
-              {/* terminal voilin plot */}
+              {/* terminal voilin plot
               <div id="terminal-voilin-plot-section" className="section">
                 <div>
                   <h2>Terminal Violin Plot</h2>
@@ -1639,7 +1561,6 @@ function SalesDashboard() {
               </div>
 
 
-              {/* // Empirical Probability for Terminal prices * */}
               <div className="container-fluid d-flex">
         <div className="main-content flex-grow-1">
           <EmpiricalChart
@@ -1653,7 +1574,6 @@ function SalesDashboard() {
       </div>
 
 
-              {/* shipping voilin plot */}
               <div id="shipping-voilin-plot-section" className="section" style={{ marginTop: '100px' }}>
                 <div>
                   <h2>Shipping Violin Plot</h2>
@@ -1676,21 +1596,18 @@ function SalesDashboard() {
                   )}
                 </div>
               </div>
-              {/*  Empirical Probability for shipping prices */}
              
               <div className="container-fluid d-flex">
         <div className="main-content flex-grow-1">      
 
-          {/* Shipping Empirical Probability Chart */}
           <EmpiricalChart
             apiEndpoint="/api/shipping_empricial_probability"
             title="Shipping Empirical Probability"
             colors={shippingColors}
           />
         </div>
-      </div>
+      </div> */}
 
-              {/* Right Sidebar for Minimized Blocks */}
               <div ref={rightSidebarRef} id="minimized-sidebar" className=" collapsed">
                 <div id="right-sidebar-toggle" onClick={toggleRightSidebar}>
                   <i className="rightbar-icon">...</i>
