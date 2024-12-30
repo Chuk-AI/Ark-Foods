@@ -109,24 +109,30 @@ export default function DashAnalytics() {
 
 // Correlation of Terminal market price
 
-      useEffect(() => {
-        // Fetch the correlation matrix from the Flask API
-        fetch("/api/terminal_correlation")
-          .then((response) => response.json())
-          .then((data) => {
-            setCorrelationTerminal(data);
-          })
-          .catch((error) => {
-            console.error("Error fetching correlation matrix:", error);
-          });
-      }, []);
-    
-      if (!correlationTerminal) return <p>Loading...</p>;
-    
-      // Prepare data for Plotly
-      const labels = Object.keys(correlationTerminal); // Extract commodity names
-      const z = labels.map((row) => labels.map((col) => correlationTerminal[row][col])); // Build matrix
+useEffect(() => {
+  // Fetch the correlation matrix from the Flask API
+  fetch("/api/terminal_correlation")
+    .then((response) => response.json())
+    .then((data) => {
+      if (data && data.correlation) {
+        setCorrelationTerminal(data.correlation); // Only set the correlation data
+      } else {
+        console.error("Correlation data missing in API response");
+      }
+    })
+    .catch((error) => {
+      console.error("Error fetching correlation matrix:", error);
+    });
+}, []);
 
+if (!correlationTerminal) return <p>Loading...</p>;
+
+// Prepare data for Plotly
+const labels = Object.keys(correlationTerminal); // Extract commodity names
+const z = labels.map((row) => labels.map((col) => correlationTerminal[row][col] || 0)); // Build matrix and handle undefined values
+
+    
+    
       
 
   return (
@@ -214,35 +220,48 @@ export default function DashAnalytics() {
       </div>
 
       <Plot
-      data={[
-        {
-          z: z,
-          x: labels,
-          y: labels,
-          type: "heatmap",
-          colorscale: "CoolWarm",
-          showscale: true,
-          text: z.map((row) => row.map((val) => val.toFixed(2))),
-          hoverinfo: "text",
+  data={[
+    {
+      z: z,
+      x: labels,
+      y: labels,
+      type: "heatmap",
+      colorscale: "CoolWarm",
+      showscale: true,
+      text: z.map((row) =>
+        row.map((val) => (typeof val === "number" ? val.toFixed(2) : "N/A"))
+      ), // Text values for each cell
+      hoverinfo: "text", // Show text on hover
+    },
+  ]}
+  layout={{
+    title: "Correlation Matrix of Terminal Market Prices",
+    xaxis: {
+      title: "Pepper types",
+      tickangle: -45,
+    },
+    yaxis: {
+      title: "Pepper types",
+      automargin: true,
+    },
+    height: 600,
+    width: 800,
+    annotations: labels.flatMap((rowLabel, rowIndex) =>
+      labels.map((colLabel, colIndex) => ({
+        x: colLabel,
+        y: rowLabel,
+        text: z[rowIndex][colIndex]?.toFixed(2),
+        showarrow: false,
+        font: {
+          color: "white", // Adjust the color if needed for better contrast
+          size: 10,
         },
-      ]}
-      layout={{
-        title: "Correlation Matrix of Terminal Market Prices",
-        xaxis: {
-          title: "Pepper types",
-          tickangle: -45,
-        },
-        yaxis: {
-          title: "Pepper types",
-          automargin: true,
-        },
-        height: 600,
-        width: 800,
-      }}
-    />
+      }))
+    ), // Add annotations for each cell
+  }}
+/>
 
 
-      
 
        <Footer/>
     </div>

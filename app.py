@@ -3153,28 +3153,45 @@ def get_shipping_empricial_probability():
         return jsonify({"error": str(e)}), 500
 
 
+
+from sklearn.preprocessing import StandardScaler
+
 @app.route("/api/terminal_correlation", methods=["GET"])
 def get_terminal_correlation():
     try:
-        # Query data from the price_data table, filtering by source or other conditions if necessary
+        # Query data from the price_data table
         result = db.session.query(PriceData.commodity, PriceData.price).all()
+        print(result)
 
         if not result:
             return jsonify({"error": "No data found"}), 404
 
         # Organize data into a pandas DataFrame
         data = pd.DataFrame(result, columns=["commodity", "price"])
+        print(data.head())
+        print(data.describe())  # Check summary statistics
 
         # Pivot the data to create a matrix with commodities as both rows and columns
         pivot_table = data.pivot_table(values="price", index="commodity", columns="commodity")
+        print(pivot_table)
+
+        # Scale the data using StandardScaler
+        scaler = StandardScaler()
+        scaled_data = scaler.fit_transform(pivot_table.fillna(0))  # Fill NaN with 0 for scaling
+        scaled_df = pd.DataFrame(scaled_data, index=pivot_table.index, columns=pivot_table.columns)
 
         # Compute the Pearson correlation matrix
-        correlation_matrix = pivot_table.corr(method="pearson").fillna(0)
+        correlation_matrix = scaled_df.corr()
+        print(correlation_matrix)
 
         # Convert the correlation matrix to a JSON-serializable format
-        correlation_dict = correlation_matrix.to_dict()
+        correlation_dict = correlation_matrix.fillna(0).to_dict()
+        print(correlation_dict)
 
-        return jsonify(correlation_dict), 200
+        # Compute summary statistics for each commodity
+        summary_stats = data.groupby("commodity").price.describe().to_dict()
+
+        return jsonify({"correlation": correlation_dict, "summary": summary_stats}), 200
     except Exception as e:
         app.logger.error(f"Error computing correlation matrix: {e}")
         return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
