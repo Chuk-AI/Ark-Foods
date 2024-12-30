@@ -46,3 +46,16 @@ body{
 #shipping-voilin-plot-section{
     margin-top: 50px;
 }
+
+.corr-section{
+    display: flex;
+    justify-content: space-between;
+    padding: 20px;
+    border-radius: 20px;
+    background: #33b1a7;
+    margin-top: 30px;
+}
+.correlations{
+    margin-top: 100px;
+
+}
