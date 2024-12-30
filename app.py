@@ -3154,48 +3154,89 @@ def get_shipping_empricial_probability():
 
 
 
-from sklearn.preprocessing import StandardScaler
+import traceback  # Add this at the top with your other imports
 
 @app.route("/api/terminal_correlation", methods=["GET"])
 def get_terminal_correlation():
     try:
-        # Query data from the price_data table
-        result = db.session.query(PriceData.commodity, PriceData.price).all()
-        print(result)
-
+        # Query data including ID to maintain order
+        result = db.session.query(
+            PriceData.id,  # Include ID for ordering
+            PriceData.commodity, 
+            PriceData.price
+        ).order_by(PriceData.id).all()
+        
         if not result:
             return jsonify({"error": "No data found"}), 404
 
-        # Organize data into a pandas DataFrame
-        data = pd.DataFrame(result, columns=["commodity", "price"])
-        print(data.head())
-        print(data.describe())  # Check summary statistics
+        # Create DataFrame with ordered data
+        data = pd.DataFrame(result, columns=["id", "commodity", "price"])
+        
+        # Add debug logging
+        app.logger.info(f"Total records: {len(data)}")
+        app.logger.info(f"Unique commodities: {data['commodity'].nunique()}")
+        app.logger.info("Sample of data:")
+        app.logger.info(data.head())
 
-        # Pivot the data to create a matrix with commodities as both rows and columns
-        pivot_table = data.pivot_table(values="price", index="commodity", columns="commodity")
-        print(pivot_table)
-
-        # Scale the data using StandardScaler
-        scaler = StandardScaler()
-        scaled_data = scaler.fit_transform(pivot_table.fillna(0))  # Fill NaN with 0 for scaling
-        scaled_df = pd.DataFrame(scaled_data, index=pivot_table.index, columns=pivot_table.columns)
-
-        # Compute the Pearson correlation matrix
-        correlation_matrix = scaled_df.corr()
-        print(correlation_matrix)
-
-        # Convert the correlation matrix to a JSON-serializable format
-        correlation_dict = correlation_matrix.fillna(0).to_dict()
-        print(correlation_dict)
-
+        # Create segments for each commodity based on order of entries
+        data['segment'] = data.groupby('commodity').cumcount()
+        
+        # Create pivot table using segments instead of timestamps
+        pivot_table = data.pivot(index='segment', 
+                               columns='commodity', 
+                               values='price')
+        
+        # Remove segments where we don't have data for all commodities
+        pivot_table = pivot_table.dropna()
+        
+        # Log pivot table info
+        app.logger.info(f"Pivot table shape: {pivot_table.shape}")
+        app.logger.info(f"Number of price points per commodity: {len(pivot_table)}")
+        
+        # Calculate percentage changes between consecutive prices
+        returns = pivot_table.pct_change().dropna()
+        
+        # Compute correlation matrix only if we have enough data
+        if len(returns) < 2:
+            return jsonify({"error": "Insufficient data for correlation"}), 400
+            
+        correlation_matrix = returns.corr()
+        
+        # Log correlation statistics
+        app.logger.info(f"Correlation matrix shape: {correlation_matrix.shape}")
+        app.logger.info(f"Correlation range: [{correlation_matrix.min().min():.2f}, {correlation_matrix.max().max():.2f}]")
+        
+        # Convert to dictionary and handle any remaining NaN values
+        correlation_dict = correlation_matrix.round(4).fillna(0).to_dict()
+        
         # Compute summary statistics for each commodity
-        summary_stats = data.groupby("commodity").price.describe().to_dict()
-
-        return jsonify({"correlation": correlation_dict, "summary": summary_stats}), 200
+        summary_stats = {
+            commodity: {
+                'count': len(data[data['commodity'] == commodity]),
+                'mean': data[data['commodity'] == commodity]['price'].mean(),
+                'std': data[data['commodity'] == commodity]['price'].std(),
+                'min': data[data['commodity'] == commodity]['price'].min(),
+                'max': data[data['commodity'] == commodity]['price'].max(),
+                'price_changes': len(returns)
+            }
+            for commodity in data['commodity'].unique()
+        }
+        
+        return jsonify({
+            "correlation": correlation_dict,
+            "summary": summary_stats,
+            "metadata": {
+                "total_records": len(data),
+                "unique_commodities": data['commodity'].nunique(),
+                "price_points_used": len(pivot_table),
+                "price_changes_analyzed": len(returns)
+            }
+        }), 200
+        
     except Exception as e:
-        app.logger.error(f"Error computing correlation matrix: {e}")
+        app.logger.error(f"Error computing correlation matrix: {str(e)}")
+        app.logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
-
 
 
 
