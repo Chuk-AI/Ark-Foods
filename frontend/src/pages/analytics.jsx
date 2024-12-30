@@ -11,6 +11,8 @@ export default function DashAnalytics() {
     const [terminalViolinData, setTerminalViolinData] = useState([]);
     const [shippingViolinData, setShippingViolinData] = useState([]);
   
+    const [correlationTerminal, setCorrelationTerminal] = useState(null);
+
   
   
   
@@ -105,6 +107,28 @@ export default function DashAnalytics() {
       }, []);
     
 
+// Correlation of Terminal market price
+
+      useEffect(() => {
+        // Fetch the correlation matrix from the Flask API
+        fetch("/api/terminal_correlation")
+          .then((response) => response.json())
+          .then((data) => {
+            setCorrelationTerminal(data);
+          })
+          .catch((error) => {
+            console.error("Error fetching correlation matrix:", error);
+          });
+      }, []);
+    
+      if (!correlationTerminal) return <p>Loading...</p>;
+    
+      // Prepare data for Plotly
+      const labels = Object.keys(correlationTerminal); // Extract commodity names
+      const z = labels.map((row) => labels.map((col) => correlationTerminal[row][col])); // Build matrix
+
+      
+
   return (
     <div>
         <Header/>
@@ -138,8 +162,8 @@ export default function DashAnalytics() {
   )}
 </div>
 
-              {/* // Empirical Probability for Terminal prices * */}
-              <div className="terminal-empricial-container d-flex">
+         {/* // Empirical Probability for Terminal prices * */}
+        <div className="terminal-empricial-container d-flex">
         <div className=" ">
           <EmpiricalChart
             apiEndpoint="/api/terminal_empricial_probability"
@@ -178,13 +202,9 @@ export default function DashAnalytics() {
   )}
 </div>
 
-
-              {/*  Empirical Probability for shipping prices */}
-             
-              <div className="shipping-empricial-container d-flex">
+        {/*  Empirical Probability for shipping prices */}
+        <div className="shipping-empricial-container d-flex">
         <div >      
-
-          {/* Shipping Empirical Probability Chart */}
           <EmpiricalChart
             apiEndpoint="/api/shipping_empricial_probability"
             title="Shipping Empirical Probability"
@@ -192,6 +212,37 @@ export default function DashAnalytics() {
           />
         </div>
       </div>
+
+      <Plot
+      data={[
+        {
+          z: z,
+          x: labels,
+          y: labels,
+          type: "heatmap",
+          colorscale: "CoolWarm",
+          showscale: true,
+          text: z.map((row) => row.map((val) => val.toFixed(2))),
+          hoverinfo: "text",
+        },
+      ]}
+      layout={{
+        title: "Correlation Matrix of Terminal Market Prices",
+        xaxis: {
+          title: "Pepper types",
+          tickangle: -45,
+        },
+        yaxis: {
+          title: "Pepper types",
+          automargin: true,
+        },
+        height: 600,
+        width: 800,
+      }}
+    />
+
+
+      
 
        <Footer/>
     </div>

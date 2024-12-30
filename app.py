@@ -3102,29 +3102,7 @@ def get_terminal_empricial_probability():
 
 
 
-# @app.route('/api/terminal_empricial_probability', methods=['GET'])
 
-# def get_terminal_empricial_probability():
-#     try:
-#         # Query the database to fetch all price data
-#         data = PriceData.query.all()
-        
-#         # Convert the data to a DataFrame
-#         df = pd.DataFrame([(d.commodity, d.price) for d in data], columns=['commodity', 'price'])
-
-#         # Group prices by commodity
-#         grouped_data = df.groupby('commodity')['price'].apply(list).reset_index()
-
-#         # Add statistics (mean, std_dev) to each commodity
-#         grouped_data['mean'] = grouped_data['price'].apply(lambda x: sum(x) / len(x))
-#         grouped_data['std_dev'] = grouped_data['price'].apply(lambda x: pd.Series(x).std())
-
-#         # Convert to dictionary for JSON response
-#         result = grouped_data.to_dict(orient='records')
-
-#         return jsonify(result)
-#     except Exception as e:
-#         return jsonify({"error": str(e)}), 500
 
 
 # shipping empricial probability chart fetch
@@ -3175,33 +3153,33 @@ def get_shipping_empricial_probability():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/terminal_correlation", methods=["GET"])
+def get_terminal_correlation():
+    try:
+        # Query data from the price_data table, filtering by source or other conditions if necessary
+        result = db.session.query(PriceData.commodity, PriceData.price).all()
+
+        if not result:
+            return jsonify({"error": "No data found"}), 404
+
+        # Organize data into a pandas DataFrame
+        data = pd.DataFrame(result, columns=["commodity", "price"])
+
+        # Pivot the data to create a matrix with commodities as both rows and columns
+        pivot_table = data.pivot_table(values="price", index="commodity", columns="commodity")
+
+        # Compute the Pearson correlation matrix
+        correlation_matrix = pivot_table.corr(method="pearson").fillna(0)
+
+        # Convert the correlation matrix to a JSON-serializable format
+        correlation_dict = correlation_matrix.to_dict()
+
+        return jsonify(correlation_dict), 200
+    except Exception as e:
+        app.logger.error(f"Error computing correlation matrix: {e}")
+        return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
 
 
-
-
-# @app.route('/api/shipping_empricial_probability', methods=['GET'])
-
-# def get_shipping_empricial_probability():
-#     try:
-#         # Query the database to fetch all shipping price data
-#         data = ShippingPriceData.query.all()
-        
-#         # Convert the data to a DataFrame
-#         df = pd.DataFrame([(d.commodity, d.price) for d in data], columns=['commodity', 'price'])
-
-#         # Group prices by commodity
-#         grouped_data = df.groupby('commodity')['price'].apply(list).reset_index()
-
-#         # Add statistics (mean, std_dev) to each commodity
-#         grouped_data['mean'] = grouped_data['price'].apply(lambda x: sum(x) / len(x))
-#         grouped_data['std_dev'] = grouped_data['price'].apply(lambda x: pd.Series(x).std())
-
-#         # Convert to dictionary for JSON response
-#         result = grouped_data.to_dict(orient='records')
-
-#         return jsonify(result)
-#     except Exception as e:
-#         return jsonify({"error": str(e)}), 500
 
 
 
