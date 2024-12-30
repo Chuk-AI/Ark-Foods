@@ -27,9 +27,9 @@ function SalesDashboard() {
   const [last7Days, setLast7Days] = useState(false);
   const [bestMarketData, setBestMarketData] = useState([]);
   // const [chartInstance, setChartInstance] = useState(null);
-  const [currentSectionTitle, setCurrentSectionTitle] = useState('Best Sell Market');
+  const [currentSectionTitle, setCurrentSectionTitle] = useState('Most Recent Price');
   const [filters, setFilters] = useState({
-    bestSellMarket: true,
+    bestSellMarket: false,
     map: false,
     seasonalTrends: false,
     historicalData: false,
@@ -1361,6 +1361,43 @@ function SalesDashboard() {
 
         {/* Main Content */}
         <div className="main-content flex-grow-1">
+        <div id="most-recent-price-section" className="section">
+                <div className="row mb-4 salesBody">
+                  <div className="col-12 mb-4">
+                    <div className="card resizable-block" id="most-recent-prices-card" data-block-title="Most Recent Prices">
+                      <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                        <h2>Most Recent Prices</h2>
+                        <button
+                          className="btn btn-sm btn-outline-light toggle-size"
+                          data-block-title="Most Recent Prices"
+                          onClick={() => toggleBlockSize('most-recent-prices-card', 'Most Recent Prices')}
+                        >
+                          Minimize
+                        </button>
+                      </div>
+                      <div className="card-body p-0">
+                        <table className="table table-striped table-hover table-bordered" id="most-recent-prices-table">
+                          <thead className="thead-dark">
+                            <tr>
+                              <th>Commodity</th>
+                              <th>Baltimore</th>
+                              <th>Boston</th>
+                              <th>Chicago</th>
+                              <th>Columbia</th>
+                              <th>Miami</th>
+                              <th>New York</th>
+                              <th>Philadelphia</th>
+                              <th>Los Angeles</th>
+                            </tr>
+                          </thead>
+                          <tbody>{updateMostRecentPricesTable()}</tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
           <div id="best-sell-market-section" className="section">
             <div className="row mb-4 sales-Body">
               {/* Best Sell Market Table */}
@@ -1428,42 +1465,7 @@ function SalesDashboard() {
                 </div>
               </div>
               {/* Row 2: Most Recent Prices Table */}
-              <div id="most-recent-price-section" className="section">
-                <div className="row mb-4 salesBody">
-                  <div className="col-12 mb-4">
-                    <div className="card resizable-block" id="most-recent-prices-card" data-block-title="Most Recent Prices">
-                      <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                        <h2>Most Recent Prices</h2>
-                        <button
-                          className="btn btn-sm btn-outline-light toggle-size"
-                          data-block-title="Most Recent Prices"
-                          onClick={() => toggleBlockSize('most-recent-prices-card', 'Most Recent Prices')}
-                        >
-                          Minimize
-                        </button>
-                      </div>
-                      <div className="card-body p-0">
-                        <table className="table table-striped table-hover table-bordered" id="most-recent-prices-table">
-                          <thead className="thead-dark">
-                            <tr>
-                              <th>Commodity</th>
-                              <th>Baltimore</th>
-                              <th>Boston</th>
-                              <th>Chicago</th>
-                              <th>Columbia</th>
-                              <th>Miami</th>
-                              <th>New York</th>
-                              <th>Philadelphia</th>
-                              <th>Los Angeles</th>
-                            </tr>
-                          </thead>
-                          <tbody>{updateMostRecentPricesTable()}</tbody>
-                        </table>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+          
               {/* Seasonal Trends */}
               <div id="seasonal-trends-section" className="section">
                 <div className="col-lg-12 mb-4">

@@ -3323,6 +3323,65 @@ def get_shipping_correlation():
         return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
 
 
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+
+
+@app.route("/api/terminal_scatterplot_matrix", methods=["GET"])
+def get_terminal_scatterplot_matrix():
+    try:
+        result = db.session.query(PriceData.commodity, PriceData.price).all()
+
+        if not result:
+            return jsonify({"error": "No data found"}), 404
+
+        # Create a DataFrame
+        data = pd.DataFrame(result, columns=["commodity", "price"]).dropna()
+
+        if data.empty:
+            return jsonify({"error": "No valid data available"}), 404
+
+        # Create a pivot table, filling missing values with 0
+        pivot_data = data.pivot_table(
+            values="price", index=data.index, columns="commodity", aggfunc="mean"
+        ).fillna(0)
+
+        if pivot_data.empty:
+            return jsonify({"error": "No pivot data available"}), 404
+
+        varieties = pivot_data.columns
+        scatter_matrix = make_subplots(
+            rows=len(varieties), cols=len(varieties), shared_xaxes=True, shared_yaxes=True
+        )
+
+        for i, variety_x in enumerate(varieties):
+            for j, variety_y in enumerate(varieties):
+                scatter_matrix.add_trace(
+                    go.Scatter(
+                        x=pivot_data[variety_x].tolist(),
+                        y=pivot_data[variety_y].tolist(),
+                        mode="markers",
+                        marker=dict(size=3, opacity=0.8),
+                    ),
+                    row=i + 1,
+                    col=j + 1,
+                )
+
+        scatter_matrix.update_layout(
+            title="Scatterplot Matrix of Terminal Market Prices",
+            height=1500,
+            width=1500,
+            showlegend=False,
+            font=dict(family="Arial"),
+        )
+
+        return jsonify(scatter_matrix.to_plotly_json()), 200
+
+    except Exception as e:
+        app.logger.error(f"Error generating scatterplot matrix: {str(e)}")
+        return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
+
+
 
 # Run the app
 if __name__ == "__main__":
