@@ -6,6 +6,7 @@ import '../styles/analytics.css';
 import Plot from 'react-plotly.js';
 import EmpiricalChart from '../components/empirical';
 import CorrelationsPlots from '../components/correlations'
+import ScatterPlot from '../components/scatterPlots';
 
 export default function DashAnalytics() {
 
@@ -16,7 +17,6 @@ export default function DashAnalytics() {
     const terminalColors = ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40"];
     const shippingColors = ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40"];
 
-    // const [terminalScatterMatrix, setTerminalScatterMatrix] = useState(null);
 
     
     const fetchTerminalViolinData = async () => {
@@ -104,20 +104,6 @@ export default function DashAnalytics() {
         }
         return acc;
       }, []);
-    
-      // useEffect(() => {
-      //   // Fetch terminal scatterplot matrix
-      //   fetch('/api/terminal_scatterplot_matrix')
-      //     .then((response) => response.json())
-      //     .then((data) => {
-      //       if (data && data.data) {
-      //         setTerminalScatterMatrix(data); // Set terminal scatter matrix
-      //       } else {
-      //         console.error('Invalid terminal scatterplot matrix data');
-      //       }
-      //     })
-      //     .catch((error) => console.error('Error fetching terminal scatterplot matrix:', error));
-      // }, []);
     
    
   return (
@@ -209,22 +195,12 @@ export default function DashAnalytics() {
   <CorrelationsPlots />
 </div>
 
-{/* 
-<div>
-      <h1>Scatterplot Matrices</h1>
 
-      {terminalScatterMatrix && (
-        <div style={{ marginBottom: '40px' }}>
-          <h2>Terminal Scatterplot Matrix</h2>
-          <Plot
-            data={terminalScatterMatrix.data}
-            layout={terminalScatterMatrix.layout}
-          />
-        </div>
-      )}
+<div>
+    <ScatterPlot />
 
      
-    </div> */}
+    </div>
 
 
        <Footer/>

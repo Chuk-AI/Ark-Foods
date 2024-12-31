@@ -1,0 +1,28 @@
+.scatter-container{
+    margin-top: 100px;
+}
+.scatter-filter{
+    display: flex;
+    gap: 50px;
+}
+.scatter-filter label{
+    padding: 10px;
+   
+}
+.scatter-filter select{
+    padding: 10px 20px 10px 20px;
+    border: 1px solid #33b1a7;
+    border-radius: 10px;
+}
+.scatter-button{
+    border: 1px solid #33b1a7;
+    border-radius: 10px;
+    background: none;
+
+}
+.scatter-chart{
+
+    display: flex;
+    justify-content: center;
+    margin-top: 20px;
+}
