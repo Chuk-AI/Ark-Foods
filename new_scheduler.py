@@ -15,7 +15,7 @@ def stop_worker_dyno():
         print("Error: Missing HEROKU_API_KEY or HEROKU_APP_NAME environment variables.")
         return
 
-    url = f"https://api.heroku.com/apps/{APP_NAME}/formation/worker2"
+    url = f"https://api.heroku.com/apps/{APP_NAME}/formation/worker"
     headers = {
         "Content-Type": "application/json",
         "Accept": "application/vnd.heroku+json; version=3",
@@ -26,10 +26,10 @@ def stop_worker_dyno():
     response = requests.patch(url, headers=headers, json=data)
 
     if response.status_code == 200:
-        print("Successfully stopped the worker2 dyno.")
+        print("Successfully stopped the worker dyno.")
     else:
         print(
-            f"Failed to stop the worker2 dyno: {response.status_code} - {response.text}"
+            f"Failed to stop the worker dyno: {response.status_code} - {response.text}"
         )
 
 
@@ -55,7 +55,7 @@ if __name__ == "__main__":
     # Add a job to run every 2 hours
     scheduler.add_job(
         execute_scheduled_functions,
-        trigger=IntervalTrigger(hours=2),
+        trigger=IntervalTrigger(hours=1),
         id="scheduled_task",  # Unique job ID
         replace_existing=True,
     )
