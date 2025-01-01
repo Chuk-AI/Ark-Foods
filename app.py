@@ -786,7 +786,7 @@ def fetch_daily_data():
 
 import threading
 
-def async_fetch_shipping_data():
+def fetch_shipping_data():
     with app.app_context():  # Ensure Flask app context is active
         try:
             fetch_shipping_point_data()  # Long-running task
@@ -796,7 +796,7 @@ def async_fetch_shipping_data():
 
 @app.route('/fetch-shipping', methods=['GET'])
 def fetch_shipping():
-    thread = threading.Thread(target=async_fetch_shipping_data)
+    thread = threading.Thread(target=fetch_shipping_data)
     thread.start()
     return jsonify({"status": "success", "message": "Task started in background"}), 202
 
