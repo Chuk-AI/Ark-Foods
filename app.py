@@ -3337,7 +3337,7 @@ def get_terminal_scatterplot_matrix():
         if not commodity_x or not commodity_y:
             return jsonify({"error": "Both commodities must be provided"}), 400
 
-        # Query data for the selected commodities
+        # Query data for the selected commodities from PriceData
         result = db.session.query(PriceData.commodity, PriceData.price).filter(
             PriceData.commodity.in_([commodity_x, commodity_y])
         ).all()
@@ -3351,23 +3351,14 @@ def get_terminal_scatterplot_matrix():
         if df.empty:
             return jsonify({"error": "No valid data available"}), 404
 
-        # Pivot data
-        pivot_data = df.pivot_table(
-            values="price", index=df.index, columns="commodity", aggfunc="mean"
-        ).fillna(0)  # Keep zeros to include in the filtered data
+        # Separate data for each commodity
+        x_data = df[df['commodity'] == commodity_x]['price'].tolist()
+        y_data = df[df['commodity'] == commodity_y]['price'].tolist()
 
-        # Ensure commodities exist in the pivot table
-        if commodity_x not in pivot_data.columns or commodity_y not in pivot_data.columns:
-            return jsonify({
-                "error": f"One or both commodities ({commodity_x}, {commodity_y}) not found in the data."
-            }), 404
+        # Get the minimum length to ensure equal pairs
+        min_length = min(len(x_data), len(y_data))
 
-        # Filter the data (include rows with 0 values)
-        filtered_data = pivot_data[
-            (pivot_data[commodity_x] >= 0) & (pivot_data[commodity_y] >= 0)
-        ]
-
-        if filtered_data.empty:
+        if min_length == 0:
             scatter_plot = go.Figure()
             scatter_plot.update_layout(
                 title="No Data Available",
@@ -3392,10 +3383,10 @@ def get_terminal_scatterplot_matrix():
 
         scatter_plot.add_trace(
             go.Scatter(
-                x=filtered_data[commodity_x].tolist(),
-                y=filtered_data[commodity_y].tolist(),
+                x=x_data[:min_length],
+                y=y_data[:min_length],
                 mode="markers",
-                marker=dict(size=5, opacity=0.8),
+                marker=dict(size=5, opacity=0.8, color="#33b1a7"),
             )
         )
 
@@ -3408,13 +3399,105 @@ def get_terminal_scatterplot_matrix():
             font=dict(family="Arial"),
         )
 
+        # Add debug logging
+        print("Data points for plotting:")
+        print(f"{commodity_x} data (first 5):", x_data[:5])
+        print(f"{commodity_y} data (first 5):", y_data[:5])
+        print(f"Total points being plotted: {min_length}")
+
         return jsonify(scatter_plot.to_plotly_json()), 200
 
     except Exception as e:
-        app.logger.error(f"Error generating scatterplot: {str(e)}")
+        app.logger.error(f"Error generating terminal scatterplot: {str(e)}")
         return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
 
 
+
+
+@app.route("/api/shipping_scatterplot_matrix", methods=["POST"])
+def get_shipping_scatterplot_matrix():
+    try:
+        # Parse input from the frontend
+        data = request.get_json()
+        commodity_x = data.get("commodity_x")
+        commodity_y = data.get("commodity_y")
+
+        if not commodity_x or not commodity_y:
+            return jsonify({"error": "Both commodities must be provided"}), 400
+
+        # Query data for the selected commodities from ShippingPriceData
+        result = db.session.query(ShippingPriceData.commodity, ShippingPriceData.price).filter(
+            ShippingPriceData.commodity.in_([commodity_x, commodity_y])
+        ).all()
+
+        if not result:
+            return jsonify({"error": "No data found for the selected commodities"}), 404
+
+        # Create a DataFrame
+        df = pd.DataFrame(result, columns=["commodity", "price"]).dropna()
+
+        if df.empty:
+            return jsonify({"error": "No valid data available"}), 404
+
+        # Separate data for each commodity
+        x_data = df[df['commodity'] == commodity_x]['price'].tolist()
+        y_data = df[df['commodity'] == commodity_y]['price'].tolist()
+
+        # Get the minimum length to ensure equal pairs
+        min_length = min(len(x_data), len(y_data))
+
+        if min_length == 0:
+            scatter_plot = go.Figure()
+            scatter_plot.update_layout(
+                title="No Data Available",
+                xaxis_title=f"{commodity_x} Prices",
+                yaxis_title=f"{commodity_y} Prices",
+                annotations=[
+                    dict(
+                        text="No valid data available for the selected commodities.",
+                        xref="paper",
+                        yref="paper",
+                        showarrow=False,
+                        font=dict(size=14),
+                    )
+                ],
+                height=600,
+                width=600,
+            )
+            return jsonify(scatter_plot.to_plotly_json()), 200
+
+        # Generate scatter plot
+        scatter_plot = go.Figure()
+
+        scatter_plot.add_trace(
+            go.Scatter(
+                x=x_data[:min_length],
+                y=y_data[:min_length],
+                mode="markers",
+                marker=dict(size=5, opacity=0.8, color="#33b1a7"),
+            )
+        )
+
+        scatter_plot.update_layout(
+            title=f"Scatter Plot: {commodity_x} vs {commodity_y}",
+            xaxis_title=f"{commodity_x} Prices",
+            yaxis_title=f"{commodity_y} Prices",
+            height=600,
+            width=600,
+            font=dict(family="Arial"),
+        )
+
+        # Add debug logging
+        print("Data points for plotting:")
+        print(f"{commodity_x} data (first 5):", x_data[:5])
+        print(f"{commodity_y} data (first 5):", y_data[:5])
+        print(f"Total points being plotted: {min_length}")
+
+        return jsonify(scatter_plot.to_plotly_json()), 200
+
+    except Exception as e:
+        app.logger.error(f"Error generating shipping scatterplot: {str(e)}")
+        return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
 
 
 
