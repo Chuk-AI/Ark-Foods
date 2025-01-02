@@ -26,7 +26,7 @@ def fetch_shipping_point_data():
     }
 
     # Define date range
-    start_date = pd.Timestamp("2020-01-01")  # Adjust as needed
+    start_date = pd.Timestamp("2025-01-01")  # Adjust as needed
     end_date = pd.Timestamp.today()
 
     current_date = start_date

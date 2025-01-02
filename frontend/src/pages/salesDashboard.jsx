@@ -149,7 +149,7 @@ function SalesDashboard() {
     commodities: ['Habanero'], // Default to one or more items
     regions: ["mexico crossings through texas"], // Default to one or more regions
     source: 'ProduceIQ', // Default source for shipping point price
-    startDate: '2020-01-01', // Default to a valid date
+    startDate: '2024-01-01', // Default to a valid date
     endDate: '2024-12-31', // Default to a valid date
     averageCommodities: false,
     averageRegions: false,
