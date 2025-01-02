@@ -2897,7 +2897,7 @@ def get_sales_seasonal_prices():
 @app.route("/api/trigger_usda_fetch", methods=["GET"])
 def trigger_usda_fetch():
     fetch_usda_daily_data()
-    # fetch_shipping_point_data()
+    fetch_shipping_point_data()
     fetch_daily_data()
     return "USDA Data Fetch Triggered"
 

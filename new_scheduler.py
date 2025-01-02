@@ -1,5 +1,3 @@
-from apscheduler.schedulers.blocking import BlockingScheduler
-from apscheduler.triggers.interval import IntervalTrigger
 import os
 import requests
 from app import fetch_shipping_data, fetch_usda_daily_data, fetch_daily_data  # Import your Flask app functions
@@ -44,24 +42,10 @@ def execute_scheduled_functions():
     except Exception as e:
         print(f"Error occurred during scheduled execution: {e}")
     finally:
-        # Stop the worker dyno if needed
+        # Stop the worker dyno if needed (if you're using Heroku worker dyno)
         stop_worker_dyno()
 
 
 if __name__ == "__main__":
-    # Initialize the scheduler
-    scheduler = BlockingScheduler()
-
-    # Add a job to run every 2 hours
-    scheduler.add_job(
-        execute_scheduled_functions,
-        trigger=IntervalTrigger(hours=1),
-        id="scheduled_task",  # Unique job ID
-        replace_existing=True,
-    )
-
-    print("Scheduler started. Tasks will run every 2 hours.")
-    try:
-        scheduler.start()
-    except (KeyboardInterrupt, SystemExit):
-        print("Scheduler stopped.")
+    # Directly execute the tasks when the script is run
+    execute_scheduled_functions()
