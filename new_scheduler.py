@@ -36,7 +36,11 @@ def execute_scheduled_functions():
     try:
         print("Executing scheduled tasks...")
         fetch_daily_data()  # Replace with your actual function calls
+        print("daily data fetched executed successfully.")
+
         fetch_shipping_data()
+        print("shipping data fetched executed successfully.")
+
         fetch_usda_daily_data()  # Replace with your actual function calls
         print("Scheduled tasks executed successfully.")
     except Exception as e:
