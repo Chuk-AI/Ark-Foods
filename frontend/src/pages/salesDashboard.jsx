@@ -1374,7 +1374,7 @@ function SalesDashboard() {
         {/* Main Content */}
         <div className="main-content flex-grow-1">
         <div id="most-recent-price-section" className="section">
-                <div className="row mb-4 salesBody">
+                <div className="row mb-4 salesBody most-recent-container">
                   <div className="col-12 mb-4">
                     <div className="card resizable-block" id="most-recent-prices-card" data-block-title="Most Recent Prices">
                       <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
