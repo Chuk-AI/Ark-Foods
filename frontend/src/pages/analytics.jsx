@@ -7,6 +7,7 @@ import Plot from 'react-plotly.js';
 import EmpiricalChart from '../components/empirical';
 import CorrelationsPlots from '../components/correlations'
 import ScatterPlot from '../components/scatterPlots';
+import RollingCorrelation from '../components/RollingCorrelations'
 
 export default function DashAnalytics() {
 
@@ -198,9 +199,11 @@ export default function DashAnalytics() {
 
 <div>
     <ScatterPlot />
+</div>
 
-     
-    </div>
+{/* <div>
+    <RollingCorrelation />
+</div> */}
 
 
        <Footer/>

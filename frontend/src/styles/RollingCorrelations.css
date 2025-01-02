@@ -1,0 +1,42 @@
+.rolling-correlation-container {
+    width: 100%;
+    margin-top: 100px;
+  }
+  
+  .form-container {
+    display: flex;
+    margin-bottom: 20px;
+    align-items: center;
+  }
+  
+  .form-container label {
+    margin-right: 10px;
+  }
+  
+  .error-message {
+    color: red;
+    margin-top: 10px;
+  }
+  
+  .chart-container {
+    margin-top: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    align-content: center;
+  }
+  .radio-buttons{
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+  }
+  .form-container select{
+    padding: 10px 20px 10px 20px;
+    border: 1px solid #33b1a7;
+    border-radius: 10px;
+  }
+.GapInputs{
+    display: flex;
+    gap: 50px;
+    width: 50%;
+}

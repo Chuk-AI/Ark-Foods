@@ -3501,6 +3501,348 @@ def get_shipping_scatterplot_matrix():
 
 
 
+
+# Rolling Correlations for Terminal prices
+
+import plotly.express as px
+
+def calculate_rolling_price_correlations(window, source_df, series1, series2):
+    """
+    Calculate rolling correlations between two price series.
+    """
+    try:
+        # Sort index to ensure proper time-based calculations
+        source_df = source_df.sort_index()
+        
+        # Forward fill missing values (up to 7 days)
+        source_df = source_df.fillna(method='ffill', limit=7)
+        
+        # Calculate rolling correlation
+        roll_corr = source_df[series1].rolling(
+            window=window,
+            min_periods=window//2  # Allow for some missing data
+        ).corr(source_df[series2])
+        
+        # Convert to JSON serializable format
+        result_df = pd.DataFrame({
+            'date': roll_corr.index,
+            'correlation': roll_corr.values
+        })
+        
+        # Convert numpy values to Python native types
+        result_df['correlation'] = result_df['correlation'].astype(float)
+        result_df['date'] = result_df['date'].dt.strftime('%Y-%m-%d')
+        
+        return result_df
+        
+    except KeyError as e:
+        raise ValueError(f"KeyError: {e}. At least one of the selected varieties has no price data.")
+
+def plot_rolling_price_correlations(roll_corr_df, series1, series2, window):
+    """
+    Create a plotly figure for rolling correlations.
+    """
+    try:
+        # Convert date strings back to datetime for plotting
+        roll_corr_df['date'] = pd.to_datetime(roll_corr_df['date'])
+        
+        fig_roll_corr = px.line(
+            roll_corr_df,
+            x='date',
+            y='correlation',
+            title=f"{window}-day rolling correlation between {series1} and {series2}"
+        )
+
+        fig_roll_corr.update_layout(
+            title={
+                "text": f"{window}-day rolling correlation between {series1} and {series2}",
+                "x": 0.5,
+                "y": 0.9,
+                "xanchor": "center",
+                "yanchor": "top"
+            },
+            xaxis_title="Date",
+            yaxis_title="Correlation Coefficient",
+            yaxis=dict(
+                tickformat='.2f',
+                range=[-1, 1]  # Correlation coefficient ranges from -1 to 1
+            ),
+            height=600,
+            width=600,
+            showlegend=False
+        )
+
+        # Add reference lines
+        fig_roll_corr.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5)
+        fig_roll_corr.add_hline(y=1, line_dash="dot", line_color="gray", opacity=0.3)
+        fig_roll_corr.add_hline(y=-1, line_dash="dot", line_color="gray", opacity=0.3)
+
+        return fig_roll_corr
+        
+    except Exception as e:
+        raise ValueError(f"Error creating plot: {str(e)}")
+
+@app.route("/api/terminal_rolling_correlations", methods=["POST"])
+def terminal_rolling_correlations():
+    try:
+        # Parse input from the frontend
+        data = request.get_json()
+        series1 = data.get("series1")
+        series2 = data.get("series2")
+        window = int(data.get("window", 30))  # Default to 30 days
+
+        if not series1 or not series2:
+            return jsonify({"error": "Both commodities must be provided"}), 400
+
+        if window < 5:
+            return jsonify({"error": "Window size must be at least 5 days"}), 400
+
+        # Fetch data from the database
+        result = db.session.query(
+            PriceData.year,
+            PriceData.day,
+            PriceData.commodity,
+            PriceData.price
+        ).filter(
+            PriceData.commodity.in_([series1, series2]),
+            PriceData.price > 0  # Ensure we only get valid prices
+        ).all()
+
+        if not result:
+            return jsonify({"error": "No data found for the selected commodities"}), 404
+
+        # Create a DataFrame
+        df = pd.DataFrame(result, columns=["year", "day", "commodity", "price"])
+
+        # Generate a date column from year and day
+        df["date"] = pd.to_datetime(
+            df.apply(lambda row: f"{row.year}-{row.day}", axis=1),
+            format="%Y-%j"
+        )
+
+        # Pivot the data for rolling correlation
+        pivot_data = df.pivot_table(
+            values="price",
+            index="date",
+            columns="commodity",
+            aggfunc="mean"
+        ).sort_index()
+
+        # Check for minimum data points
+        min_required_points = window * 2
+        if len(pivot_data) < min_required_points:
+            return jsonify({
+                "error": f"Insufficient data points. Need at least {min_required_points} days of data for {window}-day window"
+            }), 400
+
+        # Calculate rolling correlation
+        roll_corr_df = calculate_rolling_price_correlations(
+            window=window,
+            source_df=pivot_data,
+            series1=series1,
+            series2=series2
+        )
+
+        # Plot rolling correlation
+        fig_roll_corr = plot_rolling_price_correlations(
+            roll_corr_df=roll_corr_df,
+            series1=series1,
+            series2=series2,
+            window=window
+        )
+
+        # Convert the Plotly figure to JSON, ensuring all values are serializable
+        fig_json = fig_roll_corr.to_json()  # Use to_json() instead of to_plotly_json()
+        
+        return app.response_class(
+            response=fig_json,
+            status=200,
+            mimetype='application/json'
+        )
+
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        app.logger.error(f"Error generating terminal rolling correlations: {str(e)}")
+        return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
+
+
+
+
+
+
+# Rolling Correlations for Shipping prices
+
+
+
+def calculate_rolling_price_correlations(window, source_df, series1, series2):
+    """
+    Calculate rolling correlations between two price series.
+    """
+    try:
+        # Sort index to ensure proper time-based calculations
+        source_df = source_df.sort_index()
+        
+        # Forward fill missing values (up to 7 days)
+        source_df = source_df.fillna(method='ffill', limit=7)
+        
+        # Calculate rolling correlation
+        roll_corr = source_df[series1].rolling(
+            window=window,
+            min_periods=window // 2  # Allow for some missing data
+        ).corr(source_df[series2])
+        
+        # Convert to JSON serializable format
+        result_df = pd.DataFrame({
+            'date': roll_corr.index,
+            'correlation': roll_corr.values
+        })
+        
+        # Convert numpy values to Python native types
+        result_df['correlation'] = result_df['correlation'].astype(float)
+        result_df['date'] = result_df['date'].dt.strftime('%Y-%m-%d')
+        
+        return result_df
+        
+    except KeyError as e:
+        raise ValueError(f"KeyError: {e}. At least one of the selected varieties has no price data.")
+
+
+def plot_rolling_price_correlations(roll_corr_df, series1, series2, window):
+    """
+    Create a Plotly figure for rolling correlations.
+    """
+    try:
+        # Convert date strings back to datetime for plotting
+        roll_corr_df['date'] = pd.to_datetime(roll_corr_df['date'])
+        
+        fig_roll_corr = px.line(
+            roll_corr_df,
+            x='date',
+            y='correlation',
+            title=f"{window}-day rolling correlation between {series1} and {series2}"
+        )
+
+        fig_roll_corr.update_layout(
+            title={
+                "text": f"{window}-day rolling correlation between {series1} and {series2}",
+                "x": 0.5,
+                "y": 0.9,
+                "xanchor": "center",
+                "yanchor": "top"
+            },
+            xaxis_title="Date",
+            yaxis_title="Correlation Coefficient",
+            yaxis=dict(
+                tickformat='.2f',
+                range=[-1, 1]  # Correlation coefficient ranges from -1 to 1
+            ),
+            height=600,
+            width=600,
+            showlegend=False
+        )
+
+        # Add reference lines
+        fig_roll_corr.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5)
+        fig_roll_corr.add_hline(y=1, line_dash="dot", line_color="gray", opacity=0.3)
+        fig_roll_corr.add_hline(y=-1, line_dash="dot", line_color="gray", opacity=0.3)
+
+        return fig_roll_corr
+        
+    except Exception as e:
+        raise ValueError(f"Error creating plot: {str(e)}")
+
+
+@app.route("/api/shipping_rolling_correlations", methods=["POST"])
+def shipping_rolling_correlations():
+    """
+    Endpoint to calculate and plot rolling correlations for shipping price data.
+    """
+    try:
+        # Parse input from the frontend
+        data = request.get_json()
+        series1 = data.get("series1")
+        series2 = data.get("series2")
+        window = int(data.get("window", 30))  # Default to 30 days
+
+        if not series1 or not series2:
+            return jsonify({"error": "Both commodities must be provided"}), 400
+
+        if window < 5:
+            return jsonify({"error": "Window size must be at least 5 days"}), 400
+
+        # Fetch data from the database
+        result = db.session.query(
+            ShippingPriceData.year,
+            ShippingPriceData.day,
+            ShippingPriceData.commodity,
+            ShippingPriceData.price
+        ).filter(
+            ShippingPriceData.commodity.in_([series1, series2]),
+            ShippingPriceData.price > 0  # Ensure we only get valid prices
+        ).all()
+
+        if not result:
+            return jsonify({"error": "No data found for the selected commodities"}), 404
+
+        # Create a DataFrame
+        df = pd.DataFrame(result, columns=["year", "day", "commodity", "price"])
+
+        # Generate a date column from year and day
+        df["date"] = pd.to_datetime(
+            df.apply(lambda row: f"{row.year}-{row.day}", axis=1),
+            format="%Y-%j"
+        )
+
+        # Pivot the data for rolling correlation
+        pivot_data = df.pivot_table(
+            values="price",
+            index="date",
+            columns="commodity",
+            aggfunc="mean"
+        ).sort_index()
+
+        # Check for minimum data points
+        min_required_points = window * 2
+        if len(pivot_data) < min_required_points:
+            return jsonify({
+                "error": f"Insufficient data points. Need at least {min_required_points} days of data for {window}-day window"
+            }), 400
+
+        # Calculate rolling correlation
+        roll_corr_df = calculate_rolling_price_correlations(
+            window=window,
+            source_df=pivot_data,
+            series1=series1,
+            series2=series2
+        )
+
+        # Plot rolling correlation
+        fig_roll_corr = plot_rolling_price_correlations(
+            roll_corr_df=roll_corr_df,
+            series1=series1,
+            series2=series2,
+            window=window
+        )
+
+        # Convert the Plotly figure to JSON, ensuring all values are serializable
+        fig_json = fig_roll_corr.to_json()
+        
+        return app.response_class(
+            response=fig_json,
+            status=200,
+            mimetype='application/json'
+        )
+
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        app.logger.error(f"Error generating shipping rolling correlations: {str(e)}")
+        return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
+
+
+
+
 # Run the app
 if __name__ == "__main__":
     app.run(debug=True)

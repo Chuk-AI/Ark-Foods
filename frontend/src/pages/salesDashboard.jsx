@@ -146,10 +146,10 @@ function SalesDashboard() {
 
   // Shipping Point Price Data States
   const [shippingPointFilterState, setShippingPointFilterState] = useState({
-    commodities: ['Anaheim'], // Default to one or more items
-    regions: ['Central and South Florida'], // Default to one or more regions
+    commodities: ['Habanero'], // Default to one or more items
+    regions: ["mexico crossings through texas"], // Default to one or more regions
     source: 'ProduceIQ', // Default source for shipping point price
-    startDate: '2024-01-01', // Default to a valid date
+    startDate: '2020-01-01', // Default to a valid date
     endDate: '2024-12-31', // Default to a valid date
     averageCommodities: false,
     averageRegions: false,
@@ -826,8 +826,8 @@ function SalesDashboard() {
       shippingPointPriceChart.destroy();
     }
 
-    if (!chartData.labels.length || !chartData.datasets.length) {
-      // alert('No data available for the Shipping Point Price chart.');
+    if (!chartData || !chartData.labels.length || !chartData.datasets.length) {
+      alert('No data available for the Shipping Point Price chart.');
       return;
     }
 
@@ -930,32 +930,40 @@ function SalesDashboard() {
     setShippingPointPriceChart(newChart);
   };
 
-  const fetchShippingPointPriceData = async (filters = {}) => {
-    const { commodities = [], regions = [], source = '', startDate = '', endDate = '', averageCommodities = false, averageRegions = false } = filters;
+  const fetchShippingPointPriceData = async (filters = null) => {
+    // Use default data if no filters are provided
+    const defaultFilters = {
+      commodities: ['Habanero'], // Default commodity for testing
+      regions: ['mexico crossings through texas'], // Default region for testing
+      source: 'ProduceIQ',
+      startDate: '2020-01-01',
+      endDate: '2024-12-31',
+    };
+  
+    const appliedFilters = filters || defaultFilters;
+  
     try {
-      console.log('Filters:', filters); // Log filters
-
+      console.log('Filters:', appliedFilters); // Log filters
+  
       const token = localStorage.getItem('authToken');
       if (!token) throw new Error('No token found');
-
-      // Construct query parameters
+  
       const params = new URLSearchParams({
-        commodities: commodities.join(','),
-        regions: regions.join(','),
-        source,
-        start_date: startDate,
-        end_date: endDate,
-        averageCommodities: averageCommodities.toString(),
-        averageRegions: averageRegions.toString(),
+        commodities: appliedFilters.commodities.join(','),
+        regions: appliedFilters.regions.join(','),
+        source: appliedFilters.source,
+        start_date: appliedFilters.startDate,
+        end_date: appliedFilters.endDate,
+        averageCommodities: appliedFilters.averageCommodities?.toString() || 'false',
+        averageRegions: appliedFilters.averageRegions?.toString() || 'false',
       });
-
-      // Fetch data from backend
+  
       const response = await fetch(`/api/shipping_point_price?${params.toString()}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
-
+  
       if (!response.ok) {
         if (response.status === 401) {
           alert('Session expired. Please log in again.');
@@ -964,22 +972,26 @@ function SalesDashboard() {
         }
         throw new Error('Failed to fetch Shipping Point Price data');
       }
-
+  
       const data = await response.json();
-      updateShippingPointPriceChart(data); // Update chart with the fetched data
+      updateShippingPointPriceChart(data); // Update chart with fetched data
     } catch (error) {
       console.error('Error fetching Shipping Point Price data:', error);
     }
   };
+  
 
+  // useEffect(() => {
+  //   fetchShippingPointPriceData({
+  //     commodities: ['Jalapeno'], // Default commodity for testing
+  //     regions: ['mexico crossings through texas'], // Default region for testing
+  //     source: 'ProduceIQ',
+  //     startDate: '2020-01-01',
+  //     endDate: '2024-12-31',
+  //   });
+  // }, []);
   useEffect(() => {
-    fetchShippingPointPriceData({
-      commodities: ['Jalapeno'], // Default commodity for testing
-      regions: ['mexico crossings through texas'], // Default region for testing
-      source: 'ProduceIQ',
-      startDate: '2020-01-01',
-      endDate: '2020-12-31',
-    });
+    fetchShippingPointPriceData(); // Fetch default data on mount
   }, []);
 
 
