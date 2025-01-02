@@ -17,10 +17,10 @@
   display: flex;
   flex-wrap: wrap; /* Wrap charts to the next row if needed */
   gap: 15px; /* Space between each chart */
-  justify-content: center; /* Center-align charts within the container */
+  justify-content: center; 
   margin-left: 0; /* Remove any left margin */
   padding: 0; /* Remove extra padding */
-
+  width: 100%;
   display: flex;
   justify-content: center;
  align-items: center;
@@ -28,7 +28,7 @@
 
 
  border-radius: 15px; /* Adjust the radius as needed */
- overflow: hidden;    /* Ensures content respects the border-radius */
+ overflow: hidden;  
  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Optional: Add a shadow effect */
  background: #33b1a7; /* Match this with `paper_bgcolor` */
  padding: 10px;     

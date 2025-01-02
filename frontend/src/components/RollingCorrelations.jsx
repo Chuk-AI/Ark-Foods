@@ -71,7 +71,7 @@ const RollingCorrelation = () => {
 
   return (
     <div className="rolling-correlation-container">
-      <h1 >Rolling Correlations</h1>
+      <h2>Rolling Correlations</h2>
 
       
 
@@ -123,7 +123,10 @@ const RollingCorrelation = () => {
         </div>
        
 
-        <div className="radio-buttons">
+  
+        <button onClick={fetchRollingCorrelation} className="rolling-button">Generate Rolling Chart</button>
+      </div>
+      <div className="radio-buttons">
         <label>
           <input
             type="radio"
@@ -144,12 +147,9 @@ const RollingCorrelation = () => {
         </label>
       </div>
 
-        <button onClick={fetchRollingCorrelation}>Generate Chart</button>
-      </div>
-
       {error && <div className="error-message">{error}</div>}
 
-      <div className="chart-container">
+      <div className="rolling-chart-container">
         {chartData && (
           <Plot
             data={chartData.data}

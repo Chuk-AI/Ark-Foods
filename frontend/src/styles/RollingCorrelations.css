@@ -18,17 +18,22 @@
     margin-top: 10px;
   }
   
-  .chart-container {
+  .rolling-chart-container {
     margin-top: 20px;
     display: flex;
     justify-content: center;
     align-items: center;
     align-content: center;
+    height: 600px;
+    background: #33b1a7;
+    border-radius: 20px;
   }
   .radio-buttons{
       display: flex;
-      flex-direction: column;
-      gap: 15px;
+      justify-content: center;
+      width: 100%;
+      gap: 200px;
+ 
   }
   .form-container select{
     padding: 10px 20px 10px 20px;
@@ -38,5 +43,21 @@
 .GapInputs{
     display: flex;
     gap: 50px;
-    width: 50%;
+    width: 57%;
+}
+.rolling-window input{
+    width: 100px;
+    border: 1px solid #33b1a7;
+    border-radius: 10px;
+text-align: center;
+
+} 
+
+.rolling-button{
+    border: 1px solid #33b1a7;
+    border-radius: 10px;
+    background: none;
+    margin-left: 180px;
+    width: 170px;
+    height: 90px;
 }

@@ -23,6 +23,7 @@ body{
 }
 #terminal-voilin-plot-section{
     margin-top: 100px;
+    height: 595px;
 }
 .terminal-empricial-container{
     margin-top: 50px;
@@ -35,8 +36,7 @@ body{
     justify-content: center;
    align-items: center;
    align-content: center;
-
-
+  
    border-radius: 15px; /* Adjust the radius as needed */
    overflow: hidden;    /* Ensures content respects the border-radius */
    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Optional: Add a shadow effect */
@@ -45,6 +45,8 @@ body{
 }
 #shipping-voilin-plot-section{
     margin-top: 50px;
+    height: 595px;
+
 }
 
 .corr-section{

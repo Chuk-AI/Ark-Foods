@@ -136,7 +136,7 @@ export default function DashAnalytics() {
       />
     </div>
   ) : (
-    <p>Loading...</p>
+    <p style={{textAlign:'center', alignContent:'center'}}>Loading...</p>
   )}
 </div>
 
@@ -176,7 +176,7 @@ export default function DashAnalytics() {
       />
     </div>
   ) : (
-    <p>Loading...</p>
+    <p style={{textAlign:'center'}}>Loading...</p>
   )}
 </div>
 
@@ -201,9 +201,9 @@ export default function DashAnalytics() {
     <ScatterPlot />
 </div>
 
-{/* <div>
+<div>
     <RollingCorrelation />
-</div> */}
+</div>
 
 
        <Footer/>

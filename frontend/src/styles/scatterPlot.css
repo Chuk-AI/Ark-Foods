@@ -25,4 +25,7 @@
     display: flex;
     justify-content: center;
     margin-top: 20px;
+    height: 600px;
+    background: #33b1a7;
+    border-radius: 20px;
 }

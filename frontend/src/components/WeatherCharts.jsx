@@ -278,13 +278,18 @@ const WeatherCharts = () => {
   <div className="row-charts">
       <div className="row-charts">
 
+    <div className="first-chart">
     <canvas ref={precipChartRef} width="200" height="150"></canvas>
+    </div>
+
+
+    <div className="second-chart">
     <canvas ref={tempChartRef} width="200" height="150"></canvas>
+    </div>
     </div>
 
   </div>
   <div className="third-chart">
-
   <canvas ref={ensembleChartRef} width="400" height="300"></canvas>
   </div>
 

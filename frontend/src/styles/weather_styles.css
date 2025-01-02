@@ -30,6 +30,19 @@ canvas {
   align-items: center; /* Vertical centering */
   margin-top: 20px; /* Space above the third chart */
   width: 100%; /* Take full width to allow proper centering */
+  border: 1px solid #33b1a7;
+  border-radius: 20px;
+}
+.first-chart{
+  border: 1px solid #33b1a7;
+  border-radius: 20px;
+
+
+}
+.second-chart{
+  border: 1px solid #33b1a7;
+  border-radius: 20px;
+
 }
 
 .third-chart canvas {
