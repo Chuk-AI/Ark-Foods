@@ -1,0 +1,207 @@
+Commodity,City,Low Price,High Price,Report Date
+Long Hot,Boston,45,45,01/02/2025
+Anaheim,Boston,21,24,01/02/2025
+Shishito,Boston,44,44,01/02/2025
+Poblano,Boston,34,36,01/02/2025
+Jalapeno,Boston,18,18,01/02/2025
+Habanero,Boston,30,30,01/02/2025
+Habanero,Boston,36,36,01/02/2025
+Poblano,Boston,22,24,01/02/2025
+Serrano,Columbia,29,,01/02/2025
+Poblano,Columbia,35,,01/02/2025
+Poblano,Columbia,29,,01/02/2025
+Serrano,Boston,28,28,01/02/2025
+Poblano,Boston,24,26,01/02/2025
+Jalapeno,Boston,32,32,01/02/2025
+Fresno,Boston,75,75,01/02/2025
+Hungarian Wax,Boston,30,30,01/02/2025
+Serrano,Columbia,18,,01/02/2025
+Habanero,Columbia,40,40,01/02/2025
+Hungarian Wax,Columbia,18,19,01/02/2025
+Jalapeno,Columbia,19,21,01/02/2025
+Long Hot,Columbia,33,,01/02/2025
+Jalapeno,Columbia,34,,01/02/2025
+Habanero,Philadelphia,30,36,01/02/2025
+Jalapeno,Philadelphia,42,,01/02/2025
+Serrano,Philadelphia,32,,01/02/2025
+Habanero,Philadelphia,25,28,01/02/2025
+Long Hot,Philadelphia,55,60,01/02/2025
+Jalapeno,Philadelphia,32,,01/02/2025
+Poblano,Philadelphia,30,,01/02/2025
+Habanero,Philadelphia,36,,01/02/2025
+Anaheim,Philadelphia,18,,01/02/2025
+Poblano,Philadelphia,32,,01/02/2025
+Habanero,Philadelphia,36,,01/02/2025
+Habanero,Philadelphia,36,38,01/02/2025
+Jalapeno,Philadelphia,28,32,01/02/2025
+Serrano,Philadelphia,20,,01/02/2025
+Habanero,Boston,36,40,01/02/2025
+Shishito,Boston,58,58,01/02/2025
+Fresno,Boston,78,78,01/02/2025
+Serrano,Boston,20,24,01/02/2025
+Habanero,Boston,36,40,01/02/2025
+Habanero,Boston,32,32,01/02/2025
+Long Hot,New York,60,62,01/02/2025
+Poblano,New York,20,22,01/02/2025
+Habanero,New York,26,28,01/02/2025
+Anaheim,New York,20,20,01/02/2025
+Fresno,New York,54,56,01/02/2025
+Habanero,New York,28,30,01/02/2025
+Jalapeno,New York,,,01/02/2025
+Long Hot,New York,60,62,01/02/2025
+Jalapeno,New York,,,01/02/2025
+Jalapeno,New York,26,28,01/02/2025
+Poblano,New York,28,28,01/02/2025
+Habanero,New York,30,30,01/02/2025
+Serrano,New York,28,30,01/02/2025
+Serrano,New York,16,18,01/02/2025
+Habanero,New York,42,44,01/02/2025
+Habanero,New York,38,38,01/02/2025
+Habanero,New York,30,32,01/02/2025
+Jalapeno,New York,,,01/02/2025
+Jalapeno,New York,26,28,01/02/2025
+Habanero,Chicago,38,38,01/02/2025
+Jalapeno,Chicago,22,22,01/02/2025
+Poblano,Chicago,22,24,01/02/2025
+Poblano,Chicago,24,26,01/02/2025
+Jalapeno,Chicago,36,38,01/02/2025
+Jalapeno,Chicago,20,20,01/02/2025
+Fresno,Chicago,65,65,01/02/2025
+Habanero,Chicago,28,30,01/02/2025
+Hungarian Wax,Chicago,44,44,01/02/2025
+Jalapeno,Chicago,22,22,01/02/2025
+Serrano,Chicago,19,19,01/02/2025
+Habanero,Chicago,28,32,01/02/2025
+Poblano,Chicago,32,32,01/02/2025
+Habanero,Chicago,38,38,01/02/2025
+Anaheim,Chicago,30,30,01/02/2025
+Shishito,Chicago,36,36,01/02/2025
+Long Hot,Chicago,66,66,01/02/2025
+Serrano,Chicago,18,18,01/02/2025
+Jalapeno,Baltimore,22,22,01/02/2025
+Jalapeno,Baltimore,31,31,01/02/2025
+Jalapeno,Baltimore,16,18,01/02/2025
+Habanero,Baltimore,40,42,01/02/2025
+Jalapeno,Baltimore,26,28,01/02/2025
+Habanero,Baltimore,22,25,01/02/2025
+Hungarian Wax,Baltimore,28,28,01/02/2025
+Jalapeno,Baltimore,28,28,01/02/2025
+Poblano,Baltimore,25,28,01/02/2025
+Anaheim,Baltimore,30,30,01/02/2025
+Long Hot,Baltimore,65,65,01/02/2025
+Serrano,Baltimore,22,24,01/02/2025
+Habanero,Baltimore,27,28,01/02/2025
+Jalapeno,Baltimore,35,35,01/02/2025
+Poblano,Los Angeles,35,36,01/02/2025
+Hungarian Wax,Los Angeles,24,25,01/02/2025
+Anaheim,Los Angeles,30,32,01/02/2025
+Anaheim,Los Angeles,40,41,01/02/2025
+Jalapeno,Los Angeles,35,36,01/02/2025
+Serrano,Los Angeles,30,32,01/02/2025
+Jalapeno,Los Angeles,25,26,01/02/2025
+Serrano,Los Angeles,30,31,01/02/2025
+Jalapeno,Los Angeles,25,26,01/02/2025
+Hungarian Wax,Columbia,18,19,01/03/2025
+Poblano,Columbia,35,,01/03/2025
+Jalapeno,Columbia,19,21,01/03/2025
+Serrano,Columbia,18,,01/03/2025
+Long Hot,Columbia,33,,01/03/2025
+Habanero,Columbia,40,40,01/03/2025
+Serrano,Columbia,29,,01/03/2025
+Poblano,Columbia,29,,01/03/2025
+Jalapeno,Columbia,34,,01/03/2025
+Poblano,Boston,22,24,01/03/2025
+Hungarian Wax,Boston,30,30,01/03/2025
+Habanero,Boston,32,32,01/03/2025
+Habanero,Boston,36,40,01/03/2025
+Poblano,Boston,34,36,01/03/2025
+Long Hot,Boston,45,45,01/03/2025
+Jalapeno,Boston,32,32,01/03/2025
+Serrano,Boston,20,24,01/03/2025
+Fresno,Boston,75,75,01/03/2025
+Anaheim,Boston,21,24,01/03/2025
+Shishito,Boston,44,44,01/03/2025
+Habanero,Boston,36,40,01/03/2025
+Serrano,Boston,28,28,01/03/2025
+Poblano,Boston,24,26,01/03/2025
+Habanero,Boston,30,30,01/03/2025
+Habanero,Boston,36,36,01/03/2025
+Shishito,Boston,58,58,01/03/2025
+Jalapeno,Boston,18,18,01/03/2025
+Fresno,Boston,78,78,01/03/2025
+Long Hot,Philadelphia,55,60,01/03/2025
+Serrano,Philadelphia,32,,01/03/2025
+Habanero,Philadelphia,25,28,01/03/2025
+Habanero,Philadelphia,36,38,01/03/2025
+Habanero,Philadelphia,36,,01/03/2025
+Habanero,Philadelphia,30,36,01/03/2025
+Jalapeno,Philadelphia,28,32,01/03/2025
+Poblano,Philadelphia,32,,01/03/2025
+Jalapeno,Philadelphia,42,,01/03/2025
+Jalapeno,Philadelphia,32,,01/03/2025
+Habanero,Philadelphia,36,,01/03/2025
+Habanero,New York,28,30,01/03/2025
+Habanero,New York,26,28,01/03/2025
+Jalapeno,New York,,,01/03/2025
+Habanero,New York,30,32,01/03/2025
+Jalapeno,New York,,,01/03/2025
+Long Hot,New York,60,62,01/03/2025
+Habanero,New York,38,38,01/03/2025
+Jalapeno,New York,,,01/03/2025
+Serrano,New York,28,30,01/03/2025
+Serrano,New York,16,18,01/03/2025
+Habanero,New York,42,44,01/03/2025
+Shishito,Chicago,36,36,01/03/2025
+Jalapeno,Chicago,36,38,01/03/2025
+Poblano,Chicago,22,24,01/03/2025
+Long Hot,Chicago,66,66,01/03/2025
+Jalapeno,Chicago,20,20,01/03/2025
+Habanero,Chicago,38,38,01/03/2025
+Habanero,Chicago,28,30,01/03/2025
+Serrano,Chicago,19,19,01/03/2025
+Poblano,Chicago,32,32,01/03/2025
+Jalapeno,Chicago,22,22,01/03/2025
+Habanero,Chicago,38,38,01/03/2025
+Jalapeno,Chicago,22,22,01/03/2025
+Serrano,Chicago,18,18,01/03/2025
+Anaheim,Chicago,30,30,01/03/2025
+Hungarian Wax,Chicago,44,44,01/03/2025
+Fresno,Chicago,65,65,01/03/2025
+Poblano,Chicago,24,26,01/03/2025
+Habanero,Chicago,28,32,01/03/2025
+Serrano,Baltimore,22,24,01/03/2025
+Jalapeno,Baltimore,16,18,01/03/2025
+Jalapeno,Baltimore,35,35,01/03/2025
+Jalapeno,Baltimore,22,22,01/03/2025
+Habanero,Baltimore,27,32,01/03/2025
+Habanero,Baltimore,22,25,01/03/2025
+Jalapeno,Baltimore,26,28,01/03/2025
+Long Hot,Baltimore,65,65,01/03/2025
+Hungarian Wax,Baltimore,28,28,01/03/2025
+Habanero,Baltimore,40,42,01/03/2025
+Jalapeno,Baltimore,28,28,01/03/2025
+Anaheim,Baltimore,30,30,01/03/2025
+Fresno,Baltimore,80,,01/03/2025
+Anaheim,Baltimore,40,,01/03/2025
+Jalapeno,Baltimore,19,20,01/03/2025
+Poblano,Baltimore,20,20,01/03/2025
+Serrano,Baltimore,20,,01/03/2025
+Jalapeno,Baltimore,31,31,01/03/2025
+Poblano,Baltimore,25,28,01/03/2025
+Hungarian Wax,Los Angeles,24,25,01/03/2025
+Serrano,Los Angeles,30,31,01/03/2025
+Jalapeno,Los Angeles,25,26,01/03/2025
+Poblano,Los Angeles,35,36,01/03/2025
+Anaheim,Los Angeles,30,32,01/03/2025
+Serrano,Los Angeles,30,32,01/03/2025
+Anaheim,Los Angeles,40,41,01/03/2025
+Jalapeno,Los Angeles,25,26,01/03/2025
+Jalapeno,Los Angeles,35,36,01/03/2025
+Jalapeno,New York,26,28,01/03/2025
+Poblano,New York,20,22,01/03/2025
+Long Hot,New York,60,62,01/03/2025
+Jalapeno,New York,26,28,01/03/2025
+Habanero,New York,30,30,01/03/2025
+Fresno,New York,54,56,01/03/2025
+Poblano,New York,28,28,01/03/2025
+Anaheim,New York,20,20,01/03/2025

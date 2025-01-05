@@ -251,6 +251,28 @@ class ShippingPriceData(db.Model):
     season = db.Column(db.String, nullable=True)  
 
     
+class UPriceData(db.Model):
+    __tablename__ = 'usda_price_data'
+
+    id = db.Column(db.Integer, primary_key=True)
+    city_name = db.Column(db.String(100), nullable=False)
+    commodity = db.Column(db.String(100), nullable=False)
+    year = db.Column(db.Integer, nullable=False)
+    price = db.Column(db.Float, nullable=False)
+    source = db.Column(db.String(50), nullable=False, default="USDA")
+    season = db.Column(db.String(20), nullable=False)
+
+
+class UShippingPriceData(db.Model):
+    __tablename__ = 'usda_shipping_price_data'
+
+    id = db.Column(db.Integer, primary_key=True)
+    city_name = db.Column(db.String(100), nullable=False)
+    commodity = db.Column(db.String(100), nullable=False)
+    year = db.Column(db.Integer, nullable=False)
+    price = db.Column(db.Float, nullable=False)
+    source = db.Column(db.String(50), nullable=False, default="USDA")
+    season = db.Column(db.String(20), nullable=False)
 
 
 class WeatherForecast(db.Model):

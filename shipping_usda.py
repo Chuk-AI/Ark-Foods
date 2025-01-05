@@ -5,12 +5,12 @@ import pandas as pd
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-def fetch_usda_terminal_data():
-    from app import db, UPriceData  # Import database and model
+def fetch_usda_shipping_data():
+    from app import db, UShippingPriceData  # Import database and model
 
     # API Key and Endpoint
     API_KEY = "LIm1Mr7tz2MRDq+5CyCXttTtSkfsD1Kr"
-    BASE_URL = "https://marsapi.ams.usda.gov/services/v1.2/marketTypes/sc-cr/sc/terminal/daily"
+    BASE_URL = "https://marsapi.ams.usda.gov/services/v1.2/marketTypes/sc-cr/sc/shippingpt/daily"
 
     # Commodities to filter
     wanted_commodities = [
@@ -24,11 +24,6 @@ def fetch_usda_terminal_data():
         "Poblano",
         "Serrano",
         "Shishito",
-    ]
-
-    # Cities to filter
-    wanted_cities = [
-        "Chicago", "New York", "Boston", "Miami", "Baltimore", "Los Angeles", "Philadelphia", "Columbia"
     ]
 
     # Standardize the commodity list for comparison
@@ -49,7 +44,7 @@ def fetch_usda_terminal_data():
     }
 
     # Define date range
-    start_date = pd.Timestamp("2024-12-06")  # Adjust as needed
+    start_date = pd.Timestamp("2024-1-06")  # Adjust as needed
     end_date = pd.Timestamp.today()
 
     current_date = start_date
@@ -80,41 +75,39 @@ def fetch_usda_terminal_data():
                         location = item.get('location', "")
                         first_city = location.split(",")[0].strip()
 
-                        # Filter by wanted cities
-                        if first_city in wanted_cities:
-                            # Calculate season
-                            report_date = pd.Timestamp(item.get('report_date', ""))
-                            year = report_date.year
-                            month = report_date.month
+                        # Calculate season
+                        report_date = pd.Timestamp(item.get('report_date', ""))
+                        year = report_date.year
+                        month = report_date.month
 
-                            if month in [3, 4, 5]:
-                                season = "Spring"
-                            elif month in [6, 7, 8]:
-                                season = "Summer"
-                            elif month in [9, 10, 11]:
-                                season = "Autumn"
-                            else:
-                                season = "Winter"
+                        if month in [3, 4, 5]:
+                            season = "Spring"
+                        elif month in [6, 7, 8]:
+                            season = "Summer"
+                        elif month in [9, 10, 11]:
+                            season = "Autumn"
+                        else:
+                            season = "Winter"
 
-                            # Calculate price as average of low and high price and round to 1 decimal place
-                            low_price = item.get('low_price')
-                            high_price = item.get('high_price')
+                        # Calculate price as average of low and high price and round to 1 decimal place
+                        low_price = item.get('low_price')
+                        high_price = item.get('high_price')
 
-                            try:
-                                price = round((float(low_price) + float(high_price)) / 2, 1) if low_price and high_price else round(float(low_price or high_price or 0), 1)
-                            except ValueError:
-                                price = 0.0
+                        try:
+                            price = round((float(low_price) + float(high_price)) / 2, 1) if low_price and high_price else round(float(low_price or high_price or 0), 1)
+                        except ValueError:
+                            price = 0.0
 
-                            # Save to database
-                            usda_price_data = UPriceData(
-                                city_name=first_city,
-                                commodity=standardized_commodity,
-                                year=year,
-                                price=price,
-                                source="USDA",
-                                season=season,
-                            )
-                            db.session.add(usda_price_data)
+                        # Save to database
+                        shipping_price_data = UShippingPriceData(
+                            city_name=first_city,
+                            commodity=standardized_commodity,
+                            year=year,
+                            price=price,
+                            source="USDA",
+                            season=season,
+                        )
+                        db.session.add(shipping_price_data)
 
             # Commit data to the database
             db.session.commit()
@@ -129,4 +122,4 @@ def fetch_usda_terminal_data():
 if __name__ == "__main__":
     from app import app  # Import only the `app` object here
     with app.app_context():  # Wrap all operations in the app context
-        fetch_usda_terminal_data()
+        fetch_usda_shipping_data()

@@ -1,7 +1,7 @@
 import os
 import requests
 from app import fetch_shipping_data, fetch_usda_daily_data, fetch_daily_data  # Import your Flask app functions
-
+from usda import fetch_usda_terminal_data
 
 HEROKU_API_KEY = os.getenv("HEROKU_API_KEY")
 APP_NAME = os.getenv("HEROKU_APP_NAME")
@@ -41,7 +41,7 @@ def execute_scheduled_functions():
         fetch_shipping_data()
         print("shipping data fetched executed successfully.")
 
-        fetch_usda_daily_data()  # Replace with your actual function calls
+        fetch_usda_terminal_data()  # Replace with your actual function calls
         print("Scheduled tasks executed successfully.")
     except Exception as e:
         print(f"Error occurred during scheduled execution: {e}")
