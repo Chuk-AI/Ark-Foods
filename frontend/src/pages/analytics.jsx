@@ -8,10 +8,10 @@ import EmpiricalChart from '../components/empirical';
 import CorrelationsPlots from '../components/correlations'
 import ScatterPlot from '../components/scatterPlots';
 import RollingCorrelation from '../components/RollingCorrelations'
+import TerminalViolinPlot from '../components/terminalViolin'
 
 export default function DashAnalytics() {
 
-    const [terminalViolinData, setTerminalViolinData] = useState([]);
     const [shippingViolinData, setShippingViolinData] = useState([]);
   
   
@@ -20,26 +20,7 @@ export default function DashAnalytics() {
 
 
     
-    const fetchTerminalViolinData = async () => {
-        try {
-          const response = await fetch('/api/terminal_price_violin');
-          console.log('Terminal API Response Status:', response.status);
-    
-          if (!response.ok) {
-            throw new Error('Failed to fetch terminal violin plot data');
-          }
-    
-          const data = await response.json();
-          console.log('Fetched Terminal Data:', data); // Log the fetched data
-          setTerminalViolinData(data);
-        } catch (error) {
-          console.error('Error fetching terminal violin data:', error);
-        }
-      };
-    
-      useEffect(() => {
-        fetchTerminalViolinData();
-      }, []);
+
     
       // Fetch data for the shipping violin plot
       const fetchShippingViolinData = async () => {
@@ -63,30 +44,7 @@ export default function DashAnalytics() {
         fetchShippingViolinData();
       }, []);
     
-      // Prepare data for the terminal violin plot
-      const TerminalplotData = Object.values(
-        terminalViolinData.reduce((acc, item) => {
-          const { varietyName, price } = item;
-    
-          // Ensure unique grouping by varietyName
-          if (!acc[varietyName]) {
-            acc[varietyName] = {
-              type: 'violin',
-              y: [], // Initialize prices array
-              name: varietyName, // x-axis label
-              box: { visible: true },
-              meanline: { visible: true },
-              marker: { color: '#636efa' },
-            };
-          }
-    
-          // Add price to the corresponding variety
-          acc[varietyName].y.push(price);
-    
-          return acc;
-        }, {})
-      );
-    
+   
       // Prepare data for the shipping violin plot
       const ShippingplotData = shippingViolinData.reduce((acc, item) => {
         const { varietyName, price } = item;
@@ -112,33 +70,9 @@ export default function DashAnalytics() {
         <Header/>
 
  {/* terminal voilin plot */}
- <div id="terminal-voilin-plot-section" className="section chart-container">
-  <div className="chart-title">
-    <h2>Terminal Violin Plot</h2>
-  </div>
-  {terminalViolinData.length > 0 ? (
-    <div className="terminal-voilin-wrapper">
-      {console.log('Final TerminalplotData:', TerminalplotData)}
-      <Plot
-        data={TerminalplotData}
-        layout={{
-          title: 'Terminal Measures of Central Tendency and Dispersion',
-          xaxis: { title: 'Variety' },
-          yaxis: { title: 'Avg Daily Price' },
-          height: 500,
-          width: 700, // Set your desired width here
-          showlegend: false, // Disable the legend
-          margin: { l: 50, r: 50, t: 50, b: 50 }, // Equal left and right margins
-          autosize: true,
-          plot_bgcolor: '#f0f8ff', // Background color of the plotting area
-          paper_bgcolor: '#e6e6fa', // Background color of the entire chart
-        }}
-      />
-    </div>
-  ) : (
-    <p style={{textAlign:'center', alignContent:'center'}}>Loading...</p>
-  )}
-</div>
+
+ <TerminalViolinPlot />
+
 
          {/* // Empirical Probability for Terminal prices * */}
         <div className="terminal-empricial-container d-flex">

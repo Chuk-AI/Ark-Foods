@@ -3022,14 +3022,13 @@ from sqlalchemy.sql import text  # Import `text` from SQLAlchemy
 # voilin plot for terminal data
 
 @app.route("/api/terminal_price_violin", methods=["GET"])
-
 def terminal_price_violin():
     try:
         app.logger.info("Fetching data for terminal violin plot...")
 
-        # Correct SQL query wrapped in `text`
+        # Correct SQL query to include source
         query = text("""
-        SELECT commodity AS varietyName, price
+        SELECT commodity AS varietyName, price, source
         FROM price_data
         WHERE price IS NOT NULL
         """)
@@ -3037,13 +3036,19 @@ def terminal_price_violin():
         # Fetch and log results
         result = db.session.execute(query).fetchall()
 
-        # Transform into JSON format
-        data = [{"varietyName": row[0], "price": row[1]} for row in result]
+        # Transform into grouped JSON format
+        data = {}
+        for row in result:
+            source = row[2]  # Extract the source (e.g., "USDA" or "ProduceIQ")
+            if source not in data:
+                data[source] = []
+            data[source].append({"varietyName": row[0], "price": row[1]})
 
         return jsonify(data), 200
     except Exception as e:
         app.logger.error(f"Error fetching data for terminal violin plot: {str(e)}")
         return jsonify({"error": "Failed to fetch terminal data"}), 500
+
 
 
 # voilin plot for shipping data
