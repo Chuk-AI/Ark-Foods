@@ -25,12 +25,15 @@
   --shadow-hover: 0 20px 25px rgba(0, 0, 0, 0.1);
 }
 
+
+
 /* Enhanced Navbar */
 .navbar {
-  background-color: var(--header-bg) !important;
+  /* background-color: var(--header-bg) !important; */
   box-shadow: var(--shadow-nav);
   height: 70px;
   padding: 0.5rem 2rem;
+  border-radius: 20px;
 }
 .nav-items{
   gap: 1000px;

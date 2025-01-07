@@ -1,5 +1,8 @@
 .scatter-container{
-    margin-top: 100px;
+    padding: 10px; /* Reduced padding */
+    background-color: #f8f9fa;
+    border-radius: 10px; /* Add rounded corners */
+    box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1); /* Subtle shadow */
 }
 .scatter-filter{
     display: flex;
@@ -26,6 +29,6 @@
     justify-content: center;
     margin-top: 20px;
     height: 600px;
-    background: #33b1a7;
+    background: linear-gradient(to right, #141e30, #243b55);
     border-radius: 20px;
 }

@@ -1,146 +1,202 @@
-import React from 'react'
-import { useEffect, useState, useRef } from 'react';
+// import React, { useState } from 'react';
+// import Header from '../components/header';
+// import Footer from '../components/footer';
+// import '../styles/analytics.css';
+// import EmpiricalChart from '../components/empirical';
+// import CorrelationsPlots from '../components/correlations';
+// import ScatterPlot from '../components/scatterPlots';
+// import RollingCorrelation from '../components/RollingCorrelations';
+// import TerminalViolinPlot from '../components/terminalViolin';
+// import ShippingViolinPlot from '../components/shippingViolin'; // Import the new component
+
+// export default function DashAnalytics() {
+//   const [selectedComponent, setSelectedComponent] = useState('Terminal Violin Plot');
+
+//   const terminalColors = ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40"];
+//   const shippingColors = ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40"];
+
+//   const renderComponent = () => {
+//     switch (selectedComponent) {
+//       case 'Terminal Violin Plot':
+//         return <TerminalViolinPlot />;
+//       case 'Shipping Violin Plot':
+//         return <ShippingViolinPlot />;
+//       case 'Terminal Empirical Probability':
+//         return (
+//           <EmpiricalChart
+//             apiEndpoint="/api/terminal_empricial_probability"
+//             title="Terminal Empirical Probability"
+//             colors={terminalColors}
+//           />
+//         );
+//       case 'Shipping Empirical Probability':
+//         return (
+//           <EmpiricalChart
+//             apiEndpoint="/api/shipping_empricial_probability"
+//             title="Shipping Empirical Probability"
+//             colors={shippingColors}
+//           />
+//         );
+//       case 'Correlations Plots':
+//         return <CorrelationsPlots />;
+//       case 'Scatter Plot':
+//         return <ScatterPlot />;
+//       case 'Rolling Correlations':
+//         return <RollingCorrelation />;
+//       default:
+//         return <p>Please select a component to display.</p>;
+//     }
+//   };
+
+//   return (
+//     <div className="analytics-page">
+//       <Header />
+
+//       {/* Component Selection Dropdown */}
+//       <div className="component-selector">
+//         <label htmlFor="componentDropdown" style={{ marginRight: '10px' }}>
+//           Select Component to Display:
+//         </label>
+//         <select
+//           id="componentDropdown"
+//           value={selectedComponent}
+//           onChange={(e) => setSelectedComponent(e.target.value)}
+//           style={{
+//             padding: '10px',
+//             borderRadius: '5px',
+//             border: '1px solid #ddd',
+//           }}
+//         >
+//           <option value="Terminal Violin Plot">Terminal Violin Plot</option>
+//           <option value="Shipping Violin Plot">Shipping Violin Plot</option>
+//           <option value="Terminal Empirical Probability">Terminal Empirical Probability</option>
+//           <option value="Shipping Empirical Probability">Shipping Empirical Probability</option>
+//           <option value="Correlations Plots">Correlations Plots</option>
+//           <option value="Scatter Plot">Scatter Plot</option>
+//           <option value="Rolling Correlations">Rolling Correlations</option>
+//         </select>
+//       </div>
+
+//       {/* Render the selected component */}
+//       <div className="component-container" style={{ marginTop: '20px' }}>
+//         {renderComponent()}
+//       </div>
+
+//       <Footer />
+//     </div>
+//   );
+// }
+
+
+import React, { useState } from 'react';
+import { motion } from 'framer-motion';
 import Header from '../components/header';
 import Footer from '../components/footer';
 import '../styles/analytics.css';
-import Plot from 'react-plotly.js';
 import EmpiricalChart from '../components/empirical';
-import CorrelationsPlots from '../components/correlations'
+import CorrelationsPlots from '../components/correlations';
 import ScatterPlot from '../components/scatterPlots';
-import RollingCorrelation from '../components/RollingCorrelations'
-import TerminalViolinPlot from '../components/terminalViolin'
+import RollingCorrelation from '../components/RollingCorrelations';
+import TerminalViolinPlot from '../components/terminalViolin';
+import ShippingViolinPlot from '../components/shippingViolin'; // Import the new component
 
 export default function DashAnalytics() {
+  const [selectedComponent, setSelectedComponent] = useState('Terminal Violin Plot');
 
-    const [shippingViolinData, setShippingViolinData] = useState([]);
-  
-  
-    const terminalColors = ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40"];
-    const shippingColors = ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40"];
+  const terminalColors = ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40"];
+  const shippingColors = ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40"];
 
-
-    
-
-    
-      // Fetch data for the shipping violin plot
-      const fetchShippingViolinData = async () => {
-        try {
-          const response = await fetch('/api/shipping_price_violin');
-          console.log('Shipping API Response Status:', response.status);
-    
-          if (!response.ok) {
-            throw new Error('Failed to fetch shipping violin plot data');
-          }
-    
-          const data = await response.json();
-          console.log('Fetched Shipping Data:', data); // Log the fetched data
-          setShippingViolinData(data);
-        } catch (error) {
-          console.error('Error fetching shipping violin data:', error);
-        }
-      };
-    
-      useEffect(() => {
-        fetchShippingViolinData();
-      }, []);
-    
-   
-      // Prepare data for the shipping violin plot
-      const ShippingplotData = shippingViolinData.reduce((acc, item) => {
-        const { varietyName, price } = item;
-        const existingEntry = acc.find((entry) => entry.name === varietyName);
-        if (existingEntry) {
-          existingEntry.y.push(price);
-        } else {
-          acc.push({
-            type: 'violin',
-            y: [price],
-            name: varietyName,
-            box: { visible: true },
-            meanline: { visible: true },
-            marker: { color: '#00cc96' }, // Color for shipping plot
-          });
-        }
-        return acc;
-      }, []);
-    
-   
-  return (
-    <div>
-        <Header/>
-
- {/* terminal voilin plot */}
-
- <TerminalViolinPlot />
-
-
-         {/* // Empirical Probability for Terminal prices * */}
-        <div className="terminal-empricial-container d-flex">
-        <div className=" ">
+  const renderComponent = () => {
+    switch (selectedComponent) {
+      case 'Terminal Violin Plot':
+        return <TerminalViolinPlot />;
+      case 'Shipping Violin Plot':
+        return <ShippingViolinPlot />;
+      case 'Terminal Empirical Probability':
+        return (
           <EmpiricalChart
             apiEndpoint="/api/terminal_empricial_probability"
             title="Terminal Empirical Probability"
             colors={terminalColors}
           />
-        </div>
-      </div>
-
-              {/* shipping voilin plot */}
-              <div id="shipping-voilin-plot-section" className="section chart-container">
-  <div className="chart-title">
-    <h2>Shipping Violin Plot</h2>
-  </div>
-  {shippingViolinData.length > 0 ? (
-    <div className="shipping-voilin-wrapper">
-      {console.log('Final ShippingplotData:', ShippingplotData)}
-      <Plot
-        data={ShippingplotData}
-        layout={{
-          title: 'Shipping Price Distribution by Commodity',
-          xaxis: { title: 'Variety' },
-          yaxis: { title: 'Shipping Price' },
-          height: 500,
-          width: 700, // Set your desired width here
-          showlegend: false, // Remove the legend
-          margin: { l: 50, r: 50, t: 50, b: 50 }, // Equal left and right margins
-          autosize: true,
-          plot_bgcolor: '#f0f8ff', // Background color of the plotting area
-          paper_bgcolor: '#e6e6fa', // Background color of the entire chart
-        }}
-      />
-    </div>
-  ) : (
-    <p style={{textAlign:'center'}}>Loading...</p>
-  )}
-</div>
-
-        {/*  Empirical Probability for shipping prices */}
-        <div className="shipping-empricial-container d-flex">
-        <div >      
+        );
+      case 'Shipping Empirical Probability':
+        return (
           <EmpiricalChart
             apiEndpoint="/api/shipping_empricial_probability"
             title="Shipping Empirical Probability"
             colors={shippingColors}
           />
-        </div>
+        );
+      case 'Correlations Plots':
+        return <CorrelationsPlots />;
+      case 'Scatter Plot':
+        return <ScatterPlot />;
+      case 'Rolling Correlations':
+        return <RollingCorrelation />;
+      default:
+        return <p>Please select a component to display.</p>;
+    }
+  };
+
+  const options = [
+    { name: 'Terminal Violin Plot', icon: '📊' },
+    { name: 'Shipping Violin Plot', icon: '🚢' },
+    { name: 'Terminal Empirical Probability', icon: '📈' },
+    { name: 'Shipping Empirical Probability', icon: '⚓' },
+    { name: 'Correlations Plots', icon: '🔗' },
+    { name: 'Scatter Plot', icon: '🔵' },
+    { name: 'Rolling Correlations', icon: '🔄' },
+  ];
+
+  return (
+
+    <div>
+            <Header />
+
+    <div className="analytics-page">
+
+      {/* Fun Card-Based Component Selector */}
+      <div className="component-selector">
+        <h3>Select a Component to Display:</h3>
+        <motion.div
+          className="card-container"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.8 }}
+        >
+          {options.map((option) => (
+            <motion.div
+              key={option.name}
+              className={`selection-card ${selectedComponent === option.name ? 'active' : ''}`}
+              onClick={() => setSelectedComponent(option.name)}
+              whileHover={{ scale: 1.1, rotate: 3 }}
+              whileTap={{ scale: 0.95 }}
+              initial={{ opacity: 0, y: 50 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+            >
+              <motion.span className="icon" layout>{option.icon}</motion.span>
+              <motion.span className="name" layout>{option.name}</motion.span>
+            </motion.div>
+          ))}
+        </motion.div>
       </div>
 
+      {/* Render the selected component with a fade-in effect */}
+      <motion.div
+        className="component-container"
+        key={selectedComponent}
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.5 }}
+        style={{ marginTop: '20px' }}
+      >
+        {renderComponent()}
+      </motion.div>
 
-<div className='correlations'>
-  <CorrelationsPlots />
-</div>
-
-
-<div>
-    <ScatterPlot />
-</div>
-
-<div>
-    <RollingCorrelation />
-</div>
-
-
-       <Footer/>
+      <Footer />
     </div>
-  )
+    </div>
+  );
 }

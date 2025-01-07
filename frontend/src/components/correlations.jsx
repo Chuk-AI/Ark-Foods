@@ -1,7 +1,7 @@
 import React from 'react'
 import { useEffect, useState } from 'react';
 import Plot from 'react-plotly.js';
-
+import '../styles/RollingCorrelations.css'
 
 export default function CorrelationsPlots() {
 

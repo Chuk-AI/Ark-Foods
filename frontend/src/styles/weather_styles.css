@@ -1,6 +1,6 @@
-.input-group input,
+/* .input-group input,
 .input-group select {
-  margin-right: 100px; /* Add spacing between elements */
+  margin-right: 100px; 
   padding: 100px;
 }
 
@@ -17,19 +17,19 @@
 }
 
 .row-charts canvas {
-  width: 52% !important; /* Adjust the width so both charts fit in a row */
-  height: auto !important; /* Automatically adjust the height based on width */
+  width: 52% !important; 
+  height: auto !important;
 }
 
 canvas {
-  display: block; /* Ensure proper rendering in all browsers */
+  display: block; 
 }
 .third-chart {
   display: flex;
-  justify-content: center; /* Horizontal centering */
-  align-items: center; /* Vertical centering */
-  margin-top: 20px; /* Space above the third chart */
-  width: 100%; /* Take full width to allow proper centering */
+  justify-content: center;
+  align-items: center; 
+  margin-top: 20px; 
+  width: 100%; 
   border: 1px solid #33b1a7;
   border-radius: 20px;
 }
@@ -41,9 +41,90 @@ canvas {
 }
 
 .third-chart canvas {
-  height: 500px !important; /* Automatically adjust the height based on width */
-  width: 82% !important; /* Adjust the width so both charts fit in a row */
-  display: block; /* Ensure proper rendering */
-  margin: 0 auto; /* Center the canvas inside the parent */
+  height: 500px !important; 
+  width: 82% !important;
+  display: block; 
+  margin: 0 auto; 
 
+} */
+
+.weather-dashboard {
+  display: flex;
+}
+
+/* Sidebar Styling */
+.weather-sidebar {
+  width: 250px;
+  background-color: #f5f5f5;
+  border-right: 1px solid #ddd;
+  padding: 20px;
+  height: 100vh; /* Full height */
+}
+
+.weather-sidebar h3 {
+  font-size: 1.5rem;
+  margin-bottom: 20px;
+  color: #33b1a7;
+}
+
+.weather-sidebar ul {
+  list-style: none;
+  padding: 0;
+}
+
+.weather-sidebar li {
+  padding: 10px 15px;
+  margin-bottom: 10px;
+  background-color: #ffffff;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.weather-sidebar li:hover {
+  background-color: #33b1a7;
+  color: white;
+  transform: scale(1.05);
+}
+
+.weather-sidebar-active {
+  color: black;
+  transform: scale(1.1);
+  border: 2px solid #11998e;
+}
+
+/* Main Content */
+.weather-main-content {
+  flex: 1;
+  padding: 20px;
+}
+
+/* Input and Select Styling */
+.weather-input,
+.weather-select {
+  margin: 20px;
+  border: 1px solid #33b2a8;
+  padding: 7px;
+  border-radius: 10px;
+  outline: none;
+  transition: border-color 0.3s ease;
+}
+
+.weather-input:focus,
+.weather-select:focus {
+  border-color: #11998e;
+}
+
+/* Chart Container */
+.weather-chart-container {
+  margin-top: 20px;
+  display: flex;
+  justify-content: center;
+}
+
+/* Chart Styling */
+.weather-chart {
+  border: 1px solid #33b1a7;
+  border-radius: 20px;
 }

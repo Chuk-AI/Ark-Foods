@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import Plot from 'react-plotly.js';
 import '../styles/terminalVoilin.css';
 
-
 const TerminalViolinPlot = () => {
   const [terminalViolinData, setTerminalViolinData] = useState({});
 
@@ -28,15 +27,33 @@ const TerminalViolinPlot = () => {
   }, []);
 
   return (
-    <div id="terminal-violin-plot-section" className="section chart-container">
+    <div id="terminal-violin-plot-section" className="section violin-chart-container">
       <div className="chart-title">
         <h2>Terminal Violin Plots</h2>
       </div>
       {Object.keys(terminalViolinData).length > 0 ? (
-        <div style={{ display: 'flex', justifyContent: 'space-between', background:'#e6e6fa', borderRadius: '20px' }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            background: 'linear-gradient(to right, #141e30, #243b55',
+            padding: '20px',
+            boxShadow: '0 4px 8px rgba(0, 0, 0, 0.2)',
+            borderRadius:'20px'
+          }}
+        >
           {/* USDA Violin Chart */}
           {terminalViolinData.USDA && (
-            <div style={{ width: '45%' }}>
+            <div
+              style={{
+                width: '45%',
+                padding: '10px',
+                boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)',
+                borderRadius: '20px', // Individual chart container border radius
+                overflow: 'hidden', // Ensures border radius applies to Plot
+                background: '#ffffff',
+              }}
+            >
               <h3 style={{ textAlign: 'center' }}></h3>
               <Plot
                 data={[
@@ -58,14 +75,27 @@ const TerminalViolinPlot = () => {
                   margin: { l: 50, r: 50, t: 50, b: 50 },
                   autosize: true,
                   plot_bgcolor: '#f0f8ff',
-                  paper_bgcolor: '#e6e6fa',
+                  paper_bgcolor: 'white',
+                }}
+                style={{
+                  borderRadius: '20px', // Apply border radius to Plot
+                  overflow: 'hidden', // Ensures Plot respects the border radius
                 }}
               />
             </div>
           )}
           {/* ProduceIQ Violin Chart */}
           {terminalViolinData.ProduceIQ && (
-            <div style={{ width: '45%' }}>
+            <div
+              style={{
+                width: '45%',
+                padding: '10px',
+                boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)',
+                borderRadius: '20px', // Individual chart container border radius
+                overflow: 'hidden', // Ensures border radius applies to Plot
+                background: '#ffffff',
+              }}
+            >
               <h3 style={{ textAlign: 'center' }}></h3>
               <Plot
                 data={[
@@ -87,7 +117,11 @@ const TerminalViolinPlot = () => {
                   margin: { l: 50, r: 50, t: 50, b: 50 },
                   autosize: true,
                   plot_bgcolor: '#f0f8ff',
-                  paper_bgcolor: '#e6e6fa',
+                  paper_bgcolor: 'white',
+                }}
+                style={{
+                  borderRadius: '20px', // Apply border radius to Plot
+                  overflow: 'hidden', // Ensures Plot respects the border radius
                 }}
               />
             </div>

@@ -1,6 +1,6 @@
 .empirical-chart-container {
   padding: 10px; /* Reduced padding */
-  background-color: #f8f9fa; /* Light background color */
+  background-color: #f8f9fa;
   border-radius: 10px; /* Add rounded corners */
   box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1); /* Subtle shadow */
   margin-top: 50px;
@@ -30,7 +30,7 @@
  border-radius: 15px; /* Adjust the radius as needed */
  overflow: hidden;  
  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Optional: Add a shadow effect */
- background: #33b1a7; /* Match this with `paper_bgcolor` */
+ background: linear-gradient(to right, #141e30, #243b55);
  padding: 10px;     
 }
 

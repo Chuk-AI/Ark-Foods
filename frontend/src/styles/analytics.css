@@ -6,7 +6,8 @@ body{
   font-weight: 300;
   font-style: normal;
   margin: 20px;
-  background-color: #f8f9fa;
+  background-color: #f4f7fc;
+  
 }
 .terminal-voilin-wrapper{
     display: flex;
@@ -21,9 +22,9 @@ body{
    background: #e6e6fa; /* Match this with `paper_bgcolor` */
    padding: 10px;     
 }
-#terminal-voilin-plot-section{
+#terminal-violin-plot-section{
     margin-top: 100px;
-    height: 595px;
+    height: 680px;
 }
 .terminal-empricial-container{
     margin-top: 50px;
@@ -31,23 +32,32 @@ body{
 
 
 
-.shipping-voilin-wrapper{
+.shipping-violin-wrapper {
     display: flex;
     justify-content: center;
-   align-items: center;
-   align-content: center;
-  
-   border-radius: 15px; /* Adjust the radius as needed */
-   overflow: hidden;    /* Ensures content respects the border-radius */
-   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Optional: Add a shadow effect */
-   background: #e6e6fa; /* Match this with `paper_bgcolor` */
-   padding: 10px;     
+    align-items: center;
+    align-content: center;
+    border-radius: 15px; /* Rounded corners */
+    overflow: hidden;    /* Ensures content respects the border-radius */
+    background: linear-gradient(to right, #141e30, #243b55);
+    padding: 20px;       /* Padding inside the wrapper */
+    height: 570px;
 }
-#shipping-voilin-plot-section{
-    margin-top: 50px;
-    height: 595px;
 
+.plot-container {
+    border-radius: 20px; /* Rounded corners for the plot */
+    overflow: hidden;    /* Ensures content respects the border-radius */
+    box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1); /* Optional shadow for the plot */
 }
+#shipping-violin-plot-section {
+    height: auto; /* Let height adjust automatically */
+    padding: 20px; /* Add spacing inside the section */
+    background-color: #f8f9fa;
+    border-radius: 10px; /* Rounded corners */
+    box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1); /* Subtle shadow */
+    margin-top: 50px; /* Space above the section */
+}
+
 
 .corr-section{
     display: flex;
@@ -57,7 +67,125 @@ body{
     background: #33b1a7;
     margin-top: 30px;
 }
-.correlations{
-    margin-top: 100px;
 
-}
+/* 
+.component-selector {
+    margin: 20px 0;
+    text-align: center;
+  }
+  select {
+    font-size: 16px;
+    padding: 10px;
+    border-radius: 5px;
+    border: 1px solid #ddd;
+  }
+  .component-container {
+    padding: 20px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    background-color: #ffffff;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+     */
+
+
+
+/* 
+     .component-selector {
+    text-align: center;
+    margin: 20px 0;
+  }
+  
+  .card-container {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 20px;
+  }
+  
+  .selection-card {
+    background-color: #ffffff;
+    border: 2px solid #ddd;
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+    width: 150px;
+    cursor: pointer;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease, background-color 0.3s ease, border-color 0.3s ease;
+  }
+  
+  .selection-card .icon {
+    font-size: 2rem;
+  }
+  
+  .selection-card .name {
+    font-weight: bold;
+    margin-top: 10px;
+    font-size: 1rem;
+  }
+  
+  .selection-card:hover {
+    transform: scale(1.05);
+    background-color: #33b1a7; 
+    color: #ffffff;
+    border-color: #33b1a7;
+  }
+  
+  .selection-card.active {
+    transform: scale(1.1);
+    background-color: #11998e;
+    color: #ffffff;
+    border-color: #11998e;
+  }
+  
+  .component-container {
+    padding: 20px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    background-color: #ffffff;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+   */
+
+
+/* Card Container - Flexbox */
+.card-container {
+    display: flex;
+    flex-wrap: wrap; /* Allow cards to wrap into multiple rows */
+    justify-content: center; /* Center cards horizontally */
+    gap: 20px; /* Add space between cards */
+    margin-top: 20px; /* Add some margin above the cards */
+  }
+  
+  /* Individual Selection Cards */
+  .selection-card {
+    background-color: #ffffff;
+    border: 2px solid #ddd;
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+    width: 200px; /* Set card width */
+    height: 70px;
+    cursor: pointer;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease, background-color 0.3s ease, border-color 0.3s ease;
+  }
+  
+  /* Active and Hover Effects */
+  .selection-card:hover {
+    transform: scale(1.05);
+    background-color: #33b1a7; /* Teal background on hover */
+    color: #ffffff;
+    border-color: #33b1a7;
+  }
+  
+  .selection-card.active {
+    transform: scale(1.1);
+    background-color: #11998e; /* Darker teal for the active card */
+    color: #ffffff;
+    border-color: #11998e;
+  }
+  .analytics-page{
+      margin-top: 70px;
+  }

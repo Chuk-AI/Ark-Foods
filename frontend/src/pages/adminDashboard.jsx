@@ -5,7 +5,8 @@ import ChartDataLabels from "chartjs-plugin-datalabels";
 import Header from "../components/header";
 import Footer from "../components/footer";
 import { Link } from "react-router-dom";
-// Register Chart.js plugins
+import '../styles/adminDashboard.css'
+
 Chart.register(ChartDataLabels);
 
 function AdminDashboard() {
@@ -134,18 +135,40 @@ function AdminDashboard() {
         options: {
           responsive: true,
           plugins: {
-            legend: { display: false },
+            legend: {
+              display: false,
+              labels: {
+                color: "black", // Set legend text color to white
+              },
+            },
             datalabels: {
-              color: "black",
+              color: "black", // Set data label text color to white
               anchor: "end",
               align: "top",
               formatter: (value) => `$${value}`,
             },
           },
           scales: {
+            x: {
+              ticks: {
+                color: "black", // Set x-axis text color to white
+              },
+              grid: {
+                color: "rgba(255, 255, 255, 0.2)", // Set x-axis grid lines to a subtle white
+              },
+            },
             y: {
-              beginAtZero: true,
-              title: { display: true, text: "Price ($)" },
+              ticks: {
+                color: "black", // Set y-axis text color to white
+              },
+              title: {
+                display: true,
+                text: "Price ($)",
+                color: "black", // Set y-axis title color to white
+              },
+              grid: {
+                color: "rgba(255, 255, 255, 0.2)", // Set y-axis grid lines to a subtle white
+              },
             },
           },
         },
@@ -213,7 +236,7 @@ function AdminDashboard() {
         isAdmin={user.isAdmin}
         isOwner={user.isOwner}
       />
-      <div className="container">
+      <div className="container adminDash-section" > 
         <div className="mt-3 mb-3">
 
         <Link to="/approve_users" className="btn btn-primary">
