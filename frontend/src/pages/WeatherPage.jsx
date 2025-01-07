@@ -19,7 +19,7 @@ const WeatherPage = () => {
     <div>
         <Header/>
         <div className="weather-container">
-        <h2>Weather Dashboard</h2>
+        {/* <h2>Weather Dashboard</h2> */}
         <WeatherCharts
           city={weatherCity}
           setCity={setWeatherCity}
