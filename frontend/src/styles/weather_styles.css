@@ -1,53 +1,4 @@
-/* .input-group input,
-.input-group select {
-  margin-right: 100px; 
-  padding: 100px;
-}
-
-.chart-container {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.row-charts {
-  display: flex;
-  justify-content: space-between;
-  gap: 20px;
-}
-
-.row-charts canvas {
-  width: 52% !important; 
-  height: auto !important;
-}
-
-canvas {
-  display: block; 
-}
-.third-chart {
-  display: flex;
-  justify-content: center;
-  align-items: center; 
-  margin-top: 20px; 
-  width: 100%; 
-  border: 1px solid #33b1a7;
-  border-radius: 20px;
-}
-
-.second-chart{
-  border: 1px solid #33b1a7;
-  border-radius: 20px;
-
-}
-
-.third-chart canvas {
-  height: 500px !important; 
-  width: 82% !important;
-  display: block; 
-  margin: 0 auto; 
-
-} */
-
+/* Weather Dashboard Layout */
 .weather-dashboard {
   display: flex;
 }
@@ -84,14 +35,15 @@ canvas {
 
 .weather-sidebar li:hover {
   background-color: #33b1a7;
-  color: white;
+  color: #ffffff;
   transform: scale(1.05);
 }
 
 .weather-sidebar-active {
+  background-color: #11998e;
   color: black;
   transform: scale(1.1);
-  border: 2px solid #11998e;
+  border: #11998e solid 2px;
 }
 
 /* Main Content */
@@ -127,4 +79,13 @@ canvas {
 .weather-chart {
   border: 1px solid #33b1a7;
   border-radius: 20px;
+  width: 700px !important;
+  height: 400px !important;
+}
+.weather-container{
+  margin-top: 70px ;
+}
+.weather-inputs{
+  display: flex;
+  justify-content: center;
 }

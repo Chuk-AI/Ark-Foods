@@ -158,7 +158,7 @@ export default function DashAnalytics() {
 
       {/* Fun Card-Based Component Selector */}
       <div className="component-selector">
-        <h3>Select a Component to Display:</h3>
+        <h2>Select a Component to Display:</h2>
         <motion.div
           className="card-container"
           initial={{ opacity: 0 }}
