@@ -153,7 +153,12 @@ const RollingCorrelation = () => {
         {chartData && (
           <Plot
             data={chartData.data}
-            layout={chartData.layout}
+            layout={{
+              ...chartData.layout,
+              height: 500, // Adjust the height
+              width: 600,  // Adjust the width
+              autosize: false, // Disable autosize to enforce dimensions
+            }}
           />
         )}
       </div>

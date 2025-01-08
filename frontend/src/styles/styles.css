@@ -78,16 +78,9 @@
 }
 
 /* Enhanced Navigation */
-.nav-link {
-  font-weight: 600;
-  font-size: 0.95rem;
-  padding: 0.75rem 1.25rem !important;
-  position: relative;
-  border-radius: 6px;
-  transition: all 0.3s ease;
-}
 
-.nav-link:before {
+
+/* .nav-link:before {
   content: "";
   position: absolute;
   bottom: 0;
@@ -101,7 +94,7 @@
 
 .nav-link:hover:before {
   width: 80%;
-}
+} */
 
 /* Card Enhancements */
 .card {
@@ -303,4 +296,49 @@ footer::before {
 }
 .logo{
   margin-top: 15px;
+}
+
+.nav-item.active-tab .nav-link {
+  border-bottom: 2px solid #182539; /* Underline color */
+  font-weight: bold; /* Optional: Make the active tab bold */
+  color: #182539;
+
+}
+.nav-item .nav-link {
+  position: relative;
+  display: inline-block;
+  color: #000; /* Default text color */
+  text-decoration: none;
+  transition: color 0.3s ease; /* Smooth transition for text color */
+  
+}
+
+.nav-item .nav-link::after {
+  content: "";
+  position: absolute;
+  bottom: -5px; /* Position the line slightly below the text */
+  left: 100%; /* Start from the right side */
+  width: 0; /* Initially, the line has zero width */
+  height: 2px; /* Height of the underline */
+  transition: all 0.3s ease; /* Smooth transition for the line */
+}
+
+.nav-item .nav-link:hover {
+  color: #182539; /* Change text color on hover */
+  border-bottom: 2px solid #182539; /* Underline color */
+
+}
+
+.nav-item .nav-link:hover::after {
+  left: 0; /* Move the line to the left */
+  width: 100%; /* Expand the line to full width */
+}
+
+.nav-link {
+  font-weight: 600;
+  font-size: 0.95rem;
+  padding: 0.75rem 1.25rem !important;
+  position: relative;
+  border-radius: 6px;
+  transition: all 0.3s ease;
 }

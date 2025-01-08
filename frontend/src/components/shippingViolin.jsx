@@ -69,17 +69,42 @@ export default function ShippingViolinPlot() {
             <Plot
               data={ShippingplotData}
               layout={{
-                title: 'Shipping Price Distribution by Commodity',
-                xaxis: { title: 'Variety' },
-                yaxis: { title: 'Shipping Price' },
+                title: { 
+                  text: 'Shipping Price Distribution by Commodity', 
+                  font: { size: 16, weight: 'bold' } // Bold title
+                },
+                xaxis: {
+                  title: { 
+                    text: 'Variety', 
+                    font: { size: 14, weight: 'bold' }, // Bold x-axis title
+                    standoff: 6 // Add space between title and tick labels
+                  },
+                  tickfont: {
+                    size: 13, // Font size for x-axis tick labels
+                    weight: 500 // Normal weight for x-axis tick labels
+                  },
+                  automargin: true // Automatically adjust margins for the x-axis
+                },
+                yaxis: {
+                  title: { 
+                    text: 'Shipping Price', 
+                    font: { size: 14, weight: 'bold' } // Bold y-axis title
+                  },
+                  tickfont: {
+                    size: 13, // Font size for y-axis tick labels
+                    weight: 500 // Normal weight for y-axis tick labels
+                  },
+                  automargin: true // Automatically adjust margins for the y-axis
+                },
                 height: 500,
                 width: 700, // Set your desired width
                 showlegend: false,
-                margin: { l: 50, r: 50, t: 50, b: 50 }, // Internal chart margins
+                margin: { l: 50, r: 0, t: 50, b: 70 }, // Adjust bottom margin for x-axis title
                 autosize: true,
                 plot_bgcolor: '#f0f8ff', // Chart background color
                 paper_bgcolor: 'white', // Outer background color
               }}
+              
               style={{
                 width: '100%',
                 height: '100%',

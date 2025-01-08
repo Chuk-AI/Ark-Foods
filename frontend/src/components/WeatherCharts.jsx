@@ -181,8 +181,19 @@ const WeatherCharts = () => {
       data: { labels, datasets: datasetArray },
       options: {
         scales: {
-          x: { type: "time", time: { unit: "day" } },
-          y: { title: { display: true, text: label } },
+          x: { type: "time", time: { unit: "day" },
+          ticks: {
+            color: "white", // Set tick labels color to white
+            font: { size: 12 }, // Adjust font size if needed
+          }, },
+          
+          y: { title: { display: true, text: label,  color: "white", // Set the title color to white
+          font: { size: 14, weight: "bold" }, },
+          ticks: {
+            color: "white", // Set tick labels color to white
+            font: { size: 12 }, // Adjust font size if needed
+          },
+        },
         },
         plugins: {
           legend: { display: true, position: "top" },
@@ -215,13 +226,13 @@ const WeatherCharts = () => {
           {
             label: "Ensemble Totals",
             data: sortedTotals, // Use sorted data
-            backgroundColor: "gray",
+            backgroundColor: "white",
           },
           {
             label: "Climatology",
             data: Array(sortedTotals.length).fill(climatologyValue),
             type: "line",
-            borderColor: "blue",
+            borderColor: "white",
             borderWidth: 2,
             pointRadius: 0, // Remove points on the line
           },
@@ -237,8 +248,19 @@ const WeatherCharts = () => {
           datalabels: { display: false }, // Disable datalabels globally
         },
         scales: {
-          x: { title: { display: true, text: "Ensemble Members" } },
-          y: { title: { display: true, text: "Accumulated Precipitation (mm)" } },
+          x: { title: { display: true, text: "Ensemble Members", color: "white", // Set the title color to white
+          font: { size: 14, weight: "bold" }, },
+          
+          ticks: {
+            color: "white", // Set tick labels color to white
+            font: { size: 12 }, // Adjust font size if needed
+          }, },
+          y: { title: { display: true, text: "Accumulated Precipitation (mm)",color: "white", // Set the title color to white
+          font: { size: 14, weight: "bold" }, },
+          ticks: {
+            color: "white", // Set tick labels color to white
+            font: { size: 12 }, // Adjust font size if needed
+          }, },
         },
       },
     });
@@ -275,13 +297,11 @@ const WeatherCharts = () => {
 
       <div className="chart-container">
   <div className="row-charts">
-      <div className="row-charts">
 
     <canvas ref={precipChartRef} width="200" height="150" style={{  border:' 1px solid #33b1a7', borderRadius:'20px'}}></canvas>
 
 
     <canvas ref={tempChartRef} width="200" height="150" style={{  border:' 1px solid #33b1a7', borderRadius:'20px'}}></canvas>
-    </div>
 
   </div>
   <div className="third-chart">

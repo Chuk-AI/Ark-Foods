@@ -349,7 +349,7 @@ function AdminDashboard() {
               {/* Results Section */}
               <div className="col-md-6">
                 {forecastData ? (
-                  <div className="card">
+                  <div className="card Forecast-Results">
                     <div className="card-body">
                       <h2>Forecast Results</h2>
                       <table className="table table-bordered">

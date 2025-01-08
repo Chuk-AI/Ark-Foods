@@ -1,5 +1,3 @@
-
-
 import React, { useState } from "react";
 import Plot from "react-plotly.js";
 import "../styles/scatterPlot.css";
@@ -99,11 +97,23 @@ function ScatterPlot() {
           Generate Scatter Plot
         </button>
       </div>
-      <div className="scatter-chart">
-        {scatterPlotData && (
-          <Plot data={scatterPlotData.data} layout={scatterPlotData.layout} />
-        )}
-      </div>
+
+
+ <div className="scatter-chart">
+  {scatterPlotData && (
+    <Plot 
+      data={scatterPlotData.data} 
+      layout={{
+        ...scatterPlotData.layout,
+        height: 500, // Adjust the height
+        width: 600,  // Adjust the width
+        autosize: false, // Disable autosize to enforce dimensions
+      }} 
+    />
+  )}
+</div>
+
+
     </div>
   );
 }

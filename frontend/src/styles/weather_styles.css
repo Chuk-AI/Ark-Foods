@@ -8,6 +8,10 @@
   display: flex;
   flex-direction: column;
   gap: 20px;
+  background: linear-gradient(to right, #141e30, #243b55);
+  border-radius: 20px;
+  padding: 20px;
+  min-width: 1021px;
 }
 
 .row-charts {
@@ -41,8 +45,8 @@ canvas {
 }
 
 .third-chart canvas {
-  height: 500px !important; 
-  width: 100% !important;
+  height: 480px !important; 
+  width: 60% !important;
   display: block; 
   margin: 0 auto; 
 

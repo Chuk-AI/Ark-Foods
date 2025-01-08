@@ -67,16 +67,42 @@ const TerminalViolinPlot = () => {
                   },
                 ]}
                 layout={{
-                  title: 'USDA Terminal Data',
-                  xaxis: { title: 'Variety' },
-                  yaxis: { title: 'Avg Daily Price' },
+                  title: {
+                    text: 'USDA Terminal Data',
+                    font: { size: 16, weight: 'bold' } // Bold chart title
+                  },
+                  xaxis: {
+                    title: {
+                      text: 'Variety',
+                      font: { size: 14, weight: 'bold' }, // Bold x-axis title
+                      standoff: 6 // Add space between title and tick labels
+                    },
+                    tickfont: {
+                      size: 13, // Font size for x-axis tick labels
+                      weight: 500 // Medium-bold for variety names (adjust between 100 and 900)
+                    },
+                    automargin: true // Automatically adjust margins for the x-axis
+                  },
+                  yaxis: {
+                    title: {
+                      text: 'Avg Daily Price',
+                      font: { size: 14, weight: 'bold' } // Bold y-axis title
+                    },
+                    
+                    tickfont: {
+                      size: 13, // Font size for x-axis tick labels
+                      weight: 500 // Medium-bold for variety names (adjust between 100 and 900)
+                    },
+                    automargin: true // Automatically adjust margins for the y-axis
+                  },
                   height: 500,
                   width: 600,
-                  margin: { l: 50, r: 50, t: 50, b: 50 },
+                  margin: { l: 50, r: 60, t: 50, b: 70 }, // Adjust bottom margin for x-axis title
                   autosize: true,
-                  plot_bgcolor: '#f0f8ff',
-                  paper_bgcolor: 'white',
+                  plot_bgcolor: '#f0f8ff', // Chart background color
+                  paper_bgcolor: 'white' // Outer background color
                 }}
+                
                 style={{
                   borderRadius: '20px', // Apply border radius to Plot
                   overflow: 'hidden', // Ensures Plot respects the border radius
@@ -109,16 +135,43 @@ const TerminalViolinPlot = () => {
                   },
                 ]}
                 layout={{
-                  title: 'ProduceIQ Terminal Data',
-                  xaxis: { title: 'Variety' },
-                  yaxis: { title: 'Avg Daily Price' },
+                  title: { 
+                    text: 'ProduceIQ Terminal Data', 
+                    font: { size: 16, weight: 'bold' } 
+                  },
+                  xaxis: {
+                    title: { 
+                      text: 'Variety', 
+                      font: { size: 14, weight: 'bold' },
+                      standoff: 6, // Proper spacing
+                    },
+                    
+                    tickfont: {
+                      size: 13, // Font size for x-axis tick labels
+                      weight: 500 // Medium-bold for variety names (adjust between 100 and 900)
+                    },
+                    automargin: true, // Ensure axis title and tick labels have enough space
+                  },
+                  yaxis: {
+                    title: { 
+                      text: 'Avg Daily Price', 
+                      font: { size: 14, weight: 'bold' } 
+                    },
+                    
+                    tickfont: {
+                      size: 13, // Font size for x-axis tick labels
+                      weight: 500 // Medium-bold for variety names (adjust between 100 and 900)
+                    },
+                    automargin: true, // Ensure margins are calculated automatically
+                  },
                   height: 500,
                   width: 600,
-                  margin: { l: 50, r: 50, t: 50, b: 50 },
+                  margin: { l: 50, r: 60, t: 50, b: 70 }, // Adjust bottom margin for x-axis title
                   autosize: true,
                   plot_bgcolor: '#f0f8ff',
                   paper_bgcolor: 'white',
                 }}
+                
                 style={{
                   borderRadius: '20px', // Apply border radius to Plot
                   overflow: 'hidden', // Ensures Plot respects the border radius

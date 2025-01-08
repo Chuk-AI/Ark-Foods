@@ -60,15 +60,38 @@ function EmpiricalChart({ apiEndpoint, title, colors }) {
                                 },
                             ]}
                             layout={{
-                                xaxis: { title: "Price" },
-                                yaxis: { title: "Frequency" },
+                                xaxis: {
+                                  title: {
+                                    text: "Price",
+                                    font: { size: 14, weight: 500 }, // Medium-bold x-axis title
+                                  },
+                                  tickfont: {
+                                    size: 12, // Font size for x-axis tick labels
+                                    weight: 600, // Medium-bold for tick labels
+                                  },
+                                  automargin: true, // Ensure margins are adjusted automatically
+                                },
+                                yaxis: {
+                                  title: {
+                                    text: "Frequency",
+                                    font: { size: 14, weight: 500 }, // Medium-bold y-axis title
+                                    standoff: 10, // Add space between y-axis title and data points
+                                  },
+                                  tickfont: {
+                                    size: 12, // Font size for y-axis tick labels
+                                    weight: 600, // Medium-bold for tick labels
+                                  },
+                                  automargin: true, // Ensure margins are adjusted automatically
+                                },
                                 showlegend: false,
                                 height: 400,
                                 width: 370,
-                                plot_bgcolor: "#f0f8ff",
-                                paper_bgcolor: "white",
-                                margin: { l: 60, r: 10, t: 20, b: 50 },
-                            }}
+                                plot_bgcolor: "#f0f8ff", // Chart background color
+                                paper_bgcolor: "white", // Outer background color
+                                margin: { l: 80, r: 10, t: 20, b: 50 }, // Adjusted left margin for y-axis title
+                              }}
+                              
+                              
                             config={{ responsive: true }}
                         />
                     </div>

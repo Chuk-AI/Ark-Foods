@@ -87,19 +87,40 @@ export default function CorrelationsPlots() {
     },
   ]}
   layout={{
-    title: "Correlation Matrix of Terminal Market Prices",
+    title: { 
+      text: 'Correlation Matrix of Terminal Market Prices', 
+      font: { size: 16, weight: 'bold' } // Bold title
+    },
     xaxis: {
-      title: "Pepper types",
-      tickangle: -45,
+      title: {
+        text: "Pepper types",
+        font: { size: 17, weight: 500 }, // Font styling for the x-axis title
+        standoff: 6, // Add space between the title and tick labels
+      },
+      tickfont: {
+        size: 12, // Font size for x-axis tick labels
+        weight: 600, // Normal weight for x-axis tick labels
+      },
+      tickangle: -45, // Rotate x-axis tick labels
+      automargin: true, // Automatically adjust margins for the x-axis
     },
     yaxis: {
-      title: "Pepper types",
-      automargin: true,
+      title: {
+        text: "Pepper types",
+        font: { size: 17, weight: 500 }, // Font styling for the y-axis title
+        standoff: 8, // Add space between the title and tick labels
+      },
+      tickfont: {
+        size: 12, // Font size for y-axis tick labels
+        weight: 600, // Normal weight for y-axis tick labels
+      },
+      automargin: true, // Automatically adjust margins for the y-axis
     },
     height: 600,
     width: 600,
+    autosize: true,
     annotations: Termlabels.flatMap((rowLabel, rowIndex) =>
-    Termlabels.map((colLabel, colIndex) => ({
+      Termlabels.map((colLabel, colIndex) => ({
         x: colLabel,
         y: rowLabel,
         text: terminalZ[rowIndex][colIndex]?.toFixed(2),
@@ -111,6 +132,7 @@ export default function CorrelationsPlots() {
       }))
     ), // Add annotations for each cell
   }}
+  
 />
 </div>
 
@@ -134,19 +156,39 @@ export default function CorrelationsPlots() {
           },
         ]}
         layout={{
-          title: "Correlation Matrix of Shipping Prices",
+          
+          title: { 
+            text: 'Correlation Matrix of Shipping Prices', 
+            font: { size: 16, weight: 'bold' } // Bold title
+          },
           xaxis: {
-            title: "pepper types",
-            tickangle: -45,
+            title: {
+              text: "pepper types",
+              font: { size: 17, weight: 500 }, // Font styling for the y-axis title
+              standoff: 6, // Add space between the title and tick labels
+            },
+            tickfont: {
+              size: 12, // Font size for x-axis tick labels
+              weight: 600, // Normal weight for x-axis tick labels
+            },
+            tickangle: -45, // Rotate x-axis tick labels
+            automargin: true, // Automatically adjust margins for the x-axis
           },
           yaxis: {
-            title: "pepper types",
-            automargin: true,
+            title: {
+              text: "pepper types",
+              font: { size: 17, weight: 500 }, // Font styling for the y-axis title
+              standoff: 8, // Add space between the title and tick labels
+            },
+            tickfont: {
+              size: 12, // Font size for y-axis tick labels
+              weight: 600, // Normal weight for y-axis tick labels
+            },
+            automargin: true, // Automatically adjust margins for the y-axis
           },
           height: 600,
           width: 600,
           autosize: true,
-   
           annotations: labels.flatMap((rowLabel, rowIndex) =>
             labels.map((colLabel, colIndex) => ({
               x: colLabel,
@@ -160,6 +202,7 @@ export default function CorrelationsPlots() {
             }))
           ), // Add annotations for each cell
         }}
+        
       />
 </div>
 

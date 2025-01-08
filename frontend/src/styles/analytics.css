@@ -26,9 +26,7 @@ body{
     margin-top: 100px;
     height: 680px;
 }
-.terminal-empricial-container{
-    margin-top: 50px;
-}
+
 
 
 
@@ -64,7 +62,7 @@ body{
     justify-content: space-between;
     padding: 20px;
     border-radius: 20px;
-    background: #33b1a7;
+    background: linear-gradient(to right, #141e30, #243b55);
     margin-top: 30px;
 }
 
@@ -186,6 +184,4 @@ body{
     color: #ffffff;
     border-color: #11998e;
   }
-  .analytics-page{
-      margin-top: 70px;
-  }
+ 

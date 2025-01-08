@@ -1,16 +1,15 @@
-
-// export default Header;
 import React, { useState, useContext } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { UserContext } from "../components/userContext";
 import { UserRole } from "../components/roles";
-import '../styles/styles.css'
-import logo from '../styles/logo.png'
+import "../styles/styles.css";
+import logo from "../styles/logo.png";
 
 function Header() {
-  const { isAuthenticated, userRole, logout } = useContext(UserContext); // Access context
+  const { isAuthenticated, userRole, logout } = useContext(UserContext);
   const [isNavCollapsed, setIsNavCollapsed] = useState(true);
   const navigate = useNavigate();
+  const location = useLocation(); // Get current location
 
   // Toggle Navbar Collapse
   const handleNavCollapse = () => setIsNavCollapsed(!isNavCollapsed);
@@ -18,25 +17,29 @@ function Header() {
   // Handle Logout
   const handleLogout = () => {
     if (window.confirm("Are you sure you want to log out?")) {
-      logout(); // Clear authentication state
-      navigate("/login"); // Redirect to login
+      logout();
+      navigate("/login");
     }
   };
 
   // Helper function to check for allowed roles
   const hasAccess = (allowedRoles) => allowedRoles.includes(userRole);
 
+  // Function to check if a tab is active
+  const isActive = (path) => location.pathname === path ? "active-tab" : "";
+
   return (
     <nav className="navbar navbar-expand-lg navbar-light bg-light">
       <div className="container">
         {/* Brand Logo */}
         <Link className="navbar-brand" to="/">
-    
-          <img src={logo} alt="Logo" 
+          <img
+            src={logo}
+            alt="Logo"
             width="40"
             height="40"
             className="logo"
-            />
+          />
         </Link>
 
         {/* Navbar Toggler */}
@@ -59,32 +62,36 @@ function Header() {
           <ul className="navbar-nav ml-auto">
             {isAuthenticated ? (
               <>
-                {/* Admin Dashboard (ADMIN and OWNER roles) */}
+                {/* Admin Dashboard */}
                 {hasAccess([UserRole.ADMIN, UserRole.OWNER]) && (
-                  <li className="nav-item">
+                  <li className={`nav-item ${isActive("/admin_dashboard")}`}>
                     <Link className="nav-link" to="/admin_dashboard">
                       Admin Dashboard
                     </Link>
                   </li>
                 )}
 
-                {/* Sales Dashboard (SALES and OWNER roles) */}
+                {/* Sales Dashboard */}
                 {hasAccess([UserRole.SALES, UserRole.OWNER, UserRole.ADMIN]) && (
-                  <li className="nav-item">
+                  <li className={`nav-item ${isActive("/sales_dashboard")}`}>
                     <Link className="nav-link" to="/sales_dashboard">
                       Sales Dashboard
                     </Link>
                   </li>
                 )}
-                  {hasAccess([ UserRole.OWNER, UserRole.ADMIN, UserRole.SALES]) && (
-                  <li className="nav-item">
+
+                {/* Analytics */}
+                {hasAccess([UserRole.OWNER, UserRole.ADMIN, UserRole.SALES]) && (
+                  <li className={`nav-item ${isActive("/analytics")}`}>
                     <Link className="nav-link" to="/analytics">
                       Analytics
                     </Link>
                   </li>
                 )}
-                    {hasAccess([ UserRole.OWNER, UserRole.ADMIN]) && (
-                  <li className="nav-item">
+
+                {/* Weather Dashboard */}
+                {hasAccess([UserRole.OWNER, UserRole.ADMIN]) && (
+                  <li className={`nav-item ${isActive("/weather_dashboard")}`}>
                     <Link className="nav-link" to="/weather_dashboard">
                       Weather Dashboard
                     </Link>
@@ -105,14 +112,14 @@ function Header() {
             ) : (
               <>
                 {/* Login */}
-                <li className="nav-item">
+                <li className={`nav-item ${isActive("/login")}`}>
                   <Link className="nav-link" to="/login">
                     Login
                   </Link>
                 </li>
 
                 {/* Register */}
-                <li className="nav-item">
+                <li className={`nav-item ${isActive("/register")}`}>
                   <Link className="nav-link" to="/register">
                     Register
                   </Link>
