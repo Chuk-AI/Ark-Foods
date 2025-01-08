@@ -3120,6 +3120,11 @@ def get_terminal_empricial_probability():
                 "histogram": histogram,
             })
 
+        # Clean up DataFrame references
+        del df
+        del grouped
+        gc.collect()  # Explicit garbage collection to release memory
+
         return jsonify(result)
     except Exception as e:
         # Use traceback to capture the full error details
@@ -3128,54 +3133,6 @@ def get_terminal_empricial_probability():
         print("Error Traceback:", error_message)
         return jsonify({"error": str(e)}), 500
 
-# @app.route('/api/terminal_empricial_probability', methods=['GET'])
-# def get_terminal_empricial_probability():
-#     try:
-#         # Query the database to fetch specific fields (commodity and price)
-#         data = db.session.query(PriceData.commodity, PriceData.price).all()
-#         if not data:
-#             return jsonify([])  # Return empty list if no data
-        
-#         # Convert the data to a DataFrame
-#         df = pd.DataFrame(data, columns=['commodity', 'price'])
-#         if df.empty:
-#             return jsonify([])
-
-#         # Ensure 'price' is numeric
-#         df['price'] = pd.to_numeric(df['price'], errors='coerce')
-#         df = df.dropna(subset=['price'])
-
-#         # Prepare chart-ready data
-#         result = []
-#         grouped = df.groupby('commodity')
-
-#         for commodity, group in grouped:
-#             prices = group['price'].values
-#             if len(prices) == 0:
-#                 continue
-
-#             mean = prices.mean()
-#             std_dev = prices.std()
-#             hist, bin_edges = np.histogram(prices, bins=50)
-#             histogram = {
-#                 "x": bin_edges[:-1].tolist(),
-#                 "y": hist.tolist(),
-#             }
-
-#             result.append({
-#                 "commodity": commodity,
-#                 "mean": float(mean),
-#                 "std_dev": float(std_dev),
-#                 "histogram": histogram,
-#             })
-
-#         return jsonify(result)
-#     except Exception as e:
-#         # Use traceback to capture the full error details
-#         import traceback
-#         error_message = traceback.format_exc()
-#         print("Error Traceback:", error_message)
-#         return jsonify({"error": str(e)}), 500
 
 
 
@@ -3186,10 +3143,13 @@ def get_terminal_empricial_probability():
 @app.route('/api/shipping_empricial_probability', methods=['GET'])
 def get_shipping_empricial_probability():
     try:
-        # Query the database to fetch specific fields (commodity and price) where source is 'Usda'
+        # Query the database to fetch specific fields (commodity and price) where source is 'ProduceIQ'
         data = db.session.query(ShippingPriceData.commodity, ShippingPriceData.price) \
             .filter(ShippingPriceData.source == 'ProduceIQ') \
             .all()
+
+        if not data:
+            return jsonify([])  # Return an empty list if no data is found
 
         # Convert the data to a DataFrame
         df = pd.DataFrame(data, columns=['commodity', 'price'])
@@ -3226,9 +3186,17 @@ def get_shipping_empricial_probability():
                 "histogram": histogram,
             })
 
+        # Clean up DataFrame references
+        del df
+        del grouped
+        gc.collect()  # Explicit garbage collection to free memory
+
         return jsonify(result)
     except Exception as e:
-        print("Error:", str(e))  # Debugging
+        # Capture and print the full traceback for debugging
+        import traceback
+        error_message = traceback.format_exc()
+        print("Error Traceback:", error_message)
         return jsonify({"error": str(e)}), 500
 
 
@@ -3303,7 +3271,14 @@ def get_terminal_correlation():
             }
             for commodity in data['commodity'].unique()
         }
-        
+
+        # Clean up DataFrame references
+        del data
+        del pivot_table
+        del returns
+        del correlation_matrix
+        gc.collect()  # Explicit garbage collection
+
         return jsonify({
             "correlation": correlation_dict,
             "summary": summary_stats,
@@ -3319,6 +3294,7 @@ def get_terminal_correlation():
         app.logger.error(f"Error computing correlation matrix: {str(e)}")
         app.logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
+
 
 
 
@@ -3388,7 +3364,14 @@ def get_shipping_correlation():
             }
             for commodity in data['commodity'].unique()
         }
-        
+
+        # Clean up DataFrame references
+        del data
+        del pivot_table
+        del returns
+        del correlation_matrix
+        gc.collect()  # Explicit garbage collection to free memory
+
         return jsonify({
             "correlation": correlation_dict,
             "summary": summary_stats,
@@ -3404,6 +3387,7 @@ def get_shipping_correlation():
         app.logger.error(f"Error computing correlation matrix: {str(e)}")
         app.logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
+
 
 
 
@@ -3441,6 +3425,10 @@ def get_terminal_scatterplot_matrix():
         # Separate data for each commodity
         x_data = df[df['commodity'] == commodity_x]['price'].tolist()
         y_data = df[df['commodity'] == commodity_y]['price'].tolist()
+
+        # Clean up DataFrame
+        del df
+        gc.collect()  # Explicit garbage collection to free memory
 
         # Get the minimum length to ensure equal pairs
         min_length = min(len(x_data), len(y_data))
@@ -3501,6 +3489,7 @@ def get_terminal_scatterplot_matrix():
 
 
 
+
 # shipping scatterplot for ProduceIQ data
 
 @app.route("/api/shipping_scatterplot_matrix", methods=["POST"])
@@ -3532,6 +3521,10 @@ def get_shipping_scatterplot_matrix():
         # Separate data for each commodity
         x_data = df[df['commodity'] == commodity_x]['price'].tolist()
         y_data = df[df['commodity'] == commodity_y]['price'].tolist()
+
+        # Clean up DataFrame
+        del df
+        gc.collect()  # Explicit garbage collection to free memory
 
         # Get the minimum length to ensure equal pairs
         min_length = min(len(x_data), len(y_data))
@@ -3592,6 +3585,7 @@ def get_shipping_scatterplot_matrix():
 
 
 
+
 # Rolling Correlations for Terminal prices
 
 import plotly.express as px
@@ -3610,23 +3604,30 @@ def calculate_rolling_price_correlations(window, source_df, series1, series2):
         # Calculate rolling correlation
         roll_corr = source_df[series1].rolling(
             window=window,
-            min_periods=window//2  # Allow for some missing data
+            min_periods=window // 2  # Allow for some missing data
         ).corr(source_df[series2])
         
-        # Convert to JSON serializable format
+        # Create result DataFrame
         result_df = pd.DataFrame({
             'date': roll_corr.index,
             'correlation': roll_corr.values
         })
-        
+
         # Convert numpy values to Python native types
         result_df['correlation'] = result_df['correlation'].astype(float)
         result_df['date'] = result_df['date'].dt.strftime('%Y-%m-%d')
-        
+
+        # Clean up memory
+        del roll_corr
+        gc.collect()
+
         return result_df
-        
+
     except KeyError as e:
         raise ValueError(f"KeyError: {e}. At least one of the selected varieties has no price data.")
+    except Exception as e:
+        raise ValueError(f"Unexpected error: {str(e)}")
+
 
 def plot_rolling_price_correlations(roll_corr_df, series1, series2, window):
     """
@@ -3636,6 +3637,7 @@ def plot_rolling_price_correlations(roll_corr_df, series1, series2, window):
         # Convert date strings back to datetime for plotting
         roll_corr_df['date'] = pd.to_datetime(roll_corr_df['date'])
         
+        # Create the plot
         fig_roll_corr = px.line(
             roll_corr_df,
             x='date',
@@ -3667,10 +3669,15 @@ def plot_rolling_price_correlations(roll_corr_df, series1, series2, window):
         fig_roll_corr.add_hline(y=1, line_dash="dot", line_color="gray", opacity=0.3)
         fig_roll_corr.add_hline(y=-1, line_dash="dot", line_color="gray", opacity=0.3)
 
+        # Clean up memory
+        del roll_corr_df
+        gc.collect()
+
         return fig_roll_corr
-        
+
     except Exception as e:
         raise ValueError(f"Error creating plot: {str(e)}")
+
 
 
 # terminal correlations for usda data
@@ -3721,9 +3728,15 @@ def terminal_rolling_correlations():
             aggfunc="mean"
         ).sort_index()
 
+        # Clean up the main DataFrame after pivoting
+        del df
+        gc.collect()
+
         # Check for minimum data points
         min_required_points = window * 2
         if len(pivot_data) < min_required_points:
+            del pivot_data
+            gc.collect()
             return jsonify({
                 "error": f"Insufficient data points. Need at least {min_required_points} days of data for {window}-day window"
             }), 400
@@ -3736,6 +3749,10 @@ def terminal_rolling_correlations():
             series2=series2
         )
 
+        # Clean up the pivot DataFrame after rolling correlation
+        del pivot_data
+        gc.collect()
+
         # Plot rolling correlation
         fig_roll_corr = plot_rolling_price_correlations(
             roll_corr_df=roll_corr_df,
@@ -3743,6 +3760,10 @@ def terminal_rolling_correlations():
             series2=series2,
             window=window
         )
+
+        # Clean up the rolling correlation DataFrame
+        del roll_corr_df
+        gc.collect()
 
         # Convert the Plotly figure to JSON, ensuring all values are serializable
         fig_json = fig_roll_corr.to_json()
@@ -3764,9 +3785,7 @@ def terminal_rolling_correlations():
 
 
 
-
 # Rolling Correlations for Shipping prices
-
 
 
 def calculate_rolling_price_correlations(window, source_df, series1, series2):
@@ -3796,10 +3815,16 @@ def calculate_rolling_price_correlations(window, source_df, series1, series2):
         result_df['correlation'] = result_df['correlation'].astype(float)
         result_df['date'] = result_df['date'].dt.strftime('%Y-%m-%d')
         
+        # Clean up rolling correlation Series
+        del roll_corr
+        gc.collect()  # Ensure unused memory is released
+
         return result_df
-        
+
     except KeyError as e:
         raise ValueError(f"KeyError: {e}. At least one of the selected varieties has no price data.")
+    except Exception as e:
+        raise ValueError(f"Unexpected error occurred: {str(e)}")
 
 
 def plot_rolling_price_correlations(roll_corr_df, series1, series2, window):
@@ -3810,6 +3835,7 @@ def plot_rolling_price_correlations(roll_corr_df, series1, series2, window):
         # Convert date strings back to datetime for plotting
         roll_corr_df['date'] = pd.to_datetime(roll_corr_df['date'])
         
+        # Create the Plotly figure
         fig_roll_corr = px.line(
             roll_corr_df,
             x='date',
@@ -3817,6 +3843,7 @@ def plot_rolling_price_correlations(roll_corr_df, series1, series2, window):
             title=f"{window}-day rolling correlation between {series1} and {series2}"
         )
 
+        # Update layout for better visualization
         fig_roll_corr.update_layout(
             title={
                 "text": f"{window}-day rolling correlation between {series1} and {series2}",
@@ -3841,8 +3868,12 @@ def plot_rolling_price_correlations(roll_corr_df, series1, series2, window):
         fig_roll_corr.add_hline(y=1, line_dash="dot", line_color="gray", opacity=0.3)
         fig_roll_corr.add_hline(y=-1, line_dash="dot", line_color="gray", opacity=0.3)
 
+        # Clean up the rolling correlation DataFrame
+        del roll_corr_df
+        gc.collect()  # Ensure unused memory is released
+
         return fig_roll_corr
-        
+
     except Exception as e:
         raise ValueError(f"Error creating plot: {str(e)}")
 
@@ -3866,7 +3897,7 @@ def shipping_rolling_correlations():
         if window < 5:
             return jsonify({"error": "Window size must be at least 5 days"}), 400
 
-        # Fetch data from the database with the filter for source 'ProduceIQ'
+        # Fetch data from the database
         result = db.session.query(
             ShippingPriceData.year,
             ShippingPriceData.day,
@@ -3874,8 +3905,7 @@ def shipping_rolling_correlations():
             ShippingPriceData.price
         ).filter(
             ShippingPriceData.commodity.in_([series1, series2]),
-            ShippingPriceData.price > 0,  # Ensure we only get valid prices
-            ShippingPriceData.source == "ProduceIQ"  # Filter by source 'ProduceIQ'
+            ShippingPriceData.price > 0  # Ensure we only get valid prices
         ).all()
 
         if not result:
@@ -3898,9 +3928,15 @@ def shipping_rolling_correlations():
             aggfunc="mean"
         ).sort_index()
 
+        # Clean up the main DataFrame after pivoting
+        del df
+        gc.collect()
+
         # Check for minimum data points
         min_required_points = window * 2
         if len(pivot_data) < min_required_points:
+            del pivot_data
+            gc.collect()
             return jsonify({
                 "error": f"Insufficient data points. Need at least {min_required_points} days of data for {window}-day window"
             }), 400
@@ -3913,6 +3949,10 @@ def shipping_rolling_correlations():
             series2=series2
         )
 
+        # Clean up the pivot DataFrame after rolling correlation
+        del pivot_data
+        gc.collect()
+
         # Plot rolling correlation
         fig_roll_corr = plot_rolling_price_correlations(
             roll_corr_df=roll_corr_df,
@@ -3920,6 +3960,10 @@ def shipping_rolling_correlations():
             series2=series2,
             window=window
         )
+
+        # Clean up the rolling correlation DataFrame
+        del roll_corr_df
+        gc.collect()
 
         # Convert the Plotly figure to JSON, ensuring all values are serializable
         fig_json = fig_roll_corr.to_json()
@@ -3935,7 +3979,6 @@ def shipping_rolling_correlations():
     except Exception as e:
         app.logger.error(f"Error generating shipping rolling correlations: {str(e)}")
         return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
-
 
 
 
