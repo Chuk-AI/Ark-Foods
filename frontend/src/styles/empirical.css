@@ -29,7 +29,7 @@
  border-radius: 15px; /* Adjust the radius as needed */
  overflow: hidden;  
  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Optional: Add a shadow effect */
- background: linear-gradient(to right, #141e30, #243b55);
+ background: #33b1a7;
  padding: 10px;     
 }
 

@@ -8,7 +8,6 @@ import SalesDashboard from './pages/salesDashboard';
 import { UserProvider, UserContext } from './components/userContext';
 import React, { useContext } from 'react';
 import axios from 'axios';
-import Header from './components/header';
 import ProtectedRoute from './components/protectedRoute';
 import WeatherPage from './pages/WeatherPage';
 import DashAnalytics from './pages/analytics'

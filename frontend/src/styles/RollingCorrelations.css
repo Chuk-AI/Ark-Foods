@@ -30,7 +30,7 @@
     align-items: center;
     align-content: center;
     height: 600px;
-    background: linear-gradient(to right, #141e30, #243b55);
+    background: #33b1a7;
     border-radius: 20px;
   }
   .radio-buttons{
@@ -72,5 +72,5 @@ text-align: center;
   border-radius: 10px; /* Add rounded corners */
   box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1); /* Subtle shadow */
   margin-top: 50px;
-  height: 741px;
+  height: 741px !important;
 }

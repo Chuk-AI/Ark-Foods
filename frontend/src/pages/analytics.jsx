@@ -49,7 +49,7 @@ export default function DashAnalytics() {
         </div>
       </div>
 
-      <div>
+      <div className='correlationsHeight'>
         <CorrelationsPlots />
       </div>
 

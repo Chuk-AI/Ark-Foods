@@ -299,9 +299,9 @@ footer::before {
 }
 
 .nav-item.active-tab .nav-link {
-  border-bottom: 2px solid #182539; /* Underline color */
+  border-bottom: 2px solid #33b1a7; /* Underline color */
   font-weight: bold; /* Optional: Make the active tab bold */
-  color: #182539;
+  color: #33b1a7;
 
 }
 .nav-item .nav-link {
@@ -325,7 +325,7 @@ footer::before {
 
 .nav-item .nav-link:hover {
   color: #182539; /* Change text color on hover */
-  border-bottom: 2px solid #182539; /* Underline color */
+  border-bottom: 2px solid #33b1a7; /* Underline color */
 
 }
 

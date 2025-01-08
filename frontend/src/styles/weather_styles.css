@@ -8,7 +8,7 @@
   display: flex;
   flex-direction: column;
   gap: 20px;
-  background: linear-gradient(to right, #141e30, #243b55);
+  background: #ECFFFD;
   border-radius: 20px;
   padding: 20px;
   min-width: 1021px;
@@ -60,4 +60,8 @@ canvas {
   display: flex;
   flex-direction: column;
   margin-top: 140px;
+  background:#33b1a7 ;
+  height: 350px;
+  border-radius: 20px;
+  border: solid 2px wheat;
 }

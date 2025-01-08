@@ -36,7 +36,7 @@ const TerminalViolinPlot = () => {
           style={{
             display: 'flex',
             justifyContent: 'space-between',
-            background: 'linear-gradient(to right, #141e30, #243b55',
+            background: '#33b1a7',
             padding: '20px',
             boxShadow: '0 4px 8px rgba(0, 0, 0, 0.2)',
             borderRadius:'20px'
