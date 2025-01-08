@@ -1,9 +1,12 @@
 __pycache__
 instance/users.db
 instance/
-venv/
 users_dump.sql
 users_dump_part_0.sql
 users_dump_part_1.sql
 .env
 data/
+venv/
+users_dump_part_1
+users_dump_part_0
+users_dump
