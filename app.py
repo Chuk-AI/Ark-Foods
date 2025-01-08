@@ -3051,18 +3051,17 @@ def terminal_price_violin():
 
 
 
-# voilin plot for shipping data
+# voilin plot for shipping data ProduceIQ
 @app.route("/api/shipping_price_violin", methods=["GET"])
-
 def shipping_price_violin():
     try:
         app.logger.info("Fetching data for shipping violin plot...")
 
-        # Correct SQL query wrapped in `text`
+        # Correct SQL query wrapped in `text`, adding a filter for source = 'Usda'
         query = text("""
         SELECT commodity AS varietyName, price
         FROM shipping_price_data
-        WHERE price IS NOT NULL
+        WHERE price IS NOT NULL AND source = 'ProduceIQ'
         """)
 
         # Fetch and log results
@@ -3077,12 +3076,14 @@ def shipping_price_violin():
         return jsonify({"error": "Failed to fetch shipping data"}), 500
 
 
+
 # terminal empricial probability chart fetch
 @app.route('/api/terminal_empricial_probability', methods=['GET'])
 def get_terminal_empricial_probability():
     try:
-        # Query the database to fetch specific fields (commodity and price)
-        data = db.session.query(PriceData.commodity, PriceData.price).all()
+        # Query the database to fetch specific fields (commodity and price) with the filter for 'Usda' source
+        data = db.session.query(PriceData.commodity, PriceData.price).filter(PriceData.source == 'USDA').all()
+        
         if not data:
             return jsonify([])  # Return empty list if no data
         
@@ -3127,17 +3128,68 @@ def get_terminal_empricial_probability():
         print("Error Traceback:", error_message)
         return jsonify({"error": str(e)}), 500
 
+# @app.route('/api/terminal_empricial_probability', methods=['GET'])
+# def get_terminal_empricial_probability():
+#     try:
+#         # Query the database to fetch specific fields (commodity and price)
+#         data = db.session.query(PriceData.commodity, PriceData.price).all()
+#         if not data:
+#             return jsonify([])  # Return empty list if no data
+        
+#         # Convert the data to a DataFrame
+#         df = pd.DataFrame(data, columns=['commodity', 'price'])
+#         if df.empty:
+#             return jsonify([])
+
+#         # Ensure 'price' is numeric
+#         df['price'] = pd.to_numeric(df['price'], errors='coerce')
+#         df = df.dropna(subset=['price'])
+
+#         # Prepare chart-ready data
+#         result = []
+#         grouped = df.groupby('commodity')
+
+#         for commodity, group in grouped:
+#             prices = group['price'].values
+#             if len(prices) == 0:
+#                 continue
+
+#             mean = prices.mean()
+#             std_dev = prices.std()
+#             hist, bin_edges = np.histogram(prices, bins=50)
+#             histogram = {
+#                 "x": bin_edges[:-1].tolist(),
+#                 "y": hist.tolist(),
+#             }
+
+#             result.append({
+#                 "commodity": commodity,
+#                 "mean": float(mean),
+#                 "std_dev": float(std_dev),
+#                 "histogram": histogram,
+#             })
+
+#         return jsonify(result)
+#     except Exception as e:
+#         # Use traceback to capture the full error details
+#         import traceback
+#         error_message = traceback.format_exc()
+#         print("Error Traceback:", error_message)
+#         return jsonify({"error": str(e)}), 500
 
 
 
 
 
-# shipping empricial probability chart fetch
+
+# shipping empricial probability chart fetch ProduceIQ
 @app.route('/api/shipping_empricial_probability', methods=['GET'])
 def get_shipping_empricial_probability():
     try:
-        # Query the database to fetch specific fields (commodity and price)
-        data = db.session.query(ShippingPriceData.commodity, ShippingPriceData.price).all()
+        # Query the database to fetch specific fields (commodity and price) where source is 'Usda'
+        data = db.session.query(ShippingPriceData.commodity, ShippingPriceData.price) \
+            .filter(ShippingPriceData.source == 'ProduceIQ') \
+            .all()
 
         # Convert the data to a DataFrame
         df = pd.DataFrame(data, columns=['commodity', 'price'])
@@ -3181,17 +3233,20 @@ def get_shipping_empricial_probability():
 
 
 
+
 import traceback  # Add this at the top with your other imports
 
+
+# terminal correlation for USDA data
 @app.route("/api/terminal_correlation", methods=["GET"])
 def get_terminal_correlation():
     try:
-        # Query data including ID to maintain order
+        # Query data including ID and filter by source = 'Usda'
         result = db.session.query(
             PriceData.id,  # Include ID for ordering
             PriceData.commodity, 
             PriceData.price
-        ).order_by(PriceData.id).all()
+        ).filter(PriceData.source == 'USDA').order_by(PriceData.id).all()
         
         if not result:
             return jsonify({"error": "No data found"}), 404
@@ -3267,15 +3322,16 @@ def get_terminal_correlation():
 
 
 
+# shipping correlation for ProduceIQ data
 @app.route("/api/shipping_correlation", methods=["GET"])
 def get_shipping_correlation():
     try:
-        # Query data including ID to maintain order
+        # Query data including ID and filter by source = 'ProduceIQ'
         result = db.session.query(
             ShippingPriceData.id,  # Include ID for ordering
             ShippingPriceData.commodity, 
             ShippingPriceData.price
-        ).order_by(ShippingPriceData.id).all()
+        ).filter(ShippingPriceData.source == 'ProduceIQ').order_by(ShippingPriceData.id).all()
         
         if not result:
             return jsonify({"error": "No data found"}), 404
@@ -3297,7 +3353,7 @@ def get_shipping_correlation():
                                  columns='commodity', 
                                  values='price')
         
-        # Remove segments where we don't have data for all commodity
+        # Remove segments where we don't have data for all commodities
         pivot_table = pivot_table.dropna()
         
         # Log pivot table info
@@ -3350,9 +3406,12 @@ def get_shipping_correlation():
         return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
 
 
+
+
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+# terminal scatterplot for usda data
 @app.route("/api/terminal_scatterplot_matrix", methods=["POST"])
 def get_terminal_scatterplot_matrix():
     try:
@@ -3364,9 +3423,10 @@ def get_terminal_scatterplot_matrix():
         if not commodity_x or not commodity_y:
             return jsonify({"error": "Both commodities must be provided"}), 400
 
-        # Query data for the selected commodities from PriceData
+        # Query data for the selected commodities from PriceData where source is 'USDA'
         result = db.session.query(PriceData.commodity, PriceData.price).filter(
-            PriceData.commodity.in_([commodity_x, commodity_y])
+            PriceData.commodity.in_([commodity_x, commodity_y]),
+            PriceData.source == 'USDA'  # Add filter for source 'USDA'
         ).all()
 
         if not result:
@@ -3441,6 +3501,8 @@ def get_terminal_scatterplot_matrix():
 
 
 
+# shipping scatterplot for ProduceIQ data
+
 @app.route("/api/shipping_scatterplot_matrix", methods=["POST"])
 def get_shipping_scatterplot_matrix():
     try:
@@ -3452,9 +3514,10 @@ def get_shipping_scatterplot_matrix():
         if not commodity_x or not commodity_y:
             return jsonify({"error": "Both commodities must be provided"}), 400
 
-        # Query data for the selected commodities from ShippingPriceData
+        # Query data for the selected commodities from ShippingPriceData where source is 'ProduceIQ'
         result = db.session.query(ShippingPriceData.commodity, ShippingPriceData.price).filter(
-            ShippingPriceData.commodity.in_([commodity_x, commodity_y])
+            ShippingPriceData.commodity.in_([commodity_x, commodity_y]),
+            ShippingPriceData.source == 'ProduceIQ'  # Add filter for source 'ProduceIQ'
         ).all()
 
         if not result:
@@ -3609,6 +3672,8 @@ def plot_rolling_price_correlations(roll_corr_df, series1, series2, window):
     except Exception as e:
         raise ValueError(f"Error creating plot: {str(e)}")
 
+
+# terminal correlations for usda data
 @app.route("/api/terminal_rolling_correlations", methods=["POST"])
 def terminal_rolling_correlations():
     try:
@@ -3624,7 +3689,7 @@ def terminal_rolling_correlations():
         if window < 5:
             return jsonify({"error": "Window size must be at least 5 days"}), 400
 
-        # Fetch data from the database
+        # Fetch data from the database, filtering by source 'USDA'
         result = db.session.query(
             PriceData.year,
             PriceData.day,
@@ -3632,7 +3697,8 @@ def terminal_rolling_correlations():
             PriceData.price
         ).filter(
             PriceData.commodity.in_([series1, series2]),
-            PriceData.price > 0  # Ensure we only get valid prices
+            PriceData.price > 0,  # Ensure we only get valid prices
+            PriceData.source == "USDA"  # Filter by source 'USDA'
         ).all()
 
         if not result:
@@ -3679,7 +3745,7 @@ def terminal_rolling_correlations():
         )
 
         # Convert the Plotly figure to JSON, ensuring all values are serializable
-        fig_json = fig_roll_corr.to_json()  # Use to_json() instead of to_plotly_json()
+        fig_json = fig_roll_corr.to_json()
         
         return app.response_class(
             response=fig_json,
@@ -3692,6 +3758,7 @@ def terminal_rolling_correlations():
     except Exception as e:
         app.logger.error(f"Error generating terminal rolling correlations: {str(e)}")
         return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
+
 
 
 
@@ -3780,6 +3847,7 @@ def plot_rolling_price_correlations(roll_corr_df, series1, series2, window):
         raise ValueError(f"Error creating plot: {str(e)}")
 
 
+# rolling correlations for shipping produceiq
 @app.route("/api/shipping_rolling_correlations", methods=["POST"])
 def shipping_rolling_correlations():
     """
@@ -3798,7 +3866,7 @@ def shipping_rolling_correlations():
         if window < 5:
             return jsonify({"error": "Window size must be at least 5 days"}), 400
 
-        # Fetch data from the database
+        # Fetch data from the database with the filter for source 'ProduceIQ'
         result = db.session.query(
             ShippingPriceData.year,
             ShippingPriceData.day,
@@ -3806,7 +3874,8 @@ def shipping_rolling_correlations():
             ShippingPriceData.price
         ).filter(
             ShippingPriceData.commodity.in_([series1, series2]),
-            ShippingPriceData.price > 0  # Ensure we only get valid prices
+            ShippingPriceData.price > 0,  # Ensure we only get valid prices
+            ShippingPriceData.source == "ProduceIQ"  # Filter by source 'ProduceIQ'
         ).all()
 
         if not result:

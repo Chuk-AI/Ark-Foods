@@ -6,6 +6,7 @@ import '../styles/RollingCorrelations.css'
 export default function CorrelationsPlots() {
 
 
+  const [loading, setLoading] = useState(true); // Add a loading state
 
 
     const [correlationTerminal, setCorrelationTerminal] = useState(null);
@@ -41,24 +42,32 @@ export default function CorrelationsPlots() {
           })
           .catch((error) => {
             console.error("Error fetching shipping correlation matrix:", error);
-          });
+          })
+          .finally(() => setLoading(false)); // Set loading to false after data is fetched
+
+          ;
       }, []);
       
-      // Conditional rendering: ensure both datasets are loaded
-      if (!correlationTerminal || !correlationShipping) {
-        return <p>Loading data...</p>;
-      }
+      // // Conditional rendering: ensure both datasets are loaded
+      // if (!correlationTerminal || !correlationShipping) {
+      //   return <p>Loading data...</p>;
+      // }
       
       // Prepare data for Plotly after the data is ready
-      const Termlabels = Object.keys(correlationTerminal); // Extract commodity names
-      const terminalZ = Termlabels.map((row) =>
-        Termlabels.map((col) => correlationTerminal[row][col] || 0)
-      ); // Build matrix and handle undefined values
+      const Termlabels = correlationTerminal ? Object.keys(correlationTerminal) : [];
+      const terminalZ = correlationTerminal
+        ? Termlabels.map((row) =>
+            Termlabels.map((col) => correlationTerminal[row][col] || 0)
+          )
+        : [];
       
-      const labels = Object.keys(correlationShipping); // Extract destination names
-      const z = labels.map((row) =>
-        labels.map((col) => correlationShipping[row][col] || 0)
-      ); // Build matrix and handle undefined values
+      const labels = correlationShipping ? Object.keys(correlationShipping) : [];
+      const z = correlationShipping
+        ? labels.map((row) =>
+            labels.map((col) => correlationShipping[row][col] || 0)
+          )
+        : [];
+      
       
 
   return (
@@ -66,6 +75,9 @@ export default function CorrelationsPlots() {
         <div className='correlations'>
       <h2>Correlations Charts</h2>
 
+      {loading ? (
+          <p>Loading...</p> 
+        ) : (
 <div className='corr-section'>
 <div className='terminal-corr-section'   style={{
     borderRadius: "15px", // Rounded corners
@@ -207,7 +219,8 @@ export default function CorrelationsPlots() {
 </div>
 
 </div>
+        )}
 </div>
     </div>
-  )
+  );
 }
