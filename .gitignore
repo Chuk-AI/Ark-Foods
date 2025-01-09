@@ -7,6 +7,6 @@ users_dump_part_1.sql
 .env
 data/
 venv/
-users_dump_part_1
-users_dump_part_0
-users_dump
+node_modules/
+node_modules/
+data/

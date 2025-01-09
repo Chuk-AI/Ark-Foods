@@ -1963,7 +1963,6 @@ def historical_data():
         cities = request.args.get("cities", "").split(",")
         start_date = request.args.get("start_date")
         end_date = request.args.get("end_date")
-        source = request.args.get("source")
         avg_commodities = (
             request.args.get("averageCommodities", "false").lower() == "true"
         )
@@ -1973,22 +1972,13 @@ def historical_data():
         app.logger.info(f"Commodities: {commodities}")
         app.logger.info(f"Cities: {cities}")
         app.logger.info(f"Start Date: {start_date}, End Date: {end_date}")
-        app.logger.info(f"Source: {source}")
         app.logger.info(f"Avg Commodities: {avg_commodities}, Avg Cities: {avg_cities}")
 
         # Standardize Cubanelles based on source
-        standardized_commodities = []
-        for commodity in commodities:
-            if commodity.lower().startswith("cubanelle"):
-                if source == "USDA":
-                    standardized_commodities.append("Cubanelle")
-                else:  # ProduceIQ
-                    standardized_commodities.append("Cubanelles")
-            else:
-                standardized_commodities.append(commodity)
-
-        # Debug: Log standardized commodities
-        app.logger.info(f"Standardized Commodities: {standardized_commodities}")
+        standardized_commodities = [
+            "Cubanelle" if commodity.lower().startswith("cubanelle") else commodity
+            for commodity in commodities
+        ]
 
         # Convert dates
         start_dt = datetime.strptime(start_date, "%Y-%m-%d")
@@ -2001,11 +1991,11 @@ def historical_data():
         # Debug: Log date range
         app.logger.info(f"Start Day: {start_day}, End Day: {end_day}")
 
-        # Query the database with proper date filtering
+        # Query the database with proper date filtering and restrict to source 'USDA'
         query = PriceData.query.filter(
             PriceData.commodity.in_(standardized_commodities),
             func.upper(PriceData.city_name).in_([city.upper() for city in cities]),
-            PriceData.source == source,
+            PriceData.source == "USDA",
         )
 
         # Add year-specific conditions
@@ -2027,7 +2017,7 @@ def historical_data():
         data = query.all()
 
         # Debug: Log raw query results
-        app.logger.info(f"Query Results: {data}")
+        app.logger.info(f"Query Results: {len(data)} records fetched.")
 
         if not data:
             return jsonify({"labels": [], "datasets": []}), 200
@@ -2098,6 +2088,10 @@ def historical_data():
                 }
             )
 
+        # Cleanup
+        del data, price_series, all_dates
+        gc.collect()
+
         # Debug: Log datasets
         app.logger.info(f"Datasets: {datasets}")
 
@@ -2106,6 +2100,7 @@ def historical_data():
     except Exception as e:
         app.logger.error(f"Error: {str(e)}")
         return jsonify({"error": str(e)}), 500
+
 
 
 
@@ -2122,7 +2117,6 @@ def test_db_connection():
 #  route for the shipping point price
 @app.route("/api/shipping_point_price", methods=["GET"])
 # @jwt_required()
-
 def shipping_point_price():
     try:
         # Fetch parameters from the frontend
@@ -2182,7 +2176,7 @@ def shipping_point_price():
         data = query.all()
 
         # Debug: Log raw query results
-        app.logger.info(f"Query Results: {data}")
+        app.logger.info(f"Query Results: {len(data)} records fetched.")
 
         if not data:
             return jsonify({"labels": [], "datasets": []}), 200
@@ -2247,6 +2241,10 @@ def shipping_point_price():
                 }
             )
 
+        # Cleanup
+        del data, price_series, all_dates
+        gc.collect()
+
         # Debug: Log datasets
         app.logger.info(f"Datasets: {datasets}")
 
@@ -2255,6 +2253,7 @@ def shipping_point_price():
     except Exception as e:
         app.logger.error(f"Error: {str(e)}")
         return jsonify({"error": str(e)}), 500
+
 
 
 
