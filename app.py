@@ -3232,8 +3232,8 @@ def get_terminal_correlation():
         
         # Create pivot table using segments instead of timestamps
         pivot_table = data.pivot(index='segment', 
-                               columns='commodity', 
-                               values='price')
+                                 columns='commodity', 
+                                 values='price')
         
         # Remove segments where we don't have data for all commodities
         pivot_table = pivot_table.dropna()
@@ -3271,6 +3271,14 @@ def get_terminal_correlation():
             for commodity in data['commodity'].unique()
         }
 
+        # Create metadata before cleaning up
+        metadata = {
+            "total_records": len(data),
+            "unique_commodities": data['commodity'].nunique(),
+            "price_points_used": len(pivot_table),
+            "price_changes_analyzed": len(returns)
+        }
+
         # Clean up DataFrame references
         del data
         del pivot_table
@@ -3281,18 +3289,14 @@ def get_terminal_correlation():
         return jsonify({
             "correlation": correlation_dict,
             "summary": summary_stats,
-            "metadata": {
-                "total_records": len(data),
-                "unique_commodities": data['commodity'].nunique(),
-                "price_points_used": len(pivot_table),
-                "price_changes_analyzed": len(returns)
-            }
+            "metadata": metadata
         }), 200
         
     except Exception as e:
         app.logger.error(f"Error computing correlation matrix: {str(e)}")
         app.logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
+
 
 
 
