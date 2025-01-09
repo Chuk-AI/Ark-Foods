@@ -3020,41 +3020,30 @@ from sqlalchemy.sql import text  # Import `text` from SQLAlchemy
 
 # voilin plot for terminal data
 
-from flask_caching import Cache
-# Configure caching
-cache = Cache(config={'CACHE_TYPE': 'SimpleCache'})
-cache.init_app(app)
-
-
+        
 @app.route("/api/terminal_price_violin", methods=["GET"])
-@cache.cached(timeout=300)  # Cache results for 5 minutes
 def terminal_price_violin():
     try:
-        app.logger.info("Fetching data for terminal violin plot...")
+        app.logger.info("Fetching USDA data for terminal violin plot...")
 
-        # Optimized SQL query to minimize data size
+        # SQL query to fetch only USDA data
         query = text("""
-        SELECT commodity AS varietyName, price, source
+        SELECT commodity AS varietyName, price
         FROM price_data
-        WHERE price IS NOT NULL
+        WHERE price IS NOT NULL AND source = 'USDA'
         """)
 
-        # Fetch data from the database
+        # Fetch and log results
         result = db.session.execute(query).fetchall()
 
-        # Use pandas for efficient transformation
-        df = pd.DataFrame(result, columns=["varietyName", "price", "source"])
+        # Transform results into the required format
+        data = [{"varietyName": row[0], "price": row[1]} for row in result]
 
-        # Group data by source
-        grouped_data = {
-            source: group[["varietyName", "price"]].to_dict(orient="records")
-            for source, group in df.groupby("source")
-        }
-
-        return jsonify(grouped_data), 200
+        return jsonify({"USDA": data}), 200
     except Exception as e:
-        app.logger.error(f"Error fetching data for terminal violin plot: {str(e)}")
-        return jsonify({"error": "Failed to fetch terminal data"}), 500
+        app.logger.error(f"Error fetching USDA data for terminal violin plot: {str(e)}")
+        return jsonify({"error": "Failed to fetch USDA terminal data"}), 500
+
 
 
 
@@ -3304,6 +3293,7 @@ def get_terminal_correlation():
         app.logger.error(f"Error computing correlation matrix: {str(e)}")
         app.logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
+
 
 
 
