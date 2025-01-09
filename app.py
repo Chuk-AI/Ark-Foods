@@ -3020,30 +3020,38 @@ from sqlalchemy.sql import text  # Import `text` from SQLAlchemy
 
 # voilin plot for terminal data
 
+from flask_caching import Cache
+# Configure caching
+cache = Cache(config={'CACHE_TYPE': 'SimpleCache'})
+cache.init_app(app)
+
+
 @app.route("/api/terminal_price_violin", methods=["GET"])
+@cache.cached(timeout=300)  # Cache results for 5 minutes
 def terminal_price_violin():
     try:
         app.logger.info("Fetching data for terminal violin plot...")
 
-        # Correct SQL query to include source
+        # Optimized SQL query to minimize data size
         query = text("""
         SELECT commodity AS varietyName, price, source
         FROM price_data
         WHERE price IS NOT NULL
         """)
 
-        # Fetch and log results
+        # Fetch data from the database
         result = db.session.execute(query).fetchall()
 
-        # Transform into grouped JSON format
-        data = {}
-        for row in result:
-            source = row[2]  # Extract the source (e.g., "USDA" or "ProduceIQ")
-            if source not in data:
-                data[source] = []
-            data[source].append({"varietyName": row[0], "price": row[1]})
+        # Use pandas for efficient transformation
+        df = pd.DataFrame(result, columns=["varietyName", "price", "source"])
 
-        return jsonify(data), 200
+        # Group data by source
+        grouped_data = {
+            source: group[["varietyName", "price"]].to_dict(orient="records")
+            for source, group in df.groupby("source")
+        }
+
+        return jsonify(grouped_data), 200
     except Exception as e:
         app.logger.error(f"Error fetching data for terminal violin plot: {str(e)}")
         return jsonify({"error": "Failed to fetch terminal data"}), 500
