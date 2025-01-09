@@ -3368,6 +3368,14 @@ def get_shipping_correlation():
             for commodity in data['commodity'].unique()
         }
 
+        # Create metadata before cleaning up
+        metadata = {
+            "total_records": len(data),
+            "commodities": data['commodity'].nunique(),
+            "price_points_used": len(pivot_table),
+            "price_changes_analyzed": len(returns)
+        }
+
         # Clean up DataFrame references
         del data
         del pivot_table
@@ -3378,18 +3386,14 @@ def get_shipping_correlation():
         return jsonify({
             "correlation": correlation_dict,
             "summary": summary_stats,
-            "metadata": {
-                "total_records": len(data),
-                "commodities": data['commodity'].nunique(),
-                "price_points_used": len(pivot_table),
-                "price_changes_analyzed": len(returns)
-            }
+            "metadata": metadata
         }), 200
         
     except Exception as e:
         app.logger.error(f"Error computing correlation matrix: {str(e)}")
         app.logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
+
 
 
 
