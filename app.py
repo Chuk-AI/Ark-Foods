@@ -190,41 +190,6 @@ app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 db = SQLAlchemy(app)
 
 
-# # Global DataFrame to store the data
-# price_data_df = None
-
-# def initialize_dataframe(app):
-#     """
-#     Initialize the global DataFrame with data from the database.
-#     This should be called when the app starts.
-#     """
-#     global price_data_df
-    
-#     with app.app_context():
-#         try:
-#             app.logger.info("Initializing global DataFrame...")
-            
-#             # Query to fetch all data
-#             query = text("""
-#                 SELECT id, city_name, commodity, year, day, price, source, season
-#                 FROM price_data
-#             """)
-            
-#             # Execute query and fetch all results
-#             result = db.session.execute(query).fetchall()
-            
-#             # Convert to DataFrame
-#             price_data_df = pd.DataFrame(
-#                 result,
-#                 columns=['id', 'city_name', 'commodity', 'year', 'day', 'price', 'source', 'season']
-#             )
-            
-#             app.logger.info(f"Global DataFrame initialized with {len(price_data_df)} records")
-            
-#         except Exception as e:
-#             app.logger.error(f"Error initializing global DataFrame: {str(e)}")
-#             raise e
-
 
 
 # Initialize LoginManager for handling user sessions

@@ -1,24 +1,21 @@
-// import React, { useState, useEffect } from 'react';
-// import Plot from 'react-plotly.js';
+
+// import React, { useState, useEffect } from "react";
+// import Plot from "react-plotly.js";
 
 // export default function ShippingViolinPlot() {
-//   const [shippingViolinData, setShippingViolinData] = useState([]);
+//   const [chartData, setChartData] = useState(null);
 
 //   // Fetch data for the shipping violin plot
 //   const fetchShippingViolinData = async () => {
 //     try {
-//       const response = await fetch('/api/shipping_price_violin');
-//       console.log('Shipping API Response Status:', response.status);
-
+//       const response = await fetch("/api/shipping_price_violin");
 //       if (!response.ok) {
-//         throw new Error('Failed to fetch shipping violin plot data');
+//         throw new Error("Failed to fetch shipping violin plot data");
 //       }
-
 //       const data = await response.json();
-//       console.log('Fetched Shipping Data:', data); // Log the fetched data
-//       setShippingViolinData(data);
+//       setChartData(data);
 //     } catch (error) {
-//       console.error('Error fetching shipping violin data:', error);
+//       console.error("Error fetching shipping violin data:", error);
 //     }
 //   };
 
@@ -26,23 +23,9 @@
 //     fetchShippingViolinData();
 //   }, []);
 
-//   // Prepare data for the shipping violin plot
-//   const ShippingplotData = shippingViolinData.reduce((acc, item) => {
-//     const { varietyName, price } = item;
-//     const existingEntry = acc.find((entry) => entry.name === varietyName);
-//     if (existingEntry) {
-//       existingEntry.y.push(price);
-//     } else {
-//       acc.push({
-//         type: 'violin',
-//         y: [price],
-//         name: varietyName,
-//         box: { visible: true },
-//         meanline: { visible: true },
-//         marker: { color: '#00cc96' }, // Color for shipping plot
-//       });
-//     }
-//     return acc;
+
+//   useEffect(() => {
+//     console.log('Shipping violin rendered!');
 //   }, []);
 
 //   return (
@@ -50,105 +33,107 @@
 //       <div className="chart-title">
 //         <h2>Shipping Violin Plot</h2>
 //       </div>
-//       {shippingViolinData.length > 0 ? (
+//       {chartData ? (
 //         <div
 //           className="shipping-violin-wrapper"
 //           style={{
-//             borderRadius: '15px', // Ensure rounded corners for the wrapper
-//             padding: '20px', // Add padding inside the wrapper
-//             backgroundColor: '#33b1a7', // Background color
+//             borderRadius: "15px", // Ensure rounded corners for the wrapper
+//             padding: "20px", // Add padding inside the wrapper
+//             backgroundColor: "#33b1a7", // Background color
 //           }}
 //         >
-//           {console.log('Final ShippingplotData:', ShippingplotData)}
 //           <div
 //             style={{
-//               borderRadius: '20px', // Rounded corners for the plot wrapper
-//               overflow: 'hidden', // Enforces the borderRadius on the plot
+//               borderRadius: "20px", // Rounded corners for the plot wrapper
+//               overflow: "hidden", // Enforces the borderRadius on the plot
 //             }}
 //           >
 //             <Plot
-//               data={ShippingplotData}
-//               layout={{
-//                 title: { 
-//                   text: 'Shipping Price Distribution by Commodity', 
-//                   font: { size: 16, weight: 'bold' } // Bold title
-//                 },
-//                 xaxis: {
-//                   title: { 
-//                     text: 'Variety', 
-//                     font: { size: 14, weight: 'bold' }, // Bold x-axis title
-//                     standoff: 6 // Add space between title and tick labels
-//                   },
-//                   tickfont: {
-//                     size: 13, // Font size for x-axis tick labels
-//                     weight: 500 // Normal weight for x-axis tick labels
-//                   },
-//                   automargin: true // Automatically adjust margins for the x-axis
-//                 },
-//                 yaxis: {
-//                   title: { 
-//                     text: 'Shipping Price', 
-//                     font: { size: 14, weight: 'bold' } // Bold y-axis title
-//                   },
-//                   tickfont: {
-//                     size: 13, // Font size for y-axis tick labels
-//                     weight: 500 // Normal weight for y-axis tick labels
-//                   },
-//                   automargin: true // Automatically adjust margins for the y-axis
-//                 },
-//                 height: 500,
-//                 width: 700, // Set your desired width
-//                 showlegend: false,
-//                 margin: { l: 50, r: 0, t: 50, b: 70 }, // Adjust bottom margin for x-axis title
-//                 autosize: true,
-//                 plot_bgcolor: '#f0f8ff', // Chart background color
-//                 paper_bgcolor: 'white', // Outer background color
-//               }}
-              
+//               data={chartData.data}
+//               layout={chartData.layout}
 //               style={{
-//                 width: '100%',
-//                 height: '100%',
+//                 width: "100%",
+//                 height: "100%",
 //               }}
 //             />
 //           </div>
 //         </div>
 //       ) : (
-//         <p style={{ textAlign: 'center' }}>Loading...</p>
+//         <p style={{ textAlign: "center" }}>Loading...</p>
 //       )}
 //     </div>
 //   );
 // }
 
-import React, { useState, useEffect } from "react";
+
+import React, { useState, useEffect, useRef } from "react";
 import Plot from "react-plotly.js";
 
 export default function ShippingViolinPlot() {
+  const [isVisible, setIsVisible] = useState(false);
   const [chartData, setChartData] = useState(null);
+  const ref = useRef();
 
-  // Fetch data for the shipping violin plot
-  const fetchShippingViolinData = async () => {
-    try {
-      const response = await fetch("/api/shipping_price_violin");
-      if (!response.ok) {
-        throw new Error("Failed to fetch shipping violin plot data");
-      }
-      const data = await response.json();
-      setChartData(data);
-    } catch (error) {
-      console.error("Error fetching shipping violin data:", error);
-    }
-  };
-
+  // Detect if the component is visible in the viewport
   useEffect(() => {
-    fetchShippingViolinData();
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsVisible(true);
+          observer.disconnect(); // Stop observing once visible
+        }
+      },
+      { threshold: 0.3 } 
+    );
+
+    if (ref.current) {
+      observer.observe(ref.current);
+    }
+
+    return () => {
+      if (ref.current) {
+        observer.disconnect();
+      }
+    };
   }, []);
 
+  // Fetch data only when the component is visible
+  useEffect(() => {
+    if (isVisible && !chartData) {
+      const fetchShippingViolinData = async () => {
+        try {
+          const response = await fetch("/api/shipping_price_violin");
+          if (!response.ok) {
+            throw new Error("Failed to fetch shipping violin plot data");
+          }
+          const data = await response.json();
+          setChartData(data);
+        } catch (error) {
+          console.error("Error fetching shipping violin data:", error);
+        }
+      };
+
+      fetchShippingViolinData();
+    }
+  }, [isVisible, chartData]);
+
+  // Log only when the component is visible
+  useEffect(() => {
+    if (isVisible) {
+      console.log("Shipping violin rendered!");
+    }
+  }, [isVisible]);
+
   return (
-    <div id="shipping-violin-plot-section" className="section violin-chart-container">
+    <div
+      id="shipping-violin-plot-section"
+      className="section violin-chart-container"
+      ref={ref}
+    >
       <div className="chart-title">
         <h2>Shipping Violin Plot</h2>
       </div>
-      {chartData ? (
+      {isVisible && chartData ? (
         <div
           className="shipping-violin-wrapper"
           style={{
@@ -174,7 +159,9 @@ export default function ShippingViolinPlot() {
           </div>
         </div>
       ) : (
-        <p style={{ textAlign: "center" }}>Loading...</p>
+        <p style={{ textAlign: "center" }}>
+          {isVisible ? "Loading..." : null}
+        </p>
       )}
     </div>
   );
