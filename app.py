@@ -3116,34 +3116,28 @@ from flask import jsonify
 # @app.route("/api/terminal_price_violin", methods=["GET"])
 # def terminal_price_violin():
 #     try:
-#         app.logger.info("Accessing terminal violin plots using DataFrame...")
-
-#         # Get the DataFrame
+#         logger.info("Generating terminal violin plots...")
+        
 #         df = get_dataframe()
-
+        
 #         if df is None or df.empty:
-#             app.logger.error("DataFrame is not initialized or empty")
 #             return jsonify({"error": "Data not available"}), 500
-
-#         # Filter data from the DataFrame
+        
 #         filtered_df = df[df['source'].isin(['USDA', 'ProduceIQ'])]
-
+        
 #         if filtered_df.empty:
-#             app.logger.warning("No data found for USDA or ProduceIQ sources")
 #             return jsonify({"error": "No data available for selected sources"}), 404
-
-#         # Group data by source
+        
 #         data = {"USDA": {"x": [], "y": []}, "ProduceIQ": {"x": [], "y": []}}
-
+        
 #         for source in ['USDA', 'ProduceIQ']:
 #             source_df = filtered_df[filtered_df['source'] == source]
 #             data[source]["x"] = source_df['commodity'].tolist()
 #             data[source]["y"] = source_df['price'].tolist()
-
-#         # Create separate charts for each source
+        
 #         charts = {}
 #         for source in ["USDA", "ProduceIQ"]:
-#             if data[source]["x"]:  # Only create chart if data exists
+#             if data[source]["x"]:
 #                 fig = go.Figure()
 #                 fig.add_trace(
 #                     go.Violin(
@@ -3163,17 +3157,12 @@ from flask import jsonify
 #                     width=600
 #                 )
 #                 charts[source] = fig.to_dict()
-
-#         if not charts:
-#             app.logger.warning("No charts could be generated")
-#             return jsonify({"error": "No data available to generate charts"}), 404
-
+        
 #         return jsonify(charts), 200
-
+        
 #     except Exception as e:
-#         app.logger.error(f"Error in terminal_price_violin: {str(e)}")
-#         return jsonify({"error": "Failed to generate terminal violin plots"}), 500
-
+#         logger.error(f"Error in terminal_price_violin: {str(e)}")
+#         return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/terminal_price_violin", methods=["GET"])
