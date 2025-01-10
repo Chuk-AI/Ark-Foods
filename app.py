@@ -3026,19 +3026,35 @@ from flask import jsonify
 
 # voilin plot for terminal data
 
-
-
 @app.route("/api/terminal_price_violin", methods=["GET"])
 def terminal_price_violin():
     try:
         app.logger.info("Fetching data for terminal violin plots...")
 
-        # Query to fetch data
-        query = text("""
+        # Get the time frame from query parameters (default to '7d')
+        time_frame = request.args.get("timeFrame", "7d")
+
+        # Map timeFrame to SQLite-compatible date arithmetic
+        time_intervals = {
+            "3d": "'now', '-3 days'",
+            "7d": "'now', '-7 days'",
+            "1m": "'now', '-1 month'",
+            "3m": "'now', '-3 months'",
+            "1y": "'now', '-1 year'",
+            "2y": "'now', '-2 years'"
+        }
+
+        # Get the corresponding SQLite date function for the time frame
+        sqlite_date_function = time_intervals.get(time_frame.lower(), "'now', '-7 days'")
+
+        # Query to fetch data within the specified time frame
+        query = text(f"""
         SELECT commodity, price, source
         FROM price_data
         WHERE source IN ('USDA', 'ProduceIQ')
+          AND DATE(year || '-01-01', '+' || (day - 1) || ' days') >= DATE({sqlite_date_function})
         """)
+
         result = db.session.execute(query).fetchall()
 
         # Group data by source
@@ -3082,17 +3098,89 @@ def terminal_price_violin():
 
 
 
+# @app.route("/api/terminal_price_violin", methods=["GET"])
+# def terminal_price_violin():
+#     try:
+#         app.logger.info("Fetching data for terminal violin plots...")
+
+#         # Query to fetch data
+#         query = text("""
+#         SELECT commodity, price, source
+#         FROM price_data
+#         WHERE source IN ('USDA', 'ProduceIQ')
+#         """)
+#         result = db.session.execute(query).fetchall()
+
+#         # Group data by source
+#         data = {"USDA": {"x": [], "y": []}, "ProduceIQ": {"x": [], "y": []}}
+#         for row in result:
+#             source = row[2]
+#             if source in data:
+#                 data[source]["x"].append(row[0])  # Commodity
+#                 data[source]["y"].append(row[1])  # Price
+
+#         # Create separate charts for each source
+#         charts = {}
+#         for source in ["USDA", "ProduceIQ"]:
+#             fig = go.Figure()
+#             fig.add_trace(
+#                 go.Violin(
+#                     x=data[source]["x"],
+#                     y=data[source]["y"],
+#                     name=source,
+#                     box_visible=True,
+#                     meanline_visible=True,
+#                     marker_color='blue'  # Custom color
+#                 )
+#             )
+#             fig.update_layout(
+#                 title=f"{source} Terminal Data",
+#                 xaxis_title="Commodity",
+#                 yaxis_title="Price",
+#                 height=500,
+#                 width=600
+#             )
+#             charts[source] = fig.to_dict()  # Convert each chart to JSON
+
+#         return jsonify(charts), 200
+
+#     except Exception as e:
+#         app.logger.error(f"Error generating terminal violin plots: {str(e)}")
+#         return jsonify({"error": "Failed to generate terminal violin plots"}), 500
+
+
+
+
+
 # voilin plot for shipping data ProduceIQ
+
 @app.route("/api/shipping_price_violin", methods=["GET"])
 def shipping_price_violin():
     try:
         app.logger.info("Fetching data for shipping violin plot...")
 
-        # SQL query to fetch data filtered by source
-        query = text("""
+        # Get the time frame from query parameters (default to '7d')
+        time_frame = request.args.get("timeFrame", "7d")
+
+        # Map timeFrame to SQLite-compatible date arithmetic
+        time_intervals = {
+            "3d": "'now', '-3 days'",
+            "7d": "'now', '-7 days'",
+            "1m": "'now', '-1 month'",
+            "3m": "'now', '-3 months'",
+            "1y": "'now', '-1 year'",
+            "2y": "'now', '-2 years'"
+        }
+
+        # Get the corresponding SQLite date function for the time frame
+        sqlite_date_function = time_intervals.get(time_frame.lower(), "'now', '-7 days'")
+
+        # SQL query to fetch data filtered by source and time range
+        query = text(f"""
             SELECT commodity, price
             FROM shipping_price_data
             WHERE source = 'ProduceIQ'
+              AND DATE(year || '-01-01', '+' || (day - 1) || ' days') >= DATE({sqlite_date_function})
         """)
         result = db.session.execute(query).fetchall()
 
@@ -3136,6 +3224,60 @@ def shipping_price_violin():
     except Exception as e:
         app.logger.error(f"Error generating shipping violin plot: {str(e)}")
         return jsonify({"error": "Failed to generate shipping violin plot"}), 500
+
+# @app.route("/api/shipping_price_violin", methods=["GET"])
+# def shipping_price_violin():
+#     try:
+#         app.logger.info("Fetching data for shipping violin plot...")
+
+#         # SQL query to fetch data filtered by source
+#         query = text("""
+#             SELECT commodity, price
+#             FROM shipping_price_data
+#             WHERE source = 'ProduceIQ'
+#         """)
+#         result = db.session.execute(query).fetchall()
+
+#         # Group data by commodity
+#         data = {}
+#         for row in result:
+#             commodity = row[0]  # Commodity (varietyName)
+#             price = row[1]  # Price
+#             if commodity not in data:
+#                 data[commodity] = []
+#             data[commodity].append(price)
+
+#         # Create violin traces for each commodity
+#         traces = []
+#         for commodity, prices in data.items():
+#             traces.append(
+#                 go.Violin(
+#                     y=prices,
+#                     name=commodity,
+#                     box_visible=True,
+#                     meanline_visible=True,
+#                     marker_color='blue'  # Custom color
+#                 )
+#             )
+
+#         # Create the layout for the chart
+#         layout = {
+#             "title": {"text": "Shipping Price Distribution by Commodity", "font": {"size": 16, "weight": "bold"}},
+#             "xaxis": {"title": {"text": "Commodity", "font": {"size": 14, "weight": "bold"}}, "automargin": True},
+#             "yaxis": {"title": {"text": "Shipping Price", "font": {"size": 14, "weight": "bold"}}, "automargin": True},
+#             "height": 500,
+#             "width": 700,
+#             "showlegend": False,
+#             "plot_bgcolor": "#f0f8ff",
+#             "paper_bgcolor": "white",
+#         }
+
+#         # Return the chart data and layout as JSON
+#         return jsonify({"data": [trace.to_plotly_json() for trace in traces], "layout": layout}), 200
+
+#     except Exception as e:
+#         app.logger.error(f"Error generating shipping violin plot: {str(e)}")
+#         return jsonify({"error": "Failed to generate shipping violin plot"}), 500
 
 
 

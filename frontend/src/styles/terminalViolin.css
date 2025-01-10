@@ -1,0 +1,55 @@
+#terminal-violin-plot-section{
+    padding: 10px; /* Reduced padding */
+    background-color: #f8f9fa;
+    border-radius: 10px; /* Add rounded corners */
+    box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1); /* Subtle shadow */
+    margin-top: 50px;
+    height: 717px;
+}
+.violin-chart-container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  
+  /* Time Frame Filter Container */
+.time-frame-filters {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  
+  /* Time Frame Buttons */
+  .time-frame-button {
+    padding: 5px 15px;
+    font-size: 14px;
+    font-weight: bold;
+    text-transform: uppercase;
+    border: 2px solid #33b1a7;
+    border-radius: 25px;
+    background-color: #f0f8f7;
+    color: #33b1a7;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+  
+  /* Button Hover State */
+  .time-frame-button:hover {
+    background-color: #33b1a7;
+    color: white;
+  }
+  
+  /* Active Button State */
+  .time-frame-button.active {
+    background-color: #33b1a7;
+    color: white;
+    border-color: #33b1a7;
+  }
+  
+  /* Button Focus State */
+  .time-frame-button:focus {
+    outline: none;
+    box-shadow: 0 0 8px rgba(51, 177, 167, 0.6);
+  }
+  

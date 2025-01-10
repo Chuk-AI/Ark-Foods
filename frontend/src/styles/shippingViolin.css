@@ -1,4 +1,6 @@
-#terminal-violin-plot-section{
+/* Time Frame Filter Container */
+
+#shipping-violin-plot-section{
     padding: 10px; /* Reduced padding */
     background-color: #f8f9fa;
     border-radius: 10px; /* Add rounded corners */
@@ -6,9 +8,9 @@
     margin-top: 50px;
     height: 717px;
 }
-.violin-chart-container {
+.shipping-violin-chart-container{
     display: flex;
     flex-direction: column;
     gap: 20px;
-  }
-  
+}
+
