@@ -190,7 +190,12 @@ app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 db = SQLAlchemy(app)
 
 
-# Global DataFrame
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 global_price_data = None
 
 # Define the function to load data
@@ -201,18 +206,35 @@ def load_global_price_data():
         query = """
         SELECT commodity, price, source 
         FROM price_data 
-        WHERE price IS NOT NULL
         """
         result = db.session.execute(query).fetchall()
         
         # Load data into a DataFrame
         global_price_data = pd.DataFrame(result, columns=["commodity", "price", "source"])
-        print("Global price data loaded successfully!")
+        
+        # Log success and DataFrame info
+        logger.info("Global price data loaded successfully!")
+        logger.info(f"DataFrame Info: {global_price_data.info()}")
+        logger.info(f"DataFrame Sample: {global_price_data.head()}")
     except Exception as e:
-        print(f"Error loading global price data: {e}")
+        logger.error(f"Error loading global price data: {e}")
 
 # Call the function after initializing the app and database
-load_global_price_data()
+with app.app_context():
+    load_global_price_data()
+
+@app.route("/api/debug/global_dataframe", methods=["GET"])
+def debug_global_dataframe():
+    try:
+        if global_price_data is None:
+            return jsonify({"error": "Global price data is not loaded"}), 500
+        
+        # Return DataFrame metadata or a sample
+        data_sample = global_price_data.head(10).to_dict(orient="records")
+        return jsonify({"rows": len(global_price_data), "sample": data_sample}), 200
+    except Exception as e:
+        logger.error(f"Error in debug_global_dataframe: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 
 
