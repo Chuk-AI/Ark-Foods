@@ -1,71 +1,93 @@
 .rolling-correlation-container {
-    width: 100%;
-    padding: 10px; /* Reduced padding */
-    background-color: #f8f9fa;
-    border-radius: 10px; /* Add rounded corners */
-    box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1); /* Subtle shadow */
-    margin-top: 50px;
-
-  }
-  
-  .form-container {
-    display: flex;
-    margin-bottom: 20px;
-    align-items: center;
-  }
-  
-  .form-container label {
-    margin-right: 10px;
-  }
-  
-  .error-message {
-    color: red;
-    margin-top: 10px;
-  }
-  
-  .rolling-chart-container {
-    margin-top: 50px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    align-content: center;
-    height: 600px;
-    background: #33b1a7;
-    border-radius: 20px;
-  }
-  .radio-buttons{
-      display: flex;
-      justify-content: center;
-      width: 100%;
-      gap: 200px;
- 
-  }
-  .form-container select{
-    padding: 10px 20px 10px 20px;
-    border: 1px solid #33b1a7;
-    border-radius: 10px;
-  }
-.GapInputs{
-    display: flex;
-    gap: 50px;
-    width: 57%;
+  width: 100%;
+  padding: 20px;
+  background-color: #f8f9fa;
+  border-radius: 10px;
+  box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+  margin-top: 50px;
 }
-.rolling-window input{
-    width: 100px;
-    border: 1px solid #33b1a7;
-    border-radius: 10px;
-text-align: center;
 
-} 
-
-.rolling-button{
-    border: 1px solid #33b1a7;
-    border-radius: 10px;
-    background: none;
-    margin-left: 180px;
-    width: 170px;
-    height: 90px;
+.form-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px; /* Space between items */
+  flex-wrap: nowrap; /* Ensure all items stay in a single row */
 }
+
+.form-container label {
+  display: flex;
+  flex-direction: column;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.form-container select,
+.rolling-window input {
+  padding: 8px 10px;
+  border: 1px solid #33b1a7;
+  border-radius: 10px;
+  font-size: 14px;
+  width: 150px; /* Fixed width for consistency */
+}
+
+.rolling-window {
+  display: flex;
+  flex-direction: column;
+}
+
+.radio-buttons {
+  display: flex;
+  gap: 20px; /* Add spacing between radio buttons */
+  align-items: center;
+}
+
+.radio-buttons label {
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.generate-chart-button {
+  padding: 10px 20px;
+  border: 1px solid #33b1a7;
+  border-radius: 10px;
+  background-color: #ffffff;
+  font-weight: bold;
+  color: #33b1a7;
+  cursor: pointer;
+  transition: background-color 0.3s, color 0.3s;
+}
+
+.generate-chart-button:hover {
+  background-color: #33b1a7;
+  color: #ffffff;
+}
+
+.error-message {
+  color: red;
+  margin-top: 10px;
+}
+
+.rolling-chart-container {
+  margin-top: 50px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 650px;
+  background: #33b1a7;
+  border-radius: 20px;
+}
+
+.rolling-chart-box{
+  background: #33b1a7;
+  height: 650px;
+  margin-top: 50px;
+  border-radius: 20px;
+
+}
+
 .correlations{
   padding: 10px; /* Reduced padding */
   background-color: #f8f9fa;

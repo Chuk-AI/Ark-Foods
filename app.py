@@ -3021,33 +3021,63 @@ from sqlalchemy.sql import text  # Import `text` from SQLAlchemy
 # voilin plot for terminal data
 
         
+import plotly.graph_objects as go
+from flask import jsonify
+
+import plotly.graph_objects as go
+from flask import jsonify
+
 @app.route("/api/terminal_price_violin", methods=["GET"])
 def terminal_price_violin():
     try:
-        app.logger.info("Fetching data for terminal violin plot...")
+        app.logger.info("Fetching data for terminal violin plots...")
 
-        # Correct SQL query to include source
+        # Query to fetch data
         query = text("""
-        SELECT commodity AS varietyName, price, source
+        SELECT commodity, price, source
         FROM price_data
-        WHERE price IS NOT NULL
+        WHERE source IN ('USDA', 'ProduceIQ')
         """)
-
-        # Fetch and log results
         result = db.session.execute(query).fetchall()
 
-        # Transform into grouped JSON format
-        data = {}
+        # Group data by source
+        data = {"USDA": {"x": [], "y": []}, "ProduceIQ": {"x": [], "y": []}}
         for row in result:
-            source = row[2]  # Extract the source (e.g., "USDA" or "ProduceIQ")
-            if source not in data:
-                data[source] = []
-            data[source].append({"varietyName": row[0], "price": row[1]})
+            source = row[2]
+            if source in data:
+                data[source]["x"].append(row[0])  # Commodity
+                data[source]["y"].append(row[1])  # Price
 
-        return jsonify(data), 200
+        # Create separate charts for each source
+        charts = {}
+        for source in ["USDA", "ProduceIQ"]:
+            fig = go.Figure()
+            fig.add_trace(
+                go.Violin(
+                    x=data[source]["x"],
+                    y=data[source]["y"],
+                    name=source,
+                    box_visible=True,
+                    meanline_visible=True,
+                    marker_color='blue'  # Custom color
+                )
+            )
+            fig.update_layout(
+                title=f"{source} Terminal Data",
+                xaxis_title="Commodity",
+                yaxis_title="Price",
+                height=500,
+                width=600
+            )
+            charts[source] = fig.to_dict()  # Convert each chart to JSON
+
+        return jsonify(charts), 200
+
     except Exception as e:
-        app.logger.error(f"Error fetching data for terminal violin plot: {str(e)}")
-        return jsonify({"error": "Failed to fetch terminal data"}), 500
+        app.logger.error(f"Error generating terminal violin plots: {str(e)}")
+        return jsonify({"error": "Failed to generate terminal violin plots"}), 500
+
+
 
 
 
@@ -3057,47 +3087,76 @@ def shipping_price_violin():
     try:
         app.logger.info("Fetching data for shipping violin plot...")
 
-        # Correct SQL query wrapped in `text`, adding a filter for source = 'Usda'
+        # SQL query to fetch data filtered by source
         query = text("""
-        SELECT commodity AS varietyName, price
-        FROM shipping_price_data
-        WHERE price IS NOT NULL AND source = 'ProduceIQ'
+            SELECT commodity, price
+            FROM shipping_price_data
+            WHERE source = 'ProduceIQ'
         """)
-
-        # Fetch and log results
         result = db.session.execute(query).fetchall()
 
-        # Transform into JSON format
-        data = [{"varietyName": row[0], "price": row[1]} for row in result]
+        # Group data by commodity
+        data = {}
+        for row in result:
+            commodity = row[0]  # Commodity (varietyName)
+            price = row[1]  # Price
+            if commodity not in data:
+                data[commodity] = []
+            data[commodity].append(price)
 
-        return jsonify(data), 200
+        # Create violin traces for each commodity
+        traces = []
+        for commodity, prices in data.items():
+            traces.append(
+                go.Violin(
+                    y=prices,
+                    name=commodity,
+                    box_visible=True,
+                    meanline_visible=True,
+                    marker_color='blue'  # Custom color
+                )
+            )
+
+        # Create the layout for the chart
+        layout = {
+            "title": {"text": "Shipping Price Distribution by Commodity", "font": {"size": 16, "weight": "bold"}},
+            "xaxis": {"title": {"text": "Commodity", "font": {"size": 14, "weight": "bold"}}, "automargin": True},
+            "yaxis": {"title": {"text": "Shipping Price", "font": {"size": 14, "weight": "bold"}}, "automargin": True},
+            "height": 500,
+            "width": 700,
+            "showlegend": False,
+            "plot_bgcolor": "#f0f8ff",
+            "paper_bgcolor": "white",
+        }
+
+        # Return the chart data and layout as JSON
+        return jsonify({"data": [trace.to_plotly_json() for trace in traces], "layout": layout}), 200
+
     except Exception as e:
-        app.logger.error(f"Error fetching data for shipping violin plot: {str(e)}")
-        return jsonify({"error": "Failed to fetch shipping data"}), 500
+        app.logger.error(f"Error generating shipping violin plot: {str(e)}")
+        return jsonify({"error": "Failed to generate shipping violin plot"}), 500
+
 
 
 
 # terminal empricial probability chart fetch
+
+
 @app.route('/api/terminal_empricial_probability', methods=['GET'])
 def get_terminal_empricial_probability():
     try:
-        # Query the database to fetch specific fields (commodity and price) with the filter for 'Usda' source
+        # Query the database
         data = db.session.query(PriceData.commodity, PriceData.price).filter(PriceData.source == 'USDA').all()
-        
         if not data:
-            return jsonify([])  # Return empty list if no data
-        
-        # Convert the data to a DataFrame
-        df = pd.DataFrame(data, columns=['commodity', 'price'])
-        if df.empty:
             return jsonify([])
 
-        # Ensure 'price' is numeric
+        # Convert data to DataFrame
+        df = pd.DataFrame(data, columns=['commodity', 'price'])
         df['price'] = pd.to_numeric(df['price'], errors='coerce')
         df = df.dropna(subset=['price'])
 
-        # Prepare chart-ready data
-        result = []
+        # Prepare chart data
+        charts = []
         grouped = df.groupby('commodity')
 
         for commodity, group in grouped:
@@ -3107,31 +3166,40 @@ def get_terminal_empricial_probability():
 
             mean = prices.mean()
             std_dev = prices.std()
+
+            # Create histogram and traces
             hist, bin_edges = np.histogram(prices, bins=50)
-            histogram = {
-                "x": bin_edges[:-1].tolist(),
-                "y": hist.tolist(),
+            histogram_trace = go.Bar(x=bin_edges[:-1].tolist(), y=hist.tolist(), name=f"{commodity} Histogram", marker_color="#636EFA")
+            mean_trace = go.Scatter(x=[mean, mean], y=[0, max(hist)], mode="lines", line=dict(color="red", dash="dash"), name=f"{commodity} Mean")
+            std_dev_trace = go.Scatter(x=[mean - std_dev, mean + std_dev], y=[0, 0], mode="markers", marker=dict(color="blue", size=8, symbol="cross"), name=f"{commodity} Std Dev")
+
+            # Prepare layout
+            layout = {
+                "title": f"{commodity} Price Distribution",
+                "xaxis": {"title": "Price", "automargin": True},
+                "yaxis": {"title": "Frequency", "automargin": True},
+                "height": 400,
+                "width": 370,
+                "showlegend": False,
+                "plot_bgcolor": "#f0f8ff",
+                "paper_bgcolor": "white",
             }
 
-            result.append({
+            # Append chart JSON
+            charts.append({
                 "commodity": commodity,
-                "mean": float(mean),
-                "std_dev": float(std_dev),
-                "histogram": histogram,
+                "data": [histogram_trace.to_plotly_json(), mean_trace.to_plotly_json(), std_dev_trace.to_plotly_json()],
+                "layout": layout,
             })
 
-        # Clean up DataFrame references
-        del df
-        del grouped
-        gc.collect()  # Explicit garbage collection to release memory
+        return jsonify(charts), 200
 
-        return jsonify(result)
     except Exception as e:
-        # Use traceback to capture the full error details
         import traceback
         error_message = traceback.format_exc()
         print("Error Traceback:", error_message)
         return jsonify({"error": str(e)}), 500
+
 
 
 
@@ -3143,61 +3211,63 @@ def get_terminal_empricial_probability():
 @app.route('/api/shipping_empricial_probability', methods=['GET'])
 def get_shipping_empricial_probability():
     try:
-        # Query the database to fetch specific fields (commodity and price) where source is 'ProduceIQ'
-        data = db.session.query(ShippingPriceData.commodity, ShippingPriceData.price) \
-            .filter(ShippingPriceData.source == 'ProduceIQ') \
-            .all()
-
+        # Query the database
+        data = db.session.query(ShippingPriceData.commodity, ShippingPriceData.price).filter(ShippingPriceData.source == 'ProduceIQ').all()
         if not data:
-            return jsonify([])  # Return an empty list if no data is found
+            return jsonify([])
 
-        # Convert the data to a DataFrame
+        # Convert data to DataFrame
         df = pd.DataFrame(data, columns=['commodity', 'price'])
-        print("DataFrame Contents:", df.head())  # Debugging
+        df['price'] = pd.to_numeric(df['price'], errors='coerce')
+        df = df.dropna(subset=['price'])
 
-        # Prepare chart-ready data
-        result = []
+        # Prepare chart data
+        charts = []
         grouped = df.groupby('commodity')
 
-        # Iterate over each group
         for commodity, group in grouped:
-            print(f"Processing Commodity: {commodity}")  # Debugging
-            prices = group['price'].values  # Extract prices as a NumPy array or list
-
+            prices = group['price'].values
             if len(prices) == 0:
                 continue
 
-            # Compute statistics
-            mean = prices.mean()  # NumPy or Pandas mean
-            std_dev = prices.std()  # NumPy or Pandas std
+            mean = prices.mean()
+            std_dev = prices.std()
 
-            # Compute histogram bins
-            hist, bin_edges = np.histogram(prices, bins=50)  # Use NumPy for histograms
-            histogram = {
-                "x": bin_edges[:-1].tolist(),  # Bin edges
-                "y": hist.tolist(),  # Frequencies
+            # Create histogram and traces
+            hist, bin_edges = np.histogram(prices, bins=50)
+            histogram_trace = go.Bar(x=bin_edges[:-1].tolist(), y=hist.tolist(), name=f"{commodity} Histogram", marker_color="#636EFA")
+            mean_trace = go.Scatter(x=[mean, mean], y=[0, max(hist)], mode="lines", line=dict(color="red", dash="dash"), name=f"{commodity} Mean")
+            std_dev_trace = go.Scatter(x=[mean - std_dev, mean + std_dev], y=[0, 0], mode="markers", marker=dict(color="blue", size=8, symbol="cross"), name=f"{commodity} Std Dev")
+
+            # Prepare layout
+            layout = {
+                "title": f"{commodity} Price Distribution",
+                "xaxis": {"title": "Price", "automargin": True},
+                "yaxis": {"title": "Frequency", "automargin": True},
+                "height": 400,
+                "width": 370,
+                "showlegend": False,
+                "plot_bgcolor": "#f0f8ff",
+                "paper_bgcolor": "white",
             }
 
-            # Prepare chart-ready trace data
-            result.append({
+            # Append chart JSON
+            charts.append({
                 "commodity": commodity,
-                "mean": float(mean),  # Convert NumPy float to Python float
-                "std_dev": float(std_dev),  # Convert NumPy float to Python float
-                "histogram": histogram,
+                "data": [histogram_trace.to_plotly_json(), mean_trace.to_plotly_json(), std_dev_trace.to_plotly_json()],
+                "layout": layout,
             })
 
-        # Clean up DataFrame references
-        del df
-        del grouped
-        gc.collect()  # Explicit garbage collection to free memory
+        return jsonify(charts), 200
 
-        return jsonify(result)
     except Exception as e:
-        # Capture and print the full traceback for debugging
         import traceback
         error_message = traceback.format_exc()
         print("Error Traceback:", error_message)
         return jsonify({"error": str(e)}), 500
+
+
+
 
 
 
@@ -3209,94 +3279,81 @@ import traceback  # Add this at the top with your other imports
 @app.route("/api/terminal_correlation", methods=["GET"])
 def get_terminal_correlation():
     try:
-        # Query data including ID and filter by source = 'Usda'
+        # Query data including ID and filter by source = 'USDA'
         result = db.session.query(
-            PriceData.id,  # Include ID for ordering
-            PriceData.commodity, 
-            PriceData.price
+            PriceData.id, PriceData.commodity, PriceData.price
         ).filter(PriceData.source == 'USDA').order_by(PriceData.id).all()
-        
+
         if not result:
             return jsonify({"error": "No data found"}), 404
 
-        # Create DataFrame with ordered data
+        # Create DataFrame
         data = pd.DataFrame(result, columns=["id", "commodity", "price"])
-        
-        # Add debug logging
-        app.logger.info(f"Total records: {len(data)}")
-        app.logger.info(f"Unique commodities: {data['commodity'].nunique()}")
-        app.logger.info("Sample of data:")
-        app.logger.info(data.head())
-
-        # Create segments for each commodity based on order of entries
         data['segment'] = data.groupby('commodity').cumcount()
-        
-        # Create pivot table using segments instead of timestamps
-        pivot_table = data.pivot(index='segment', 
-                                 columns='commodity', 
-                                 values='price')
-        
-        # Remove segments where we don't have data for all commodities
-        pivot_table = pivot_table.dropna()
-        
-        # Log pivot table info
-        app.logger.info(f"Pivot table shape: {pivot_table.shape}")
-        app.logger.info(f"Number of price points per commodity: {len(pivot_table)}")
-        
-        # Calculate percentage changes between consecutive prices
+
+        # Create pivot table
+        pivot_table = data.pivot(index='segment', columns='commodity', values='price').dropna()
+
+        # Calculate percentage changes
         returns = pivot_table.pct_change().dropna()
-        
-        # Compute correlation matrix only if we have enough data
+
         if len(returns) < 2:
             return jsonify({"error": "Insufficient data for correlation"}), 400
-            
+
+        # Compute correlation matrix
         correlation_matrix = returns.corr()
-        
-        # Log correlation statistics
-        app.logger.info(f"Correlation matrix shape: {correlation_matrix.shape}")
-        app.logger.info(f"Correlation range: [{correlation_matrix.min().min():.2f}, {correlation_matrix.max().max():.2f}]")
-        
-        # Convert to dictionary and handle any remaining NaN values
-        correlation_dict = correlation_matrix.round(4).fillna(0).to_dict()
-        
-        # Compute summary statistics for each commodity
-        summary_stats = {
-            commodity: {
-                'count': len(data[data['commodity'] == commodity]),
-                'mean': data[data['commodity'] == commodity]['price'].mean(),
-                'std': data[data['commodity'] == commodity]['price'].std(),
-                'min': data[data['commodity'] == commodity]['price'].min(),
-                'max': data[data['commodity'] == commodity]['price'].max(),
-                'price_changes': len(returns)
-            }
-            for commodity in data['commodity'].unique()
+
+        # Prepare labels and z-values for Plotly
+        labels = correlation_matrix.columns.tolist()
+        z_values = correlation_matrix.values.tolist()
+
+        # Prepare Plotly chart
+        chart = {
+            "data": [
+                {
+                    "z": z_values,
+                    "x": labels,
+                    "y": labels,
+                    "type": "heatmap",
+                    "colorscale": "CoolWarm",
+                    "showscale": True,
+                    "text": [[f"{val:.2f}" for val in row] for row in z_values],
+                    "hoverinfo": "text",
+                }
+            ],
+            "layout": {
+                "title": "Correlation Matrix of Terminal Market Prices",
+                "xaxis": {
+                    "title": "Commodities",
+                    "tickangle": -45,
+                    "automargin": True,
+                },
+                "yaxis": {
+                    "title": "Commodities",
+                    "automargin": True,
+                },
+                "height": 600,
+                "width": 600,
+                "annotations": [
+                    {
+                        "x": labels[col],
+                        "y": labels[row],
+                        "text": f"{z_values[row][col]:.2f}",
+                        "showarrow": False,
+                        "font": {"color": "white", "size": 10},
+                    }
+                    for row in range(len(labels))
+                    for col in range(len(labels))
+                ],
+            },
         }
 
-        # Create metadata before cleaning up
-        metadata = {
-            "total_records": len(data),
-            "unique_commodities": data['commodity'].nunique(),
-            "price_points_used": len(pivot_table),
-            "price_changes_analyzed": len(returns)
-        }
+        return jsonify(chart), 200
 
-        # Clean up DataFrame references
-        del data
-        del pivot_table
-        del returns
-        del correlation_matrix
-        gc.collect()  # Explicit garbage collection
-
-        return jsonify({
-            "correlation": correlation_dict,
-            "summary": summary_stats,
-            "metadata": metadata
-        }), 200
-        
     except Exception as e:
-        app.logger.error(f"Error computing correlation matrix: {str(e)}")
-        app.logger.error(f"Traceback: {traceback.format_exc()}")
+        app.logger.error(f"Error generating terminal correlation chart: {str(e)}")
         return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
+
 
 
 
@@ -3308,92 +3365,79 @@ def get_shipping_correlation():
     try:
         # Query data including ID and filter by source = 'ProduceIQ'
         result = db.session.query(
-            ShippingPriceData.id,  # Include ID for ordering
-            ShippingPriceData.commodity, 
-            ShippingPriceData.price
+            ShippingPriceData.id, ShippingPriceData.commodity, ShippingPriceData.price
         ).filter(ShippingPriceData.source == 'ProduceIQ').order_by(ShippingPriceData.id).all()
-        
+
         if not result:
             return jsonify({"error": "No data found"}), 404
 
-        # Create DataFrame with ordered data
+        # Create DataFrame
         data = pd.DataFrame(result, columns=["id", "commodity", "price"])
-        
-        # Add debug logging
-        app.logger.info(f"Total records: {len(data)}")
-        app.logger.info(f"Unique commodity: {data['commodity'].nunique()}")
-        app.logger.info("Sample of data:")
-        app.logger.info(data.head())
-
-        # Create segments for each commodity based on order of entries
         data['segment'] = data.groupby('commodity').cumcount()
-        
-        # Create pivot table using segments instead of timestamps
-        pivot_table = data.pivot(index='segment', 
-                                 columns='commodity', 
-                                 values='price')
-        
-        # Remove segments where we don't have data for all commodities
-        pivot_table = pivot_table.dropna()
-        
-        # Log pivot table info
-        app.logger.info(f"Pivot table shape: {pivot_table.shape}")
-        app.logger.info(f"Number of price points per commodity: {len(pivot_table)}")
-        
-        # Calculate percentage changes between consecutive prices
+
+        # Create pivot table
+        pivot_table = data.pivot(index='segment', columns='commodity', values='price').dropna()
+
+        # Calculate percentage changes
         returns = pivot_table.pct_change().dropna()
-        
-        # Compute correlation matrix only if we have enough data
+
         if len(returns) < 2:
             return jsonify({"error": "Insufficient data for correlation"}), 400
-            
+
+        # Compute correlation matrix
         correlation_matrix = returns.corr()
-        
-        # Log correlation statistics
-        app.logger.info(f"Correlation matrix shape: {correlation_matrix.shape}")
-        app.logger.info(f"Correlation range: [{correlation_matrix.min().min():.2f}, {correlation_matrix.max().max():.2f}]")
-        
-        # Convert to dictionary and handle any remaining NaN values
-        correlation_dict = correlation_matrix.round(4).fillna(0).to_dict()
-        
-        # Compute summary statistics for each commodity
-        summary_stats = {
-            commodity: {
-                'count': len(data[data['commodity'] == commodity]),
-                'mean': data[data['commodity'] == commodity]['price'].mean(),
-                'std': data[data['commodity'] == commodity]['price'].std(),
-                'min': data[data['commodity'] == commodity]['price'].min(),
-                'max': data[data['commodity'] == commodity]['price'].max(),
-                'price_changes': len(returns)
-            }
-            for commodity in data['commodity'].unique()
+
+        # Prepare labels and z-values for Plotly
+        labels = correlation_matrix.columns.tolist()
+        z_values = correlation_matrix.values.tolist()
+
+        # Prepare Plotly chart
+        chart = {
+            "data": [
+                {
+                    "z": z_values,
+                    "x": labels,
+                    "y": labels,
+                    "type": "heatmap",
+                    "colorscale": "CoolWarm",
+                    "showscale": True,
+                    "text": [[f"{val:.2f}" for val in row] for row in z_values],
+                    "hoverinfo": "text",
+                }
+            ],
+            "layout": {
+                "title": "Correlation Matrix of Shipping Prices",
+                "xaxis": {
+                    "title": "Commodities",
+                    "tickangle": -45,
+                    "automargin": True,
+                },
+                "yaxis": {
+                    "title": "Commodities",
+                    "automargin": True,
+                },
+                "height": 600,
+                "width": 600,
+                "annotations": [
+                    {
+                        "x": labels[col],
+                        "y": labels[row],
+                        "text": f"{z_values[row][col]:.2f}",
+                        "showarrow": False,
+                        "font": {"color": "white", "size": 10},
+                    }
+                    for row in range(len(labels))
+                    for col in range(len(labels))
+                ],
+            },
         }
 
-        # Create metadata before cleaning up
-        metadata = {
-            "total_records": len(data),
-            "commodities": data['commodity'].nunique(),
-            "price_points_used": len(pivot_table),
-            "price_changes_analyzed": len(returns)
-        }
+        return jsonify(chart), 200
 
-        # Clean up DataFrame references
-        del data
-        del pivot_table
-        del returns
-        del correlation_matrix
-        gc.collect()  # Explicit garbage collection to free memory
-
-        return jsonify({
-            "correlation": correlation_dict,
-            "summary": summary_stats,
-            "metadata": metadata
-        }), 200
-        
     except Exception as e:
-        app.logger.error(f"Error computing correlation matrix: {str(e)}")
-        app.logger.error(f"Traceback: {traceback.format_exc()}")
+        app.logger.error(f"Error generating shipping correlation chart: {str(e)}")
         return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
+
 
 
 
@@ -3418,7 +3462,7 @@ def get_terminal_scatterplot_matrix():
         # Query data for the selected commodities from PriceData where source is 'USDA'
         result = db.session.query(PriceData.commodity, PriceData.price).filter(
             PriceData.commodity.in_([commodity_x, commodity_y]),
-            PriceData.source == 'USDA'  # Add filter for source 'USDA'
+            PriceData.source == 'USDA'
         ).all()
 
         if not result:
@@ -3434,61 +3478,58 @@ def get_terminal_scatterplot_matrix():
         x_data = df[df['commodity'] == commodity_x]['price'].tolist()
         y_data = df[df['commodity'] == commodity_y]['price'].tolist()
 
-        # Clean up DataFrame
-        del df
-        gc.collect()  # Explicit garbage collection to free memory
-
         # Get the minimum length to ensure equal pairs
         min_length = min(len(x_data), len(y_data))
 
         if min_length == 0:
-            scatter_plot = go.Figure()
-            scatter_plot.update_layout(
-                title="No Data Available",
-                xaxis_title=f"{commodity_x} Prices",
-                yaxis_title=f"{commodity_y} Prices",
-                annotations=[
-                    dict(
-                        text="No valid data available for the selected commodities.",
-                        xref="paper",
-                        yref="paper",
-                        showarrow=False,
-                        font=dict(size=14),
-                    )
-                ],
-                height=600,
-                width=600,
-            )
-            return jsonify(scatter_plot.to_plotly_json()), 200
+            scatter_plot = {
+                "data": [],
+                "layout": {
+                    "title": "No Data Available",
+                    "xaxis": {"title": f"{commodity_x} Prices"},
+                    "yaxis": {"title": f"{commodity_y} Prices"},
+                    "annotations": [
+                        {
+                            "text": "No valid data available for the selected commodities.",
+                            "xref": "paper",
+                            "yref": "paper",
+                            "showarrow": False,
+                            "font": {"size": 14},
+                        }
+                    ],
+                    "height": 600,
+                    "width": 600,
+                },
+            }
+            return jsonify(scatter_plot), 200
 
-        # Generate scatter plot
-        scatter_plot = go.Figure()
+        # Generate scatter plot JSON
+        scatter_plot = {
+            "data": [
+                {
+                    "x": x_data[:min_length],
+                    "y": y_data[:min_length],
+                    "mode": "markers",
+                    "marker": {"size": 5, "opacity": 0.8, "color": "#33b1a7"},
+                    "type": "scatter",
+                }
+            ],
+            "layout": {
+                "title": f"Scatter Plot: {commodity_x} vs {commodity_y}",
+                "xaxis": {"title": f"{commodity_x} Prices"},
+                "yaxis": {"title": f"{commodity_y} Prices"},
+                "height": 600,
+                "width": 600,
+                "font": {"family": "Arial"},
+            },
+        }
 
-        scatter_plot.add_trace(
-            go.Scatter(
-                x=x_data[:min_length],
-                y=y_data[:min_length],
-                mode="markers",
-                marker=dict(size=5, opacity=0.8, color="#33b1a7"),
-            )
-        )
+        # Debug logs
+        app.logger.info(f"{commodity_x} data (first 5): {x_data[:5]}")
+        app.logger.info(f"{commodity_y} data (first 5): {y_data[:5]}")
+        app.logger.info(f"Total points being plotted: {min_length}")
 
-        scatter_plot.update_layout(
-            title=f"Scatter Plot: {commodity_x} vs {commodity_y}",
-            xaxis_title=f"{commodity_x} Prices",
-            yaxis_title=f"{commodity_y} Prices",
-            height=600,
-            width=600,
-            font=dict(family="Arial"),
-        )
-
-        # Add debug logging
-        print("Data points for plotting:")
-        print(f"{commodity_x} data (first 5):", x_data[:5])
-        print(f"{commodity_y} data (first 5):", y_data[:5])
-        print(f"Total points being plotted: {min_length}")
-
-        return jsonify(scatter_plot.to_plotly_json()), 200
+        return jsonify(scatter_plot), 200
 
     except Exception as e:
         app.logger.error(f"Error generating terminal scatterplot: {str(e)}")
@@ -3498,8 +3539,8 @@ def get_terminal_scatterplot_matrix():
 
 
 
-# shipping scatterplot for ProduceIQ data
 
+# shipping scatterplot for ProduceIQ data
 @app.route("/api/shipping_scatterplot_matrix", methods=["POST"])
 def get_shipping_scatterplot_matrix():
     try:
@@ -3514,7 +3555,7 @@ def get_shipping_scatterplot_matrix():
         # Query data for the selected commodities from ShippingPriceData where source is 'ProduceIQ'
         result = db.session.query(ShippingPriceData.commodity, ShippingPriceData.price).filter(
             ShippingPriceData.commodity.in_([commodity_x, commodity_y]),
-            ShippingPriceData.source == 'ProduceIQ'  # Add filter for source 'ProduceIQ'
+            ShippingPriceData.source == 'ProduceIQ'
         ).all()
 
         if not result:
@@ -3530,65 +3571,63 @@ def get_shipping_scatterplot_matrix():
         x_data = df[df['commodity'] == commodity_x]['price'].tolist()
         y_data = df[df['commodity'] == commodity_y]['price'].tolist()
 
-        # Clean up DataFrame
-        del df
-        gc.collect()  # Explicit garbage collection to free memory
-
         # Get the minimum length to ensure equal pairs
         min_length = min(len(x_data), len(y_data))
 
         if min_length == 0:
-            scatter_plot = go.Figure()
-            scatter_plot.update_layout(
-                title="No Data Available",
-                xaxis_title=f"{commodity_x} Prices",
-                yaxis_title=f"{commodity_y} Prices",
-                annotations=[
-                    dict(
-                        text="No valid data available for the selected commodities.",
-                        xref="paper",
-                        yref="paper",
-                        showarrow=False,
-                        font=dict(size=14),
-                    )
-                ],
-                height=600,
-                width=600,
-            )
-            return jsonify(scatter_plot.to_plotly_json()), 200
+            scatter_plot = {
+                "data": [],
+                "layout": {
+                    "title": "No Data Available",
+                    "xaxis": {"title": f"{commodity_x} Prices"},
+                    "yaxis": {"title": f"{commodity_y} Prices"},
+                    "annotations": [
+                        {
+                            "text": "No valid data available for the selected commodities.",
+                            "xref": "paper",
+                            "yref": "paper",
+                            "showarrow": False,
+                            "font": {"size": 14},
+                        }
+                    ],
+                    "height": 600,
+                    "width": 600,
+                },
+            }
+            return jsonify(scatter_plot), 200
 
-        # Generate scatter plot
-        scatter_plot = go.Figure()
+        # Generate scatter plot JSON
+        scatter_plot = {
+            "data": [
+                {
+                    "x": x_data[:min_length],
+                    "y": y_data[:min_length],
+                    "mode": "markers",
+                    "marker": {"size": 5, "opacity": 0.8, "color": "#33b1a7"},
+                    "type": "scatter",
+                }
+            ],
+            "layout": {
+                "title": f"Scatter Plot: {commodity_x} vs {commodity_y}",
+                "xaxis": {"title": f"{commodity_x} Prices"},
+                "yaxis": {"title": f"{commodity_y} Prices"},
+                "height": 600,
+                "width": 600,
+                "font": {"family": "Arial"},
+            },
+        }
 
-        scatter_plot.add_trace(
-            go.Scatter(
-                x=x_data[:min_length],
-                y=y_data[:min_length],
-                mode="markers",
-                marker=dict(size=5, opacity=0.8, color="#33b1a7"),
-            )
-        )
+        # Debug logs
+        app.logger.info(f"{commodity_x} data (first 5): {x_data[:5]}")
+        app.logger.info(f"{commodity_y} data (first 5): {y_data[:5]}")
+        app.logger.info(f"Total points being plotted: {min_length}")
 
-        scatter_plot.update_layout(
-            title=f"Scatter Plot: {commodity_x} vs {commodity_y}",
-            xaxis_title=f"{commodity_x} Prices",
-            yaxis_title=f"{commodity_y} Prices",
-            height=600,
-            width=600,
-            font=dict(family="Arial"),
-        )
-
-        # Add debug logging
-        print("Data points for plotting:")
-        print(f"{commodity_x} data (first 5):", x_data[:5])
-        print(f"{commodity_y} data (first 5):", y_data[:5])
-        print(f"Total points being plotted: {min_length}")
-
-        return jsonify(scatter_plot.to_plotly_json()), 200
+        return jsonify(scatter_plot), 200
 
     except Exception as e:
         app.logger.error(f"Error generating shipping scatterplot: {str(e)}")
         return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
+
 
 
 
@@ -3761,97 +3800,15 @@ def terminal_rolling_correlations():
         del pivot_data
         gc.collect()
 
-        # Plot rolling correlation
-        fig_roll_corr = plot_rolling_price_correlations(
-            roll_corr_df=roll_corr_df,
-            series1=series1,
-            series2=series2,
-            window=window
-        )
-
-        # Clean up the rolling correlation DataFrame
-        del roll_corr_df
-        gc.collect()
-
-        # Convert the Plotly figure to JSON, ensuring all values are serializable
-        fig_json = fig_roll_corr.to_json()
-        
-        return app.response_class(
-            response=fig_json,
-            status=200,
-            mimetype='application/json'
-        )
-
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
-    except Exception as e:
-        app.logger.error(f"Error generating terminal rolling correlations: {str(e)}")
-        return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
-
-
-
-
-
-
-# Rolling Correlations for Shipping prices
-
-
-def calculate_rolling_price_correlations(window, source_df, series1, series2):
-    """
-    Calculate rolling correlations between two price series.
-    """
-    try:
-        # Sort index to ensure proper time-based calculations
-        source_df = source_df.sort_index()
-        
-        # Forward fill missing values (up to 7 days)
-        source_df = source_df.fillna(method='ffill', limit=7)
-        
-        # Calculate rolling correlation
-        roll_corr = source_df[series1].rolling(
-            window=window,
-            min_periods=window // 2  # Allow for some missing data
-        ).corr(source_df[series2])
-        
-        # Convert to JSON serializable format
-        result_df = pd.DataFrame({
-            'date': roll_corr.index,
-            'correlation': roll_corr.values
-        })
-        
-        # Convert numpy values to Python native types
-        result_df['correlation'] = result_df['correlation'].astype(float)
-        result_df['date'] = result_df['date'].dt.strftime('%Y-%m-%d')
-        
-        # Clean up rolling correlation Series
-        del roll_corr
-        gc.collect()  # Ensure unused memory is released
-
-        return result_df
-
-    except KeyError as e:
-        raise ValueError(f"KeyError: {e}. At least one of the selected varieties has no price data.")
-    except Exception as e:
-        raise ValueError(f"Unexpected error occurred: {str(e)}")
-
-
-def plot_rolling_price_correlations(roll_corr_df, series1, series2, window):
-    """
-    Create a Plotly figure for rolling correlations.
-    """
-    try:
-        # Convert date strings back to datetime for plotting
-        roll_corr_df['date'] = pd.to_datetime(roll_corr_df['date'])
-        
-        # Create the Plotly figure
+        # Create the Plotly figure directly
         fig_roll_corr = px.line(
             roll_corr_df,
-            x='date',
-            y='correlation',
+            x="date",
+            y="correlation",
             title=f"{window}-day rolling correlation between {series1} and {series2}"
         )
 
-        # Update layout for better visualization
+        # Customize the layout
         fig_roll_corr.update_layout(
             title={
                 "text": f"{window}-day rolling correlation between {series1} and {series2}",
@@ -3876,21 +3833,122 @@ def plot_rolling_price_correlations(roll_corr_df, series1, series2, window):
         fig_roll_corr.add_hline(y=1, line_dash="dot", line_color="gray", opacity=0.3)
         fig_roll_corr.add_hline(y=-1, line_dash="dot", line_color="gray", opacity=0.3)
 
-        # Clean up the rolling correlation DataFrame
-        del roll_corr_df
-        gc.collect()  # Ensure unused memory is released
+        # Convert the Plotly figure to JSON, ensuring all values are serializable
+        fig_json = fig_roll_corr.to_json()
 
-        return fig_roll_corr
+        # Return the chart as JSON
+        return app.response_class(
+            response=fig_json,
+            status=200,
+            mimetype='application/json'
+        )
+
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        app.logger.error(f"Error generating terminal rolling correlations: {str(e)}")
+        return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
+
+
+
+
+
+# Rolling Correlations for Shipping prices
+
+def calculate_rolling_price_correlations(window, source_df, series1, series2):
+    """
+    Calculate rolling correlations between two price series.
+    """
+    try:
+        # Sort index to ensure proper time-based calculations
+        source_df = source_df.sort_index()
+        
+        # Forward fill missing values (up to 7 days)
+        source_df = source_df.ffill(limit=7)  # Use .ffill() instead of fillna(method='ffill')
+
+        # Calculate rolling correlation
+        roll_corr = source_df[series1].rolling(
+            window=window,
+            min_periods=window // 2  # Allow for some missing data
+        ).corr(source_df[series2])
+        
+        # Create result DataFrame
+        result_df = pd.DataFrame({
+            'date': roll_corr.index,
+            'correlation': roll_corr.values
+        })
+
+        # Convert numpy values to Python native types
+        result_df['correlation'] = result_df['correlation'].astype(float)
+        result_df['date'] = result_df['date'].dt.strftime('%Y-%m-%d')
+
+        # Clean up memory
+        del roll_corr
+        gc.collect()
+
+        return result_df
+
+    except KeyError as e:
+        raise ValueError(f"KeyError: {e}. At least one of the selected varieties has no price data.")
+    except Exception as e:
+        raise ValueError(f"Unexpected error: {str(e)}")
+
+
+
+def plot_rolling_price_correlations(roll_corr_df, series1, series2, window):
+    """
+    Create a Plotly figure for rolling correlations and convert it to JSON.
+    """
+    try:
+        # Convert date strings back to datetime for plotting
+        roll_corr_df['date'] = pd.to_datetime(roll_corr_df['date'])
+        
+        # Create the Plotly figure
+        fig_roll_corr = px.line(
+            roll_corr_df,
+            x='date',
+            y='correlation',
+            title=f"{window}-day Rolling Correlation between {series1} and {series2}",
+            labels={'correlation': 'Correlation Coefficient', 'date': 'Date'}
+        )
+
+        # Update layout for better visualization
+        fig_roll_corr.update_layout(
+            title={
+                "x": 0.5,
+                "y": 0.9,
+                "xanchor": "center",
+                "yanchor": "top"
+            },
+            xaxis=dict(title="Date"),
+            yaxis=dict(
+                title="Correlation Coefficient",
+                tickformat='.2f',
+                range=[-1, 1]  # Correlation coefficient ranges from -1 to 1
+            ),
+            height=600,
+            width=600,
+            showlegend=False
+        )
+
+        # Add reference lines
+        fig_roll_corr.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5)
+        fig_roll_corr.add_hline(y=1, line_dash="dot", line_color="gray", opacity=0.3)
+        fig_roll_corr.add_hline(y=-1, line_dash="dot", line_color="gray", opacity=0.3)
+
+        # Return the Plotly figure as JSON
+        return fig_roll_corr.to_json()
 
     except Exception as e:
         raise ValueError(f"Error creating plot: {str(e)}")
+
 
 
 # rolling correlations for shipping produceiq
 @app.route("/api/shipping_rolling_correlations", methods=["POST"])
 def shipping_rolling_correlations():
     """
-    Endpoint to calculate and plot rolling correlations for shipping price data.
+    Endpoint to calculate and return rolling correlations chart for shipping price data.
     """
     try:
         # Parse input from the frontend
@@ -3936,15 +3994,9 @@ def shipping_rolling_correlations():
             aggfunc="mean"
         ).sort_index()
 
-        # Clean up the main DataFrame after pivoting
-        del df
-        gc.collect()
-
         # Check for minimum data points
         min_required_points = window * 2
         if len(pivot_data) < min_required_points:
-            del pivot_data
-            gc.collect()
             return jsonify({
                 "error": f"Insufficient data points. Need at least {min_required_points} days of data for {window}-day window"
             }), 400
@@ -3957,25 +4009,14 @@ def shipping_rolling_correlations():
             series2=series2
         )
 
-        # Clean up the pivot DataFrame after rolling correlation
-        del pivot_data
-        gc.collect()
-
-        # Plot rolling correlation
-        fig_roll_corr = plot_rolling_price_correlations(
+        # Plot and serialize the rolling correlation chart
+        fig_json = plot_rolling_price_correlations(
             roll_corr_df=roll_corr_df,
             series1=series1,
             series2=series2,
             window=window
         )
 
-        # Clean up the rolling correlation DataFrame
-        del roll_corr_df
-        gc.collect()
-
-        # Convert the Plotly figure to JSON, ensuring all values are serializable
-        fig_json = fig_roll_corr.to_json()
-        
         return app.response_class(
             response=fig_json,
             status=200,

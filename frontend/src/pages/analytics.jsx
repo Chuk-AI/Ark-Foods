@@ -25,11 +25,11 @@ export default function DashAnalytics() {
       {/* Empirical Probability for Terminal Prices */}
       <div className="terminal-empricial-container d-flex">
         <div className="">
-          <EmpiricalChart
-            apiEndpoint="/api/terminal_empricial_probability"
-            title="Terminal Empirical Probability"
-            colors={terminalColors}
-          />
+        <EmpiricalChart
+    apiEndpoint="/api/terminal_empricial_probability"
+    title="Terminal Empirical Probability"
+    colors={terminalColors}
+/>
         </div>
       </div>
 
@@ -41,11 +41,11 @@ export default function DashAnalytics() {
       {/* Empirical Probability for Shipping Prices */}
       <div className="shipping-empricial-container d-flex">
         <div>
-          <EmpiricalChart
-            apiEndpoint="/api/shipping_empricial_probability"
-            title="Shipping Empirical Probability"
-            colors={shippingColors}
-          />
+        <EmpiricalChart
+    apiEndpoint="/api/shipping_empricial_probability"
+    title="Shipping Empirical Probability"
+    colors={shippingColors}
+/>
         </div>
       </div>
 

@@ -19,10 +19,20 @@
     border-radius: 10px;
 }
 .scatter-button{
-    border: 1px solid #33b1a7;
-    border-radius: 10px;
-    background: none;
+    padding: 10px 20px;
+  border: 1px solid #33b1a7;
+  border-radius: 10px;
+  background-color: #ffffff;
+  font-weight: bold;
+  color: #33b1a7;
+  cursor: pointer;
+  transition: background-color 0.3s, color 0.3s;
 
+}
+
+.scatter-button:hover{
+    background-color: #33b1a7;
+    color: #ffffff;
 }
 .scatter-chart{
 
@@ -30,7 +40,14 @@
     justify-content: center;
     align-items: center;
     margin-top: 20px;
-    height: 600px;
+    height: 650px;
     background: #33b1a7;
     border-radius: 20px;
+}
+.scatter-chart-container{
+    height: 650px;
+    background: #33b1a7;
+    margin-top: 20px;
+    border-radius: 20px;
+
 }
