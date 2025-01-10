@@ -3034,25 +3034,25 @@ def terminal_price_violin():
         # Get the time frame from query parameters (default to '7d')
         time_frame = request.args.get("timeFrame", "7d")
 
-        # Map timeFrame to SQLite-compatible date arithmetic
+        # Map timeFrame to PostgreSQL-compatible interval
         time_intervals = {
-            "3d": "'now', '-3 days'",
-            "7d": "'now', '-7 days'",
-            "1m": "'now', '-1 month'",
-            "3m": "'now', '-3 months'",
-            "1y": "'now', '-1 year'",
-            "2y": "'now', '-2 years'"
+            "3d": "'3 days'",
+            "7d": "'7 days'",
+            "1m": "'1 month'",
+            "3m": "'3 months'",
+            "1y": "'1 year'",
+            "2y": "'2 years'"
         }
 
-        # Get the corresponding SQLite date function for the time frame
-        sqlite_date_function = time_intervals.get(time_frame.lower(), "'now', '-7 days'")
+        # Get the corresponding PostgreSQL interval for the time frame
+        postgres_interval = time_intervals.get(time_frame.lower(), "'7 days'")
 
         # Query to fetch data within the specified time frame
         query = text(f"""
         SELECT commodity, price, source
         FROM price_data
         WHERE source IN ('USDA', 'ProduceIQ')
-          AND DATE(year || '-01-01', '+' || (day - 1) || ' days') >= DATE({sqlite_date_function})
+          AND TO_DATE(year || '-01-01', 'YYYY-MM-DD') + (day - 1) * interval '1 day' >= NOW() - INTERVAL {postgres_interval}
         """)
 
         result = db.session.execute(query).fetchall()
@@ -3093,6 +3093,7 @@ def terminal_price_violin():
     except Exception as e:
         app.logger.error(f"Error generating terminal violin plots: {str(e)}")
         return jsonify({"error": "Failed to generate terminal violin plots"}), 500
+
 
 
 
@@ -3162,25 +3163,25 @@ def shipping_price_violin():
         # Get the time frame from query parameters (default to '7d')
         time_frame = request.args.get("timeFrame", "7d")
 
-        # Map timeFrame to SQLite-compatible date arithmetic
+        # Map timeFrame to PostgreSQL-compatible interval
         time_intervals = {
-            "3d": "'now', '-3 days'",
-            "7d": "'now', '-7 days'",
-            "1m": "'now', '-1 month'",
-            "3m": "'now', '-3 months'",
-            "1y": "'now', '-1 year'",
-            "2y": "'now', '-2 years'"
+            "3d": "'3 days'",
+            "7d": "'7 days'",
+            "1m": "'1 month'",
+            "3m": "'3 months'",
+            "1y": "'1 year'",
+            "2y": "'2 years'"
         }
 
-        # Get the corresponding SQLite date function for the time frame
-        sqlite_date_function = time_intervals.get(time_frame.lower(), "'now', '-7 days'")
+        # Get the corresponding PostgreSQL interval for the time frame
+        postgres_interval = time_intervals.get(time_frame.lower(), "'7 days'")
 
         # SQL query to fetch data filtered by source and time range
         query = text(f"""
             SELECT commodity, price
             FROM shipping_price_data
             WHERE source = 'ProduceIQ'
-              AND DATE(year || '-01-01', '+' || (day - 1) || ' days') >= DATE({sqlite_date_function})
+              AND TO_DATE(year || '-01-01', 'YYYY-MM-DD') + (day - 1) * interval '1 day' >= NOW() - INTERVAL {postgres_interval}
         """)
         result = db.session.execute(query).fetchall()
 
@@ -3224,6 +3225,7 @@ def shipping_price_violin():
     except Exception as e:
         app.logger.error(f"Error generating shipping violin plot: {str(e)}")
         return jsonify({"error": "Failed to generate shipping violin plot"}), 500
+
 
 # @app.route("/api/shipping_price_violin", methods=["GET"])
 # def shipping_price_violin():
