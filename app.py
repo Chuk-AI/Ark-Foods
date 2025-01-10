@@ -3113,66 +3113,66 @@ from flask import jsonify
 # logger = logging.getLogger(__name__)
 
 
-@app.route("/api/terminal_price_violin", methods=["GET"])
-def terminal_price_violin():
-    try:
-        app.logger.info("Accessing terminal violin plots using DataFrame...")
+# @app.route("/api/terminal_price_violin", methods=["GET"])
+# def terminal_price_violin():
+#     try:
+#         app.logger.info("Accessing terminal violin plots using DataFrame...")
 
-        # Get the DataFrame
-        df = get_dataframe()
+#         # Get the DataFrame
+#         df = get_dataframe()
 
-        if df is None or df.empty:
-            app.logger.error("DataFrame is not initialized or empty")
-            return jsonify({"error": "Data not available"}), 500
+#         if df is None or df.empty:
+#             app.logger.error("DataFrame is not initialized or empty")
+#             return jsonify({"error": "Data not available"}), 500
 
-        # Filter data from the DataFrame
-        filtered_df = df[df['source'].isin(['USDA', 'ProduceIQ'])]
+#         # Filter data from the DataFrame
+#         filtered_df = df[df['source'].isin(['USDA', 'ProduceIQ'])]
 
-        if filtered_df.empty:
-            app.logger.warning("No data found for USDA or ProduceIQ sources")
-            return jsonify({"error": "No data available for selected sources"}), 404
+#         if filtered_df.empty:
+#             app.logger.warning("No data found for USDA or ProduceIQ sources")
+#             return jsonify({"error": "No data available for selected sources"}), 404
 
-        # Group data by source
-        data = {"USDA": {"x": [], "y": []}, "ProduceIQ": {"x": [], "y": []}}
+#         # Group data by source
+#         data = {"USDA": {"x": [], "y": []}, "ProduceIQ": {"x": [], "y": []}}
 
-        for source in ['USDA', 'ProduceIQ']:
-            source_df = filtered_df[filtered_df['source'] == source]
-            data[source]["x"] = source_df['commodity'].tolist()
-            data[source]["y"] = source_df['price'].tolist()
+#         for source in ['USDA', 'ProduceIQ']:
+#             source_df = filtered_df[filtered_df['source'] == source]
+#             data[source]["x"] = source_df['commodity'].tolist()
+#             data[source]["y"] = source_df['price'].tolist()
 
-        # Create separate charts for each source
-        charts = {}
-        for source in ["USDA", "ProduceIQ"]:
-            if data[source]["x"]:  # Only create chart if data exists
-                fig = go.Figure()
-                fig.add_trace(
-                    go.Violin(
-                        x=data[source]["x"],
-                        y=data[source]["y"],
-                        name=source,
-                        box_visible=True,
-                        meanline_visible=True,
-                        marker_color='blue'
-                    )
-                )
-                fig.update_layout(
-                    title=f"{source} Terminal Data",
-                    xaxis_title="Commodity",
-                    yaxis_title="Price",
-                    height=500,
-                    width=600
-                )
-                charts[source] = fig.to_dict()
+#         # Create separate charts for each source
+#         charts = {}
+#         for source in ["USDA", "ProduceIQ"]:
+#             if data[source]["x"]:  # Only create chart if data exists
+#                 fig = go.Figure()
+#                 fig.add_trace(
+#                     go.Violin(
+#                         x=data[source]["x"],
+#                         y=data[source]["y"],
+#                         name=source,
+#                         box_visible=True,
+#                         meanline_visible=True,
+#                         marker_color='blue'
+#                     )
+#                 )
+#                 fig.update_layout(
+#                     title=f"{source} Terminal Data",
+#                     xaxis_title="Commodity",
+#                     yaxis_title="Price",
+#                     height=500,
+#                     width=600
+#                 )
+#                 charts[source] = fig.to_dict()
 
-        if not charts:
-            app.logger.warning("No charts could be generated")
-            return jsonify({"error": "No data available to generate charts"}), 404
+#         if not charts:
+#             app.logger.warning("No charts could be generated")
+#             return jsonify({"error": "No data available to generate charts"}), 404
 
-        return jsonify(charts), 200
+#         return jsonify(charts), 200
 
-    except Exception as e:
-        app.logger.error(f"Error in terminal_price_violin: {str(e)}")
-        return jsonify({"error": "Failed to generate terminal violin plots"}), 500
+#     except Exception as e:
+#         app.logger.error(f"Error in terminal_price_violin: {str(e)}")
+#         return jsonify({"error": "Failed to generate terminal violin plots"}), 500
 
 
 
