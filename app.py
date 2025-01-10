@@ -78,7 +78,6 @@ from sqlalchemy.exc import SQLAlchemyError
 from flask import send_from_directory
 from notebook import get_best_start_dates, fetch_data_from_api
 from fetch_shipping_point_data import fetch_shipping_point_data  # Replace with the correct module name
-from dataframe import get_dataframe
 
 
 
@@ -191,74 +190,40 @@ app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 db = SQLAlchemy(app)
 
 
-# import threading
+# Global DataFrame to store the data
+price_data_df = None
 
-# #  Global DataFrame with thread lock for safety
-
-# price_data_df = None
-# df_lock = threading.Lock()
-
-# def get_dataframe():
-#     """
-#     Safely get the global DataFrame, initializing if necessary
-#     """
-#     global price_data_df
+def initialize_dataframe(app):
+    """
+    Initialize the global DataFrame with data from the database.
+    This should be called when the app starts.
+    """
+    global price_data_df
     
-#     if price_data_df is None:
-#         with df_lock:
-#             if price_data_df is None:  # Double-check pattern
-#                 try:
-#                     app.logger.info("Initializing DataFrame on first request...")
-#                     initialize_dataframe(app)
-#                 except Exception as e:
-#                     app.logger.error(f"Error initializing DataFrame: {str(e)}")
-#                     raise
-    
-#     return price_data_df
-
-# def initialize_dataframe(app):
-#     """
-#     Initialize the global DataFrame with data from the database.
-#     """
-#     global price_data_df
-    
-#     try:
-#         app.logger.info("Fetching data from database...")
-        
-#         # Query to fetch all data
-#         query = text("""
-#             SELECT id, city_name, commodity, year, day, price, source, season
-#             FROM price_data
-#         """)
-        
-#         # Execute query and fetch all results
-#         result = db.session.execute(query).fetchall()
-        
-#         # Convert to DataFrame
-#         price_data_df = pd.DataFrame(
-#             result,
-#             columns=['id', 'city_name', 'commodity', 'year', 'day', 'price', 'source', 'season']
-#         )
-        
-#         app.logger.info(f"DataFrame initialized with {len(price_data_df)} records")
-        
-#     except Exception as e:
-#         app.logger.error(f"Error in initialize_dataframe: {str(e)}")
-#         raise
-
-
-
-
-
-
-# try:
-#     with app.app_context():
-#         initialize_dataframe(app)
-# except Exception as e:
-#     app.logger.error(f"Initial DataFrame load failed: {str(e)}")
-#     # Continue anyway - the get_dataframe() function will retry on first request
-
-
+    with app.app_context():
+        try:
+            app.logger.info("Initializing global DataFrame...")
+            
+            # Query to fetch all data
+            query = text("""
+                SELECT id, city_name, commodity, year, day, price, source, season
+                FROM price_data
+            """)
+            
+            # Execute query and fetch all results
+            result = db.session.execute(query).fetchall()
+            
+            # Convert to DataFrame
+            price_data_df = pd.DataFrame(
+                result,
+                columns=['id', 'city_name', 'commodity', 'year', 'day', 'price', 'source', 'season']
+            )
+            
+            app.logger.info(f"Global DataFrame initialized with {len(price_data_df)} records")
+            
+        except Exception as e:
+            app.logger.error(f"Error initializing global DataFrame: {str(e)}")
+            raise e
 
 
 
@@ -877,23 +842,7 @@ def fetch_daily_data():
 
 
 
-# @app.route("/api/test_dataframe")
-# def test_dataframe():
-#     try:
-#         df = get_dataframe()
-#         return jsonify({
-#             "status": "success",
-#             "total_records": len(df),
-#             "sample_data": df.head(5).to_dict('records'),
-#             "memory_usage": f"{df.memory_usage(deep=True).sum() / 1024 / 1024:.2f} MB"
-#         })
-#     except Exception as e:
-#         return jsonify({
-#             "status": "error",
-#             "message": str(e)
-#         })
 
-        
 
 import threading
 
@@ -3109,60 +3058,9 @@ from sqlalchemy.sql import text  # Import `text` from SQLAlchemy
 import plotly.graph_objects as go
 from flask import jsonify
 
-# logging.basicConfig(level=logging.INFO)
-# logger = logging.getLogger(__name__)
 
+# voilin plot for terminal data
 
-# @app.route("/api/terminal_price_violin", methods=["GET"])
-# def terminal_price_violin():
-#     try:
-#         logger.info("Generating terminal violin plots...")
-        
-#         df = get_dataframe()
-        
-#         if df is None or df.empty:
-#             return jsonify({"error": "Data not available"}), 500
-        
-#         filtered_df = df[df['source'].isin(['USDA', 'ProduceIQ'])]
-        
-#         if filtered_df.empty:
-#             return jsonify({"error": "No data available for selected sources"}), 404
-        
-#         data = {"USDA": {"x": [], "y": []}, "ProduceIQ": {"x": [], "y": []}}
-        
-#         for source in ['USDA', 'ProduceIQ']:
-#             source_df = filtered_df[filtered_df['source'] == source]
-#             data[source]["x"] = source_df['commodity'].tolist()
-#             data[source]["y"] = source_df['price'].tolist()
-        
-#         charts = {}
-#         for source in ["USDA", "ProduceIQ"]:
-#             if data[source]["x"]:
-#                 fig = go.Figure()
-#                 fig.add_trace(
-#                     go.Violin(
-#                         x=data[source]["x"],
-#                         y=data[source]["y"],
-#                         name=source,
-#                         box_visible=True,
-#                         meanline_visible=True,
-#                         marker_color='blue'
-#                     )
-#                 )
-#                 fig.update_layout(
-#                     title=f"{source} Terminal Data",
-#                     xaxis_title="Commodity",
-#                     yaxis_title="Price",
-#                     height=500,
-#                     width=600
-#                 )
-#                 charts[source] = fig.to_dict()
-        
-#         return jsonify(charts), 200
-        
-#     except Exception as e:
-#         logger.error(f"Error in terminal_price_violin: {str(e)}")
-#         return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/terminal_price_violin", methods=["GET"])
@@ -4164,13 +4062,6 @@ def shipping_rolling_correlations():
     except Exception as e:
         app.logger.error(f"Error generating shipping rolling correlations: {str(e)}")
         return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
-
-
-
-# print("Starting DataFrame initialization...")
-# with app.app_context():
-#     initialize_dataframe(app)
-# print("DataFrame initialization complete!")
 
 
 
