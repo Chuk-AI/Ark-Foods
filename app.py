@@ -190,72 +190,72 @@ app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 db = SQLAlchemy(app)
 
 
-import threading
+# import threading
 
-#  Global DataFrame with thread lock for safety
+# #  Global DataFrame with thread lock for safety
 
-price_data_df = None
-df_lock = threading.Lock()
+# price_data_df = None
+# df_lock = threading.Lock()
 
-def get_dataframe():
-    """
-    Safely get the global DataFrame, initializing if necessary
-    """
-    global price_data_df
+# def get_dataframe():
+#     """
+#     Safely get the global DataFrame, initializing if necessary
+#     """
+#     global price_data_df
     
-    if price_data_df is None:
-        with df_lock:
-            if price_data_df is None:  # Double-check pattern
-                try:
-                    app.logger.info("Initializing DataFrame on first request...")
-                    initialize_dataframe(app)
-                except Exception as e:
-                    app.logger.error(f"Error initializing DataFrame: {str(e)}")
-                    raise
+#     if price_data_df is None:
+#         with df_lock:
+#             if price_data_df is None:  # Double-check pattern
+#                 try:
+#                     app.logger.info("Initializing DataFrame on first request...")
+#                     initialize_dataframe(app)
+#                 except Exception as e:
+#                     app.logger.error(f"Error initializing DataFrame: {str(e)}")
+#                     raise
     
-    return price_data_df
+#     return price_data_df
 
-def initialize_dataframe(app):
-    """
-    Initialize the global DataFrame with data from the database.
-    """
-    global price_data_df
+# def initialize_dataframe(app):
+#     """
+#     Initialize the global DataFrame with data from the database.
+#     """
+#     global price_data_df
     
-    try:
-        app.logger.info("Fetching data from database...")
+#     try:
+#         app.logger.info("Fetching data from database...")
         
-        # Query to fetch all data
-        query = text("""
-            SELECT id, city_name, commodity, year, day, price, source, season
-            FROM price_data
-        """)
+#         # Query to fetch all data
+#         query = text("""
+#             SELECT id, city_name, commodity, year, day, price, source, season
+#             FROM price_data
+#         """)
         
-        # Execute query and fetch all results
-        result = db.session.execute(query).fetchall()
+#         # Execute query and fetch all results
+#         result = db.session.execute(query).fetchall()
         
-        # Convert to DataFrame
-        price_data_df = pd.DataFrame(
-            result,
-            columns=['id', 'city_name', 'commodity', 'year', 'day', 'price', 'source', 'season']
-        )
+#         # Convert to DataFrame
+#         price_data_df = pd.DataFrame(
+#             result,
+#             columns=['id', 'city_name', 'commodity', 'year', 'day', 'price', 'source', 'season']
+#         )
         
-        app.logger.info(f"DataFrame initialized with {len(price_data_df)} records")
+#         app.logger.info(f"DataFrame initialized with {len(price_data_df)} records")
         
-    except Exception as e:
-        app.logger.error(f"Error in initialize_dataframe: {str(e)}")
-        raise
+#     except Exception as e:
+#         app.logger.error(f"Error in initialize_dataframe: {str(e)}")
+#         raise
 
 
 
 
 
 
-try:
-    with app.app_context():
-        initialize_dataframe(app)
-except Exception as e:
-    app.logger.error(f"Initial DataFrame load failed: {str(e)}")
-    # Continue anyway - the get_dataframe() function will retry on first request
+# try:
+#     with app.app_context():
+#         initialize_dataframe(app)
+# except Exception as e:
+#     app.logger.error(f"Initial DataFrame load failed: {str(e)}")
+#     # Continue anyway - the get_dataframe() function will retry on first request
 
 
 
@@ -876,21 +876,21 @@ def fetch_daily_data():
 
 
 
-@app.route("/api/test_dataframe")
-def test_dataframe():
-    try:
-        df = get_dataframe()
-        return jsonify({
-            "status": "success",
-            "total_records": len(df),
-            "sample_data": df.head(5).to_dict('records'),
-            "memory_usage": f"{df.memory_usage(deep=True).sum() / 1024 / 1024:.2f} MB"
-        })
-    except Exception as e:
-        return jsonify({
-            "status": "error",
-            "message": str(e)
-        })
+# @app.route("/api/test_dataframe")
+# def test_dataframe():
+#     try:
+#         df = get_dataframe()
+#         return jsonify({
+#             "status": "success",
+#             "total_records": len(df),
+#             "sample_data": df.head(5).to_dict('records'),
+#             "memory_usage": f"{df.memory_usage(deep=True).sum() / 1024 / 1024:.2f} MB"
+#         })
+#     except Exception as e:
+#         return jsonify({
+#             "status": "error",
+#             "message": str(e)
+#         })
 
         
 
@@ -3111,117 +3111,117 @@ from flask import jsonify
 
 # voilin plot for terminal data
 
-@app.route("/api/terminal_price_violin", methods=["GET"])
-def terminal_price_violin():
-    try:
-        app.logger.info("Accessing terminal violin plots...")
-        
-        # Safely get the DataFrame
-        df = get_dataframe()
-        
-        if df is None or df.empty:
-            app.logger.error("DataFrame is not initialized or empty")
-            return jsonify({"error": "Data not available"}), 500
-        
-        # Filter data from the DataFrame
-        filtered_df = df[df['source'].isin(['USDA', 'ProduceIQ'])]
-        
-        if filtered_df.empty:
-            app.logger.warning("No data found for USDA or ProduceIQ sources")
-            return jsonify({"error": "No data available for selected sources"}), 404
-        
-        # Group data by source
-        data = {"USDA": {"x": [], "y": []}, "ProduceIQ": {"x": [], "y": []}}
-        
-        for source in ['USDA', 'ProduceIQ']:
-            source_df = filtered_df[filtered_df['source'] == source]
-            data[source]["x"] = source_df['commodity'].tolist()
-            data[source]["y"] = source_df['price'].tolist()
-        
-        # Create separate charts for each source
-        charts = {}
-        for source in ["USDA", "ProduceIQ"]:
-            if data[source]["x"]:  # Only create chart if data exists
-                fig = go.Figure()
-                fig.add_trace(
-                    go.Violin(
-                        x=data[source]["x"],
-                        y=data[source]["y"],
-                        name=source,
-                        box_visible=True,
-                        meanline_visible=True,
-                        marker_color='blue'
-                    )
-                )
-                fig.update_layout(
-                    title=f"{source} Terminal Data",
-                    xaxis_title="Commodity",
-                    yaxis_title="Price",
-                    height=500,
-                    width=600
-                )
-                charts[source] = fig.to_dict()
-        
-        if not charts:
-            app.logger.warning("No charts could be generated")
-            return jsonify({"error": "No data available to generate charts"}), 404
-            
-        return jsonify(charts), 200
-        
-    except Exception as e:
-        app.logger.error(f"Error in terminal_price_violin: {str(e)}")
-        return jsonify({"error": "Failed to generate terminal violin plots"}), 500
-
-
 # @app.route("/api/terminal_price_violin", methods=["GET"])
 # def terminal_price_violin():
 #     try:
-#         app.logger.info("Fetching data for terminal violin plots...")
-
-#         # Query to fetch data
-#         query = text("""
-#         SELECT commodity, price, source
-#         FROM price_data
-#         WHERE source IN ('USDA', 'ProduceIQ')
-#         """)
-#         result = db.session.execute(query).fetchall()
-
+#         app.logger.info("Accessing terminal violin plots...")
+        
+#         # Safely get the DataFrame
+#         df = get_dataframe()
+        
+#         if df is None or df.empty:
+#             app.logger.error("DataFrame is not initialized or empty")
+#             return jsonify({"error": "Data not available"}), 500
+        
+#         # Filter data from the DataFrame
+#         filtered_df = df[df['source'].isin(['USDA', 'ProduceIQ'])]
+        
+#         if filtered_df.empty:
+#             app.logger.warning("No data found for USDA or ProduceIQ sources")
+#             return jsonify({"error": "No data available for selected sources"}), 404
+        
 #         # Group data by source
 #         data = {"USDA": {"x": [], "y": []}, "ProduceIQ": {"x": [], "y": []}}
-#         for row in result:
-#             source = row[2]
-#             if source in data:
-#                 data[source]["x"].append(row[0])  # Commodity
-#                 data[source]["y"].append(row[1])  # Price
-
+        
+#         for source in ['USDA', 'ProduceIQ']:
+#             source_df = filtered_df[filtered_df['source'] == source]
+#             data[source]["x"] = source_df['commodity'].tolist()
+#             data[source]["y"] = source_df['price'].tolist()
+        
 #         # Create separate charts for each source
 #         charts = {}
 #         for source in ["USDA", "ProduceIQ"]:
-#             fig = go.Figure()
-#             fig.add_trace(
-#                 go.Violin(
-#                     x=data[source]["x"],
-#                     y=data[source]["y"],
-#                     name=source,
-#                     box_visible=True,
-#                     meanline_visible=True,
-#                     marker_color='blue'  # Custom color
+#             if data[source]["x"]:  # Only create chart if data exists
+#                 fig = go.Figure()
+#                 fig.add_trace(
+#                     go.Violin(
+#                         x=data[source]["x"],
+#                         y=data[source]["y"],
+#                         name=source,
+#                         box_visible=True,
+#                         meanline_visible=True,
+#                         marker_color='blue'
+#                     )
 #                 )
-#             )
-#             fig.update_layout(
-#                 title=f"{source} Terminal Data",
-#                 xaxis_title="Commodity",
-#                 yaxis_title="Price",
-#                 height=500,
-#                 width=600
-#             )
-#             charts[source] = fig.to_dict()  # Convert each chart to JSON
-
+#                 fig.update_layout(
+#                     title=f"{source} Terminal Data",
+#                     xaxis_title="Commodity",
+#                     yaxis_title="Price",
+#                     height=500,
+#                     width=600
+#                 )
+#                 charts[source] = fig.to_dict()
+        
+#         if not charts:
+#             app.logger.warning("No charts could be generated")
+#             return jsonify({"error": "No data available to generate charts"}), 404
+            
 #         return jsonify(charts), 200
-
+        
 #     except Exception as e:
-#         app.logger.error(f"Error generating terminal violin plots: {str(e)}")
+#         app.logger.error(f"Error in terminal_price_violin: {str(e)}")
 #         return jsonify({"error": "Failed to generate terminal violin plots"}), 500
+
+
+@app.route("/api/terminal_price_violin", methods=["GET"])
+def terminal_price_violin():
+    try:
+        app.logger.info("Fetching data for terminal violin plots...")
+
+        # Query to fetch data
+        query = text("""
+        SELECT commodity, price, source
+        FROM price_data
+        WHERE source IN ('USDA', 'ProduceIQ')
+        """)
+        result = db.session.execute(query).fetchall()
+
+        # Group data by source
+        data = {"USDA": {"x": [], "y": []}, "ProduceIQ": {"x": [], "y": []}}
+        for row in result:
+            source = row[2]
+            if source in data:
+                data[source]["x"].append(row[0])  # Commodity
+                data[source]["y"].append(row[1])  # Price
+
+        # Create separate charts for each source
+        charts = {}
+        for source in ["USDA", "ProduceIQ"]:
+            fig = go.Figure()
+            fig.add_trace(
+                go.Violin(
+                    x=data[source]["x"],
+                    y=data[source]["y"],
+                    name=source,
+                    box_visible=True,
+                    meanline_visible=True,
+                    marker_color='blue'  # Custom color
+                )
+            )
+            fig.update_layout(
+                title=f"{source} Terminal Data",
+                xaxis_title="Commodity",
+                yaxis_title="Price",
+                height=500,
+                width=600
+            )
+            charts[source] = fig.to_dict()  # Convert each chart to JSON
+
+        return jsonify(charts), 200
+
+    except Exception as e:
+        app.logger.error(f"Error generating terminal violin plots: {str(e)}")
+        return jsonify({"error": "Failed to generate terminal violin plots"}), 500
 
 
 
@@ -4175,10 +4175,10 @@ def shipping_rolling_correlations():
 
 
 
-print("Starting DataFrame initialization...")
-with app.app_context():
-    initialize_dataframe(app)
-print("DataFrame initialization complete!")
+# print("Starting DataFrame initialization...")
+# with app.app_context():
+#     initialize_dataframe(app)
+# print("DataFrame initialization complete!")
 
 
 
