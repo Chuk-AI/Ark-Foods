@@ -189,6 +189,34 @@ app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 # Initialize extensions
 db = SQLAlchemy(app)
 
+
+# Global DataFrame
+global_price_data = None
+
+# Define the function to load data
+def load_global_price_data():
+    global global_price_data
+    try:
+        # Fetch data from the database
+        query = """
+        SELECT commodity, price, source 
+        FROM price_data 
+        WHERE price IS NOT NULL
+        """
+        result = db.session.execute(query).fetchall()
+        
+        # Load data into a DataFrame
+        global_price_data = pd.DataFrame(result, columns=["commodity", "price", "source"])
+        print("Global price data loaded successfully!")
+    except Exception as e:
+        print(f"Error loading global price data: {e}")
+
+# Call the function after initializing the app and database
+load_global_price_data()
+
+
+
+
 # Initialize LoginManager for handling user sessions
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -3016,37 +3044,36 @@ def upload_historical():
 
 
 from sqlalchemy.sql import text  # Import `text` from SQLAlchemy
-
-
-# voilin plot for terminal data
-
         
 import plotly.graph_objects as go
 from flask import jsonify
 
-import plotly.graph_objects as go
-from flask import jsonify
 
+# voilin plot for terminal data
+
+# Assuming global_price_data is already defined and populated
 @app.route("/api/terminal_price_violin", methods=["GET"])
 def terminal_price_violin():
+    global global_price_data  # Use the global DataFrame
     try:
         app.logger.info("Fetching data for terminal violin plots...")
 
-        # Query to fetch data
-        query = text("""
-        SELECT commodity, price, source
-        FROM price_data
-        WHERE source IN ('USDA', 'ProduceIQ')
-        """)
-        result = db.session.execute(query).fetchall()
+        # Ensure global data is loaded
+        if global_price_data is None or global_price_data.empty:
+            app.logger.error("Global price data is not loaded.")
+            return jsonify({"error": "Global price data is not available"}), 500
+
+        # Filter data for the sources "USDA" and "ProduceIQ"
+        filtered_data = global_price_data[
+            global_price_data['source'].isin(['USDA', 'ProduceIQ'])
+        ]
 
         # Group data by source
         data = {"USDA": {"x": [], "y": []}, "ProduceIQ": {"x": [], "y": []}}
-        for row in result:
-            source = row[2]
+        for source, group in filtered_data.groupby('source'):
             if source in data:
-                data[source]["x"].append(row[0])  # Commodity
-                data[source]["y"].append(row[1])  # Price
+                data[source]["x"] = group['commodity'].tolist()
+                data[source]["y"] = group['price'].tolist()
 
         # Create separate charts for each source
         charts = {}
@@ -3076,6 +3103,58 @@ def terminal_price_violin():
     except Exception as e:
         app.logger.error(f"Error generating terminal violin plots: {str(e)}")
         return jsonify({"error": "Failed to generate terminal violin plots"}), 500
+
+
+
+# @app.route("/api/terminal_price_violin", methods=["GET"])
+# def terminal_price_violin():
+#     try:
+#         app.logger.info("Fetching data for terminal violin plots...")
+
+#         # Query to fetch data
+#         query = text("""
+#         SELECT commodity, price, source
+#         FROM price_data
+#         WHERE source IN ('USDA', 'ProduceIQ')
+#         """)
+#         result = db.session.execute(query).fetchall()
+
+#         # Group data by source
+#         data = {"USDA": {"x": [], "y": []}, "ProduceIQ": {"x": [], "y": []}}
+#         for row in result:
+#             source = row[2]
+#             if source in data:
+#                 data[source]["x"].append(row[0])  # Commodity
+#                 data[source]["y"].append(row[1])  # Price
+
+#         # Create separate charts for each source
+#         charts = {}
+#         for source in ["USDA", "ProduceIQ"]:
+#             fig = go.Figure()
+#             fig.add_trace(
+#                 go.Violin(
+#                     x=data[source]["x"],
+#                     y=data[source]["y"],
+#                     name=source,
+#                     box_visible=True,
+#                     meanline_visible=True,
+#                     marker_color='blue'  # Custom color
+#                 )
+#             )
+#             fig.update_layout(
+#                 title=f"{source} Terminal Data",
+#                 xaxis_title="Commodity",
+#                 yaxis_title="Price",
+#                 height=500,
+#                 width=600
+#             )
+#             charts[source] = fig.to_dict()  # Convert each chart to JSON
+
+#         return jsonify(charts), 200
+
+#     except Exception as e:
+#         app.logger.error(f"Error generating terminal violin plots: {str(e)}")
+#         return jsonify({"error": "Failed to generate terminal violin plots"}), 500
 
 
 
@@ -3444,8 +3523,6 @@ def get_shipping_correlation():
 
 
 
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 
 # terminal scatterplot for usda data
 @app.route("/api/terminal_scatterplot_matrix", methods=["POST"])
