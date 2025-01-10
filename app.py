@@ -4110,4 +4110,5 @@ def shipping_rolling_correlations():
 
 # Run the app
 if __name__ == "__main__":
+    initialize_dataframe(app)  # Initialize the DataFrame
     app.run(debug=True)
