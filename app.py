@@ -189,10 +189,11 @@ app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 # Initialize extensions
 db = SQLAlchemy(app)
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
-# Global DataFrame and lock
+import threading
+
+#  Global DataFrame with thread lock for safety
+
 price_data_df = None
 df_lock = threading.Lock()
 
@@ -204,12 +205,12 @@ def get_dataframe():
     
     if price_data_df is None:
         with df_lock:
-            if price_data_df is None:
+            if price_data_df is None:  # Double-check pattern
                 try:
-                    logger.info("Initializing DataFrame on first request...")
+                    app.logger.info("Initializing DataFrame on first request...")
                     initialize_dataframe(app)
                 except Exception as e:
-                    logger.error(f"Error initializing DataFrame: {str(e)}")
+                    app.logger.error(f"Error initializing DataFrame: {str(e)}")
                     raise
     
     return price_data_df
@@ -221,48 +222,40 @@ def initialize_dataframe(app):
     global price_data_df
     
     try:
-        logger.info("Starting DataFrame initialization...")
+        app.logger.info("Fetching data from database...")
         
+        # Query to fetch all data
         query = text("""
             SELECT id, city_name, commodity, year, day, price, source, season
             FROM price_data
         """)
         
+        # Execute query and fetch all results
         result = db.session.execute(query).fetchall()
-        logger.info(f"Query executed, fetched {len(result)} records")
         
-        # Fixed DataFrame creation
-        columns = ['id', 'city_name', 'commodity', 'year', 'day', 'price', 'source', 'season']
-        price_data_df = pd.DataFrame(data=result, columns=columns)
+        # Convert to DataFrame
+        price_data_df = pd.DataFrame(
+            result,
+            columns=['id', 'city_name', 'commodity', 'year', 'day', 'price', 'source', 'season']
+        )
         
-        logger.info(f"DataFrame created with shape: {price_data_df.shape}")
-        logger.info(f"Memory usage: {price_data_df.memory_usage(deep=True).sum() / 1024 / 1024:.2f} MB")
-        logger.info("\nSample data:")
-        logger.info(price_data_df.head())
+        app.logger.info(f"DataFrame initialized with {len(price_data_df)} records")
         
     except Exception as e:
-        logger.error(f"Error in initialize_dataframe: {str(e)}")
+        app.logger.error(f"Error in initialize_dataframe: {str(e)}")
         raise
 
-# Test route to check DataFrame status
-@app.route("/api/test_dataframe")
-def test_dataframe():
-    try:
-        df = get_dataframe()
-        return jsonify({
-            "status": "success",
-            "total_records": len(df),
-            "columns": list(df.columns),
-            "sample_data": df.head(5).to_dict('records'),
-            "memory_usage": f"{df.memory_usage(deep=True).sum() / 1024 / 1024:.2f} MB",
-            "data_types": df.dtypes.astype(str).to_dict()
-        })
-    except Exception as e:
-        logger.error(f"Error in test_dataframe route: {str(e)}")
-        return jsonify({
-            "status": "error",
-            "message": str(e)
-        }), 500
+
+
+
+
+
+try:
+    with app.app_context():
+        initialize_dataframe(app)
+except Exception as e:
+    app.logger.error(f"Initial DataFrame load failed: {str(e)}")
+    # Continue anyway - the get_dataframe() function will retry on first request
 
 
 
@@ -899,7 +892,7 @@ def test_dataframe():
             "message": str(e)
         })
 
-
+        
 
 import threading
 
@@ -4182,17 +4175,10 @@ def shipping_rolling_correlations():
 
 
 
-
-# Initialize DataFrame when starting the app
-print("Starting application...")
+print("Starting DataFrame initialization...")
 with app.app_context():
-    try:
-        initialize_dataframe(app)
-        print("DataFrame initialized successfully!")
-    except Exception as e:
-        print(f"Error during initialization: {e}")
-        print("Application will continue and try to initialize DataFrame on first request")
-
+    initialize_dataframe(app)
+print("DataFrame initialization complete!")
 
 
 
