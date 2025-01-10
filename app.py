@@ -190,69 +190,40 @@ app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 db = SQLAlchemy(app)
 
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-logger = logging.getLogger(__name__)
+# Global DataFrame to store the data
+price_data_df = None
 
-
-# Global variable to store the DataFrame
-global_price_data = None
-
-def load_global_price_data():
+def initialize_dataframe(app):
     """
-    Load global price data from the database into a DataFrame.
+    Initialize the global DataFrame with data from the database.
+    This should be called when the app starts.
     """
-    global global_price_data
-    try:
-        # Define the query
-        query = """
-        SELECT commodity, price, source 
-        FROM price_data
-        WHERE price IS NOT NULL
-        """
-        
-        # Execute the query
-        logger.info("Executing query to load global price data...")
-        result = db.session.execute(query).fetchall()
-        
-        # Load data into a DataFrame
-        global_price_data = pd.DataFrame(result, columns=["commodity", "price", "source"])
-        
-        # Log success and DataFrame information
-        logger.info("Global price data loaded successfully!")
-        logger.info(f"Number of rows: {len(global_price_data)}")
-        logger.info(f"Columns: {list(global_price_data.columns)}")
-        logger.info(f"Sample Data:\n{global_price_data.head()}")
-    except Exception as e:
-        logger.error("Error loading global price data", exc_info=True)
-        global_price_data = None  # Reset the DataFrame to None on failure
-
-# Initialize data after app context is created
-with app.app_context():
-    load_global_price_data()
-
-@app.route("/api/debug/global_dataframe", methods=["GET"])
-def debug_global_dataframe():
-    """
-    Debug route to return metadata and a sample of the global price data.
-    """
-    try:
-        if global_price_data is None:
-            logger.warning("Global price data is not loaded.")
-            return jsonify({"error": "Global price data is not loaded"}), 500
-        
-        # Return DataFrame metadata and sample rows
-        data_sample = global_price_data.head(10).to_dict(orient="records")
-        response = {
-            "rows": len(global_price_data),
-            "columns": list(global_price_data.columns),
-            "sample": data_sample
-        }
-        return jsonify(response), 200
-    except Exception as e:
-        logger.error("Error in debug_global_dataframe", exc_info=True)
-        return jsonify({"error": str(e)}), 500
-
+    global price_data_df
+    
+    with app.app_context():
+        try:
+            app.logger.info("Initializing global DataFrame...")
+            
+            # Query to fetch all data
+            query = text("""
+                SELECT id, city_name, commodity, year, day, price, source, season
+                FROM price_data
+            """)
+            
+            # Execute query and fetch all results
+            result = db.session.execute(query).fetchall()
+            
+            # Convert to DataFrame
+            price_data_df = pd.DataFrame(
+                result,
+                columns=['id', 'city_name', 'commodity', 'year', 'day', 'price', 'source', 'season']
+            )
+            
+            app.logger.info(f"Global DataFrame initialized with {len(price_data_df)} records")
+            
+        except Exception as e:
+            app.logger.error(f"Error initializing global DataFrame: {str(e)}")
+            raise e
 
 
 
@@ -3090,48 +3061,36 @@ from flask import jsonify
 
 # voilin plot for terminal data
 
-# Assuming global_price_data is already defined and populated
 @app.route("/api/terminal_price_violin", methods=["GET"])
 def terminal_price_violin():
-    global global_price_data  # Use the global DataFrame
     try:
-        app.logger.info("Fetching data for terminal violin plots...")
-
-        # Ensure global data is loaded
-        if global_price_data is None or global_price_data.empty:
-            app.logger.error("Global price data is not loaded or empty.")
-            return jsonify({"error": "Global price data is not available"}), 500
-
-        # Filter data for the sources "USDA" and "ProduceIQ"
-        valid_sources = ['USDA', 'ProduceIQ']
-        filtered_data = global_price_data[global_price_data['source'].isin(valid_sources)]
-
-        if filtered_data.empty:
-            app.logger.warning("No data available for the specified sources.")
-            return jsonify({"error": "No data available for USDA and ProduceIQ sources"}), 404
-
+        app.logger.info("Generating terminal violin plots using global DataFrame...")
+        
+        # Filter data from the global DataFrame
+        filtered_df = price_data_df[price_data_df['source'].isin(['USDA', 'ProduceIQ'])]
+        
         # Group data by source
-        grouped_data = {
-            source: group for source, group in filtered_data.groupby('source')
-        }
-
-        # Generate violin plots for each source
+        data = {"USDA": {"x": [], "y": []}, "ProduceIQ": {"x": [], "y": []}}
+        
+        for source in ['USDA', 'ProduceIQ']:
+            source_df = filtered_df[filtered_df['source'] == source]
+            data[source]["x"] = source_df['commodity'].tolist()
+            data[source]["y"] = source_df['price'].tolist()
+        
+        # Create separate charts for each source
         charts = {}
-        for source, group in grouped_data.items():
-            app.logger.info(f"Generating violin plot for source: {source}")
+        for source in ["USDA", "ProduceIQ"]:
             fig = go.Figure()
-
             fig.add_trace(
                 go.Violin(
-                    x=group['commodity'],
-                    y=group['price'],
+                    x=data[source]["x"],
+                    y=data[source]["y"],
                     name=source,
                     box_visible=True,
                     meanline_visible=True,
-                    marker_color='blue' if source == 'USDA' else 'green'
+                    marker_color='blue'
                 )
             )
-
             fig.update_layout(
                 title=f"{source} Terminal Data",
                 xaxis_title="Commodity",
@@ -3139,17 +3098,13 @@ def terminal_price_violin():
                 height=500,
                 width=600
             )
-
-            charts[source] = fig.to_dict()  # Convert each chart to JSON-compatible dict
-
+            charts[source] = fig.to_dict()
+        
         return jsonify(charts), 200
-
+        
     except Exception as e:
-        app.logger.error(f"Error generating terminal violin plots: {str(e)}", exc_info=True)
+        app.logger.error(f"Error generating terminal violin plots: {str(e)}")
         return jsonify({"error": "Failed to generate terminal violin plots"}), 500
-
-
-
 
 # @app.route("/api/terminal_price_violin", methods=["GET"])
 # def terminal_price_violin():
