@@ -208,7 +208,6 @@ def chunk_query(time_frame):
     offset = 0
     
     while True:
-        # Use Python f-strings to inject chunk_size and offset directly into the query
         base_query = f"""
             WITH date_data AS (
                 SELECT 
@@ -217,7 +216,9 @@ def chunk_query(time_frame):
                     source
                 FROM price_data
                 WHERE source IN ('USDA', 'ProduceIQ')
-                AND DATE(year || '-01-01', '+' || (day - 1) || ' days') >= DATE('now', '{interval}')
+                AND (
+                    TO_DATE(CAST(year AS TEXT) || '-01-01', 'YYYY-MM-DD') + (day - 1) * INTERVAL '1 day'
+                ) >= NOW() + INTERVAL '{interval}'
                 GROUP BY commodity, source
             )
             SELECT *
@@ -245,6 +246,7 @@ def chunk_query(time_frame):
         return pd.DataFrame()
     
     return pd.concat(chunks, ignore_index=True)
+
 
 
 
