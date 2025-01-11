@@ -3035,25 +3035,25 @@ def terminal_price_violin():
         # Get the time frame from query parameters (default to '7d')
         time_frame = request.args.get("timeFrame", "7d")
 
-        # Map timeFrame to PostgreSQL-compatible interval
+        # Map timeFrame to PostgreSQL-compatible intervals
         time_intervals = {
-            "3d": "'3 days'",
-            "7d": "'7 days'",
-            "1m": "'1 month'",
-            "3m": "'3 months'",
-            "1y": "'1 year'",
-            "2y": "'2 years'"
+            "3d": "3 days",
+            "7d": "7 days",
+            "1m": "1 month",
+            "3m": "3 months",
+            "1y": "1 year",
+            "2y": "2 years"
         }
 
         # Get the corresponding PostgreSQL interval for the time frame
-        postgres_interval = time_intervals.get(time_frame.lower(), "'7 days'")
+        postgres_interval = time_intervals.get(time_frame.lower(), "7 days")
 
-        # SQL query to fetch data filtered by source and time range
+        # PostgreSQL-compatible query to fetch data filtered by source and time range
         query = text(f"""
             SELECT commodity, price
             FROM price_data
             WHERE source = 'USDA'
-              AND TO_DATE(CAST(year AS TEXT) || '-01-01', 'YYYY-MM-DD') + (day - 1) * interval '1 day' >= NOW() - INTERVAL {postgres_interval}
+              AND (TO_DATE(CAST(year AS TEXT) || '-01-01', 'YYYY-MM-DD') + (day - 1) * INTERVAL '1 day') >= NOW() - INTERVAL '{postgres_interval}'
         """)
         result = db.session.execute(query).fetchall()
 
@@ -3104,73 +3104,74 @@ def terminal_price_violin():
 # @app.route("/api/terminal_price_violin", methods=["GET"])
 # def terminal_price_violin():
 #     try:
-#         app.logger.info("Fetching data for terminal violin plots...")
+#         app.logger.info("Generating terminal violin plots...")
 
 #         # Get the time frame from query parameters (default to '7d')
 #         time_frame = request.args.get("timeFrame", "7d")
 
 #         # Map timeFrame to SQLite-compatible date arithmetic
 #         time_intervals = {
-#             "3d": "'now', '-3 days'",
-#             "7d": "'now', '-7 days'",
-#             "1m": "'now', '-1 month'",
-#             "3m": "'now', '-3 months'",
-#             "1y": "'now', '-1 year'",
-#             "2y": "'now', '-2 years'"
+#             "3d": "'-3 days'",
+#             "7d": "'-7 days'",
+#             "1m": "'-1 month'",
+#             "3m": "'-3 months'",
+#             "1y": "'-1 year'",
+#             "2y": "'-2 years'"
 #         }
 
-#         # Get the corresponding SQLite date function for the time frame
-#         sqlite_date_function = time_intervals.get(time_frame.lower(), "'now', '-7 days'")
+#         # Get the corresponding SQLite interval for the time frame
+#         sqlite_interval = time_intervals.get(time_frame.lower(), "'-7 days'")
 
-#         # SQL query to fetch raw prices for USDA only
+#         # SQLite-compatible query to fetch data filtered by source and time range
 #         query = text(f"""
-#         SELECT
-#             commodity,
-#             price
-#         FROM price_data
-#         WHERE source = 'USDA'
-#           AND DATE(year || '-01-01', '+' || (day - 1) || ' days') >= DATE({sqlite_date_function})
+#             SELECT commodity, price
+#             FROM price_data
+#             WHERE source = 'USDA'
+#               AND DATE(year || '-01-01', '+' || (day - 1) || ' days') >= DATE('now', {sqlite_interval})
 #         """)
-
-#         # Execute the query
 #         result = db.session.execute(query).fetchall()
 
-#         # Group raw prices by commodity for USDA
-#         data = {"USDA": {"x": [], "y": []}}
+#         # Group data by commodity
+#         data = {}
 #         for row in result:
-#             commodity = row[0]
-#             price = row[1]
-#             data["USDA"]["x"].append(commodity)  # Add commodity
-#             data["USDA"]["y"].append(price)      # Add raw price for distribution
+#             commodity = row[0]  # Commodity
+#             price = row[1]  # Price
+#             if commodity not in data:
+#                 data[commodity] = []
+#             data[commodity].append(price)
 
-#         # Create the chart for USDA
-#         fig = go.Figure()
-#         fig.add_trace(
-#             go.Violin(
-#                 x=data["USDA"]["x"],
-#                 y=data["USDA"]["y"],
-#                 name="USDA",
-#                 box_visible=True,
-#                 meanline_visible=True,
-#                 marker_color='blue'  # Custom color
+#         # Create violin traces for each commodity
+#         traces = []
+#         for commodity, prices in data.items():
+#             traces.append(
+#                 go.Violin(
+#                     y=prices,
+#                     name=commodity,
+#                     box_visible=True,
+#                     meanline_visible=True,
+#                     marker_color='blue'  # Custom color
+#                 )
 #             )
-#         )
-#         fig.update_layout(
-#             title="USDA Terminal Data",
-#             xaxis_title="Commodity",
-#             yaxis_title="Price",
-#             height=500,
-#             width=600
-#         )
 
-#         # Convert the chart to JSON
-#         chart = fig.to_dict()
+#         # Create the layout for the chart
+#         layout = {
+#             "title": {"text": "USDA Terminal Price Distribution by Commodity", "font": {"size": 16, "weight": "bold"}},
+#             "xaxis": {"title": {"text": "Commodity", "font": {"size": 14, "weight": "bold"}}, "automargin": True},
+#             "yaxis": {"title": {"text": "Price", "font": {"size": 14, "weight": "bold"}}, "automargin": True},
+#             "height": 500,
+#             "width": 700,
+#             "showlegend": False,
+#             "plot_bgcolor": "#f0f8ff",
+#             "paper_bgcolor": "white",
+#         }
 
-#         return jsonify({"USDA": chart}), 200
+#         # Return the chart data and layout as JSON
+#         return jsonify({"data": [trace.to_plotly_json() for trace in traces], "layout": layout}), 200
 
 #     except Exception as e:
 #         app.logger.error(f"Error generating terminal violin plot: {str(e)}")
 #         return jsonify({"error": "Failed to generate terminal violin plot"}), 500
+
 
 
 

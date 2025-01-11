@@ -42,11 +42,7 @@ body{
     height: 570px;
 }
 
-.plot-container {
-    border-radius: 20px; /* Rounded corners for the plot */
-    overflow: hidden;    /* Ensures content respects the border-radius */
-    box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1); /* Optional shadow for the plot */
-}
+
 #shipping-violin-plot-section {
     height: auto; /* Let height adjust automatically */
     padding: 20px; /* Add spacing inside the section */

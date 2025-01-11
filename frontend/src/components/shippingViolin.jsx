@@ -135,6 +135,7 @@ export default function ShippingViolinPlot() {
             style={{
               borderRadius: "20px",
               overflow: "hidden",
+              
             }}
           >
             <Plot
