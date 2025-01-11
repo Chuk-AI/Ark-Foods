@@ -204,32 +204,31 @@ def chunk_query(time_frame):
     }
     interval = intervals.get(time_frame.lower(), "-7 days")
     
-    # Query with pagination and basic statistical aggregation
-    base_query = f"""
-        WITH date_data AS (
-            SELECT 
-                commodity,
-                ROUND(AVG(price), 2) as price,
-                source
-            FROM price_data
-            WHERE source IN ('USDA', 'ProduceIQ')
-            AND DATE(year || '-01-01', '+' || (day - 1) || ' days') >= DATE('now', '{interval}')
-            GROUP BY commodity, source
-        )
-        SELECT *
-        FROM date_data
-        LIMIT :chunk_size OFFSET :offset
-    """
-    
     chunk_size = 10000  # Adjust based on your memory constraints
     offset = 0
     
     while True:
+        # Use Python f-strings to inject chunk_size and offset directly into the query
+        base_query = f"""
+            WITH date_data AS (
+                SELECT 
+                    commodity,
+                    ROUND(AVG(price), 2) as price,
+                    source
+                FROM price_data
+                WHERE source IN ('USDA', 'ProduceIQ')
+                AND DATE(year || '-01-01', '+' || (day - 1) || ' days') >= DATE('now', '{interval}')
+                GROUP BY commodity, source
+            )
+            SELECT *
+            FROM date_data
+            LIMIT {chunk_size} OFFSET {offset}
+        """
+        
         # Use the query as a string directly
         chunk = pd.read_sql(
             base_query,
-            con=db.engine,  # Use db.engine for the connection
-            params={"offset": offset, "chunk_size": chunk_size}  # Use parameters for pagination
+            con=db.engine  # Use db.engine for the connection
         )
         
         if chunk.empty:
@@ -246,6 +245,7 @@ def chunk_query(time_frame):
         return pd.DataFrame()
     
     return pd.concat(chunks, ignore_index=True)
+
 
 
 def create_optimized_violin(data, source):
