@@ -191,131 +191,6 @@ db = SQLAlchemy(app)
 
 
 
-def chunk_query(time_frame):
-    """Execute query in chunks to reduce memory usage"""
-    chunks = []
-    intervals = {
-        '3d': "-3 days",
-        '7d': "-7 days",
-        '1m': "-1 month",
-        '3m': "-3 months",
-        '1y': "-1 year",
-        '2y': "-2 years"
-    }
-    interval = intervals.get(time_frame.lower(), "-7 days")
-    
-    chunk_size = 10000  # Adjust based on your memory constraints
-    offset = 0
-    
-    while True:
-        base_query = f"""
-            WITH date_data AS (
-                SELECT 
-                    commodity,
-                    ROUND(CAST(AVG(price) AS numeric), 2) AS price,
-                    source
-                FROM price_data
-                WHERE source IN ('USDA', 'ProduceIQ')
-                AND (
-                    TO_DATE(CAST(year AS TEXT) || '-01-01', 'YYYY-MM-DD') + (day - 1) * INTERVAL '1 day'
-                ) >= NOW() + INTERVAL '{interval}'
-                GROUP BY commodity, source
-            )
-            SELECT *
-            FROM date_data
-            LIMIT {chunk_size} OFFSET {offset}
-        """
-        
-        # Use the query as a string directly
-        chunk = pd.read_sql(
-            base_query,
-            con=db.engine  # Use db.engine for the connection
-        )
-        
-        if chunk.empty:
-            break
-            
-        chunks.append(chunk)
-        offset += chunk_size
-        
-        # Force garbage collection after each chunk
-        gc.collect()
-    
-    # Combine chunks efficiently
-    if not chunks:
-        return pd.DataFrame()
-    
-    return pd.concat(chunks, ignore_index=True)
-
-
-
-
-
-def create_optimized_violin(data, source):
-    """Create memory-efficient violin plot"""
-    source_data = data[data['source'] == source].copy()
-    
-    if len(source_data) == 0:
-        return None
-        
-    # Calculate statistics for each commodity
-    stats = source_data.groupby('commodity').agg({
-        'price': ['count', 'mean', 'std']
-    }).reset_index()
-    
-    # Filter out commodities with too few points
-    valid_commodities = stats[stats[('price', 'count')] >= 5]['commodity']
-    source_data = source_data[source_data['commodity'].isin(valid_commodities)]
-    
-    if len(source_data) == 0:
-        return None
-    
-    # Create simplified violin plot
-    fig = go.Figure()
-    
-    # Process each commodity separately to save memory
-    for commodity in valid_commodities:
-        commodity_data = source_data[source_data['commodity'] == commodity]['price']
-        
-        # Calculate KDE with fewer points
-        kde_points = min(len(commodity_data), 50)
-        if kde_points < 5:
-            continue
-            
-        fig.add_trace(
-            go.Violin(
-                x=[commodity] * len(commodity_data),
-                y=commodity_data,
-                name=commodity,
-                box_visible=True,
-                meanline_visible=True,
-                points=False,  # Hide individual points to reduce memory
-                bandwidth=0.5  # Adjust bandwidth for smoother plot
-            )
-        )
-        
-        # Clear memory after each commodity
-        del commodity_data
-        gc.collect()
-    
-    fig.update_layout(
-        title=f"{source} Terminal Data",
-        xaxis_title="Commodity",
-        yaxis_title="Price",
-        height=500,
-        width=600,
-        showlegend=False  # Disable legend to save memory
-    )
-    
-    # Convert to dict and optimize memory
-    chart_dict = fig.to_dict()
-    del fig
-    gc.collect()
-    
-    return chart_dict
-
-
-
 
 # Initialize LoginManager for handling user sessions
 login_manager = LoginManager()
@@ -3156,43 +3031,73 @@ from flask import jsonify
 def terminal_price_violin():
     try:
         app.logger.info("Generating terminal violin plots...")
-        
+
+        # Get the time frame from query parameters (default to '7d')
         time_frame = request.args.get("timeFrame", "7d")
-        
-        # Get data in chunks
-        df = chunk_query(time_frame)
-        
-        if df.empty:
-            return jsonify({"error": "No data available for the selected time frame"}), 404
-        
-        # Process each source separately to manage memory
-        charts = {}
-        for source in ["USDA", "ProduceIQ"]:
-            chart = create_optimized_violin(df, source)
-            if chart:
-                charts[source] = chart
-            gc.collect()  # Force garbage collection after each chart
-        
-        # Clear main dataframe
-        del df
-        gc.collect()
-        
-        if not charts:
-            return jsonify({"error": "No valid data available for visualization"}), 404
-        
-        response = jsonify(charts)
-        
-        # Add compression headers
-        response.headers['Content-Encoding'] = 'gzip'
-        
-        return response, 200
-        
+
+        # Map timeFrame to PostgreSQL-compatible date arithmetic
+        time_intervals = {
+            "3d": "NOW() - INTERVAL '3 days'",
+            "7d": "NOW() - INTERVAL '7 days'",
+            "1m": "NOW() - INTERVAL '1 month'",
+            "3m": "NOW() - INTERVAL '3 months'",
+            "1y": "NOW() - INTERVAL '1 year'",
+            "2y": "NOW() - INTERVAL '2 years'"
+        }
+
+        # Get the corresponding PostgreSQL interval for the time frame
+        postgres_date_function = time_intervals.get(time_frame.lower(), "NOW() - INTERVAL '7 days'")
+
+        # SQL query to fetch raw prices for USDA only
+        query = text(f"""
+        SELECT
+            commodity,
+            price
+        FROM price_data
+        WHERE source = 'USDA'
+          AND (TO_DATE(CAST(year AS TEXT) || '-01-01', 'YYYY-MM-DD') + (day - 1) * INTERVAL '1 day') >= {postgres_date_function}
+        """)
+
+        # Execute the query
+        result = db.session.execute(query).fetchall()
+
+        # Group raw prices by commodity for USDA
+        data = {"USDA": {"x": [], "y": []}}
+        for row in result:
+            commodity = row[0]
+            price = row[1]
+            data["USDA"]["x"].append(commodity)  # Add commodity
+            data["USDA"]["y"].append(price)      # Add raw price for distribution
+
+        # Create the chart for USDA
+        fig = go.Figure()
+        fig.add_trace(
+            go.Violin(
+                x=data["USDA"]["x"],
+                y=data["USDA"]["y"],
+                name="USDA",
+                box_visible=True,
+                meanline_visible=True,
+                marker_color='blue'  # Custom color
+            )
+        )
+        fig.update_layout(
+            title="USDA Terminal Data",
+            xaxis_title="Commodity",
+            yaxis_title="Price",
+            height=500,
+            width=600
+        )
+
+        # Convert the chart to JSON
+        chart = fig.to_dict()
+
+        return jsonify({"USDA": chart}), 200
+
     except Exception as e:
-        app.logger.error(f"Error in terminal_price_violin: {str(e)}")
-        return jsonify({"error": "Failed to generate terminal violin plots"}), 500
-    finally:
-        # Final cleanup
-        gc.collect()
+        app.logger.error(f"Error generating terminal violin plot: {str(e)}")
+        return jsonify({"error": "Failed to generate terminal violin plot"}), 500
+
 
 # @app.route("/api/terminal_price_violin", methods=["GET"])
 # def terminal_price_violin():
@@ -3202,18 +3107,18 @@ def terminal_price_violin():
 #         # Get the time frame from query parameters (default to '7d')
 #         time_frame = request.args.get("timeFrame", "7d")
 
-#         # Map timeFrame to PostgreSQL-compatible date arithmetic
+#         # Map timeFrame to SQLite-compatible date arithmetic
 #         time_intervals = {
-#             "3d": "NOW() - INTERVAL '3 days'",
-#             "7d": "NOW() - INTERVAL '7 days'",
-#             "1m": "NOW() - INTERVAL '1 month'",
-#             "3m": "NOW() - INTERVAL '3 months'",
-#             "1y": "NOW() - INTERVAL '1 year'",
-#             "2y": "NOW() - INTERVAL '2 years'"
+#             "3d": "'now', '-3 days'",
+#             "7d": "'now', '-7 days'",
+#             "1m": "'now', '-1 month'",
+#             "3m": "'now', '-3 months'",
+#             "1y": "'now', '-1 year'",
+#             "2y": "'now', '-2 years'"
 #         }
 
-#         # Get the corresponding PostgreSQL interval for the time frame
-#         postgres_date_function = time_intervals.get(time_frame.lower(), "NOW() - INTERVAL '7 days'")
+#         # Get the corresponding SQLite date function for the time frame
+#         sqlite_date_function = time_intervals.get(time_frame.lower(), "'now', '-7 days'")
 
 #         # SQL query to fetch raw prices for USDA only
 #         query = text(f"""
@@ -3222,7 +3127,7 @@ def terminal_price_violin():
 #             price
 #         FROM price_data
 #         WHERE source = 'USDA'
-#           AND (TO_DATE(CAST(year AS TEXT) || '-01-01', 'YYYY-MM-DD') + (day - 1) * INTERVAL '1 day') >= {postgres_date_function}
+#           AND DATE(year || '-01-01', '+' || (day - 1) || ' days') >= DATE({sqlite_date_function})
 #         """)
 
 #         # Execute the query
@@ -3264,11 +3169,6 @@ def terminal_price_violin():
 #     except Exception as e:
 #         app.logger.error(f"Error generating terminal violin plot: {str(e)}")
 #         return jsonify({"error": "Failed to generate terminal violin plot"}), 500
-
-
-
-
-
 
 
 
