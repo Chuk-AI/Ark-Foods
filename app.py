@@ -3026,6 +3026,7 @@ from flask import jsonify
 
 # voilin plot for terminal data
 
+
 @app.route("/api/terminal_price_violin", methods=["GET"])
 def terminal_price_violin():
     try:
@@ -3034,65 +3035,143 @@ def terminal_price_violin():
         # Get the time frame from query parameters (default to '7d')
         time_frame = request.args.get("timeFrame", "7d")
 
-        # Map timeFrame to PostgreSQL-compatible interval
+        # Map timeFrame to PostgreSQL-compatible date arithmetic
         time_intervals = {
-            "3d": "'3 days'",
-            "7d": "'7 days'",
-            "1m": "'1 month'",
-            "3m": "'3 months'",
-            "1y": "'1 year'",
-            "2y": "'2 years'"
+            "3d": "NOW() - INTERVAL '3 days'",
+            "7d": "NOW() - INTERVAL '7 days'",
+            "1m": "NOW() - INTERVAL '1 month'",
+            "3m": "NOW() - INTERVAL '3 months'",
+            "1y": "NOW() - INTERVAL '1 year'",
+            "2y": "NOW() - INTERVAL '2 years'"
         }
 
         # Get the corresponding PostgreSQL interval for the time frame
-        postgres_interval = time_intervals.get(time_frame.lower(), "'7 days'")
+        postgres_date_function = time_intervals.get(time_frame.lower(), "NOW() - INTERVAL '7 days'")
 
-        # Query to fetch data within the specified time frame
+        # SQL query to fetch raw prices for USDA only
         query = text(f"""
-        SELECT commodity, price, source
+        SELECT
+            commodity,
+            price
         FROM price_data
-        WHERE source IN ('USDA', 'ProduceIQ')
-          AND TO_DATE(year || '-01-01', 'YYYY-MM-DD') + (day - 1) * interval '1 day' >= NOW() - INTERVAL {postgres_interval}
+        WHERE source = 'USDA'
+          AND (TO_DATE(CAST(year AS TEXT) || '-01-01', 'YYYY-MM-DD') + (day - 1) * INTERVAL '1 day') >= {postgres_date_function}
         """)
 
+        # Execute the query
         result = db.session.execute(query).fetchall()
 
-        # Group data by source
-        data = {"USDA": {"x": [], "y": []}, "ProduceIQ": {"x": [], "y": []}}
+        # Group raw prices by commodity for USDA
+        data = {"USDA": {"x": [], "y": []}}
         for row in result:
-            source = row[2]
-            if source in data:
-                data[source]["x"].append(row[0])  # Commodity
-                data[source]["y"].append(row[1])  # Price
+            commodity = row[0]
+            price = row[1]
+            data["USDA"]["x"].append(commodity)  # Add commodity
+            data["USDA"]["y"].append(price)      # Add raw price for distribution
 
-        # Create separate charts for each source
-        charts = {}
-        for source in ["USDA", "ProduceIQ"]:
-            fig = go.Figure()
-            fig.add_trace(
-                go.Violin(
-                    x=data[source]["x"],
-                    y=data[source]["y"],
-                    name=source,
-                    box_visible=True,
-                    meanline_visible=True,
-                    marker_color='blue'  # Custom color
-                )
+        # Create the chart for USDA
+        fig = go.Figure()
+        fig.add_trace(
+            go.Violin(
+                x=data["USDA"]["x"],
+                y=data["USDA"]["y"],
+                name="USDA",
+                box_visible=True,
+                meanline_visible=True,
+                marker_color='blue'  # Custom color
             )
-            fig.update_layout(
-                title=f"{source} Terminal Data",
-                xaxis_title="Commodity",
-                yaxis_title="Price",
-                height=500,
-                width=600
-            )
-            charts[source] = fig.to_dict()  # Convert each chart to JSON
+        )
+        fig.update_layout(
+            title="USDA Terminal Data",
+            xaxis_title="Commodity",
+            yaxis_title="Price",
+            height=500,
+            width=600
+        )
 
-        return jsonify(charts), 200
+        # Convert the chart to JSON
+        chart = fig.to_dict()
+
+        return jsonify({"USDA": chart}), 200
 
     except Exception as e:
-        app.logger.error(f"Error generating terminal violin plots: {str(e)}")
-        return jsonify({"error": "Failed to generate terminal violin plots"}), 500
+        app.logger.error(f"Error generating terminal violin plot: {str(e)}")
+        return jsonify({"error": "Failed to generate terminal violin plot"}), 500
+
+
+
+
+
+
+
+
+# @app.route("/api/terminal_price_violin", methods=["GET"])
+# def terminal_price_violin():
+#     try:
+#         app.logger.info("Fetching data for terminal violin plots...")
+
+#         # Get the time frame from query parameters (default to '7d')
+#         time_frame = request.args.get("timeFrame", "7d")
+
+#         # Map timeFrame to PostgreSQL-compatible interval
+#         time_intervals = {
+#             "3d": "'3 days'",
+#             "7d": "'7 days'",
+#             "1m": "'1 month'",
+#             "3m": "'3 months'",
+#             "1y": "'1 year'",
+#             "2y": "'2 years'"
+#         }
+
+#         # Get the corresponding PostgreSQL interval for the time frame
+#         postgres_interval = time_intervals.get(time_frame.lower(), "'7 days'")
+
+#         # Query to fetch data within the specified time frame
+#         query = text(f"""
+#         SELECT commodity, price, source
+#         FROM price_data
+#         WHERE source IN ('USDA', 'ProduceIQ')
+#           AND TO_DATE(year || '-01-01', 'YYYY-MM-DD') + (day - 1) * interval '1 day' >= NOW() - INTERVAL {postgres_interval}
+#         """)
+
+#         result = db.session.execute(query).fetchall()
+
+#         # Group data by source
+#         data = {"USDA": {"x": [], "y": []}, "ProduceIQ": {"x": [], "y": []}}
+#         for row in result:
+#             source = row[2]
+#             if source in data:
+#                 data[source]["x"].append(row[0])  # Commodity
+#                 data[source]["y"].append(row[1])  # Price
+
+#         # Create separate charts for each source
+#         charts = {}
+#         for source in ["USDA", "ProduceIQ"]:
+#             fig = go.Figure()
+#             fig.add_trace(
+#                 go.Violin(
+#                     x=data[source]["x"],
+#                     y=data[source]["y"],
+#                     name=source,
+#                     box_visible=True,
+#                     meanline_visible=True,
+#                     marker_color='blue'  # Custom color
+#                 )
+#             )
+#             fig.update_layout(
+#                 title=f"{source} Terminal Data",
+#                 xaxis_title="Commodity",
+#                 yaxis_title="Price",
+#                 height=500,
+#                 width=600
+#             )
+#             charts[source] = fig.to_dict()  # Convert each chart to JSON
+
+#         return jsonify(charts), 200
+
+#     except Exception as e:
+#         app.logger.error(f"Error generating terminal violin plots: {str(e)}")
+#         return jsonify({"error": "Failed to generate terminal violin plots"}), 500
 
 
 
