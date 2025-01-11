@@ -130,7 +130,7 @@ const TerminalViolinPlot = () => {
 
       {/* Time Frame Filters */}
       <div className="time-frame-filters">
-        {["3d", "7d", "1m", "3m", "1y"].map((frame) => (
+        {["3d", "7d", "1m", "3m", "1y", "2y"].map((frame) => (
           <button
             key={frame}
             onClick={() => setTimeFrame(frame)}

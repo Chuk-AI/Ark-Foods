@@ -107,7 +107,7 @@ export default function ShippingViolinPlot() {
       <div className="time-frame-filters">
       <span style={{textAlign:'center', display:'flex', alignItems:'center'}}>Select a time frame</span>
 
-        {["3d", "7d", "1m", "3m", "1y"].map((frame) => (
+        {["3d", "7d", "1m", "3m", "1y", "2y"].map((frame) => (
           <button
             key={frame}
             onClick={() => setTimeFrame(frame)}
