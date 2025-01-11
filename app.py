@@ -195,41 +195,41 @@ def chunk_query(time_frame):
     """Execute query in chunks to reduce memory usage"""
     chunks = []
     intervals = {
-        '3d': "interval '3 days'",
-        '7d': "interval '7 days'",
-        '1m': "interval '1 month'",
-        '3m': "interval '3 months'",
-        '1y': "interval '1 year'",
-        '2y': "interval '2 years'"
+        '3d': "-3 days",
+        '7d': "-7 days",
+        '1m': "-1 month",
+        '3m': "-3 months",
+        '1y': "-1 year",
+        '2y': "-2 years"
     }
-    interval = intervals.get(time_frame.lower(), "interval '7 days'")
+    interval = intervals.get(time_frame.lower(), "-7 days")
     
     # Query with pagination and basic statistical aggregation
     base_query = f"""
         WITH date_data AS (
             SELECT 
                 commodity,
-                ROUND(AVG(price)::numeric, 2) as price,
+                ROUND(AVG(price), 2) as price,
                 source
             FROM price_data
             WHERE source IN ('USDA', 'ProduceIQ')
-            AND TO_DATE(year || '-01-01', 'YYYY-MM-DD') + (day - 1) * interval '1 day' >= NOW() - {interval}
+            AND DATE(year || '-01-01', '+' || (day - 1) || ' days') >= DATE('now', '{interval}')
             GROUP BY commodity, source
         )
         SELECT *
         FROM date_data
-        OFFSET :offset
-        LIMIT :chunk_size
+        LIMIT :chunk_size OFFSET :offset
     """
     
     chunk_size = 10000  # Adjust based on your memory constraints
     offset = 0
     
     while True:
+        # Use the query as a string directly
         chunk = pd.read_sql(
-            text(base_query),
-            db.session.bind,
-            params={'offset': offset, 'chunk_size': chunk_size}
+            base_query,
+            con=db.engine,  # Use db.engine for the connection
+            params={"offset": offset, "chunk_size": chunk_size}  # Use parameters for pagination
         )
         
         if chunk.empty:
@@ -246,6 +246,7 @@ def chunk_query(time_frame):
         return pd.DataFrame()
     
     return pd.concat(chunks, ignore_index=True)
+
 
 def create_optimized_violin(data, source):
     """Create memory-efficient violin plot"""
