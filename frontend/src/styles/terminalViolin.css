@@ -52,4 +52,9 @@
     outline: none;
     box-shadow: 0 0 8px rgba(51, 177, 167, 0.6);
   }
-  
+  .chart-div{
+    background-color: #33b1a7;
+    padding: 20px;
+    border-radius: 20px;
+    height: 580px;
+  }

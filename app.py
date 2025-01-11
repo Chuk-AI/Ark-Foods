@@ -1,3 +1,4 @@
+from turtle import color
 from flask import (
     Flask,
     render_template,
@@ -3025,11 +3026,10 @@ from flask import jsonify
 
 
 # voilin plot for terminal data
-
 @app.route("/api/terminal_price_violin", methods=["GET"])
 def terminal_price_violin():
     try:
-        app.logger.info("Generating terminal violin plots with downsampling...")
+        app.logger.info("Generating terminal violin plots for USDA and ProduceIQ with downsampling...")
 
         # Get the time frame from query parameters (default to '7d')
         time_frame = request.args.get("timeFrame", "7d")
@@ -3041,7 +3041,6 @@ def terminal_price_violin():
             "1m": "1 month",
             "3m": "3 months",
             "1y": "1 year",
-            "2y": "2 years"
         }
 
         # Get the corresponding PostgreSQL interval for the time frame
@@ -3049,48 +3048,63 @@ def terminal_price_violin():
 
         # PostgreSQL-compatible query to fetch data filtered by source and time range
         query = text(f"""
-            SELECT commodity, price
+            SELECT commodity, price, source
             FROM price_data
-            WHERE source = 'USDA'
-              AND (DATE(make_date(year, 1, 1) + (day - 1) * INTERVAL '1 day')) >= NOW() - INTERVAL '{postgres_interval}'
+            WHERE source IN ('USDA', 'ProduceIQ')
+              AND make_date(year, 1, 1) + (day - 1) * INTERVAL '1 day' >= NOW() - INTERVAL '{postgres_interval}'
         """)
         result = db.session.execute(query).fetchall()
 
-        # Group data by commodity
-        data = {}
+        # Group data by source and commodity
+        grouped_data = {"USDA": {}, "ProduceIQ": {}}
         for row in result:
-            commodity = row[0]  # Commodity
-            price = row[1]  # Price
-            if commodity not in data:
-                data[commodity] = []
-            data[commodity].append(price)
+            commodity, price, source = row
+            if commodity not in grouped_data[source]:
+                grouped_data[source][commodity] = []
+            grouped_data[source][commodity].append(price)
 
         # Apply downsampling by percentiles
-        downsampled_data = {}
-        for commodity, prices in data.items():
-            # Calculate specific percentiles
-            percentiles = np.percentile(prices, [5, 25, 50, 75, 95])
-            # Optionally, add small noise around the percentiles for visualization
-            sampled_points = [
-                np.random.normal(loc=p, scale=0.5, size=10).tolist() for p in percentiles
-            ]
-            downsampled_data[commodity] = sum(sampled_points, [])  # Flatten the list
+        def downsample_data(data):
+            downsampled_data = {}
+            for commodity, prices in data.items():
+                # Calculate percentiles
+                percentiles = np.percentile(prices, [5, 25, 50, 75, 95])
+                # Add small noise for diversity
+                sampled_points = [
+                    np.random.normal(loc=p, scale=0.5, size=10).tolist() for p in percentiles
+                ]
+                downsampled_data[commodity] = sum(sampled_points, [])  # Flatten the list
+            return downsampled_data
 
-        # Create violin traces for each commodity
-        traces = []
-        for commodity, prices in downsampled_data.items():
-            traces.append(
-                go.Violin(
-                    y=prices,
-                    name=commodity,
-                    box_visible=True,
-                    meanline_visible=True,
-                    marker_color='blue'  # Custom color
-                )
+        usda_data = downsample_data(grouped_data["USDA"])
+        produceiq_data = downsample_data(grouped_data["ProduceIQ"])
+
+        # Create violin traces for USDA
+        usda_traces = [
+            go.Violin(
+                y=prices,
+                name=commodity,
+                box_visible=True,
+                meanline_visible=True,
+                marker_color='blue'  # Color for USDA
             )
+            for commodity, prices in usda_data.items()
+        ]
 
-        # Create the layout for the chart
-        layout = {
+        # Create violin traces for ProduceIQ
+        produceiq_traces = [
+            go.Violin(
+                y=prices,
+                name=commodity,
+                box_visible=True,
+                meanline_visible=True,
+                marker_color='green'  # Color for ProduceIQ
+            )
+            for commodity, prices in produceiq_data.items()
+        ]
+
+        # Layout for USDA
+        usda_layout = {
             "title": {"text": "USDA Terminal Price Distribution by Commodity", "font": {"size": 16, "weight": "bold"}},
             "xaxis": {"title": {"text": "Commodity", "font": {"size": 14, "weight": "bold"}}, "automargin": True},
             "yaxis": {"title": {"text": "Price", "font": {"size": 14, "weight": "bold"}}, "automargin": True},
@@ -3101,15 +3115,32 @@ def terminal_price_violin():
             "paper_bgcolor": "white",
         }
 
-        # Convert traces to JSON serializable format
-        traces_json = [trace.to_plotly_json() for trace in traces]
+        # Layout for ProduceIQ
+        produceiq_layout = {
+            "title": {"text": "ProduceIQ Terminal Price Distribution by Commodity", "font": {"size": 16, "weight": "bold"}},
+            "xaxis": {"title": {"text": "Commodity", "font": {"size": 14, "weight": "bold"}}, "automargin": True},
+            "yaxis": {"title": {"text": "Price", "font": {"size": 14, "weight": "bold"}}, "automargin": True},
+            "height": 500,
+            "width": 700,
+            "showlegend": False,
+            "plot_bgcolor": "#f0f8ff",
+            "paper_bgcolor": "white",
+        }
 
-        # Return the chart data and layout as JSON
-        return jsonify({"data": traces_json, "layout": layout}), 200
+        # Convert traces to JSON serializable format
+        usda_traces_json = [trace.to_plotly_json() for trace in usda_traces]
+        produceiq_traces_json = [trace.to_plotly_json() for trace in produceiq_traces]
+
+        # Return JSON response containing separate charts for USDA and ProduceIQ
+        return jsonify({
+            "usda": {"data": usda_traces_json, "layout": usda_layout},
+            "produceiq": {"data": produceiq_traces_json, "layout": produceiq_layout}
+        }), 200
 
     except Exception as e:
-        app.logger.error(f"Error generating terminal violin plot: {str(e)}")
-        return jsonify({"error": "Failed to generate terminal violin plot"}), 500
+        app.logger.error(f"Error generating terminal violin plots: {str(e)}")
+        return jsonify({"error": "Failed to generate terminal violin plots"}), 500
+
 
 
 
@@ -3200,136 +3231,6 @@ def terminal_price_violin():
 
 
 
-# @app.route("/api/terminal_price_violin", methods=["GET"])
-# def terminal_price_violin():
-#     try:
-#         app.logger.info("Generating terminal violin plots...")
-
-#         # Get the time frame from query parameters (default to '7d')
-#         time_frame = request.args.get("timeFrame", "7d")
-
-#         # Map timeFrame to SQLite-compatible date arithmetic
-#         time_intervals = {
-#             "3d": "'-3 days'",
-#             "7d": "'-7 days'",
-#             "1m": "'-1 month'",
-#             "3m": "'-3 months'",
-#             "1y": "'-1 year'",
-#             "2y": "'-2 years'"
-#         }
-
-#         # Get the corresponding SQLite interval for the time frame
-#         sqlite_interval = time_intervals.get(time_frame.lower(), "'-7 days'")
-
-#         # SQLite-compatible query to fetch data filtered by source and time range
-#         query = text(f"""
-#             SELECT commodity, price
-#             FROM price_data
-#             WHERE source = 'USDA'
-#               AND DATE(year || '-01-01', '+' || (day - 1) || ' days') >= DATE('now', {sqlite_interval})
-#         """)
-#         result = db.session.execute(query).fetchall()
-
-#         # Group data by commodity
-#         data = {}
-#         for row in result:
-#             commodity = row[0]  # Commodity
-#             price = row[1]  # Price
-#             if commodity not in data:
-#                 data[commodity] = []
-#             data[commodity].append(price)
-
-#         # Create violin traces for each commodity
-#         traces = []
-#         for commodity, prices in data.items():
-#             traces.append(
-#                 go.Violin(
-#                     y=prices,
-#                     name=commodity,
-#                     box_visible=True,
-#                     meanline_visible=True,
-#                     marker_color='blue'  # Custom color
-#                 )
-#             )
-
-#         # Create the layout for the chart
-#         layout = {
-#             "title": {"text": "USDA Terminal Price Distribution by Commodity", "font": {"size": 16, "weight": "bold"}},
-#             "xaxis": {"title": {"text": "Commodity", "font": {"size": 14, "weight": "bold"}}, "automargin": True},
-#             "yaxis": {"title": {"text": "Price", "font": {"size": 14, "weight": "bold"}}, "automargin": True},
-#             "height": 500,
-#             "width": 700,
-#             "showlegend": False,
-#             "plot_bgcolor": "#f0f8ff",
-#             "paper_bgcolor": "white",
-#         }
-
-#         # Return the chart data and layout as JSON
-#         return jsonify({"data": [trace.to_plotly_json() for trace in traces], "layout": layout}), 200
-
-#     except Exception as e:
-#         app.logger.error(f"Error generating terminal violin plot: {str(e)}")
-#         return jsonify({"error": "Failed to generate terminal violin plot"}), 500
-
-
-
-
-
-
-
-
-
-# @app.route("/api/terminal_price_violin", methods=["GET"])
-# def terminal_price_violin():
-#     try:
-#         app.logger.info("Fetching data for terminal violin plots...")
-
-#         # Query to fetch data
-#         query = text("""
-#         SELECT commodity, price, source
-#         FROM price_data
-#         WHERE source IN ('USDA', 'ProduceIQ')
-#         """)
-#         result = db.session.execute(query).fetchall()
-
-#         # Group data by source
-#         data = {"USDA": {"x": [], "y": []}, "ProduceIQ": {"x": [], "y": []}}
-#         for row in result:
-#             source = row[2]
-#             if source in data:
-#                 data[source]["x"].append(row[0])  # Commodity
-#                 data[source]["y"].append(row[1])  # Price
-
-#         # Create separate charts for each source
-#         charts = {}
-#         for source in ["USDA", "ProduceIQ"]:
-#             fig = go.Figure()
-#             fig.add_trace(
-#                 go.Violin(
-#                     x=data[source]["x"],
-#                     y=data[source]["y"],
-#                     name=source,
-#                     box_visible=True,
-#                     meanline_visible=True,
-#                     marker_color='blue'  # Custom color
-#                 )
-#             )
-#             fig.update_layout(
-#                 title=f"{source} Terminal Data",
-#                 xaxis_title="Commodity",
-#                 yaxis_title="Price",
-#                 height=500,
-#                 width=600
-#             )
-#             charts[source] = fig.to_dict()  # Convert each chart to JSON
-
-#         return jsonify(charts), 200
-
-#     except Exception as e:
-#         app.logger.error(f"Error generating terminal violin plots: {str(e)}")
-#         return jsonify({"error": "Failed to generate terminal violin plots"}), 500
-
-
 
 
 
@@ -3350,7 +3251,6 @@ def shipping_price_violin():
             "1m": "'1 month'",
             "3m": "'3 months'",
             "1y": "'1 year'",
-            "2y": "'2 years'"
         }
 
         # Get the corresponding PostgreSQL interval for the time frame
@@ -3560,9 +3460,9 @@ def get_shipping_empricial_probability():
 
             # Create histogram and traces
             hist, bin_edges = np.histogram(prices, bins=50)
-            histogram_trace = go.Bar(x=bin_edges[:-1].tolist(), y=hist.tolist(), name=f"{commodity} Histogram", marker_color="#636EFA")
+            histogram_trace = go.Bar(x=bin_edges[:-1].tolist(), y=hist.tolist(), name=f"{commodity} Histogram", marker_color="green")
             mean_trace = go.Scatter(x=[mean, mean], y=[0, max(hist)], mode="lines", line=dict(color="red", dash="dash"), name=f"{commodity} Mean")
-            std_dev_trace = go.Scatter(x=[mean - std_dev, mean + std_dev], y=[0, 0], mode="markers", marker=dict(color="blue", size=8, symbol="cross"), name=f"{commodity} Std Dev")
+            std_dev_trace = go.Scatter(x=[mean - std_dev, mean + std_dev], y=[0, 0], mode="markers", marker=dict(color="green", size=8, symbol="cross"), name=f"{commodity} Std Dev")
 
             # Prepare layout
             layout = {
