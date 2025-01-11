@@ -3285,7 +3285,7 @@ def shipping_price_violin():
                     name=commodity,
                     box_visible=True,
                     meanline_visible=True,
-                    marker_color='blue'  # Custom color
+                    marker_color='green'  # Custom color
                 )
             )
 
