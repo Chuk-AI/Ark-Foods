@@ -213,7 +213,7 @@ def chunk_query(time_frame):
             WITH date_data AS (
                 SELECT 
                     commodity,
-                    ROUND(AVG(price), 2) as price,
+                    ROUND(CAST(AVG(price) AS numeric), 2) AS price,
                     source
                 FROM price_data
                 WHERE source IN ('USDA', 'ProduceIQ')
@@ -245,6 +245,7 @@ def chunk_query(time_frame):
         return pd.DataFrame()
     
     return pd.concat(chunks, ignore_index=True)
+
 
 
 
