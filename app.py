@@ -3048,24 +3048,20 @@ def terminal_price_violin():
         # Get the corresponding PostgreSQL interval for the time frame
         postgres_interval = time_intervals.get(time_frame.lower(), "'7 days'")
 
-        # SQL query to fetch raw prices for USDA only
+        # SQL query to fetch data filtered by source and time range
         query = text(f"""
-        SELECT
-            commodity,
-            price
-        FROM price_data
-        WHERE source = 'USDA'
-          AND TO_DATE(CAST(year AS TEXT) || '-01-01', 'YYYY-MM-DD') + (day - 1) * INTERVAL '1 day' >= NOW() - INTERVAL {postgres_interval}
+            SELECT commodity, price
+            FROM price_data
+            WHERE source = 'USDA'
+              AND TO_DATE(CAST(year AS TEXT) || '-01-01', 'YYYY-MM-DD') + (day - 1) * interval '1 day' >= NOW() - INTERVAL {postgres_interval}
         """)
-
-        # Execute the query
         result = db.session.execute(query).fetchall()
 
         # Group data by commodity
         data = {}
         for row in result:
-            commodity = row[0]
-            price = row[1]
+            commodity = row[0]  # Commodity
+            price = row[1]  # Price
             if commodity not in data:
                 data[commodity] = []
             data[commodity].append(price)
@@ -3101,6 +3097,7 @@ def terminal_price_violin():
     except Exception as e:
         app.logger.error(f"Error generating terminal violin plot: {str(e)}")
         return jsonify({"error": "Failed to generate terminal violin plot"}), 500
+
 
 
 
