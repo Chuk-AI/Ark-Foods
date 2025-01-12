@@ -3266,35 +3266,30 @@ def shipping_price_violin():
         """)
         result = db.session.execute(query).fetchall()
 
-        # Group data by commodity
+        # Group data by commodity and filter negative prices
         data = {}
         for row in result:
-            commodity = row[0]
-            price = row[1]
-            if price is not None and price > 0:  # Filter valid prices
+            commodity, price = row[0], row[1]
+            if price is not None and price >= 0:  # Exclude invalid or negative prices
                 if commodity not in data:
                     data[commodity] = []
                 data[commodity].append(price)
 
-        # Create violin traces
+        # Create violin traces for each commodity
         traces = []
         for commodity, prices in data.items():
-            app.logger.info(f"Data for {commodity}: {prices}")
-
-            # Apply downsampling if needed
-            if len(prices) > 1000:  # Threshold for downsampling
-                prices = list(np.percentile(prices, [5, 25, 50, 75, 95]))
-            
-            traces.append(
-                go.Violin(
-                    y=prices,
-                    name=commodity,
-                    box_visible=True,
-                    meanline_visible=True,
-                    marker_color='green',
-                    points="suspectedoutliers",  # Show only outliers
+            if prices:  # Only add traces for commodities with valid prices
+                traces.append(
+                    go.Violin(
+                        y=prices,
+                        name=commodity,
+                        box_visible=True,
+                        meanline_visible=True,
+                        marker_color='green',
+                        spanmode="hard",  # Restrict violins to actual data range
+                        points="all",  # Show all individual points
+                    )
                 )
-            )
 
         # Create the layout for the chart
         layout = {
