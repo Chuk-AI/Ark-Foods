@@ -6,8 +6,9 @@
 //   const [commodityX, setCommodityX] = useState("");
 //   const [commodityY, setCommodityY] = useState("");
 //   const [scatterPlotData, setScatterPlotData] = useState(null);
-//   const [apiType, setApiType] = useState("terminal"); // Toggle between terminal and shipping API
+//   const [apiType, setApiType] = useState("terminal");
 
+//   // Full list of commodities
 //   const commodities = [
 //     "Anaheim",
 //     "Cubanelles",
@@ -98,28 +99,18 @@
 //         </button>
 //       </div>
 
-
-//  <div className="scatter-chart">
-//   {scatterPlotData && (
-//     <Plot 
-//       data={scatterPlotData.data} 
-//       layout={{
-//         ...scatterPlotData.layout,
-//         height: 500, // Adjust the height
-//         width: 600,  // Adjust the width
-//         autosize: false, // Disable autosize to enforce dimensions
-//       }} 
-//     />
-//   )}
-// </div>
-
-
+// <div className="scatter-chart-container">
+//       {scatterPlotData && (
+//         <div className="scatter-chart">
+//           <Plot data={scatterPlotData.data} layout={scatterPlotData.layout} />
+//         </div>
+//       )}
+//       </div>
 //     </div>
 //   );
 // }
 
 // export default ScatterPlot;
-
 
 import React, { useState } from "react";
 import Plot from "react-plotly.js";
@@ -129,7 +120,8 @@ function ScatterPlot() {
   const [commodityX, setCommodityX] = useState("");
   const [commodityY, setCommodityY] = useState("");
   const [scatterPlotData, setScatterPlotData] = useState(null);
-  const [apiType, setApiType] = useState("terminal");
+  const [apiType, setApiType] = useState("terminal"); // Terminal or Shipping
+  const [source, setSource] = useState("ProduceIQ"); // USDA or ProduceIQ
 
   // Full list of commodities
   const commodities = [
@@ -154,7 +146,11 @@ function ScatterPlot() {
     fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ commodity_x: commodityX, commodity_y: commodityY }),
+      body: JSON.stringify({
+        commodity_x: commodityX,
+        commodity_y: commodityY,
+        source,
+      }),
     })
       .then((response) => response.json())
       .then((data) => {
@@ -165,6 +161,10 @@ function ScatterPlot() {
         }
       })
       .catch((error) => console.error("Error fetching scatter plot:", error));
+  };
+
+  const toggleSource = () => {
+    setSource((prevSource) => (prevSource === "USDA" ? "ProduceIQ" : "USDA"));
   };
 
   return (
@@ -213,6 +213,13 @@ function ScatterPlot() {
             Shipping Scatter Plot
           </label>
         </div>
+        <div className="slider-switch-container">
+          <div className="slider-switch" onClick={toggleSource}>
+            <div className={`slider-switch-thumb ${source === "ProduceIQ" ? "right" : ""}`}>
+              {source}
+            </div>
+          </div>
+        </div>
         <button
           onClick={fetchScatterPlot}
           disabled={!commodityX || !commodityY}
@@ -222,12 +229,12 @@ function ScatterPlot() {
         </button>
       </div>
 
-<div className="scatter-chart-container">
-      {scatterPlotData && (
-        <div className="scatter-chart">
-          <Plot data={scatterPlotData.data} layout={scatterPlotData.layout} />
-        </div>
-      )}
+      <div className="scatter-chart-container">
+        {scatterPlotData && (
+          <div className="scatter-chart">
+            <Plot data={scatterPlotData.data} layout={scatterPlotData.layout} />
+          </div>
+        )}
       </div>
     </div>
   );

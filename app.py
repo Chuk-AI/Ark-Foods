@@ -3539,22 +3539,22 @@ from scipy import stats
 
 
 # terminal correlation for USDA data
-
 @app.route("/api/terminal_correlation", methods=["GET"])
 def get_terminal_correlation():
     try:
         # Query data with proper filtering
+        source = request.args.get('source', 'ProduceIQ')  # Default to USDA
         query = text("""
-            SELECT 
-                commodity,
-                price,
-                DATE(CONCAT(year, '-01-01')::date + (day - 1) * INTERVAL '1 day') as date
+    SELECT 
+        commodity,
+        price,
+        DATE(DATE(year || '-01-01'), '+' || (day - 1) || ' days') as date
             FROM price_data
-            WHERE source = 'USDA'
+            WHERE source = :source
             ORDER BY date, commodity
         """)
         
-        result = db.session.execute(query).fetchall()
+        result = db.session.execute(query, {'source': source}).fetchall()
         print(f"Query result length: {len(result)}")  # Debugging log
 
         if not result:
@@ -3614,7 +3614,7 @@ def get_terminal_correlation():
                 "text": f"{reversed_z_values[row][col]:.2f}",  # Use reversed data
                 "showarrow": False,
                 "font": {
-                    "color": "white" if abs(reversed_z_values[row][col]) > 0.5 else "black",
+                    "color": "white",
                     "size": 10,
                 },
             }
@@ -3674,7 +3674,6 @@ def get_terminal_correlation():
         traceback.print_exc()
         return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
 
-
 # @app.route("/api/terminal_correlation", methods=["GET"])
 # def get_terminal_correlation():
 #     try:
@@ -3683,7 +3682,7 @@ def get_terminal_correlation():
 #             SELECT 
 #                 commodity,
 #                 price,
-#                 DATE(year || '-01-01', '+' || (day - 1) || ' days') as date
+#                 DATE(CONCAT(year, '-01-01')::date + (day - 1) * INTERVAL '1 day') as date
 #             FROM price_data
 #             WHERE source = 'USDA'
 #             ORDER BY date, commodity
@@ -3714,9 +3713,9 @@ def get_terminal_correlation():
 #         import gc
 #         gc.collect()
 
-#         # Calculate returns and handle missing values
-#         returns = pivot_df.pct_change()
-#         returns = returns.fillna(method='ffill', limit=3)  # Forward fill up to 3 days
+#         # Forward fill missing values before calculating percentage change
+#         pivot_df = pivot_df.ffill(limit=3)  # Forward fill up to 3 missing values
+#         returns = pivot_df.pct_change()  # Calculate percentage change
 #         print(f"Returns DataFrame shape before filtering: {returns.shape}")  # Debugging log
 
 #         # Remove columns with too many missing values
@@ -3749,7 +3748,7 @@ def get_terminal_correlation():
 #                 "text": f"{reversed_z_values[row][col]:.2f}",  # Use reversed data
 #                 "showarrow": False,
 #                 "font": {
-#                     "color": "white",
+#                     "color": "white" if abs(reversed_z_values[row][col]) > 0.5 else "black",
 #                     "size": 10,
 #                 },
 #             }
@@ -3815,25 +3814,24 @@ def get_terminal_correlation():
 
 
 
-
 # shipping correlation for ProduceIQ data
+
 @app.route("/api/shipping_correlation", methods=["GET"])
 def get_shipping_correlation():
     try:
         # Query data with proper filtering
+        source = request.args.get('source', 'ProduceIQ')  # Default to USDA
         query = text("""
-            SELECT 
-                commodity,
-                price,
-                DATE(CONCAT(year, '-01-01')::date + (day - 1) * INTERVAL '1 day') as date
-            FROM shipping_price_data
-            WHERE source = 'ProduceIQ'
-              AND price > 0
-              AND price IS NOT NULL
-            ORDER BY date, commodity
-        """)
+    SELECT 
+        commodity,
+        price,
+        DATE(DATE(year || '-01-01'), '+' || (day - 1) || ' days') as date
+    FROM price_data
+    WHERE source = :source
+    ORDER BY date, commodity
+""")
         
-        result = db.session.execute(query).fetchall()
+        result = db.session.execute(query, {'source': source}).fetchall()
         print(f"Query result length: {len(result)}")  # Debugging log
 
         if not result:
@@ -3858,8 +3856,8 @@ def get_shipping_correlation():
         import gc
         gc.collect()
 
-        # Calculate returns and handle missing values
-        pivot_df = pivot_df.ffill(limit=3)  # Forward fill missing values up to 3 days
+        # Forward fill missing values before calculating percentage change
+        pivot_df = pivot_df.ffill(limit=3)  # Forward fill up to 3 missing values
         returns = pivot_df.pct_change()  # Calculate percentage change
         print(f"Returns DataFrame shape before filtering: {returns.shape}")  # Debugging log
 
@@ -3893,7 +3891,7 @@ def get_shipping_correlation():
                 "text": f"{reversed_z_values[row][col]:.2f}",  # Use reversed data
                 "showarrow": False,
                 "font": {
-                    "color": "white" if abs(reversed_z_values[row][col]) > 0.5 else "black",
+                    "color": "white",
                     "size": 10,
                 },
             }
@@ -3953,7 +3951,6 @@ def get_shipping_correlation():
         traceback.print_exc()
         return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
 
-
 # @app.route("/api/shipping_correlation", methods=["GET"])
 # def get_shipping_correlation():
 #     try:
@@ -3962,7 +3959,7 @@ def get_shipping_correlation():
 #             SELECT 
 #                 commodity,
 #                 price,
-#                 DATE(year || '-01-01', '+' || (day - 1) || ' days') as date
+#                 DATE(CONCAT(year, '-01-01')::date + (day - 1) * INTERVAL '1 day') as date
 #             FROM shipping_price_data
 #             WHERE source = 'ProduceIQ'
 #               AND price > 0
@@ -3996,8 +3993,8 @@ def get_shipping_correlation():
 #         gc.collect()
 
 #         # Calculate returns and handle missing values
-#         returns = pivot_df.pct_change()
-#         returns = returns.fillna(method='ffill', limit=3)  # Forward fill up to 3 days
+#         pivot_df = pivot_df.ffill(limit=3)  # Forward fill missing values up to 3 days
+#         returns = pivot_df.pct_change()  # Calculate percentage change
 #         print(f"Returns DataFrame shape before filtering: {returns.shape}")  # Debugging log
 
 #         # Remove columns with too many missing values
@@ -4030,7 +4027,7 @@ def get_shipping_correlation():
 #                 "text": f"{reversed_z_values[row][col]:.2f}",  # Use reversed data
 #                 "showarrow": False,
 #                 "font": {
-#                     "color": "white",
+#                     "color": "white" if abs(reversed_z_values[row][col]) > 0.5 else "black",
 #                     "size": 10,
 #                 },
 #             }
@@ -4094,8 +4091,6 @@ def get_shipping_correlation():
 
 
 
-
-
 # terminal scatterplot for usda data
 @app.route("/api/terminal_scatterplot_matrix", methods=["POST"])
 def get_terminal_scatterplot_matrix():
@@ -4104,6 +4099,7 @@ def get_terminal_scatterplot_matrix():
         data = request.get_json()
         commodity_x = data.get("commodity_x")
         commodity_y = data.get("commodity_y")
+        source = data.get("source", "ProduceIQ")  # Default to 'USDA'
 
         if not commodity_x or not commodity_y:
             return jsonify({"error": "Both commodities must be provided"}), 400
@@ -4111,7 +4107,7 @@ def get_terminal_scatterplot_matrix():
         # Query data for the selected commodities from PriceData where source is 'USDA'
         result = db.session.query(PriceData.commodity, PriceData.price).filter(
             PriceData.commodity.in_([commodity_x, commodity_y]),
-            PriceData.source == 'ProduceIQ'
+            PriceData.source == source
         ).all()
 
         if not result:
@@ -4197,6 +4193,7 @@ def get_shipping_scatterplot_matrix():
         data = request.get_json()
         commodity_x = data.get("commodity_x")
         commodity_y = data.get("commodity_y")
+        source = data.get("source", "ProduceIQ")  # Default to 'USDA'
 
         if not commodity_x or not commodity_y:
             return jsonify({"error": "Both commodities must be provided"}), 400
@@ -4204,7 +4201,7 @@ def get_shipping_scatterplot_matrix():
         # Query data for the selected commodities from ShippingPriceData where source is 'ProduceIQ'
         result = db.session.query(ShippingPriceData.commodity, ShippingPriceData.price).filter(
             ShippingPriceData.commodity.in_([commodity_x, commodity_y]),
-            ShippingPriceData.source == 'ProduceIQ'
+            ShippingPriceData.source == source
         ).all()
 
         if not result:
@@ -4377,6 +4374,7 @@ def plot_rolling_price_correlations(roll_corr_df, series1, series2, window):
 
 
 # terminal correlations for usda data
+
 @app.route("/api/terminal_rolling_correlations", methods=["POST"])
 def terminal_rolling_correlations():
     try:
@@ -4385,6 +4383,7 @@ def terminal_rolling_correlations():
         series1 = data.get("series1")
         series2 = data.get("series2")
         window = int(data.get("window", 30))  # Default to 30 days
+        source = data.get("source", "ProduceIQ")  # Default to USDA
 
         if not series1 or not series2:
             return jsonify({"error": "Both commodities must be provided"}), 400
@@ -4401,7 +4400,7 @@ def terminal_rolling_correlations():
         ).filter(
             PriceData.commodity.in_([series1, series2]),
             PriceData.price > 0,  # Ensure we only get valid prices
-            PriceData.source == "ProduceIQ"  # Filter by source 'USDA'
+            PriceData.source == source  # Use selected source
         ).all()
 
         if not result:
@@ -4605,6 +4604,7 @@ def shipping_rolling_correlations():
         series1 = data.get("series1")
         series2 = data.get("series2")
         window = int(data.get("window", 30))  # Default to 30 days
+        source = data.get("source", "ProduceIQ")  # Default to USDA
 
         if not series1 or not series2:
             return jsonify({"error": "Both commodities must be provided"}), 400
@@ -4620,7 +4620,8 @@ def shipping_rolling_correlations():
             ShippingPriceData.price
         ).filter(
             ShippingPriceData.commodity.in_([series1, series2]),
-            ShippingPriceData.price > 0  # Ensure we only get valid prices
+            ShippingPriceData.price > 0,  # Ensure we only get valid prices
+            ShippingPriceData.source == source  # Use selected source
         ).all()
 
         if not result:

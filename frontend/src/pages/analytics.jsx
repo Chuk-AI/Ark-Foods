@@ -22,6 +22,11 @@ export default function DashAnalytics() {
         <TerminalViolinPlot />
       </div>
 
+   {/* Shipping Violin Plot */}
+   <div>
+        <ShippingViolinPlot />
+      </div>
+      
       {/* Empirical Probability for Terminal Prices */}
       <div className="terminal-empricial-container d-flex">
         <div className="">
@@ -33,10 +38,7 @@ export default function DashAnalytics() {
         </div>
       </div>
 
-      {/* Shipping Violin Plot */}
-      <div>
-        <ShippingViolinPlot />
-      </div>
+   
 
       {/* Empirical Probability for Shipping Prices */}
         <div className="shipping-empricial-container d-flex">
