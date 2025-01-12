@@ -3269,28 +3269,32 @@ def shipping_price_violin():
         # Group data by commodity
         data = {}
         for row in result:
-            commodity = row[0]  # Commodity (varietyName)
-            price = row[1]  # Price
+            commodity = row[0]
+            price = row[1]
             if price is not None and price > 0:  # Filter valid prices
                 if commodity not in data:
                     data[commodity] = []
                 data[commodity].append(price)
 
-        # Create violin traces for each commodity
+        # Create violin traces
         traces = []
         for commodity, prices in data.items():
-            if prices:  # Only add traces for non-empty data
-                traces.append(
-                    go.Violin(
-                        y=prices,
-                        name=commodity,
-                        box_visible=True,
-                        meanline_visible=True,
-                        marker_color='green',
-                        spanmode="hard",  # Do not extend beyond data range
-                        points="all"  # Show all data points
-                    )
+            app.logger.info(f"Data for {commodity}: {prices}")
+
+            # Apply downsampling if needed
+            if len(prices) > 1000:  # Threshold for downsampling
+                prices = list(np.percentile(prices, [5, 25, 50, 75, 95]))
+            
+            traces.append(
+                go.Violin(
+                    y=prices,
+                    name=commodity,
+                    box_visible=True,
+                    meanline_visible=True,
+                    marker_color='green',
+                    points="suspectedoutliers",  # Show only outliers
                 )
+            )
 
         # Create the layout for the chart
         layout = {
@@ -3299,7 +3303,7 @@ def shipping_price_violin():
             "yaxis": {
                 "title": {"text": "Shipping Price", "font": {"size": 14, "weight": "bold"}},
                 "automargin": True,
-                "range": [0, None]  # Force y-axis to start at 0
+                "range": [0, None],  # Force y-axis to start at 0
             },
             "height": 500,
             "width": 700,
@@ -3314,6 +3318,7 @@ def shipping_price_violin():
     except Exception as e:
         app.logger.error(f"Error generating shipping violin plot: {str(e)}")
         return jsonify({"error": "Failed to generate shipping violin plot"}), 500
+
 
 
 
