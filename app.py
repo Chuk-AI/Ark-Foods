@@ -3238,6 +3238,7 @@ def terminal_price_violin():
 
 # voilin plot for shipping data ProduceIQ
 
+
 @app.route("/api/shipping_price_violin", methods=["GET"])
 def shipping_price_violin():
     try:
@@ -3254,8 +3255,6 @@ def shipping_price_violin():
             "3m": "'3 months'",
             "1y": "'1 year'",
         }
-
-        # Get the corresponding PostgreSQL interval for the time frame
         postgres_interval = time_intervals.get(time_frame.lower(), "'7 days'")
 
         # SQL query to fetch data filtered by source and time range
@@ -3272,28 +3271,36 @@ def shipping_price_violin():
         for row in result:
             commodity = row[0]  # Commodity (varietyName)
             price = row[1]  # Price
-            if commodity not in data:
-                data[commodity] = []
-            data[commodity].append(price)
+            if price is not None and price > 0:  # Filter valid prices
+                if commodity not in data:
+                    data[commodity] = []
+                data[commodity].append(price)
 
         # Create violin traces for each commodity
         traces = []
         for commodity, prices in data.items():
-            traces.append(
-                go.Violin(
-                    y=prices,
-                    name=commodity,
-                    box_visible=True,
-                    meanline_visible=True,
-                    marker_color='green'  # Custom color
+            if prices:  # Only add traces for non-empty data
+                traces.append(
+                    go.Violin(
+                        y=prices,
+                        name=commodity,
+                        box_visible=True,
+                        meanline_visible=True,
+                        marker_color='green',
+                        spanmode="hard",  # Do not extend beyond data range
+                        points="all"  # Show all data points
+                    )
                 )
-            )
 
         # Create the layout for the chart
         layout = {
             "title": {"text": "Shipping Price Distribution by Commodity", "font": {"size": 16, "weight": "bold"}},
             "xaxis": {"title": {"text": "Commodity", "font": {"size": 14, "weight": "bold"}}, "automargin": True},
-            "yaxis": {"title": {"text": "Shipping Price", "font": {"size": 14, "weight": "bold"}}, "automargin": True},
+            "yaxis": {
+                "title": {"text": "Shipping Price", "font": {"size": 14, "weight": "bold"}},
+                "automargin": True,
+                "range": [0, None]  # Force y-axis to start at 0
+            },
             "height": 500,
             "width": 700,
             "showlegend": False,
@@ -3309,16 +3316,35 @@ def shipping_price_violin():
         return jsonify({"error": "Failed to generate shipping violin plot"}), 500
 
 
+
+
+
 # @app.route("/api/shipping_price_violin", methods=["GET"])
 # def shipping_price_violin():
 #     try:
 #         app.logger.info("Fetching data for shipping violin plot...")
 
-#         # SQL query to fetch data filtered by source
-#         query = text("""
+#         # Get the time frame from query parameters (default to '7d')
+#         time_frame = request.args.get("timeFrame", "7d")
+
+#         # Map timeFrame to PostgreSQL-compatible interval
+#         time_intervals = {
+#             "3d": "'3 days'",
+#             "7d": "'7 days'",
+#             "1m": "'1 month'",
+#             "3m": "'3 months'",
+#             "1y": "'1 year'",
+#         }
+
+#         # Get the corresponding PostgreSQL interval for the time frame
+#         postgres_interval = time_intervals.get(time_frame.lower(), "'7 days'")
+
+#         # SQL query to fetch data filtered by source and time range
+#         query = text(f"""
 #             SELECT commodity, price
 #             FROM shipping_price_data
 #             WHERE source = 'ProduceIQ'
+#               AND TO_DATE(year || '-01-01', 'YYYY-MM-DD') + (day - 1) * interval '1 day' >= NOW() - INTERVAL {postgres_interval}
 #         """)
 #         result = db.session.execute(query).fetchall()
 
@@ -3340,7 +3366,7 @@ def shipping_price_violin():
 #                     name=commodity,
 #                     box_visible=True,
 #                     meanline_visible=True,
-#                     marker_color='blue'  # Custom color
+#                     marker_color='green'  # Custom color
 #                 )
 #             )
 
