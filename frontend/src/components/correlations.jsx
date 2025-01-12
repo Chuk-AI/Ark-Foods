@@ -105,7 +105,7 @@ export default function CorrelationsPlots() {
   const [loading, setLoading] = useState(true);
   const [terminalChart, setTerminalChart] = useState(null);
   const [shippingChart, setShippingChart] = useState(null);
-  const [source, setSource] = useState('USDA'); // Track current source
+  const [source, setSource] = useState('ProduceIQ'); // Track current source
 
   const fetchCharts = () => {
     setLoading(true);

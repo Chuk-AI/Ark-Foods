@@ -3750,7 +3750,7 @@ def get_terminal_correlation():
                 "text": f"{reversed_z_values[row][col]:.2f}",  # Use reversed data
                 "showarrow": False,
                 "font": {
-                    "color": "white" if abs(reversed_z_values[row][col]) > 0.5 else "black",
+                    "color": "white",
                     "size": 10,
                 },
             }
@@ -4029,7 +4029,7 @@ def get_shipping_correlation():
                 "text": f"{reversed_z_values[row][col]:.2f}",  # Use reversed data
                 "showarrow": False,
                 "font": {
-                    "color": "white" if abs(reversed_z_values[row][col]) > 0.5 else "black",
+                    "color": "white",
                     "size": 10,
                 },
             }
