@@ -3551,8 +3551,6 @@ def get_terminal_correlation():
                 DATE(CONCAT(year, '-01-01')::date + (day - 1) * INTERVAL '1 day') as date
             FROM price_data
             WHERE source = 'USDA'
-              AND price > 0  -- Ensure price is positive
-              AND price IS NOT NULL
             ORDER BY date, commodity
         """)
         
@@ -3616,7 +3614,7 @@ def get_terminal_correlation():
                 "text": f"{reversed_z_values[row][col]:.2f}",  # Use reversed data
                 "showarrow": False,
                 "font": {
-                    "color": "white" if abs(reversed_z_values[row][col]) > 0.5 else "black",
+                    "color": "white",
                     "size": 10,
                 },
             }
@@ -3829,8 +3827,6 @@ def get_shipping_correlation():
                 DATE(CONCAT(year, '-01-01')::date + (day - 1) * INTERVAL '1 day') as date
             FROM shipping_price_data
             WHERE source = 'ProduceIQ'
-              AND price > 0  -- Ensure price is positive
-              AND price IS NOT NULL
             ORDER BY date, commodity
         """)
         
@@ -3894,7 +3890,7 @@ def get_shipping_correlation():
                 "text": f"{reversed_z_values[row][col]:.2f}",  # Use reversed data
                 "showarrow": False,
                 "font": {
-                    "color": "white" if abs(reversed_z_values[row][col]) > 0.5 else "black",
+                    "color": "white",
                     "size": 10,
                 },
             }
