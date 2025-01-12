@@ -3286,8 +3286,8 @@ def shipping_price_violin():
                         box_visible=True,
                         meanline_visible=True,
                         marker_color='green',
-                        spanmode="hard",  # Restrict violins to actual data range
-                        points="all",  # Show all individual points
+                        points=False,  # Disable individual data points
+                        bandwidth=0.5  # Adjust bandwidth for KDE smoothness
                     )
                 )
 
@@ -3313,6 +3313,7 @@ def shipping_price_violin():
     except Exception as e:
         app.logger.error(f"Error generating shipping violin plot: {str(e)}")
         return jsonify({"error": "Failed to generate shipping violin plot"}), 500
+
 
 
 
