@@ -3238,11 +3238,10 @@ def terminal_price_violin():
 
 # voilin plot for shipping data ProduceIQ
 
-
 @app.route("/api/shipping_price_violin", methods=["GET"])
 def shipping_price_violin():
     try:
-        app.logger.info("Fetching data for shipping violin plot...")
+        app.logger.info("Fetching data for shipping violin plot with downsampling...")
 
         # Get the time frame from query parameters (default to '7d')
         time_frame = request.args.get("timeFrame", "7d")
@@ -3275,9 +3274,24 @@ def shipping_price_violin():
                     data[commodity] = []
                 data[commodity].append(price)
 
+        # Apply downsampling by percentiles
+        def downsample_data(data):
+            downsampled_data = {}
+            for commodity, prices in data.items():
+                # Calculate specific percentiles
+                percentiles = np.percentile(prices, [5, 25, 50, 75, 95])
+                # Optionally add small noise around the percentiles for visualization
+                sampled_points = [
+                    np.random.normal(loc=p, scale=0.5, size=10).tolist() for p in percentiles
+                ]
+                downsampled_data[commodity] = sum(sampled_points, [])  # Flatten the list
+            return downsampled_data
+
+        downsampled_data = downsample_data(data)
+
         # Create violin traces for each commodity
         traces = []
-        for commodity, prices in data.items():
+        for commodity, prices in downsampled_data.items():
             if prices:  # Only add traces for commodities with valid prices
                 traces.append(
                     go.Violin(
@@ -3313,9 +3327,6 @@ def shipping_price_violin():
     except Exception as e:
         app.logger.error(f"Error generating shipping violin plot: {str(e)}")
         return jsonify({"error": "Failed to generate shipping violin plot"}), 500
-
-
-
 
 
 
