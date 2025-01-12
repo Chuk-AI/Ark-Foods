@@ -3232,16 +3232,10 @@ def terminal_price_violin():
 
 
 
-
-
-
-
-# voilin plot for shipping data ProduceIQ
-
 @app.route("/api/shipping_price_violin", methods=["GET"])
 def shipping_price_violin():
     try:
-        app.logger.info("Fetching data for shipping violin plot with downsampling...")
+        app.logger.info("Fetching data for shipping violin plot with refined KDE...")
 
         # Get the time frame from query parameters (default to '7d')
         time_frame = request.args.get("timeFrame", "7d")
@@ -3280,9 +3274,9 @@ def shipping_price_violin():
             for commodity, prices in data.items():
                 # Calculate specific percentiles
                 percentiles = np.percentile(prices, [5, 25, 50, 75, 95])
-                # Clip negative values in the KDE to 0
+                # Sample around percentiles to maintain diversity
                 sampled_points = [
-                    np.random.normal(loc=p if p > 0 else 0, scale=0.5, size=10).tolist() for p in percentiles
+                    np.random.normal(loc=p if p > 0 else 0, scale=0.8, size=10).tolist() for p in percentiles
                 ]
                 downsampled_data[commodity] = sum(sampled_points, [])  # Flatten the list
             return downsampled_data
@@ -3301,7 +3295,8 @@ def shipping_price_violin():
                         meanline_visible=True,
                         marker_color='green',
                         points=False,  # Disable individual data points
-                        bandwidth=0.8  # Adjust bandwidth for smoother violin shapes
+                        bandwidth=0.7,  # Adjust bandwidth for smoother violin shapes
+                        scalemode="width",  # Scale violins consistently
                     )
                 )
 
@@ -3312,7 +3307,8 @@ def shipping_price_violin():
             "yaxis": {
                 "title": {"text": "Shipping Price", "font": {"size": 14, "weight": "bold"}},
                 "automargin": True,
-                "range": [0, None],  # Force y-axis to start at 0
+                "range": [0, None],  # Ensure y-axis starts at 0
+                "zeroline": True,  # Add a zero-line for better visibility
             },
             "height": 500,
             "width": 700,
@@ -3327,6 +3323,7 @@ def shipping_price_violin():
     except Exception as e:
         app.logger.error(f"Error generating shipping violin plot: {str(e)}")
         return jsonify({"error": "Failed to generate shipping violin plot"}), 500
+
 
 
 
