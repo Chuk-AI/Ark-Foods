@@ -4111,7 +4111,7 @@ def get_terminal_scatterplot_matrix():
         # Query data for the selected commodities from PriceData where source is 'USDA'
         result = db.session.query(PriceData.commodity, PriceData.price).filter(
             PriceData.commodity.in_([commodity_x, commodity_y]),
-            PriceData.source == 'USDA'
+            PriceData.source == 'ProduceIQ'
         ).all()
 
         if not result:
@@ -4401,7 +4401,7 @@ def terminal_rolling_correlations():
         ).filter(
             PriceData.commodity.in_([series1, series2]),
             PriceData.price > 0,  # Ensure we only get valid prices
-            PriceData.source == "USDA"  # Filter by source 'USDA'
+            PriceData.source == "ProduceIQ"  # Filter by source 'USDA'
         ).all()
 
         if not result:
