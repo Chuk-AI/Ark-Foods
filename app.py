@@ -3280,9 +3280,9 @@ def shipping_price_violin():
             for commodity, prices in data.items():
                 # Calculate specific percentiles
                 percentiles = np.percentile(prices, [5, 25, 50, 75, 95])
-                # Optionally add small noise around the percentiles for visualization
+                # Clip negative values in the KDE to 0
                 sampled_points = [
-                    np.random.normal(loc=p, scale=0.5, size=10).tolist() for p in percentiles
+                    np.random.normal(loc=p if p > 0 else 0, scale=0.5, size=10).tolist() for p in percentiles
                 ]
                 downsampled_data[commodity] = sum(sampled_points, [])  # Flatten the list
             return downsampled_data
@@ -3301,7 +3301,7 @@ def shipping_price_violin():
                         meanline_visible=True,
                         marker_color='green',
                         points=False,  # Disable individual data points
-                        bandwidth=0.5  # Adjust bandwidth for KDE smoothness
+                        bandwidth=0.8  # Adjust bandwidth for smoother violin shapes
                     )
                 )
 
@@ -3327,6 +3327,7 @@ def shipping_price_violin():
     except Exception as e:
         app.logger.error(f"Error generating shipping violin plot: {str(e)}")
         return jsonify({"error": "Failed to generate shipping violin plot"}), 500
+
 
 
 
