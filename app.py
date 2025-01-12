@@ -3579,9 +3579,9 @@ def get_terminal_correlation():
         import gc
         gc.collect()
 
-        # Calculate returns and handle missing values
-        returns = pivot_df.pct_change()
-        returns = returns.fillna(method='ffill', limit=3)  # Forward fill up to 3 days
+        # Forward fill missing values before calculating percentage change
+        pivot_df = pivot_df.ffill(limit=3)  # Forward fill up to 3 missing values
+        returns = pivot_df.pct_change()  # Calculate percentage change
         print(f"Returns DataFrame shape before filtering: {returns.shape}")  # Debugging log
 
         # Remove columns with too many missing values
@@ -3614,7 +3614,7 @@ def get_terminal_correlation():
                 "text": f"{reversed_z_values[row][col]:.2f}",  # Use reversed data
                 "showarrow": False,
                 "font": {
-                    "color": "white",
+                    "color": "white" if abs(reversed_z_values[row][col]) > 0.5 else "black",
                     "size": 10,
                 },
             }
@@ -3673,6 +3673,7 @@ def get_terminal_correlation():
         import traceback
         traceback.print_exc()
         return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
+
 
 # @app.route("/api/terminal_correlation", methods=["GET"])
 # def get_terminal_correlation():
@@ -3827,6 +3828,8 @@ def get_shipping_correlation():
                 DATE(CONCAT(year, '-01-01')::date + (day - 1) * INTERVAL '1 day') as date
             FROM shipping_price_data
             WHERE source = 'ProduceIQ'
+              AND price > 0
+              AND price IS NOT NULL
             ORDER BY date, commodity
         """)
         
@@ -3856,8 +3859,8 @@ def get_shipping_correlation():
         gc.collect()
 
         # Calculate returns and handle missing values
-        returns = pivot_df.pct_change()
-        returns = returns.fillna(method='ffill', limit=3)  # Forward fill up to 3 days
+        pivot_df = pivot_df.ffill(limit=3)  # Forward fill missing values up to 3 days
+        returns = pivot_df.pct_change()  # Calculate percentage change
         print(f"Returns DataFrame shape before filtering: {returns.shape}")  # Debugging log
 
         # Remove columns with too many missing values
@@ -3890,7 +3893,7 @@ def get_shipping_correlation():
                 "text": f"{reversed_z_values[row][col]:.2f}",  # Use reversed data
                 "showarrow": False,
                 "font": {
-                    "color": "white",
+                    "color": "white" if abs(reversed_z_values[row][col]) > 0.5 else "black",
                     "size": 10,
                 },
             }
@@ -3949,6 +3952,7 @@ def get_shipping_correlation():
         import traceback
         traceback.print_exc()
         return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
+
 
 # @app.route("/api/shipping_correlation", methods=["GET"])
 # def get_shipping_correlation():
