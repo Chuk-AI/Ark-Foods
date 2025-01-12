@@ -3231,11 +3231,10 @@ def terminal_price_violin():
 
 
 
-
 @app.route("/api/shipping_price_violin", methods=["GET"])
 def shipping_price_violin():
     try:
-        app.logger.info("Fetching data for shipping violin plot with refined KDE...")
+        app.logger.info("Fetching data for shipping violin plot with zero-bounded KDE...")
 
         # Get the time frame from query parameters (default to '7d')
         time_frame = request.args.get("timeFrame", "7d")
@@ -3250,7 +3249,7 @@ def shipping_price_violin():
         }
         postgres_interval = time_intervals.get(time_frame.lower(), "'7 days'")
 
-        # SQL query to fetch data filtered by source and time range
+        # SQL query to fetch data
         query = text(f"""
             SELECT commodity, price
             FROM shipping_price_data
@@ -3259,72 +3258,110 @@ def shipping_price_violin():
         """)
         result = db.session.execute(query).fetchall()
 
-        # Group data by commodity and filter negative prices
-        data = {}
-        for row in result:
-            commodity, price = row[0], row[1]
-            if price is not None and price >= 0:  # Exclude invalid or negative prices
-                if commodity not in data:
-                    data[commodity] = []
-                data[commodity].append(price)
+        # Custom function to compute zero-bounded KDE
+        def zero_bounded_kde(data, points=100):
+            # Remove zeros and negative values
+            data = np.array([x for x in data if x > 0])
+            
+            if len(data) < 2:
+                return [], []
+            
+            # Reflect the data around zero for boundary correction
+            reflected_data = np.concatenate([-data, data])
+            
+            # Compute KDE
+            kde = stats.gaussian_kde(reflected_data, bw_method='scott')
+            
+            # Generate evaluation points
+            x_range = np.linspace(0, np.max(data) * 1.1, points)
+            
+            # Evaluate KDE and only keep positive domain
+            y_range = kde(x_range)
+            y_range = y_range[:points]  # Only keep positive domain
+            
+            return x_range.tolist(), y_range.tolist()
 
-        # Apply downsampling by percentiles
-        def downsample_data(data):
-            downsampled_data = {}
-            for commodity, prices in data.items():
-                # Calculate specific percentiles
-                percentiles = np.percentile(prices, [5, 25, 50, 75, 95])
-                # Sample around percentiles to maintain diversity
-                sampled_points = [
-                    np.random.normal(loc=p if p > 0 else 0, scale=0.8, size=10).tolist() for p in percentiles
-                ]
-                downsampled_data[commodity] = sum(sampled_points, [])  # Flatten the list
-            return downsampled_data
-
-        downsampled_data = downsample_data(data)
-
-        # Create violin traces for each commodity
+        # Process data and create violin traces
         traces = []
-        for commodity, prices in downsampled_data.items():
-            if prices:  # Only add traces for commodities with valid prices
-                traces.append(
-                    go.Violin(
-                        y=prices,
-                        name=commodity,
-                        box_visible=True,
-                        meanline_visible=True,
-                        marker_color='green',
-                        points=False,  # Disable individual data points
-                        bandwidth=0.7,  # Adjust bandwidth for smoother violin shapes
-                        scalemode="width",  # Scale violins consistently
+        for commodity, group in groupby(sorted(result, key=lambda x: x[0]), key=lambda x: x[0]):
+            prices = [price for _, price in group if price is not None and price >= 0]
+            
+            if len(prices) >= 3:  # Need at least 3 points for meaningful distribution
+                x_kde, y_kde = zero_bounded_kde(prices)
+                
+                if x_kde and y_kde:  # Check if KDE computation was successful
+                    traces.append(
+                        go.Violin(
+                            name=commodity,
+                            y=prices,  # Original points for box plot
+                            points=False,  # Hide individual points
+                            box_visible=True,
+                            meanline_visible=True,
+                            fillcolor='rgba(0, 128, 0, 0.4)',  # Semi-transparent green
+                            line_color='rgb(0, 128, 0)',
+                            bandwidth=0.5,  # Adjust bandwidth for smoother appearance
+                            side='positive',  # Only show right side of violin
+                            scalemode='width',
+                            scalegroup='all',  # Consistent scaling across violins
+                            # Custom KDE
+                            hoveron='violins+points',  # Enable hover on both violin and points
+                            spanmode='soft',  # Softer violin edges
+                            points='outliers',  # Show only outlier points
+                        )
                     )
-                )
 
-        # Create the layout for the chart
+        # Enhanced layout with zero-bounded y-axis
         layout = {
-            "title": {"text": "Shipping Price Distribution by Commodity", "font": {"size": 16, "weight": "bold"}},
-            "xaxis": {"title": {"text": "Commodity", "font": {"size": 14, "weight": "bold"}}, "automargin": True},
-            "yaxis": {
-                "title": {"text": "Shipping Price", "font": {"size": 14, "weight": "bold"}},
-                "automargin": True,
-                "range": [0, None],  # Ensure y-axis starts at 0
-                "zeroline": True,  # Add a zero-line for better visibility
+            "title": {
+                "text": "Shipping Price Distribution by Commodity",
+                "font": {"size": 16, "weight": "bold"}
             },
-            "height": 500,
-            "width": 700,
+            "xaxis": {
+                "title": {"text": "Commodity", "font": {"size": 14}},
+                "automargin": True,
+                "tickangle": -45
+            },
+            "yaxis": {
+                "title": {"text": "Shipping Price ($)", "font": {"size": 14}},
+                "automargin": True,
+                "range": [0, None],  # Force y-axis to start at 0
+                "zeroline": True,
+                "zerolinecolor": 'rgba(0,0,0,0.5)',
+                "zerolinewidth": 1.5
+            },
+            "height": 600,
+            "margin": {
+                "b": 100,  # Increased bottom margin for rotated labels
+                "l": 60,
+                "r": 40,
+                "t": 80
+            },
             "showlegend": False,
-            "plot_bgcolor": "#f0f8ff",
+            "plot_bgcolor": "rgba(240,248,255,0.5)",
             "paper_bgcolor": "white",
+            "violingap": 0.3,  # Gap between violins
+            "violingroupgap": 0.2  # Gap between violin groups
         }
 
-        # Return the chart data and layout as JSON
-        return jsonify({"data": [trace.to_plotly_json() for trace in traces], "layout": layout}), 200
+        # Add summary statistics
+        stats = {
+            "total_samples": sum(len(trace['y']) for trace in traces),
+            "commodities": len(traces),
+            "time_range": postgres_interval
+        }
+
+        return jsonify({
+            "data": [trace.to_plotly_json() for trace in traces],
+            "layout": layout,
+            "stats": stats
+        }), 200
 
     except Exception as e:
         app.logger.error(f"Error generating shipping violin plot: {str(e)}")
-        return jsonify({"error": "Failed to generate shipping violin plot"}), 500
-
-
+        return jsonify({
+            "error": "Failed to generate shipping violin plot",
+            "details": str(e)
+        }), 500
 
 
 
