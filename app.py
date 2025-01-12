@@ -3539,16 +3539,152 @@ from scipy import stats
 
 
 # terminal correlation for USDA data
+
+# @app.route("/api/terminal_correlation", methods=["GET"])
+# def get_terminal_correlation():
+#     try:
+#         # Query data with proper filtering
+#         source = request.args.get('source', 'ProduceIQ')  # Default to USDA
+#         query = text("""
+#     SELECT 
+#         commodity,
+#         price,
+#         DATE(DATE(year || '-01-01'), '+' || (day - 1) || ' days') as date
+#             FROM price_data
+#             WHERE source = :source
+#             ORDER BY date, commodity
+#         """)
+        
+#         result = db.session.execute(query, {'source': source}).fetchall()
+#         print(f"Query result length: {len(result)}")  # Debugging log
+
+#         if not result:
+#             return jsonify({"error": "No data found"}), 404
+
+#         # Create DataFrame and process data
+#         df = pd.DataFrame(result, columns=['commodity', 'price', 'date'])
+#         print(f"Initial DataFrame shape: {df.shape}")  # Debugging log
+
+#         # Ensure 'date' column is treated as datetime
+#         df['date'] = pd.to_datetime(df['date'])
+
+#         # Handle duplicate (date, commodity) entries by aggregating
+#         df = df.groupby(['date', 'commodity'], as_index=False)['price'].mean()
+#         print(f"DataFrame shape after grouping: {df.shape}")  # Debugging log
+
+#         # Create pivot table
+#         pivot_df = df.pivot(index='date', columns='commodity', values='price')
+#         print(f"Pivot table shape: {pivot_df.shape}")  # Debugging log
+
+#         del df
+#         import gc
+#         gc.collect()
+
+#         # Forward fill missing values before calculating percentage change
+#         pivot_df = pivot_df.ffill(limit=3)  # Forward fill up to 3 missing values
+#         returns = pivot_df.pct_change()  # Calculate percentage change
+#         print(f"Returns DataFrame shape before filtering: {returns.shape}")  # Debugging log
+
+#         # Remove columns with too many missing values
+#         min_valid_ratio = 0.3  # At least 30% valid data
+#         valid_columns = returns.columns[returns.count() > len(returns) * min_valid_ratio]
+#         returns = returns[valid_columns]
+#         print(f"Returns DataFrame shape after filtering: {returns.shape}")  # Debugging log
+
+#         del pivot_df
+#         gc.collect()
+
+#         # Calculate correlation matrix
+#         correlation_matrix = returns.corr(method='pearson')
+#         correlation_matrix.fillna(0, inplace=True)
+#         print(f"Correlation matrix shape: {correlation_matrix.shape}")  # Debugging log
+
+#         # Prepare data for plotting
+#         labels = correlation_matrix.columns.tolist()
+#         z_values = correlation_matrix.values.tolist()
+
+#         # Reverse the order of y-axis labels and rows in z_values
+#         reversed_labels = labels[::-1]  # Reverse the y-axis labels
+#         reversed_z_values = z_values[::-1]  # Reverse the rows of the correlation matrix
+
+#         # Create annotations dynamically for reversed labels and z_values
+#         annotations = [
+#             {
+#                 "x": labels[col],
+#                 "y": reversed_labels[row],  # Adjust for reversed y-axis
+#                 "text": f"{reversed_z_values[row][col]:.2f}",  # Use reversed data
+#                 "showarrow": False,
+#                 "font": {
+#                     "color": "white",
+#                     "size": 10,
+#                 },
+#             }
+#             for row in range(len(reversed_labels))
+#             for col in range(len(labels))
+#         ]
+
+#         # Prepare Plotly chart
+#         chart = {
+#             "data": [
+#                 {
+#                     "z": reversed_z_values,  # Use reversed rows for heatmap
+#                     "x": labels,
+#                     "y": reversed_labels,  # Use reversed y-axis labels
+#                     "type": "heatmap",
+#                     "colorscale": "CoolWarm",
+#                     "showscale": True,
+#                     "text": [[f"{val:.2f}" for val in row] for row in reversed_z_values],
+#                     "hoverinfo": "text",
+#                 }
+#             ],
+#             "layout": {
+#                 "title": "Correlation Matrix of Terminal Market Prices",
+#                 "xaxis": {
+#                     "title": "Commodities",
+#                     "tickangle": -45,
+#                     "automargin": True,
+#                 },
+#                 "yaxis": {
+#                     "title": "Commodities",
+#                     "automargin": True,
+#                 },
+#                 "height": 600,
+#                 "width": 600,
+#                 "annotations": annotations,
+#             },
+#         }
+
+#         # Add summary statistics
+#         summary_stats = {
+#             "total_records": len(returns),  # Updated to use 'returns'
+#             "unique_commodities": len(labels),
+#             "date_range": {
+#                 "start": returns.index.min().strftime('%Y-%m-%d'),
+#                 "end": returns.index.max().strftime('%Y-%m-%d'),
+#             },
+#             "average_correlation": float(correlation_matrix.mean().mean()),
+#         }
+
+#         print(f"Final chart labels: {len(labels)}, annotations: {len(annotations)}")  # Debugging log
+
+#         return jsonify({"chart": chart, "stats": summary_stats}), 200
+
+#     except Exception as e:
+#         app.logger.error(f"Error generating terminal correlation chart: {str(e)}")
+#         import traceback
+#         traceback.print_exc()
+#         return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
+
 @app.route("/api/terminal_correlation", methods=["GET"])
 def get_terminal_correlation():
     try:
         # Query data with proper filtering
         source = request.args.get('source', 'ProduceIQ')  # Default to USDA
         query = text("""
-    SELECT 
-        commodity,
-        price,
-        DATE(DATE(year || '-01-01'), '+' || (day - 1) || ' days') as date
+            SELECT 
+                commodity,
+                price,
+                DATE(CONCAT(year, '-01-01')::date + (day - 1) * INTERVAL '1 day') as date
             FROM price_data
             WHERE source = :source
             ORDER BY date, commodity
@@ -3614,7 +3750,7 @@ def get_terminal_correlation():
                 "text": f"{reversed_z_values[row][col]:.2f}",  # Use reversed data
                 "showarrow": False,
                 "font": {
-                    "color": "white",
+                    "color": "white" if abs(reversed_z_values[row][col]) > 0.5 else "black",
                     "size": 10,
                 },
             }
@@ -3674,21 +3810,30 @@ def get_terminal_correlation():
         traceback.print_exc()
         return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
 
-# @app.route("/api/terminal_correlation", methods=["GET"])
-# def get_terminal_correlation():
+
+
+
+
+
+
+# shipping correlation for ProduceIQ data
+
+# @app.route("/api/shipping_correlation", methods=["GET"])
+# def get_shipping_correlation():
 #     try:
 #         # Query data with proper filtering
+#         source = request.args.get('source', 'ProduceIQ')  # Default to USDA
 #         query = text("""
-#             SELECT 
-#                 commodity,
-#                 price,
-#                 DATE(CONCAT(year, '-01-01')::date + (day - 1) * INTERVAL '1 day') as date
-#             FROM price_data
-#             WHERE source = 'USDA'
-#             ORDER BY date, commodity
-#         """)
+#     SELECT 
+#         commodity,
+#         price,
+#         DATE(DATE(year || '-01-01'), '+' || (day - 1) || ' days') as date
+#     FROM price_data
+#     WHERE source = :source
+#     ORDER BY date, commodity
+# """)
         
-#         result = db.session.execute(query).fetchall()
+#         result = db.session.execute(query, {'source': source}).fetchall()
 #         print(f"Query result length: {len(result)}")  # Debugging log
 
 #         if not result:
@@ -3748,286 +3893,7 @@ def get_terminal_correlation():
 #                 "text": f"{reversed_z_values[row][col]:.2f}",  # Use reversed data
 #                 "showarrow": False,
 #                 "font": {
-#                     "color": "white" if abs(reversed_z_values[row][col]) > 0.5 else "black",
-#                     "size": 10,
-#                 },
-#             }
-#             for row in range(len(reversed_labels))
-#             for col in range(len(labels))
-#         ]
-
-#         # Prepare Plotly chart
-#         chart = {
-#             "data": [
-#                 {
-#                     "z": reversed_z_values,  # Use reversed rows for heatmap
-#                     "x": labels,
-#                     "y": reversed_labels,  # Use reversed y-axis labels
-#                     "type": "heatmap",
-#                     "colorscale": "CoolWarm",
-#                     "showscale": True,
-#                     "text": [[f"{val:.2f}" for val in row] for row in reversed_z_values],
-#                     "hoverinfo": "text",
-#                 }
-#             ],
-#             "layout": {
-#                 "title": "Correlation Matrix of Terminal Market Prices",
-#                 "xaxis": {
-#                     "title": "Commodities",
-#                     "tickangle": -45,
-#                     "automargin": True,
-#                 },
-#                 "yaxis": {
-#                     "title": "Commodities",
-#                     "automargin": True,
-#                 },
-#                 "height": 600,
-#                 "width": 600,
-#                 "annotations": annotations,
-#             },
-#         }
-
-#         # Add summary statistics
-#         summary_stats = {
-#             "total_records": len(returns),  # Updated to use 'returns'
-#             "unique_commodities": len(labels),
-#             "date_range": {
-#                 "start": returns.index.min().strftime('%Y-%m-%d'),
-#                 "end": returns.index.max().strftime('%Y-%m-%d'),
-#             },
-#             "average_correlation": float(correlation_matrix.mean().mean()),
-#         }
-
-#         print(f"Final chart labels: {len(labels)}, annotations: {len(annotations)}")  # Debugging log
-
-#         return jsonify({"chart": chart, "stats": summary_stats}), 200
-
-#     except Exception as e:
-#         app.logger.error(f"Error generating terminal correlation chart: {str(e)}")
-#         import traceback
-#         traceback.print_exc()
-#         return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
-
-
-
-
-
-
-
-# shipping correlation for ProduceIQ data
-
-@app.route("/api/shipping_correlation", methods=["GET"])
-def get_shipping_correlation():
-    try:
-        # Query data with proper filtering
-        source = request.args.get('source', 'ProduceIQ')  # Default to USDA
-        query = text("""
-    SELECT 
-        commodity,
-        price,
-        DATE(DATE(year || '-01-01'), '+' || (day - 1) || ' days') as date
-    FROM price_data
-    WHERE source = :source
-    ORDER BY date, commodity
-""")
-        
-        result = db.session.execute(query, {'source': source}).fetchall()
-        print(f"Query result length: {len(result)}")  # Debugging log
-
-        if not result:
-            return jsonify({"error": "No data found"}), 404
-
-        # Create DataFrame and process data
-        df = pd.DataFrame(result, columns=['commodity', 'price', 'date'])
-        print(f"Initial DataFrame shape: {df.shape}")  # Debugging log
-
-        # Ensure 'date' column is treated as datetime
-        df['date'] = pd.to_datetime(df['date'])
-
-        # Handle duplicate (date, commodity) entries by aggregating
-        df = df.groupby(['date', 'commodity'], as_index=False)['price'].mean()
-        print(f"DataFrame shape after grouping: {df.shape}")  # Debugging log
-
-        # Create pivot table
-        pivot_df = df.pivot(index='date', columns='commodity', values='price')
-        print(f"Pivot table shape: {pivot_df.shape}")  # Debugging log
-
-        del df
-        import gc
-        gc.collect()
-
-        # Forward fill missing values before calculating percentage change
-        pivot_df = pivot_df.ffill(limit=3)  # Forward fill up to 3 missing values
-        returns = pivot_df.pct_change()  # Calculate percentage change
-        print(f"Returns DataFrame shape before filtering: {returns.shape}")  # Debugging log
-
-        # Remove columns with too many missing values
-        min_valid_ratio = 0.3  # At least 30% valid data
-        valid_columns = returns.columns[returns.count() > len(returns) * min_valid_ratio]
-        returns = returns[valid_columns]
-        print(f"Returns DataFrame shape after filtering: {returns.shape}")  # Debugging log
-
-        del pivot_df
-        gc.collect()
-
-        # Calculate correlation matrix
-        correlation_matrix = returns.corr(method='pearson')
-        correlation_matrix.fillna(0, inplace=True)
-        print(f"Correlation matrix shape: {correlation_matrix.shape}")  # Debugging log
-
-        # Prepare data for plotting
-        labels = correlation_matrix.columns.tolist()
-        z_values = correlation_matrix.values.tolist()
-
-        # Reverse the order of y-axis labels and rows in z_values
-        reversed_labels = labels[::-1]  # Reverse the y-axis labels
-        reversed_z_values = z_values[::-1]  # Reverse the rows of the correlation matrix
-
-        # Create annotations dynamically for reversed labels and z_values
-        annotations = [
-            {
-                "x": labels[col],
-                "y": reversed_labels[row],  # Adjust for reversed y-axis
-                "text": f"{reversed_z_values[row][col]:.2f}",  # Use reversed data
-                "showarrow": False,
-                "font": {
-                    "color": "white",
-                    "size": 10,
-                },
-            }
-            for row in range(len(reversed_labels))
-            for col in range(len(labels))
-        ]
-
-        # Prepare Plotly chart
-        chart = {
-            "data": [
-                {
-                    "z": reversed_z_values,  # Use reversed rows for heatmap
-                    "x": labels,
-                    "y": reversed_labels,  # Use reversed y-axis labels
-                    "type": "heatmap",
-                    "colorscale": "CoolWarm",
-                    "showscale": True,
-                    "text": [[f"{val:.2f}" for val in row] for row in reversed_z_values],
-                    "hoverinfo": "text",
-                }
-            ],
-            "layout": {
-                "title": "Correlation Matrix of Shipping Prices",
-                "xaxis": {
-                    "title": "Commodities",
-                    "tickangle": -45,
-                    "automargin": True,
-                },
-                "yaxis": {
-                    "title": "Commodities",
-                    "automargin": True,
-                },
-                "height": 600,
-                "width": 600,
-                "annotations": annotations,
-            },
-        }
-
-        # Add summary statistics
-        summary_stats = {
-            "total_records": len(returns),  # Updated to use 'returns'
-            "unique_commodities": len(labels),
-            "date_range": {
-                "start": returns.index.min().strftime('%Y-%m-%d'),
-                "end": returns.index.max().strftime('%Y-%m-%d'),
-            },
-            "average_correlation": float(correlation_matrix.mean().mean()),
-        }
-
-        print(f"Final chart labels: {len(labels)}, annotations: {len(annotations)}")  # Debugging log
-
-        return jsonify({"chart": chart, "stats": summary_stats}), 200
-
-    except Exception as e:
-        app.logger.error(f"Error generating shipping correlation chart: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
-
-# @app.route("/api/shipping_correlation", methods=["GET"])
-# def get_shipping_correlation():
-#     try:
-#         # Query data with proper filtering
-#         query = text("""
-#             SELECT 
-#                 commodity,
-#                 price,
-#                 DATE(CONCAT(year, '-01-01')::date + (day - 1) * INTERVAL '1 day') as date
-#             FROM shipping_price_data
-#             WHERE source = 'ProduceIQ'
-#               AND price > 0
-#               AND price IS NOT NULL
-#             ORDER BY date, commodity
-#         """)
-        
-#         result = db.session.execute(query).fetchall()
-#         print(f"Query result length: {len(result)}")  # Debugging log
-
-#         if not result:
-#             return jsonify({"error": "No data found"}), 404
-
-#         # Create DataFrame and process data
-#         df = pd.DataFrame(result, columns=['commodity', 'price', 'date'])
-#         print(f"Initial DataFrame shape: {df.shape}")  # Debugging log
-
-#         # Ensure 'date' column is treated as datetime
-#         df['date'] = pd.to_datetime(df['date'])
-
-#         # Handle duplicate (date, commodity) entries by aggregating
-#         df = df.groupby(['date', 'commodity'], as_index=False)['price'].mean()
-#         print(f"DataFrame shape after grouping: {df.shape}")  # Debugging log
-
-#         # Create pivot table
-#         pivot_df = df.pivot(index='date', columns='commodity', values='price')
-#         print(f"Pivot table shape: {pivot_df.shape}")  # Debugging log
-
-#         del df
-#         import gc
-#         gc.collect()
-
-#         # Calculate returns and handle missing values
-#         pivot_df = pivot_df.ffill(limit=3)  # Forward fill missing values up to 3 days
-#         returns = pivot_df.pct_change()  # Calculate percentage change
-#         print(f"Returns DataFrame shape before filtering: {returns.shape}")  # Debugging log
-
-#         # Remove columns with too many missing values
-#         min_valid_ratio = 0.3  # At least 30% valid data
-#         valid_columns = returns.columns[returns.count() > len(returns) * min_valid_ratio]
-#         returns = returns[valid_columns]
-#         print(f"Returns DataFrame shape after filtering: {returns.shape}")  # Debugging log
-
-#         del pivot_df
-#         gc.collect()
-
-#         # Calculate correlation matrix
-#         correlation_matrix = returns.corr(method='pearson')
-#         correlation_matrix.fillna(0, inplace=True)
-#         print(f"Correlation matrix shape: {correlation_matrix.shape}")  # Debugging log
-
-#         # Prepare data for plotting
-#         labels = correlation_matrix.columns.tolist()
-#         z_values = correlation_matrix.values.tolist()
-
-#         # Reverse the order of y-axis labels and rows in z_values
-#         reversed_labels = labels[::-1]  # Reverse the y-axis labels
-#         reversed_z_values = z_values[::-1]  # Reverse the rows of the correlation matrix
-
-#         # Create annotations dynamically for reversed labels and z_values
-#         annotations = [
-#             {
-#                 "x": labels[col],
-#                 "y": reversed_labels[row],  # Adjust for reversed y-axis
-#                 "text": f"{reversed_z_values[row][col]:.2f}",  # Use reversed data
-#                 "showarrow": False,
-#                 "font": {
-#                     "color": "white" if abs(reversed_z_values[row][col]) > 0.5 else "black",
+#                     "color": "white",
 #                     "size": 10,
 #                 },
 #             }
@@ -4086,6 +3952,142 @@ def get_shipping_correlation():
 #         import traceback
 #         traceback.print_exc()
 #         return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
+
+
+@app.route("/api/shipping_correlation", methods=["GET"])
+def get_shipping_correlation():
+    try:
+        # Query data with proper filtering
+        source = request.args.get('source', 'ProduceIQ')  # Default to USDA
+        query = text("""
+            SELECT 
+                commodity,
+                price,
+                DATE(CONCAT(year, '-01-01')::date + (day - 1) * INTERVAL '1 day') as date
+            FROM shipping_price_data
+            WHERE source = :source
+            ORDER BY date, commodity
+        """)
+        
+        result = db.session.execute(query, {'source': source}).fetchall()
+        print(f"Query result length: {len(result)}")  # Debugging log
+
+        if not result:
+            return jsonify({"error": "No data found"}), 404
+
+        # Create DataFrame and process data
+        df = pd.DataFrame(result, columns=['commodity', 'price', 'date'])
+        print(f"Initial DataFrame shape: {df.shape}")  # Debugging log
+
+        # Ensure 'date' column is treated as datetime
+        df['date'] = pd.to_datetime(df['date'])
+
+        # Handle duplicate (date, commodity) entries by aggregating
+        df = df.groupby(['date', 'commodity'], as_index=False)['price'].mean()
+        print(f"DataFrame shape after grouping: {df.shape}")  # Debugging log
+
+        # Create pivot table
+        pivot_df = df.pivot(index='date', columns='commodity', values='price')
+        print(f"Pivot table shape: {pivot_df.shape}")  # Debugging log
+
+        del df
+        import gc
+        gc.collect()
+
+        # Calculate returns and handle missing values
+        pivot_df = pivot_df.ffill(limit=3)  # Forward fill missing values up to 3 days
+        returns = pivot_df.pct_change()  # Calculate percentage change
+        print(f"Returns DataFrame shape before filtering: {returns.shape}")  # Debugging log
+
+        # Remove columns with too many missing values
+        min_valid_ratio = 0.3  # At least 30% valid data
+        valid_columns = returns.columns[returns.count() > len(returns) * min_valid_ratio]
+        returns = returns[valid_columns]
+        print(f"Returns DataFrame shape after filtering: {returns.shape}")  # Debugging log
+
+        del pivot_df
+        gc.collect()
+
+        # Calculate correlation matrix
+        correlation_matrix = returns.corr(method='pearson')
+        correlation_matrix.fillna(0, inplace=True)
+        print(f"Correlation matrix shape: {correlation_matrix.shape}")  # Debugging log
+
+        # Prepare data for plotting
+        labels = correlation_matrix.columns.tolist()
+        z_values = correlation_matrix.values.tolist()
+
+        # Reverse the order of y-axis labels and rows in z_values
+        reversed_labels = labels[::-1]  # Reverse the y-axis labels
+        reversed_z_values = z_values[::-1]  # Reverse the rows of the correlation matrix
+
+        # Create annotations dynamically for reversed labels and z_values
+        annotations = [
+            {
+                "x": labels[col],
+                "y": reversed_labels[row],  # Adjust for reversed y-axis
+                "text": f"{reversed_z_values[row][col]:.2f}",  # Use reversed data
+                "showarrow": False,
+                "font": {
+                    "color": "white" if abs(reversed_z_values[row][col]) > 0.5 else "black",
+                    "size": 10,
+                },
+            }
+            for row in range(len(reversed_labels))
+            for col in range(len(labels))
+        ]
+
+        # Prepare Plotly chart
+        chart = {
+            "data": [
+                {
+                    "z": reversed_z_values,  # Use reversed rows for heatmap
+                    "x": labels,
+                    "y": reversed_labels,  # Use reversed y-axis labels
+                    "type": "heatmap",
+                    "colorscale": "CoolWarm",
+                    "showscale": True,
+                    "text": [[f"{val:.2f}" for val in row] for row in reversed_z_values],
+                    "hoverinfo": "text",
+                }
+            ],
+            "layout": {
+                "title": "Correlation Matrix of Shipping Prices",
+                "xaxis": {
+                    "title": "Commodities",
+                    "tickangle": -45,
+                    "automargin": True,
+                },
+                "yaxis": {
+                    "title": "Commodities",
+                    "automargin": True,
+                },
+                "height": 600,
+                "width": 600,
+                "annotations": annotations,
+            },
+        }
+
+        # Add summary statistics
+        summary_stats = {
+            "total_records": len(returns),  # Updated to use 'returns'
+            "unique_commodities": len(labels),
+            "date_range": {
+                "start": returns.index.min().strftime('%Y-%m-%d'),
+                "end": returns.index.max().strftime('%Y-%m-%d'),
+            },
+            "average_correlation": float(correlation_matrix.mean().mean()),
+        }
+
+        print(f"Final chart labels: {len(labels)}, annotations: {len(annotations)}")  # Debugging log
+
+        return jsonify({"chart": chart, "stats": summary_stats}), 200
+
+    except Exception as e:
+        app.logger.error(f"Error generating shipping correlation chart: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
 
 
 
