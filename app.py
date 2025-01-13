@@ -3276,10 +3276,11 @@ def shipping_price_violin():
                 # Calculate specific percentiles
                 percentiles = np.percentile(prices, [5, 25, 50, 75, 95])
                 # Sample around percentiles to maintain diversity
-                sampled_points = [
-                    np.random.normal(loc=p if p > 0 else 0.5, scale=0.5, size=10).tolist() for p in percentiles
-                ]
-                downsampled_data[commodity] = sum(sampled_points, [])  # Flatten the list
+                sampled_points = []
+                for p in percentiles:
+                    if p > 0.25:  # Ensure valid range
+                        sampled_points.extend(np.random.normal(loc=p, scale=0.5, size=10).tolist())
+                downsampled_data[commodity] = sampled_points
             return downsampled_data
 
         downsampled_data = downsample_data(data)
@@ -3298,14 +3299,16 @@ def shipping_price_violin():
                         name=commodity,
                         box_visible=True,
                         meanline_visible=True,
-                        marker_color='green',
+                        marker=dict(size=4, opacity=0.7),  # Adjust marker size and opacity
                         points="all",  # Show individual data points
-
+                        bandwidth=0.2,  # Adjust bandwidth for smoother violin shapes
+                        marker_color="green",
+                        line={"color": "darkgreen", "width": 1}
                     )
                 )
 
         # Calculate the maximum y-value for all commodities
-        max_y = max([max(prices) for prices in downsampled_data.values()] + [0.25])  # Ensure minimum y is 0.25
+        max_y = max([max(prices) for prices in downsampled_data.values()] + [0.25]) * 1.1  # Increase margin
 
         # Create the layout for the chart
         layout = {
