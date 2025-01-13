@@ -3262,32 +3262,47 @@ def shipping_price_violin():
 
         # Group data by commodity and filter invalid prices
         data = {}
+        min_price = 0.25  # Set minimum price threshold
         for row in result:
             commodity, price = row[0], row[1]
-            if price is not None and price >= 0.25:  # Filter prices less than 0.25
+            if price is not None and price >= min_price:
                 if commodity not in data:
                     data[commodity] = []
                 data[commodity].append(price)
 
-        # Downsample data by percentiles
-        def downsample_data(data):
+        def generate_bounded_samples(mean, std, size=10, min_val=0.25):
+            samples = []
+            while len(samples) < size:
+                sample = np.random.normal(loc=mean, scale=std)
+                if sample >= min_val:  # Only accept samples above min_val
+                    samples.append(sample)
+            return samples
+
+        # Modified downsampling function to respect minimum price
+        def downsample_data(data, min_price=0.25):
             downsampled_data = {}
             for commodity, prices in data.items():
-                # Calculate specific percentiles
-                percentiles = np.percentile(prices, [5, 25, 50, 75, 95])
-                # Sample around percentiles to maintain diversity
-                sampled_points = [
-                    np.random.normal(loc=p if p > 0 else 0.25, scale=0.5, size=10).tolist() for p in percentiles
-                ]
-                downsampled_data[commodity] = sum(sampled_points, [])  # Flatten the list
+                if prices:
+                    # Calculate percentiles excluding any values below min_price
+                    prices = np.array([p for p in prices if p >= min_price])
+                    percentiles = np.percentile(prices, [5, 25, 50, 75, 95])
+                    
+                    # Generate samples around each percentile with bounded distribution
+                    sampled_points = []
+                    for p in percentiles:
+                        std = max(0.5, p * 0.1)  # Scale standard deviation with percentile value
+                        samples = generate_bounded_samples(p, std, size=10, min_val=min_price)
+                        sampled_points.extend(samples)
+                    
+                    downsampled_data[commodity] = sampled_points
             return downsampled_data
 
-        downsampled_data = downsample_data(data)
+        downsampled_data = downsample_data(data, min_price)
 
         # Create violin traces for each commodity
         traces = []
         for commodity, prices in downsampled_data.items():
-            if prices:  # Only add traces for commodities with valid prices
+            if prices:
                 traces.append(
                     go.Violin(
                         y=prices,
@@ -3295,12 +3310,15 @@ def shipping_price_violin():
                         box_visible=True,
                         meanline_visible=True,
                         marker_color='green',
-                        points=False,  # Disable individual data points
+                        points=False,
+                        side='positive',  # Only show right half of violin
+                        spanmode='hard',  # Enforce hard boundaries
+                        bandwidth=0.5,    # Adjust bandwidth for smoother distribution
                     )
                 )
 
         # Calculate the maximum y-value for all commodities
-        max_y = max([max(prices) for prices in downsampled_data.values()] + [0.25])  # Ensure minimum y is 0.25
+        max_y = max([max(prices) for prices in downsampled_data.values()] + [min_price]) * 1.1  # Add 10% padding
 
         # Create the layout for the chart
         layout = {
@@ -3308,8 +3326,8 @@ def shipping_price_violin():
             "xaxis": {"title": {"text": "Commodity", "font": {"size": 14, "weight": "bold"}}, "automargin": True},
             "yaxis": {
                 "title": {"text": "Shipping Price", "font": {"size": 14, "weight": "bold"}},
-                "range": [0, max_y],  # Ensure y-axis starts at 0 and ends at the max value
-                "zeroline": True,  # Add a zero-line for better visibility
+                "range": [min_price * 0.9, max_y],  # Start slightly below min_price for better visibility
+                "zeroline": True,
             },
             "height": 500,
             "width": 700,
@@ -3318,7 +3336,6 @@ def shipping_price_violin():
             "paper_bgcolor": "white",
         }
 
-        # Return the chart data and layout as JSON
         return jsonify({"data": [trace.to_plotly_json() for trace in traces], "layout": layout}), 200
 
     except Exception as e:
