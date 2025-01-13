@@ -3236,72 +3236,77 @@ def terminal_price_violin():
 @app.route("/api/shipping_price_violin", methods=["GET"])
 def shipping_price_violin():
     try:
-        app.logger.info("Fetching data for shipping violin plot with refined KDE...")
+        app.logger.info("Fetching data for shipping violin plot...")
 
         # Get the time frame from query parameters (default to '7d')
         time_frame = request.args.get("timeFrame", "7d")
 
-        # Map timeFrame to PostgreSQL-compatible interval
+        # Map timeFrame to PostgreSQL-compatible intervals
         time_intervals = {
-            "3d": "'3 days'",
-            "7d": "'7 days'",
-            "1m": "'1 month'",
-            "3m": "'3 months'",
-            "1y": "'1 year'",
+            "3d": "3 days",
+            "7d": "7 days",
+            "1m": "1 month",
+            "3m": "3 months",
+            "1y": "1 year",
         }
-        postgres_interval = time_intervals.get(time_frame.lower(), "'7 days'")
+        postgres_interval = time_intervals.get(time_frame.lower(), "7 days")
 
         # SQL query to fetch data filtered by source and time range
         query = text(f"""
             SELECT commodity, price
             FROM shipping_price_data
             WHERE source = 'ProduceIQ'
-              AND TO_DATE(year || '-01-01', 'YYYY-MM-DD') + (day - 1) * interval '1 day' >= NOW() - INTERVAL {postgres_interval}
+              AND make_date(year, 1, 1) + (day - 1) * INTERVAL '1 day' >= NOW() - INTERVAL '{postgres_interval}'
         """)
         result = db.session.execute(query).fetchall()
 
-        # Group data by commodity and filter invalid prices
-        data = {}
+        # Group data by commodity
+        grouped_data = {}
         for row in result:
-            commodity, price = row[0], row[1]
-            if price is not None and price >= 0.25:  # Filter prices less than 0.25
-                if commodity not in data:
-                    data[commodity] = []
-                data[commodity].append(price)
+            commodity, price = row
+            if commodity not in grouped_data:
+                grouped_data[commodity] = []
+            grouped_data[commodity].append(price)
 
-        # Use full dataset without downsampling
-        violin_data = {commodity: prices for commodity, prices in data.items()}
+        # Apply downsampling by percentiles
+        def downsample_data(data):
+            downsampled_data = {}
+            for commodity, prices in data.items():
+                # Calculate percentiles
+                percentiles = np.percentile(prices, [5, 25, 50, 75, 95])
+                # Add small noise for diversity
+                sampled_points = [
+                    np.random.normal(loc=p, scale=0.5, size=10).tolist() for p in percentiles
+                ]
+                downsampled_data[commodity] = sum(sampled_points, [])  # Flatten the list
+            return downsampled_data
 
-        # Create violin traces for each commodity
-        traces = []
-        for commodity, prices in violin_data.items():
-            if prices:  # Only add traces for commodities with valid prices
-                traces.append(
-                    go.Violin(
-                        y=prices,
-                        name=commodity,
-                        box_visible=True,
-                        meanline_visible=True,
-                        points="all",  # Show individual data points
-                        marker=dict(size=3, opacity=0.8),  # Adjust marker size and opacity
-                        bandwidth=0.5,  # Adjust bandwidth for smoother violin shapes
-                        fillcolor="green",
-                        line_color="darkgreen",
-                        spanmode="hard",  # Ensure violin spans tightly around the data
-                    )
-                )
+        downsampled_data = downsample_data(grouped_data)
 
-        # Calculate the maximum y-value for all commodities
-        max_y = max([max(prices) for prices in violin_data.values()] + [0.25]) * 1.1  # Add margin
+        # Create violin traces for ProduceIQ
+        traces = [
+            go.Violin(
+                y=prices,
+                name=commodity,
+                box_visible=True,
+                meanline_visible=True,
+                points="all",  # Show all individual data points
+                marker=dict(size=4, opacity=0.8),  # Customize marker size and opacity
+                marker_color='green',  # Color for ProduceIQ
+                bandwidth=0.5,  # Adjust for smoother violin shapes
+                spanmode="hard"  # Ensure violin spans tightly around the data
+            )
+            for commodity, prices in downsampled_data.items()
+        ]
 
-        # Create the layout for the chart
+        # Layout for ProduceIQ
         layout = {
-            "title": {"text": "Shipping Price Distribution by Commodity", "font": {"size": 16, "weight": "bold"}},
+            "title": {"text": "ProduceIQ Shipping Price Distribution by Commodity", "font": {"size": 16, "weight": "bold"}},
             "xaxis": {"title": {"text": "Commodity", "font": {"size": 14, "weight": "bold"}}, "automargin": True},
             "yaxis": {
                 "title": {"text": "Price", "font": {"size": 14, "weight": "bold"}},
-                "range": [0, max_y],  # Ensure y-axis starts at 0 and ends at the max value
                 "zeroline": True,  # Add a zero-line for better visibility
+                "automargin": True,
             },
             "height": 500,
             "width": 700,
@@ -3310,12 +3315,16 @@ def shipping_price_violin():
             "paper_bgcolor": "white",
         }
 
-        # Return the chart data and layout as JSON
-        return jsonify({"data": [trace.to_plotly_json() for trace in traces], "layout": layout}), 200
+        # Convert traces to JSON serializable format
+        traces_json = [trace.to_plotly_json() for trace in traces]
+
+        # Return JSON response containing the chart for ProduceIQ
+        return jsonify({"data": traces_json, "layout": layout}), 200
 
     except Exception as e:
         app.logger.error(f"Error generating shipping violin plot: {str(e)}")
         return jsonify({"error": "Failed to generate shipping violin plot"}), 500
+
 
 
 
