@@ -3270,25 +3270,35 @@ def shipping_price_violin():
                     data[commodity] = []
                 data[commodity].append(price)
 
-        # Modified downsampling function with gentler approach
+        # Improved downsampling function with better distribution preservation
         def downsample_data(data):
             downsampled_data = {}
             for commodity, prices in data.items():
-                if prices:
-                    # Calculate percentiles
+                if len(prices) > 0:
+                    # Convert to numpy array
                     prices = np.array(prices)
-                    percentiles = np.percentile(prices, np.linspace(0, 100, 20))  # More percentile points
                     
-                    # Generate samples around each percentile
-                    sampled_points = []
-                    for p in percentiles:
-                        # Generate samples with smaller variance
-                        samples = np.random.normal(loc=p, scale=0.2, size=5)
-                        # Clip to ensure minimum price
-                        samples = np.clip(samples, min_price, None)
-                        sampled_points.extend(samples)
+                    # Calculate quartiles and IQR
+                    q1, q3 = np.percentile(prices, [25, 75])
+                    iqr = q3 - q1
                     
-                    downsampled_data[commodity] = sampled_points
+                    # Generate more points around the median and extremes
+                    median = np.median(prices)
+                    min_val = max(min_price, np.min(prices))
+                    max_val = np.max(prices)
+                    
+                    # Create a distribution that preserves the shape
+                    core_points = np.random.normal(loc=median, scale=iqr/2, size=100)
+                    tail_points_low = np.random.uniform(min_val, q1, size=25)
+                    tail_points_high = np.random.uniform(q3, max_val, size=25)
+                    
+                    # Combine all points
+                    all_points = np.concatenate([core_points, tail_points_low, tail_points_high])
+                    
+                    # Clip to ensure minimum price
+                    all_points = np.clip(all_points, min_price, None)
+                    
+                    downsampled_data[commodity] = all_points.tolist()
             return downsampled_data
 
         downsampled_data = downsample_data(data)
@@ -3305,7 +3315,12 @@ def shipping_price_violin():
                         meanline_visible=True,
                         marker_color='green',
                         points=False,
-                        bandwidth=1.0,    # Increased bandwidth for smoother distribution
+                        bandwidth=0.7,    # Adjusted bandwidth for better shape
+                        fillcolor='green',
+                        opacity=0.6,
+                        line={"color": "darkgreen", "width": 1},
+                        jitter=0,
+                        hoveron="violins",
                     )
                 )
 
@@ -3318,7 +3333,7 @@ def shipping_price_violin():
             "xaxis": {"title": {"text": "Commodity", "font": {"size": 14, "weight": "bold"}}, "automargin": True},
             "yaxis": {
                 "title": {"text": "Shipping Price", "font": {"size": 14, "weight": "bold"}},
-                "range": [0, max_y],  # Start at 0 for better context
+                "range": [0, max_y],
                 "zeroline": True,
             },
             "height": 500,
@@ -3326,6 +3341,8 @@ def shipping_price_violin():
             "showlegend": False,
             "plot_bgcolor": "#f0f8ff",
             "paper_bgcolor": "white",
+            "violingap": 0.3,
+            "violinmode": "overlay",
         }
 
         return jsonify({"data": [trace.to_plotly_json() for trace in traces], "layout": layout}), 200
