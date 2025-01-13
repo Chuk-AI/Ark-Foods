@@ -3167,7 +3167,7 @@ from flask import jsonify
 @app.route("/api/terminal_price_violin", methods=["GET"])
 def terminal_price_violin():
     try:
-        app.logger.info("Generating terminal violin plots for USDA and ProduceIQ with downsampling...")
+        app.logger.info("Generating terminal violin plots for USDA and ProduceIQ with sample size annotations...")
 
         # Get the time frame from query parameters (default to '7d')
         time_frame = request.args.get("timeFrame", "7d")
@@ -3186,99 +3186,75 @@ def terminal_price_violin():
 
         # PostgreSQL-compatible query to fetch data filtered by source and time range
         query = text(f"""
-            SELECT commodity, price, source
+            SELECT commodity AS varietyName, price, source
             FROM price_data
             WHERE source IN ('USDA', 'ProduceIQ')
               AND make_date(year, 1, 1) + (day - 1) * INTERVAL '1 day' >= NOW() - INTERVAL '{postgres_interval}'
         """)
         result = db.session.execute(query).fetchall()
 
-        # Group data by source and commodity
-        grouped_data = {"USDA": {}, "ProduceIQ": {}}
-        for row in result:
-            commodity, price, source = row
-            if commodity not in grouped_data[source]:
-                grouped_data[source][commodity] = []
-            grouped_data[source][commodity].append(price)
+        # Convert query results into a DataFrame
+        data = pd.DataFrame(result, columns=["varietyName", "price", "source"])
 
-        # Apply downsampling by percentiles
-        def downsample_data(data):
-            downsampled_data = {}
-            for commodity, prices in data.items():
-                # Calculate percentiles
-                percentiles = np.percentile(prices, [5, 25, 50, 75, 95])
-                # Add small noise for diversity
-                sampled_points = [
-                    np.random.normal(loc=p, scale=0.5, size=10).tolist() for p in percentiles
-                ]
-                downsampled_data[commodity] = sum(sampled_points, [])  # Flatten the list
-            return downsampled_data
+        # Separate data by source
+        usda_data = data[data["source"] == "USDA"]
+        produceiq_data = data[data["source"] == "ProduceIQ"]
 
-        usda_data = downsample_data(grouped_data["USDA"])
-        produceiq_data = downsample_data(grouped_data["ProduceIQ"])
-
-        # Create violin traces for USDA
-        usda_traces = [
-            go.Violin(
-                y=prices,
-                name=commodity,
-                box_visible=True,
-                meanline_visible=True,
-                marker_color='blue'  # Color for USDA
+        # Function to create a violin plot with annotations
+        def create_violin_plot(data, title, color):
+            violin_plot = px.violin(
+                data,
+                x="varietyName",
+                y="price",
+                box=True,  # Show box plot inside the violin
+                title=title,
             )
-            for commodity, prices in usda_data.items()
-        ]
 
-        # Create violin traces for ProduceIQ
-        produceiq_traces = [
-            go.Violin(
-                y=prices,
-                name=commodity,
-                box_visible=True,
-                meanline_visible=True,
-                marker_color='green'  # Color for ProduceIQ
+            # Add sample size annotations
+            for variety in data["varietyName"].unique():
+                variety_data = data[data["varietyName"] == variety]["price"].dropna()
+                sample_size = len(variety_data)
+
+                violin_plot.add_annotation(
+                    x=variety,
+                    y=0,
+                    text=f"Sample: {sample_size}",
+                    showarrow=False,
+                    yshift=-10,
+                )
+
+            # Customize layout
+            violin_plot.update_layout(
+                xaxis_title="Variety",
+                yaxis_title="Price",
+                height=600,
+                autosize=True,
+                showlegend=False,
+                font=dict(family="Arial"),
+                plot_bgcolor="#f0f8ff",
+                paper_bgcolor="white",
             )
-            for commodity, prices in produceiq_data.items()
-        ]
+            return violin_plot
 
-        # Layout for USDA
-        usda_layout = {
-            "title": {"text": "USDA Terminal Price Distribution by Commodity", "font": {"size": 16, "weight": "bold"}},
-            "xaxis": {"title": {"text": "Commodity", "font": {"size": 14, "weight": "bold"}}, "automargin": True},
-            "yaxis": {"title": {"text": "Price", "font": {"size": 14, "weight": "bold"}},                "zeroline": True,  # Add a zero-line for better visibility
- "automargin": True},
-            "height": 500,
-            "width": 700,
-            "showlegend": False,
-            "plot_bgcolor": "#f0f8ff",
-            "paper_bgcolor": "white",
-        }
+        # Create plots for USDA and ProduceIQ
+        usda_plot = create_violin_plot(
+            usda_data, "USDA Terminal Price Distribution by Commodity", "blue"
+        )
+        produceiq_plot = create_violin_plot(
+            produceiq_data, "ProduceIQ Terminal Price Distribution by Commodity", "green"
+        )
 
-        # Layout for ProduceIQ
-        produceiq_layout = {
-            "title": {"text": "ProduceIQ Terminal Price Distribution by Commodity", "font": {"size": 16, "weight": "bold"}},
-            "xaxis": {"title": {"text": "Commodity", "font": {"size": 14, "weight": "bold"}}, "automargin": True},
-            "yaxis": {"title": {"text": "Price", "font": {"size": 14, "weight": "bold"}}, "automargin": True},
-            "height": 500,
-            "width": 700,
-            "showlegend": False,
-            "plot_bgcolor": "#f0f8ff",
-            "paper_bgcolor": "white",
-        }
-
-        # Convert traces to JSON serializable format
-        usda_traces_json = [trace.to_plotly_json() for trace in usda_traces]
-        produceiq_traces_json = [trace.to_plotly_json() for trace in produceiq_traces]
+        # Convert plots to JSON serializable format
+        usda_plot_json = usda_plot.to_json()
+        produceiq_plot_json = produceiq_plot.to_json()
 
         # Return JSON response containing separate charts for USDA and ProduceIQ
-        return jsonify({
-            "usda": {"data": usda_traces_json, "layout": usda_layout},
-            "produceiq": {"data": produceiq_traces_json, "layout": produceiq_layout}
-        }), 200
+        return jsonify({"usda": usda_plot_json, "produceiq": produceiq_plot_json}), 200
 
     except Exception as e:
         app.logger.error(f"Error generating terminal violin plots: {str(e)}")
         return jsonify({"error": "Failed to generate terminal violin plots"}), 500
+
 
 
 
