@@ -3106,7 +3106,8 @@ def terminal_price_violin():
         usda_layout = {
             "title": {"text": "USDA Terminal Price Distribution by Commodity", "font": {"size": 16, "weight": "bold"}},
             "xaxis": {"title": {"text": "Commodity", "font": {"size": 14, "weight": "bold"}}, "automargin": True},
-            "yaxis": {"title": {"text": "Price", "font": {"size": 14, "weight": "bold"}}, "automargin": True},
+            "yaxis": {"title": {"text": "Price", "font": {"size": 14, "weight": "bold"}},                "zeroline": True,  # Add a zero-line for better visibility
+ "automargin": True},
             "height": 500,
             "width": 700,
             "showlegend": False,
@@ -3276,7 +3277,7 @@ def shipping_price_violin():
                 percentiles = np.percentile(prices, [5, 25, 50, 75, 95])
                 # Sample around percentiles to maintain diversity
                 sampled_points = [
-                    np.random.normal(loc=p if p > 0 else 0, scale=0.8, size=10).tolist() for p in percentiles
+                    np.random.normal(loc=p if p > 0 else 0, scale=0.5, size=10).tolist() for p in percentiles
                 ]
                 downsampled_data[commodity] = sum(sampled_points, [])  # Flatten the list
             return downsampled_data
@@ -3295,8 +3296,8 @@ def shipping_price_violin():
                         meanline_visible=True,
                         marker_color='green',
                         points=False,  # Disable individual data points
-                        bandwidth=0.7,  # Adjust bandwidth for smoother violin shapes
-                        scalemode="width",  # Scale violins consistently
+                        # bandwidth=0.7,  # Adjust bandwidth for smoother violin shapes
+                        # scalemode="width",  # Scale violins consistently
                     )
                 )
 
@@ -3306,8 +3307,8 @@ def shipping_price_violin():
             "xaxis": {"title": {"text": "Commodity", "font": {"size": 14, "weight": "bold"}}, "automargin": True},
             "yaxis": {
                 "title": {"text": "Shipping Price", "font": {"size": 14, "weight": "bold"}},
-                "automargin": True,
-                "range": [0, None],  # Ensure y-axis starts at 0
+                # "automargin": True,
+                "range": [0.25, None],  # Ensure y-axis starts at 0
                 "zeroline": True,  # Add a zero-line for better visibility
             },
             "height": 500,
