@@ -3300,7 +3300,6 @@ def shipping_price_violin():
                         meanline_visible=True,
                         marker_color='green',
                         points=False,  # Disable individual data points
-                        bandwidth=0.2,  # Adjust bandwidth to prevent over-smoothing
                     )
                 )
 
