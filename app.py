@@ -3301,7 +3301,12 @@ def shipping_price_violin():
                         marker_color='green',
                         points=False,  # Disable individual data points
                         bandwidth=0.2,  # Adjust bandwidth to prevent over-smoothing
-                        width=0.8  # Increase width of violins (default is ~0.5)
+                        width=0.8,  # Increase width of violins (default is ~0.5)
+                        points="all",  # Show individual data points
+                        text=[f"{price:.2f}" for price in prices],  # Add text labels for data points
+                        textposition="top center",  # Position the labels at the top of the points
+                        hoverinfo="text",  # Show text in hover tooltip
+                        
                     )
                 )
 
