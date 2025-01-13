@@ -3277,7 +3277,7 @@ def shipping_price_violin():
                 percentiles = np.percentile(prices, [5, 25, 50, 75, 95])
                 # Sample around percentiles to maintain diversity
                 sampled_points = [
-                    np.random.normal(loc=p if p > 0 else 0.25, scale=0.5, size=10).tolist() for p in percentiles
+                    np.random.normal(loc=p if p > 0 else 0.5, scale=0.5, size=10).tolist() for p in percentiles
                 ]
                 downsampled_data[commodity] = sum(sampled_points, [])  # Flatten the list
             return downsampled_data

@@ -123,6 +123,8 @@
   line-height: 36px;
   border-radius: 18px;
   position: absolute;
+  font-size: 10px;
+  font-weight:900;
   transition: all 0.4s ease;
 }
 
