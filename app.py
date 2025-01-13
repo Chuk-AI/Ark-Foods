@@ -3299,11 +3299,12 @@ def shipping_price_violin():
                         box_visible=True,
                         meanline_visible=True,
                         marker_color='green',
-                        points=False,  # Disable individual data points
+                        points="all",  # Show individual data points
+                        text=[f"{price:.2f}" for price in prices],  # Add data labels
+                        textposition="top center",  # Position labels
+                        hoverinfo="y+text",  # Show price and label in hover tooltip
                         bandwidth=0.2,  # Adjust bandwidth to prevent over-smoothing
                         width=0.8,  # Increase width of violins (default is ~0.5)
-
-                        
                     )
                 )
 
@@ -3332,6 +3333,7 @@ def shipping_price_violin():
     except Exception as e:
         app.logger.error(f"Error generating shipping violin plot: {str(e)}")
         return jsonify({"error": "Failed to generate shipping violin plot"}), 500
+
 
 
 
