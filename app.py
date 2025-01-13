@@ -3287,7 +3287,7 @@ def shipping_price_violin():
 
         # Ensure no negative values in downsampled data
         for commodity in downsampled_data:
-            downsampled_data[commodity] = [max(price, 0.25) for price in downsampled_data[commodity]]
+            downsampled_data[commodity] = [max(price, 0.5) for price in downsampled_data[commodity]]
 
         # Create violin traces for each commodity
         traces = []
