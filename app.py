@@ -3300,11 +3300,7 @@ def shipping_price_violin():
                         meanline_visible=True,
                         marker_color='green',
                         points="all",  # Show individual data points
-                        text=[f"{price:.2f}" for price in prices],  # Add data labels
-                        textposition="top center",  # Position labels
-                        hoverinfo="y+text",  # Show price and label in hover tooltip
-                        bandwidth=0.2,  # Adjust bandwidth to prevent over-smoothing
-                        width=0.8,  # Increase width of violins (default is ~0.5)
+
                     )
                 )
 
