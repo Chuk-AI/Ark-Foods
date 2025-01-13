@@ -3332,7 +3332,6 @@ def terminal_price_violin():
 
 
 
-
 @app.route("/api/shipping_price_violin", methods=["GET"])
 def shipping_price_violin():
     try:
@@ -3380,6 +3379,8 @@ def shipping_price_violin():
                     name=commodity,
                     box_visible=True,
                     meanline_visible=True,
+                    points="all",  # Show all individual data points
+                    marker=dict(size=4, opacity=0.7),  # Customize marker size and opacity
                     marker_color='green'  # Custom color
                 )
             )
