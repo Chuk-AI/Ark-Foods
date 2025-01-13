@@ -3260,16 +3260,16 @@ def shipping_price_violin():
         """)
         result = db.session.execute(query).fetchall()
 
-        # Group data by commodity and filter negative prices
+        # Group data by commodity and filter invalid prices
         data = {}
         for row in result:
             commodity, price = row[0], row[1]
-            if price is not None and price >= 0:  # Exclude invalid or negative prices
+            if price is not None and price >= 0.25:  # Filter prices less than 0.25
                 if commodity not in data:
                     data[commodity] = []
                 data[commodity].append(price)
 
-        # Apply downsampling by percentiles
+        # Downsample data by percentiles
         def downsample_data(data):
             downsampled_data = {}
             for commodity, prices in data.items():
@@ -3277,7 +3277,7 @@ def shipping_price_violin():
                 percentiles = np.percentile(prices, [5, 25, 50, 75, 95])
                 # Sample around percentiles to maintain diversity
                 sampled_points = [
-                    np.random.normal(loc=p if p > 0 else 0, scale=0.5, size=10).tolist() for p in percentiles
+                    np.random.normal(loc=p if p > 0 else 0.25, scale=0.5, size=10).tolist() for p in percentiles
                 ]
                 downsampled_data[commodity] = sum(sampled_points, [])  # Flatten the list
             return downsampled_data
@@ -3296,10 +3296,11 @@ def shipping_price_violin():
                         meanline_visible=True,
                         marker_color='green',
                         points=False,  # Disable individual data points
-                        # bandwidth=0.7,  # Adjust bandwidth for smoother violin shapes
-                        # scalemode="width",  # Scale violins consistently
                     )
                 )
+
+        # Calculate the maximum y-value for all commodities
+        max_y = max([max(prices) for prices in downsampled_data.values()] + [0.25])  # Ensure minimum y is 0.25
 
         # Create the layout for the chart
         layout = {
@@ -3307,8 +3308,7 @@ def shipping_price_violin():
             "xaxis": {"title": {"text": "Commodity", "font": {"size": 14, "weight": "bold"}}, "automargin": True},
             "yaxis": {
                 "title": {"text": "Shipping Price", "font": {"size": 14, "weight": "bold"}},
-                # "automargin": True,
-                "range": [0.25, None],  # Ensure y-axis starts at 0
+                "range": [0, max_y],  # Ensure y-axis starts at 0 and ends at the max value
                 "zeroline": True,  # Add a zero-line for better visibility
             },
             "height": 500,
@@ -3324,6 +3324,7 @@ def shipping_price_violin():
     except Exception as e:
         app.logger.error(f"Error generating shipping violin plot: {str(e)}")
         return jsonify({"error": "Failed to generate shipping violin plot"}), 500
+
 
 
 
