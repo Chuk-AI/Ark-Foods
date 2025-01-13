@@ -3241,7 +3241,6 @@ def shipping_price_violin():
         # Get the time frame from query parameters (default to '7d')
         time_frame = request.args.get("timeFrame", "7d")
 
-        # Map timeFrame to PostgreSQL-compatible interval
         time_intervals = {
             "3d": "'3 days'",
             "7d": "'7 days'",
@@ -3251,7 +3250,6 @@ def shipping_price_violin():
         }
         postgres_interval = time_intervals.get(time_frame.lower(), "'7 days'")
 
-        # SQL query to fetch data filtered by source and time range
         query = text(f"""
             SELECT commodity, price
             FROM shipping_price_data
@@ -3270,40 +3268,58 @@ def shipping_price_violin():
                     data[commodity] = []
                 data[commodity].append(price)
 
-        # Improved downsampling function with better distribution preservation
         def downsample_data(data):
             downsampled_data = {}
             for commodity, prices in data.items():
                 if len(prices) > 0:
-                    # Convert to numpy array
                     prices = np.array(prices)
                     
-                    # Calculate quartiles and IQR
-                    q1, q3 = np.percentile(prices, [25, 75])
+                    # Calculate statistics
+                    q1, median, q3 = np.percentile(prices, [25, 50, 75])
                     iqr = q3 - q1
-                    
-                    # Generate more points around the median and extremes
-                    median = np.median(prices)
-                    min_val = max(min_price, np.min(prices))
+                    min_val = min_price
                     max_val = np.max(prices)
                     
-                    # Create a distribution that preserves the shape
-                    core_points = np.random.normal(loc=median, scale=iqr/2, size=100)
-                    tail_points_low = np.random.uniform(min_val, q1, size=25)
-                    tail_points_high = np.random.uniform(q3, max_val, size=25)
+                    # Generate points with emphasis on maintaining distribution shape
+                    # Core distribution
+                    core_points = np.random.normal(loc=median, scale=iqr/2, size=80)
+                    
+                    # Generate more points near the minimum value to form the point
+                    min_range_points = np.random.triangular(
+                        left=min_val,
+                        mode=min_val + 0.5,
+                        right=q1,
+                        size=40
+                    )
+                    
+                    # Upper range points
+                    max_range_points = np.random.triangular(
+                        left=q3,
+                        mode=q3,
+                        right=max_val,
+                        size=40
+                    )
+                    
+                    # Add specific points at minimum to ensure point formation
+                    exact_min_points = np.repeat(min_val, 10)
                     
                     # Combine all points
-                    all_points = np.concatenate([core_points, tail_points_low, tail_points_high])
+                    all_points = np.concatenate([
+                        core_points,
+                        min_range_points,
+                        max_range_points,
+                        exact_min_points
+                    ])
                     
-                    # Clip to ensure minimum price
-                    all_points = np.clip(all_points, min_price, None)
+                    # Ensure no points below minimum
+                    all_points = np.clip(all_points, min_val, None)
                     
                     downsampled_data[commodity] = all_points.tolist()
             return downsampled_data
 
         downsampled_data = downsample_data(data)
 
-        # Create violin traces for each commodity
+        # Create violin traces
         traces = []
         for commodity, prices in downsampled_data.items():
             if prices:
@@ -3315,19 +3331,19 @@ def shipping_price_violin():
                         meanline_visible=True,
                         marker_color='green',
                         points=False,
-                        bandwidth=0.7,    # Adjusted bandwidth for better shape
+                        bandwidth=0.5,    # Adjusted for better shape definition
                         fillcolor='green',
                         opacity=0.6,
                         line={"color": "darkgreen", "width": 1},
                         jitter=0,
                         hoveron="violins",
+                        spanmode="soft"  # Allow natural tapering
                     )
                 )
 
-        # Calculate the maximum y-value for all commodities
+        # Calculate y-axis range
         max_y = max([max(prices) for prices in downsampled_data.values()] + [min_price]) * 1.1
 
-        # Create the layout for the chart
         layout = {
             "title": {"text": "Shipping Price Distribution by Commodity", "font": {"size": 16, "weight": "bold"}},
             "xaxis": {"title": {"text": "Commodity", "font": {"size": 14, "weight": "bold"}}, "automargin": True},
@@ -3342,7 +3358,7 @@ def shipping_price_violin():
             "plot_bgcolor": "#f0f8ff",
             "paper_bgcolor": "white",
             "violingap": 0.3,
-            "violinmode": "overlay",
+            "violinmode": "overlay"
         }
 
         return jsonify({"data": [trace.to_plotly_json() for trace in traces], "layout": layout}), 200
