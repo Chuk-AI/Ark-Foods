@@ -3269,29 +3269,12 @@ def shipping_price_violin():
                     data[commodity] = []
                 data[commodity].append(price)
 
-        # Downsample data by percentiles
-        def downsample_data(data):
-            downsampled_data = {}
-            for commodity, prices in data.items():
-                # Calculate specific percentiles
-                percentiles = np.percentile(prices, [5, 25, 50, 75, 95])
-                # Sample around percentiles to maintain diversity
-                sampled_points = []
-                for p in percentiles:
-                    if p > 0.25:  # Ensure valid range
-                        sampled_points.extend(np.random.normal(loc=p, scale=0.5, size=10).tolist())
-                downsampled_data[commodity] = sampled_points
-            return downsampled_data
-
-        downsampled_data = downsample_data(data)
-
-        # Ensure no negative values in downsampled data
-        for commodity in downsampled_data:
-            downsampled_data[commodity] = [max(price, 0.5) for price in downsampled_data[commodity]]
+        # Use full dataset without downsampling
+        violin_data = {commodity: prices for commodity, prices in data.items()}
 
         # Create violin traces for each commodity
         traces = []
-        for commodity, prices in downsampled_data.items():
+        for commodity, prices in violin_data.items():
             if prices:  # Only add traces for commodities with valid prices
                 traces.append(
                     go.Violin(
@@ -3299,23 +3282,24 @@ def shipping_price_violin():
                         name=commodity,
                         box_visible=True,
                         meanline_visible=True,
-                        marker=dict(size=4, opacity=0.7),  # Adjust marker size and opacity
                         points="all",  # Show individual data points
-                        bandwidth=0.2,  # Adjust bandwidth for smoother violin shapes
-                        marker_color="green",
-                        line={"color": "darkgreen", "width": 1}
+                        marker=dict(size=3, opacity=0.8),  # Adjust marker size and opacity
+                        bandwidth=0.5,  # Adjust bandwidth for smoother violin shapes
+                        fillcolor="green",
+                        line_color="darkgreen",
+                        spanmode="hard",  # Ensure violin spans tightly around the data
                     )
                 )
 
         # Calculate the maximum y-value for all commodities
-        max_y = max([max(prices) for prices in downsampled_data.values()] + [0.25]) * 1.1  # Increase margin
+        max_y = max([max(prices) for prices in violin_data.values()] + [0.25]) * 1.1  # Add margin
 
         # Create the layout for the chart
         layout = {
             "title": {"text": "Shipping Price Distribution by Commodity", "font": {"size": 16, "weight": "bold"}},
             "xaxis": {"title": {"text": "Commodity", "font": {"size": 14, "weight": "bold"}}, "automargin": True},
             "yaxis": {
-                "title": {"text": "Shipping Price", "font": {"size": 14, "weight": "bold"}},
+                "title": {"text": "Price", "font": {"size": 14, "weight": "bold"}},
                 "range": [0, max_y],  # Ensure y-axis starts at 0 and ends at the max value
                 "zeroline": True,  # Add a zero-line for better visibility
             },
@@ -3332,7 +3316,6 @@ def shipping_price_violin():
     except Exception as e:
         app.logger.error(f"Error generating shipping violin plot: {str(e)}")
         return jsonify({"error": "Failed to generate shipping violin plot"}), 500
-
 
 
 
