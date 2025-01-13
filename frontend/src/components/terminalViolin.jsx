@@ -144,9 +144,17 @@ const TerminalViolinPlot = () => {
 
       {/* Chart Row */}
 
-<div className="chart-div">
+<div className="chart-div"  style={{
+          borderRadius: "15px",
+          padding: "20px",
+          backgroundColor: "#33b1a7", // Background color remains during loading
+          minHeight: "400px", // Ensures height stays consistent while loading
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+        }}>
       {loading ? (
-        <p>Loading...</p>
+        <p style={{ color: "white", fontSize: "18px", fontWeight: "bold" }}>Loading...</p>
       ) : (
         <div className="chart-row" style={{ display: "flex", justifyContent: "space-between" }}>
           {/* USDA Chart */}
