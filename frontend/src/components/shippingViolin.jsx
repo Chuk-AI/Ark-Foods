@@ -138,14 +138,22 @@ export default function ShippingViolinPlot() {
               
             }}
           >
-            <Plot
-              data={chartData.data}
-              layout={chartData.layout}
-              style={{
-                width: "100%",
-                height: "100%",
-              }}
-            />
+           <Plot
+  data={chartData.data}
+  layout={{
+    ...chartData.layout,
+    yaxis: {
+      ...chartData.layout.yaxis,
+      range: [0, Math.max(...chartData.data.flatMap(d => d.y || []))], // Ensure y-axis starts at 0
+      title: "Shipping Price", // Add title for clarity
+    },
+  }}
+  style={{
+    width: "100%",
+    height: "100%",
+  }}
+/>
+
           </div>
         </div>
       ) : (
