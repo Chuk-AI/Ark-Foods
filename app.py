@@ -3262,7 +3262,7 @@ def shipping_price_violin():
 
         # Group data by commodity and filter invalid prices
         data = {}
-        min_price = 0.25  # Set minimum price threshold
+        min_price = 0.25
         for row in result:
             commodity, price = row[0], row[1]
             if price is not None and price >= min_price:
@@ -3270,34 +3270,28 @@ def shipping_price_violin():
                     data[commodity] = []
                 data[commodity].append(price)
 
-        def generate_bounded_samples(mean, std, size=10, min_val=0.25):
-            samples = []
-            while len(samples) < size:
-                sample = np.random.normal(loc=mean, scale=std)
-                if sample >= min_val:  # Only accept samples above min_val
-                    samples.append(sample)
-            return samples
-
-        # Modified downsampling function to respect minimum price
-        def downsample_data(data, min_price=0.25):
+        # Modified downsampling function with gentler approach
+        def downsample_data(data):
             downsampled_data = {}
             for commodity, prices in data.items():
                 if prices:
-                    # Calculate percentiles excluding any values below min_price
-                    prices = np.array([p for p in prices if p >= min_price])
-                    percentiles = np.percentile(prices, [5, 25, 50, 75, 95])
+                    # Calculate percentiles
+                    prices = np.array(prices)
+                    percentiles = np.percentile(prices, np.linspace(0, 100, 20))  # More percentile points
                     
-                    # Generate samples around each percentile with bounded distribution
+                    # Generate samples around each percentile
                     sampled_points = []
                     for p in percentiles:
-                        std = max(0.5, p * 0.1)  # Scale standard deviation with percentile value
-                        samples = generate_bounded_samples(p, std, size=10, min_val=min_price)
+                        # Generate samples with smaller variance
+                        samples = np.random.normal(loc=p, scale=0.2, size=5)
+                        # Clip to ensure minimum price
+                        samples = np.clip(samples, min_price, None)
                         sampled_points.extend(samples)
                     
                     downsampled_data[commodity] = sampled_points
             return downsampled_data
 
-        downsampled_data = downsample_data(data, min_price)
+        downsampled_data = downsample_data(data)
 
         # Create violin traces for each commodity
         traces = []
@@ -3311,14 +3305,12 @@ def shipping_price_violin():
                         meanline_visible=True,
                         marker_color='green',
                         points=False,
-                        side='positive',  # Only show right half of violin
-                        spanmode='hard',  # Enforce hard boundaries
-                        bandwidth=0.5,    # Adjust bandwidth for smoother distribution
+                        bandwidth=1.0,    # Increased bandwidth for smoother distribution
                     )
                 )
 
         # Calculate the maximum y-value for all commodities
-        max_y = max([max(prices) for prices in downsampled_data.values()] + [min_price]) * 1.1  # Add 10% padding
+        max_y = max([max(prices) for prices in downsampled_data.values()] + [min_price]) * 1.1
 
         # Create the layout for the chart
         layout = {
@@ -3326,7 +3318,7 @@ def shipping_price_violin():
             "xaxis": {"title": {"text": "Commodity", "font": {"size": 14, "weight": "bold"}}, "automargin": True},
             "yaxis": {
                 "title": {"text": "Shipping Price", "font": {"size": 14, "weight": "bold"}},
-                "range": [min_price * 0.9, max_y],  # Start slightly below min_price for better visibility
+                "range": [0, max_y],  # Start at 0 for better context
                 "zeroline": True,
             },
             "height": 500,
