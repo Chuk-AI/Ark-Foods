@@ -3236,52 +3236,58 @@ def terminal_price_violin():
 @app.route("/api/shipping_price_violin", methods=["GET"])
 def shipping_price_violin():
     try:
-        app.logger.info("Fetching data for shipping violin plot...")
+        app.logger.info("Fetching data for shipping violin plot with refined KDE...")
 
         # Get the time frame from query parameters (default to '7d')
         time_frame = request.args.get("timeFrame", "7d")
 
+        # Map timeFrame to PostgreSQL-compatible interval
         time_intervals = {
-            "3d": "interval '3 days'",
-            "7d": "interval '7 days'",
-            "1m": "interval '1 month'",
-            "3m": "interval '3 months'",
-            "1y": "interval '1 year'",
+            "3d": "'3 days'",
+            "7d": "'7 days'",
+            "1m": "'1 month'",
+            "3m": "'3 months'",
+            "1y": "'1 year'",
         }
-        postgres_interval = time_intervals.get(time_frame.lower(), "interval '7 days'")
+        postgres_interval = time_intervals.get(time_frame.lower(), "'7 days'")
 
-        # PostgreSQL query
+        # SQL query to fetch data filtered by source and time range
         query = text(f"""
-            SELECT commodity, price 
-            FROM shipping_price_data 
-            WHERE source = 'ProduceIQ' 
-            AND date >= CURRENT_DATE - {postgres_interval}
+            SELECT commodity, price
+            FROM shipping_price_data
+            WHERE source = 'ProduceIQ'
+              AND TO_DATE(year || '-01-01', 'YYYY-MM-DD') + (day - 1) * interval '1 day' >= NOW() - INTERVAL {postgres_interval}
         """)
-        
         result = db.session.execute(query).fetchall()
-        
-        if not result:
-            app.logger.warning("No data returned from query")
-            return jsonify({"error": "No data available for the selected time frame"}), 404
 
         # Group data by commodity and filter invalid prices
         data = {}
-        min_price = 0.25
         for row in result:
             commodity, price = row[0], row[1]
-            if price is not None and price >= min_price:
+            if price is not None and price >= 0.25:  # Filter prices less than 0.25
                 if commodity not in data:
                     data[commodity] = []
                 data[commodity].append(price)
 
-        if not data:
-            app.logger.warning("No valid data after filtering")
-            return jsonify({"error": "No valid price data available"}), 404
+        # Downsample data by percentiles
+        def downsample_data(data):
+            downsampled_data = {}
+            for commodity, prices in data.items():
+                # Calculate specific percentiles
+                percentiles = np.percentile(prices, [5, 25, 50, 75, 95])
+                # Sample around percentiles to maintain diversity
+                sampled_points = [
+                    np.random.normal(loc=p if p > 0 else 0.25, scale=0.5, size=10).tolist() for p in percentiles
+                ]
+                downsampled_data[commodity] = sum(sampled_points, [])  # Flatten the list
+            return downsampled_data
 
-        # Create violin traces
+        downsampled_data = downsample_data(data)
+
+        # Create violin traces for each commodity
         traces = []
-        for commodity, prices in data.items():
-            if len(prices) > 0:
+        for commodity, prices in downsampled_data.items():
+            if prices:  # Only add traces for commodities with valid prices
                 traces.append(
                     go.Violin(
                         y=prices,
@@ -3289,44 +3295,30 @@ def shipping_price_violin():
                         box_visible=True,
                         meanline_visible=True,
                         marker_color='green',
-                        points=False,
-                        bandwidth=0.5,
-                        fillcolor='green',
-                        opacity=0.6,
-                        line={"color": "darkgreen", "width": 1},
-                        hoveron="violins",
-                        spanmode="soft"
+                        points=False,  # Disable individual data points
                     )
                 )
 
-        if not traces:
-            app.logger.warning("No traces created")
-            return jsonify({"error": "Failed to create visualization"}), 404
+        # Calculate the maximum y-value for all commodities
+        max_y = max([max(prices) for prices in downsampled_data.values()] + [0.25])  # Ensure minimum y is 0.25
 
-        # Calculate y-axis range
-        all_prices = [price for prices in data.values() for price in prices]
-        if all_prices:
-            max_y = max(all_prices) * 1.1
-        else:
-            max_y = 50  # Default max if no prices
-
+        # Create the layout for the chart
         layout = {
             "title": {"text": "Shipping Price Distribution by Commodity", "font": {"size": 16, "weight": "bold"}},
             "xaxis": {"title": {"text": "Commodity", "font": {"size": 14, "weight": "bold"}}, "automargin": True},
             "yaxis": {
                 "title": {"text": "Shipping Price", "font": {"size": 14, "weight": "bold"}},
-                "range": [0, max_y],
-                "zeroline": True,
+                "range": [0, max_y],  # Ensure y-axis starts at 0 and ends at the max value
+                "zeroline": True,  # Add a zero-line for better visibility
             },
             "height": 500,
             "width": 700,
             "showlegend": False,
             "plot_bgcolor": "#f0f8ff",
             "paper_bgcolor": "white",
-            "violingap": 0.3,
-            "violinmode": "overlay"
         }
 
+        # Return the chart data and layout as JSON
         return jsonify({"data": [trace.to_plotly_json() for trace in traces], "layout": layout}), 200
 
     except Exception as e:
