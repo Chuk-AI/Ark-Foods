@@ -3301,6 +3301,7 @@ def shipping_price_violin():
                         marker_color='green',
                         points=False,  # Disable individual data points
                         bandwidth=0.2,  # Adjust bandwidth to prevent over-smoothing
+                        width=0.8  # Increase width of violins (default is ~0.5)
                     )
                 )
 
