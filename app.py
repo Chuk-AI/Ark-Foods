@@ -3164,7 +3164,7 @@ from flask import jsonify
 #         app.logger.error(f"Error generating terminal violin plots: {str(e)}")
 #         return jsonify({"error": "Failed to generate terminal violin plots"}), 500
 
-# @app.route("/api/terminal_price_violin", methods=["GET"])
+@app.route("/api/terminal_price_violin", methods=["GET"])
 def terminal_price_violin():
     try:
         app.logger.info("Generating terminal violin plots for USDA and ProduceIQ with downsampling...")
