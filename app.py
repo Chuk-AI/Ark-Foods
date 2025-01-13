@@ -3370,7 +3370,7 @@ def shipping_price_violin():
                 data[commodity] = []
             data[commodity].append(price)
 
-        # Create violin traces for each commodity
+        # Create violin traces for each commodity without KDE
         traces = []
         for commodity, prices in data.items():
             traces.append(
@@ -3381,7 +3381,10 @@ def shipping_price_violin():
                     meanline_visible=True,
                     points="all",  # Show all individual data points
                     marker=dict(size=4, opacity=0.7),  # Customize marker size and opacity
-                    marker_color='green'  # Custom color
+                    marker_color='green',  # Custom color
+                    side="negative",  # Disable KDE
+                    spanmode="manual",  # Prevent violin span calculations
+                    span=[0, 0],  # Disable violin span display
                 )
             )
 
