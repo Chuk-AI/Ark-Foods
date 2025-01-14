@@ -3197,7 +3197,6 @@ def shipping_price_violin():
                     box_visible=True,
                     meanline_visible=True,
                     marker_color='green',  # Custom color
-                    points="all"  # Display all individual data points
 
                 )
             )
