@@ -3172,7 +3172,7 @@ def shipping_price_violin():
     WHERE source = 'ProduceIQ'
       AND TO_DATE(year || '-01-01', 'YYYY-MM-DD') + (day - 1) * interval '1 day' >= NOW() - INTERVAL {postgres_interval}
       AND price > 5  
-""")
+        """)
 
         result = db.session.execute(query).fetchall()
 
