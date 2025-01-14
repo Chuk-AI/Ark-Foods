@@ -3029,7 +3029,7 @@ from flask import jsonify
 @app.route("/api/terminal_price_violin", methods=["GET"])
 def terminal_price_violin():
     try:
-        app.logger.info("Generating terminal violin plots for USDA and ProduceIQ with refined KDE...")
+        app.logger.info("Generating terminal violin plots for USDA and ProduceIQ with downsampling...")
 
         # Get the time frame from query parameters (default to '7d')
         time_frame = request.args.get("timeFrame", "7d")
@@ -3059,32 +3059,25 @@ def terminal_price_violin():
         grouped_data = {"USDA": {}, "ProduceIQ": {}}
         for row in result:
             commodity, price, source = row
-            if price is not None and price >= 0.25:  # Filter invalid or low prices
-                if commodity not in grouped_data[source]:
-                    grouped_data[source][commodity] = []
-                grouped_data[source][commodity].append(price)
+            if commodity not in grouped_data[source]:
+                grouped_data[source][commodity] = []
+            grouped_data[source][commodity].append(price)
 
-        # Downsample data by percentiles
+        # Apply downsampling by percentiles
         def downsample_data(data):
             downsampled_data = {}
             for commodity, prices in data.items():
                 # Calculate percentiles
                 percentiles = np.percentile(prices, [5, 25, 50, 75, 95])
-                # Sample around percentiles to maintain diversity
+                # Add small noise for diversity
                 sampled_points = [
-                    np.random.normal(loc=p if p > 0 else 0.5, scale=0.5, size=10).tolist() for p in percentiles
+                    np.random.normal(loc=p, scale=0.5, size=10).tolist() for p in percentiles
                 ]
                 downsampled_data[commodity] = sum(sampled_points, [])  # Flatten the list
             return downsampled_data
 
         usda_data = downsample_data(grouped_data["USDA"])
         produceiq_data = downsample_data(grouped_data["ProduceIQ"])
-
-        # Ensure no negative values in downsampled data
-        for commodity in usda_data:
-            usda_data[commodity] = [max(price, 0.25) for price in usda_data[commodity]]
-        for commodity in produceiq_data:
-            produceiq_data[commodity] = [max(price, 0.25) for price in produceiq_data[commodity]]
 
         # Create violin traces for USDA
         usda_traces = [
@@ -3093,10 +3086,7 @@ def terminal_price_violin():
                 name=commodity,
                 box_visible=True,
                 meanline_visible=True,
-                marker_color='blue',  # Color for USDA
-                points=False,  # Disable individual data points
-                bandwidth=0.2,  # Adjust bandwidth to prevent over-smoothing
-                width=0.8,  # Increase width of violins (default is ~0.5)
+                marker_color='blue'  # Color for USDA
             )
             for commodity, prices in usda_data.items()
         ]
@@ -3108,10 +3098,7 @@ def terminal_price_violin():
                 name=commodity,
                 box_visible=True,
                 meanline_visible=True,
-                marker_color='green',  # Color for ProduceIQ
-                points=False,  # Disable individual data points
-                bandwidth=0.2,  # Adjust bandwidth to prevent over-smoothing
-                width=0.8,  # Increase width of violins (default is ~0.5)
+                marker_color='green'  # Color for ProduceIQ
             )
             for commodity, prices in produceiq_data.items()
         ]
@@ -3120,12 +3107,8 @@ def terminal_price_violin():
         usda_layout = {
             "title": {"text": "USDA Terminal Price Distribution by Commodity", "font": {"size": 16, "weight": "bold"}},
             "xaxis": {"title": {"text": "Commodity", "font": {"size": 14, "weight": "bold"}}, "automargin": True},
-            "yaxis": {
-                "title": {"text": "Price", "font": {"size": 14, "weight": "bold"}},
-                "range": [0, max([max(prices) for prices in usda_data.values()] + [0.25])],
-                "zeroline": True,  # Add a zero-line for better visibility
-                "automargin": True,
-            },
+            "yaxis": {"title": {"text": "Price", "font": {"size": 14, "weight": "bold"}},                "zeroline": True,  # Add a zero-line for better visibility
+ "automargin": True},
             "height": 500,
             "width": 700,
             "showlegend": False,
@@ -3137,12 +3120,7 @@ def terminal_price_violin():
         produceiq_layout = {
             "title": {"text": "ProduceIQ Terminal Price Distribution by Commodity", "font": {"size": 16, "weight": "bold"}},
             "xaxis": {"title": {"text": "Commodity", "font": {"size": 14, "weight": "bold"}}, "automargin": True},
-            "yaxis": {
-                "title": {"text": "Price", "font": {"size": 14, "weight": "bold"}},
-                "range": [0, max([max(prices) for prices in produceiq_data.values()] + [0.25])],
-                "zeroline": True,  # Add a zero-line for better visibility
-                "automargin": True,
-            },
+            "yaxis": {"title": {"text": "Price", "font": {"size": 14, "weight": "bold"}}, "automargin": True},
             "height": 500,
             "width": 700,
             "showlegend": False,
@@ -3165,167 +3143,77 @@ def terminal_price_violin():
         return jsonify({"error": "Failed to generate terminal violin plots"}), 500
 
 
-# @app.route("/api/terminal_price_violin", methods=["GET"])
-# def terminal_price_violin():
-#     try:
-#         app.logger.info("Generating terminal violin plots for USDA and ProduceIQ...")
-
-#         # Get the time frame from query parameters (default to '7d')
-#         time_frame = request.args.get("timeFrame", "7d")
-
-#         # Map timeFrame to PostgreSQL-compatible intervals
-#         time_intervals = {
-#             "3d": "3 days",
-#             "7d": "7 days",
-#             "1m": "1 month",
-#             "3m": "3 months",
-#             "1y": "1 year",
-#         }
-#         interval_days = time_intervals.get(time_frame.lower(), 7)
-
-#         # SQL query to fetch data filtered by source and time range
-#         query = text("""
-#             SELECT commodity AS varietyName, price, source
-#             FROM price_data
-#             WHERE source IN ('USDA', 'ProduceIQ')
-#               AND DATE(DATE(year || '-01-01', '+' || (day - 1) || ' days')) >= DATE('now', '-' || :days || ' days')
-#         """)
-
-#         result = db.session.execute(query, {"days": interval_days}).fetchall()
-
-#         # Convert query results into a DataFrame
-#         data = pd.DataFrame(result, columns=["varietyName", "price", "source"])
-
-#         # Separate data by source
-#         usda_data = data[data["source"] == "USDA"]
-#         produceiq_data = data[data["source"] == "ProduceIQ"]
-
-#         # Function to create a violin plot with annotations
-#         def create_violin_plot(data, title, color):
-#             violin_plot = px.violin(
-#                 data,
-#                 x="varietyName",
-#                 y="price",
-#                 box=True,  # Show box plot inside the violin
-#                 title=title,
-#             )
-
-#             # Add sample size annotations
-#             for variety in data["varietyName"].unique():
-#                 variety_data = data[data["varietyName"] == variety]["price"].dropna()
-#                 sample_size = len(variety_data)
-
-#                 violin_plot.add_annotation(
-#                     x=variety,
-#                     y=0,
-#                     text=f"Sample: {sample_size}",
-#                     showarrow=False,
-#                     yshift=-10,
-#                 )
-
-#             # Customize layout
-#             violin_plot.update_layout(
-#                 xaxis_title="Variety",
-#                 yaxis_title="Price",
-#                 height=600,
-#                 autosize=True,
-#                 showlegend=False,
-#                 font=dict(family="Arial"),
-#                 plot_bgcolor="#f0f8ff",
-#                 paper_bgcolor="white",
-#             )
-#             return violin_plot
-
-#         # Create plots for USDA and ProduceIQ
-#         usda_plot = create_violin_plot(usda_data, "USDA Terminal Price Distribution by Commodity", "blue")
-#         produceiq_plot = create_violin_plot(produceiq_data, "ProduceIQ Terminal Price Distribution by Commodity", "green")
-
-#         # Deserialize Plotly JSON into Python objects
-#         usda_plot_json = json.loads(usda_plot.to_json())
-#         produceiq_plot_json = json.loads(produceiq_plot.to_json())
-
-#         # Return JSON response containing separate charts for USDA and ProduceIQ
-#         return jsonify({"usda": usda_plot_json, "produceiq": produceiq_plot_json}), 200
-
-#     except Exception as e:
-#         app.logger.error(f"Error generating terminal violin plots: {str(e)}")
-#         return jsonify({"error": "Failed to generate terminal violin plots"}), 500
 
 
+@app.route("/api/shipping_price_violin", methods=["GET"])
+def shipping_price_violin():
+    try:
+        app.logger.info("Fetching data for shipping violin plot...")
 
+        # Get the time frame from query parameters (default to '7d')
+        time_frame = request.args.get("timeFrame", "7d")
 
+        # Map timeFrame to PostgreSQL-compatible interval
+        time_intervals = {
+            "3d": "'3 days'",
+            "7d": "'7 days'",
+            "1m": "'1 month'",
+            "3m": "'3 months'",
+            "1y": "'1 year'",
+        }
 
+        # Get the corresponding PostgreSQL interval for the time frame
+        postgres_interval = time_intervals.get(time_frame.lower(), "'7 days'")
 
+        # SQL query to fetch data filtered by source and time range
+        query = text(f"""
+            SELECT commodity, price
+            FROM shipping_price_data
+            WHERE source = 'ProduceIQ'
+              AND TO_DATE(year || '-01-01', 'YYYY-MM-DD') + (day - 1) * interval '1 day' >= NOW() - INTERVAL {postgres_interval}
+        """)
+        result = db.session.execute(query).fetchall()
 
-# @app.route("/api/shipping_price_violin", methods=["GET"])
-# def shipping_price_violin():
-#     try:
-#         app.logger.info("Fetching data for shipping violin plot...")
+        # Group data by commodity
+        data = {}
+        for row in result:
+            commodity = row[0]  # Commodity (varietyName)
+            price = row[1]  # Price
+            if commodity not in data:
+                data[commodity] = []
+            data[commodity].append(price)
 
-#         # Get the time frame from query parameters (default to '7d')
-#         time_frame = request.args.get("timeFrame", "7d")
+        # Create violin traces for each commodity
+        traces = []
+        for commodity, prices in data.items():
+            traces.append(
+                go.Violin(
+                    y=prices,
+                    name=commodity,
+                    box_visible=True,
+                    meanline_visible=True,
+                    marker_color='green'  # Custom color
+                )
+            )
 
-#         # Map timeFrame to PostgreSQL-compatible interval
-#         time_intervals = {
-#             "3d": "'3 days'",
-#             "7d": "'7 days'",
-#             "1m": "'1 month'",
-#             "3m": "'3 months'",
-#             "1y": "'1 year'",
-#         }
+        # Create the layout for the chart
+        layout = {
+            "title": {"text": "Shipping Price Distribution by Commodity", "font": {"size": 16, "weight": "bold"}},
+            "xaxis": {"title": {"text": "Commodity", "font": {"size": 14, "weight": "bold"}}, "automargin": True},
+            "yaxis": {"title": {"text": "Shipping Price", "font": {"size": 14, "weight": "bold"}}, "automargin": True},
+            "height": 500,
+            "width": 700,
+            "showlegend": False,
+            "plot_bgcolor": "#f0f8ff",
+            "paper_bgcolor": "white",
+        }
 
-#         # Get the corresponding PostgreSQL interval for the time frame
-#         postgres_interval = time_intervals.get(time_frame.lower(), "'7 days'")
+        # Return the chart data and layout as JSON
+        return jsonify({"data": [trace.to_plotly_json() for trace in traces], "layout": layout}), 200
 
-#         # SQL query to fetch data filtered by source and time range
-#         query = text(f"""
-#             SELECT commodity, price
-#             FROM shipping_price_data
-#             WHERE source = 'ProduceIQ'
-#               AND TO_DATE(year || '-01-01', 'YYYY-MM-DD') + (day - 1) * interval '1 day' >= NOW() - INTERVAL {postgres_interval}
-#         """)
-#         result = db.session.execute(query).fetchall()
-
-#         # Group data by commodity
-#         data = {}
-#         for row in result:
-#             commodity = row[0]  # Commodity (varietyName)
-#             price = row[1]  # Price
-#             if commodity not in data:
-#                 data[commodity] = []
-#             data[commodity].append(price)
-
-#         # Create violin traces for each commodity
-#         traces = []
-#         for commodity, prices in data.items():
-#             traces.append(
-#                 go.Violin(
-#                     y=prices,
-#                     name=commodity,
-#                     box_visible=True,
-#                     meanline_visible=True,
-#                     marker_color='green'  # Custom color
-#                 )
-#             )
-
-#         # Create the layout for the chart
-#         layout = {
-#             "title": {"text": "Shipping Price Distribution by Commodity", "font": {"size": 16, "weight": "bold"}},
-#             "xaxis": {"title": {"text": "Commodity", "font": {"size": 14, "weight": "bold"}}, "automargin": True},
-#             "yaxis": {"title": {"text": "Shipping Price", "font": {"size": 14, "weight": "bold"}}, "automargin": True},
-#             "height": 500,
-#             "width": 700,
-#             "showlegend": False,
-#             "plot_bgcolor": "#f0f8ff",
-#             "paper_bgcolor": "white",
-#         }
-
-#         # Return the chart data and layout as JSON
-#         return jsonify({"data": [trace.to_plotly_json() for trace in traces], "layout": layout}), 200
-
-#     except Exception as e:
-#         app.logger.error(f"Error generating shipping violin plot: {str(e)}")
-#         return jsonify({"error": "Failed to generate shipping violin plot"}), 500
+    except Exception as e:
+        app.logger.error(f"Error generating shipping violin plot: {str(e)}")
+        return jsonify({"error": "Failed to generate shipping violin plot"}), 500
 
 
 
