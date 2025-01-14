@@ -3051,7 +3051,9 @@ def terminal_price_violin():
             SELECT commodity, price, source
             FROM price_data
             WHERE source IN ('USDA', 'ProduceIQ')
-              AND make_date(year, 1, 1) + (day - 1) * INTERVAL '1 day' >= NOW() - INTERVAL '{postgres_interval}'
+            AND make_date(year, 1, 1) + (day - 1) * INTERVAL '1 day' >= NOW() - INTERVAL '{postgres_interval}'
+            AND price > 2
+
         """)
         result = db.session.execute(query).fetchall()
 
@@ -3171,7 +3173,7 @@ def shipping_price_violin():
     FROM shipping_price_data
     WHERE source = 'ProduceIQ'
       AND TO_DATE(year || '-01-01', 'YYYY-MM-DD') + (day - 1) * interval '1 day' >= NOW() - INTERVAL {postgres_interval}
-      AND price > 5  
+      AND price > 1  
         """)
 
         result = db.session.execute(query).fetchall()
