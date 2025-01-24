@@ -15,7 +15,7 @@ def fetch_usda_terminal_data():
     # Commodities to filter
     wanted_commodities = [
         "Anaheim",
-        "Cubanelles",
+        "Cubanelle",
         "Fresno",
         "Habanero",
         "Hungarian Wax",
@@ -37,7 +37,7 @@ def fetch_usda_terminal_data():
     # Map standardized names back to desired format
     standardized_name = {
         "anaheim": "Anaheim",
-        "cubanelles": "Cubanelles",
+        "cubanelle": "Cubanelle",
         "fresno": "Fresno",
         "habanero": "Habanero",
         "hungarian wax": "Hungarian Wax",
@@ -49,7 +49,7 @@ def fetch_usda_terminal_data():
     }
 
     # Define date range
-    start_date = pd.Timestamp("2024-12-06")  # Adjust as needed
+    start_date = pd.Timestamp("2025-01-01")  # Adjust as needed
     end_date = pd.Timestamp.today()
 
     current_date = start_date
