@@ -138,6 +138,7 @@ function AdminDashboard() {
             legend: {
               display: false,
               labels: {
+                
                 color: "black", // Set legend text color to white
               },
             },
