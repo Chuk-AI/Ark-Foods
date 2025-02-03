@@ -65,8 +65,8 @@ function SalesDashboard() {
     commodities: ['Anaheim'], // Default to one or more items
     cities: ['New York'], // Default to one or more items
     source: 'USDA',
-    startDate: '2024-01-01', // Default to a valid date
-    endDate: '2024-12-31', // Default to a valid date
+    startDate: '2024-10-01', // Default to a valid date
+    endDate: new Date().toISOString().split('T')[0], // current day as endDate
     averageCommodities: false,
     averageCities: false,
   });
@@ -75,8 +75,8 @@ function SalesDashboard() {
     commodities: ['Anaheim'],
     cities: ['New York'],
     source: 'USDA',
-    startDate: '2024-01-01',
-    endDate: '2024-12-31',
+    startDate: '2024-11-01',
+    endDate: new Date().toISOString().split('T')[0], // current day as endDate
     averageCommodities: false,
     averageCities: false,
   });
@@ -149,8 +149,8 @@ function SalesDashboard() {
     commodities: ['Habanero'], // Default to one or more items
     regions: ["mexico crossings through texas"], // Default to one or more regions
     source: 'ProduceIQ', // Default source for shipping point price
-    startDate: '2024-01-01', // Default to a valid date
-    endDate: '2024-12-31', // Default to a valid date
+    startDate: '2024-11-01', // Default to a valid date
+    endDate: new Date().toISOString().split('T')[0], // current day as endDate
     averageCommodities: false,
     averageRegions: false,
   });
@@ -159,8 +159,8 @@ function SalesDashboard() {
     commodities: ['Anaheim'],
     regions: ['Central and South Florida'],
     source: 'ProduceIQ',
-    startDate: '2024-01-01',
-    endDate: '2024-12-31',
+    startDate: '2024-11-01',
+    endDate: new Date().toISOString().split('T')[0], // current day as endDate
     averageCommodities: false,
     averageRegions: false,
   });
@@ -840,14 +840,17 @@ function SalesDashboard() {
     setShippingPointPriceChart(newChart);
   };
 
+  const currentDate = new Date().toISOString().split('T')[0];
+
+
   const fetchShippingPointPriceData = async (filters = null) => {
     // Use default data if no filters are provided
     const defaultFilters = {
       commodities: ['Habanero'], // Default commodity for testing
       regions: ['mexico crossings through texas'], // Default region for testing
       source: 'ProduceIQ',
-      startDate: '2020-01-01',
-      endDate: '2024-12-31',
+      startDate: '2024-10-01',
+      endDate: new Date().toISOString().split('T')[0], // current day as endDate
     };
   
     const appliedFilters = filters || defaultFilters;
@@ -1454,82 +1457,7 @@ function SalesDashboard() {
                   </div>
                 </div>
               </div>
-              {/* terminal voilin plot
-              <div id="terminal-voilin-plot-section" className="section">
-                <div>
-                  <h2>Terminal Violin Plot</h2>
-
-                  {terminalViolinData.length > 0 ? (
-                    <>
-                      {console.log('Final TerminalplotData:', TerminalplotData)}
-                      <Plot
-                        data={TerminalplotData}
-                        layout={{
-                          title: 'Terminal Measures of Central Tendency and Dispersion',
-                          xaxis: { title: 'Variety' },
-                          yaxis: { title: 'Avg Daily Price' },
-                          height: 700,
-                          width: 1100, // Set your desired width here
-                          showlegend: false, // Disable the legend
-                          margin: { l: 50, r: 50, t: 50, b: 50 }, // Equal left and right margins
-
-                          autosize: true,
-                        }}
-                      />
-                    </>
-                  ) : (
-                    <p>Loading...</p>
-                  )}
-                </div>
-              </div>
-
-
-              <div className="container-fluid d-flex">
-        <div className="main-content flex-grow-1">
-          <EmpiricalChart
-            apiEndpoint="/api/terminal_empricial_probability"
-            title="Terminal Empirical Probability"
-            colors={terminalColors}
-          />
-
-    
-        </div>
-      </div>
-
-
-              <div id="shipping-voilin-plot-section" className="section" style={{ marginTop: '100px' }}>
-                <div>
-                  <h2>Shipping Violin Plot</h2>
-                  {shippingViolinData.length > 0 ? (
-                    <Plot
-                      data={ShippingplotData}
-                      layout={{
-                        title: 'Shipping Price Distribution by Commodity',
-                        xaxis: { title: 'Variety' },
-                        yaxis: { title: 'Shipping Price' },
-                        height: 600,
-                        width: 1100, // Set your desired width here
-                        autosize: false,
-                        showlegend: false, // Remove the legend
-                        margin: { l: 50, r: 50, t: 50, b: 50 }, // Equal left and right margins
-                      }}
-                    />
-                  ) : (
-                    <p>Loading...</p>
-                  )}
-                </div>
-              </div>
-             
-              <div className="container-fluid d-flex">
-        <div className="main-content flex-grow-1">      
-
-          <EmpiricalChart
-            apiEndpoint="/api/shipping_empricial_probability"
-            title="Shipping Empirical Probability"
-            colors={shippingColors}
-          />
-        </div>
-      </div> */}
+   
 
               <div ref={rightSidebarRef} id="minimized-sidebar" className=" collapsed">
                 <div id="right-sidebar-toggle" onClick={toggleRightSidebar}>
