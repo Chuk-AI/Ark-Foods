@@ -1955,59 +1955,111 @@ def api_best_sell_market():
 #     return jsonify({"prices": recent_prices})
 
 
+from sqlalchemy.sql.expression import tuple_
+from sqlalchemy import over, func
+
+
 @app.route("/api/most_recent_prices", methods=["GET"])
 def api_most_recent_prices():
-    # List of cities and commodities (as before)
     cities = [
-        "Baltimore", "Boston", "Chicago", "Columbia",
-        "Miami", "New York", "Philadelphia", "Los Angeles"
+        "Baltimore",
+        "Boston",
+        "Chicago",
+        "Columbia",
+        "Miami",
+        "New York",
+        "Philadelphia",
+        "Los Angeles",
     ]
     commodities = [
-        "Anaheim", "Cubanelles", "Fresno", "Habanero",
-        "Hungarian Wax", "Jalapeno", "Long Hot", "Poblano",
-        "Serrano", "Shishito"
+        "Anaheim",
+        "Cubanelles",
+        "Fresno",
+        "Habanero",
+        "Hungarian Wax",
+        "Jalapeno",
+        "Long Hot",
+        "Poblano",
+        "Serrano",
+        "Shishito",
     ]
-    
-    # Get the selected source, defaulting to 'USDA'
+
     selected_source = request.args.get("source", "USDA")
 
-    # Calculate the threshold timestamp for the last 7 days.
-    threshold = datetime.now(timezone("US/Pacific")) - timedelta(days=7)
+    # Create commodity mapping
+    commodity_map = {c: "Cubanelle" if (c == "Cubanelles" and selected_source == "USDA") else c 
+                    for c in commodities}
+    reverse_commodity_map = {v: k for k, v in commodity_map.items()}
+    adjusted_commodities = list(commodity_map.values())
 
-    # Query the database for maximum prices by commodity and city over the last 7 days.
-    # This query assumes that PriceData has a timestamp column.
-    results = (
+    # Generate date filters for the last 7 days
+    tz = timezone("US/Pacific")
+    seven_days_ago = datetime.now(tz) - timedelta(days=7)
+    date_filters = [(d.year, d.timetuple().tm_yday) 
+                   for d in [seven_days_ago + timedelta(days=i) for i in range(7)]]
+
+    # Create city lookup map
+    city_lower_map = {city.lower(): city for city in cities}
+
+    # Build main query with window function
+    subquery = (
         db.session.query(
             PriceData.commodity,
             PriceData.city_name,
-            func.max(PriceData.price).label("max_price")
+            PriceData.year,
+            PriceData.day,
+            func.max(PriceData.price).label('max_price')
         )
-        .filter(PriceData.timestamp >= threshold)
-        .group_by(PriceData.commodity, PriceData.city_name)
+        .filter(
+            PriceData.commodity.in_(adjusted_commodities),
+            func.lower(PriceData.city_name).in_([c.lower() for c in cities]),
+            tuple_(PriceData.year, PriceData.day).in_(date_filters)
+        )
+        .group_by(PriceData.commodity, PriceData.city_name, PriceData.year, PriceData.day)
+        .subquery()
+    )
+
+    # Correct window function usage
+    window_func = func.row_number().over(
+        partition_by=[subquery.c.commodity, subquery.c.city_name],
+        order_by=[subquery.c.year.desc(), subquery.c.day.desc()]
+    )
+
+    ranked_query = (
+        db.session.query(
+            subquery.c.commodity,
+            subquery.c.city_name,
+            subquery.c.max_price,
+            window_func.label('rn')
+        )
+        .subquery()
+    )
+
+    # Execute final query
+    results = (
+        db.session.query(
+            ranked_query.c.commodity,
+            ranked_query.c.city_name,
+            ranked_query.c.max_price
+        )
+        .filter(ranked_query.c.rn == 1)
         .all()
     )
 
-    # Initialize the dictionary with all commodities and cities set to "-"
+    # Initialize response structure with defaults
     recent_prices = {commodity: {city: "-" for city in cities} for commodity in commodities}
 
-    # Process the query results.
-    for commodity, city_name, max_price in results:
-        # Handle the special case for "Cubanelles" when the source is USDA.
-        # If the commodity in the data is "Cubanelle" and the request source is USDA, we want to map it to "Cubanelles".
-        if commodity == "Cubanelle" and selected_source == "USDA":
-            commodity_name = "Cubanelles"
-        else:
-            commodity_name = commodity
-
-        # Use case-insensitive matching for city names.
-        # Here, we check if the city from the result matches any city in our predefined list.
-        for city in cities:
-            if city.upper() == city_name.upper():
-                recent_prices[commodity_name][city] = max_price
-                break  # Found the matching city, no need to check further
+    # Update with actual results
+    for row in results:
+        original_commodity = reverse_commodity_map.get(row.commodity, row.commodity)
+        normalized_city = row.city_name.lower()
+        original_city = city_lower_map.get(normalized_city)
+        
+        if original_city and original_commodity in recent_prices:
+            recent_prices[original_commodity][original_city] = float(row.max_price) if row.max_price is not None else "-"
 
     return jsonify({"prices": recent_prices})
-
+  
 
 @app.route("/api/historical_data", methods=["GET"])
 # @jwt_required()

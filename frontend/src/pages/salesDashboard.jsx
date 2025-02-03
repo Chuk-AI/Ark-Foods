@@ -207,93 +207,6 @@ function SalesDashboard() {
     }));
   };
 
-  // // Prepare data for Plotly
-  // const fetchTerminalViolinData = async () => {
-  //   try {
-  //     const response = await fetch('/api/terminal_price_violin');
-  //     console.log('Terminal API Response Status:', response.status);
-
-  //     if (!response.ok) {
-  //       throw new Error('Failed to fetch terminal violin plot data');
-  //     }
-
-  //     const data = await response.json();
-  //     console.log('Fetched Terminal Data:', data); // Log the fetched data
-  //     setTerminalViolinData(data);
-  //   } catch (error) {
-  //     console.error('Error fetching terminal violin data:', error);
-  //   }
-  // };
-
-  // useEffect(() => {
-  //   fetchTerminalViolinData();
-  // }, []);
-
-  // // Fetch data for the shipping violin plot
-  // const fetchShippingViolinData = async () => {
-  //   try {
-  //     const response = await fetch('/api/shipping_price_violin');
-  //     console.log('Shipping API Response Status:', response.status);
-
-  //     if (!response.ok) {
-  //       throw new Error('Failed to fetch shipping violin plot data');
-  //     }
-
-  //     const data = await response.json();
-  //     console.log('Fetched Shipping Data:', data); // Log the fetched data
-  //     setShippingViolinData(data);
-  //   } catch (error) {
-  //     console.error('Error fetching shipping violin data:', error);
-  //   }
-  // };
-
-  // useEffect(() => {
-  //   fetchShippingViolinData();
-  // }, []);
-
-  // // Prepare data for the terminal violin plot
-  // const TerminalplotData = Object.values(
-  //   terminalViolinData.reduce((acc, item) => {
-  //     const { varietyName, price } = item;
-
-  //     // Ensure unique grouping by varietyName
-  //     if (!acc[varietyName]) {
-  //       acc[varietyName] = {
-  //         type: 'violin',
-  //         y: [], // Initialize prices array
-  //         name: varietyName, // x-axis label
-  //         box: { visible: true },
-  //         meanline: { visible: true },
-  //         marker: { color: '#636efa' },
-  //       };
-  //     }
-
-  //     // Add price to the corresponding variety
-  //     acc[varietyName].y.push(price);
-
-  //     return acc;
-  //   }, {})
-  // );
-
-  // // Prepare data for the shipping violin plot
-  // const ShippingplotData = shippingViolinData.reduce((acc, item) => {
-  //   const { varietyName, price } = item;
-  //   const existingEntry = acc.find((entry) => entry.name === varietyName);
-  //   if (existingEntry) {
-  //     existingEntry.y.push(price);
-  //   } else {
-  //     acc.push({
-  //       type: 'violin',
-  //       y: [price],
-  //       name: varietyName,
-  //       box: { visible: true },
-  //       meanline: { visible: true },
-  //       marker: { color: '#00cc96' }, // Color for shipping plot
-  //     });
-  //   }
-  //   return acc;
-  // }, []);
-
   // Section Titles
   const sectionTitles = {
     'best-sell-market-section': 'Best Sell Market',
@@ -371,7 +284,6 @@ function SalesDashboard() {
     const rightSidebar = rightSidebarRef.current;
     if (rightSidebar) {
       rightSidebar.classList.toggle('collapsed'); // Use 'collapsed' for consistency
-      console.log('Toggled right sidebar:', rightSidebar.className);
     } else {
       console.error('Right sidebar reference is null');
     }
@@ -381,7 +293,6 @@ function SalesDashboard() {
   const toggleBlockSize = (blockId, blockTitle) => {
     setMinimizedBlocks((prev) => {
       if (prev.includes(blockId)) {
-        console.log(`Restoring block: ${blockId}`);
 
         // Restore the block
         const blockElement = document.getElementById(blockId);
@@ -389,7 +300,6 @@ function SalesDashboard() {
         return prev.filter((id) => id !== blockId); // Remove from minimizedBlocks
       } else {
         // Minimize the block
-        console.log(`Minimizing block: ${blockId}`);
 
         const blockElement = document.getElementById(blockId);
         blockElement.classList.add('hidden');
@@ -943,7 +853,6 @@ function SalesDashboard() {
     const appliedFilters = filters || defaultFilters;
   
     try {
-      console.log('Filters:', appliedFilters); // Log filters
   
       const token = localStorage.getItem('authToken');
       if (!token) throw new Error('No token found');
