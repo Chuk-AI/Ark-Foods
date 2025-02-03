@@ -2796,7 +2796,7 @@ def get_cities():
 
 
 # Forecast Calculator
-def calculate_forecasted_price(variety, city, start_date, forecast_date):
+def calculate_forecasted_price(variety, start_date, forecast_date):
     # Step 1: Determine the season of the forecast date
     season = determine_season_for_dashboard(forecast_date)
 
@@ -2804,32 +2804,28 @@ def calculate_forecasted_price(variety, city, start_date, forecast_date):
     start_year = start_date.year
     start_day = start_date.timetuple().tm_yday
 
-    # Step 3: Query the PriceData for the given variety, city, and season, starting from the start_date
+    # Step 3: Query the PriceData for the given variety and season, starting from the start_date
     historical_data = (
         db.session.query(PriceData.price)
         .filter(
-            PriceData.commodity == variety,  # Match the commodity (variety)
-            PriceData.city_name == city.upper(),  # Match the city (case insensitive)
-            PriceData.season == season,  # Match the season
-            PriceData.year >= start_year,  # Consider data from the start year onward
-            PriceData.day
-            >= start_day,  # Ensure data is after the start date in the year
-            PriceData.source.in_(
-                ["USDA", "Historical"]
-            ),  # Data can be from USDA or Historical sources
+            PriceData.commodity == variety,          # Match the commodity (variety)
+            PriceData.season == season,                # Match the season
+            PriceData.year >= start_year,              # Consider data from the start year onward
+            PriceData.day >= start_day,                # Ensure data is after the start date in the year
+            PriceData.source.in_(["USDA", "Historical"])  # Data can be from USDA or Historical sources
         )
         .all()
     )
 
     # Step 4: Calculate the average price from the historical data
     if historical_data:
-        total_price = sum([entry.price for entry in historical_data])
+        total_price = sum(entry.price for entry in historical_data)
         average_price = total_price / len(historical_data)
     else:
-        # If no data is found, return a fallback price (optional: log a message)
         average_price = 0.0
 
     return average_price
+
 
 
 @app.route("/api/calculate_forecast", methods=["POST"])
@@ -2837,15 +2833,14 @@ def calculate_forecast():
     # Parse JSON data from the request body
     data = request.json
 
-    # Extract the form data
+    # Extract the form data (note: city is removed)
     variety = data.get("variety")
-    city = data.get("city")
     start_date = data.get("start_date")
     forecast_date = data.get("forecast_date")
     yield_per_acre = data.get("yield_per_acre")
 
-    # Validate the form inputs
-    if not all([variety, city, start_date, forecast_date, yield_per_acre]):
+    # Validate the form inputs (remove city from the required fields)
+    if not all([variety, start_date, forecast_date, yield_per_acre]):
         return jsonify({"error": "All form fields are required"}), 400
 
     try:
@@ -2856,34 +2851,31 @@ def calculate_forecast():
     except ValueError:
         return jsonify({"error": "Invalid date format or yield per acre"}), 400
 
-    # Call the calculate_forecasted_price function
-    forecasted_price = calculate_forecasted_price(
-        variety, city, start_date, forecast_date
-    )
+    # Call the calculate_forecasted_price function without the city parameter,
+    # or pass a default value if required by your logic.
+    forecasted_price = calculate_forecasted_price(variety, start_date, forecast_date)
     revenue_per_acre = forecasted_price * yield_per_acre
 
     # Determine the season for the forecast date
     season = determine_season_for_dashboard(forecast_date)
 
     # Return the results
-    return jsonify(
-        {
-            "forecasted_price": round(forecasted_price, 2),
-            "revenue_per_acre": round(revenue_per_acre, 2),
-            "season": season,
-        }
-    )
+    return jsonify({
+        "forecasted_price": round(forecasted_price, 2),
+        "revenue_per_acre": round(revenue_per_acre, 2),
+        "season": season,
+    })
+
 
 # API FOR Forecast visual
 @app.route("/api/seasonal_prices", methods=["GET"])
 # @jwt_required()
 def get_seasonal_prices():
     variety = request.args.get("variety")
-    city = request.args.get("city")
 
-    # Check if variety or city is missing
-    if not variety or not city:
-        return jsonify({"error": "Missing variety or city"}), 400
+    # Check if variety is missing
+    if not variety:
+        return jsonify({"error": "Missing variety"}), 400
 
     # Initialize seasonal_prices dictionary to store prices for each season
     seasonal_prices = {"Spring": 0, "Summer": 0, "Autumn": 0, "Winter": 0}
@@ -2893,13 +2885,11 @@ def get_seasonal_prices():
 
     # Loop through each season and calculate the average price
     for season in seasonal_prices.keys():
-        # Query data for the given variety, city, and season, starting from the start_date
+        # Query data for the given variety and season, starting from the start_date
         historical_data = (
             db.session.query(PriceData.price)
             .filter(
                 PriceData.commodity == variety,  # Match the commodity (variety)
-                PriceData.city_name
-                == city.upper(),  # Match the city (case insensitive)
                 PriceData.season == season,  # Match the season
                 PriceData.year >= start_date.year,  # Consider data from 2018 onward
                 PriceData.day
