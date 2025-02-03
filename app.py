@@ -1883,79 +1883,131 @@ def api_best_sell_market():
     return jsonify({"best_market": best_market_data})
 
 
+# @app.route("/api/most_recent_prices", methods=["GET"])
+# # @jwt_required()
+# def api_most_recent_prices():
+#     # List of cities and commodities
+#     cities = [
+#         "Baltimore",
+#         "Boston",
+#         "Chicago",
+#         "Columbia",
+#         "Miami",
+#         "New York",
+#         "Philadelphia",
+#         "Los Angeles",
+#     ]
+#     commodities = [
+#         "Anaheim",
+#         "Cubanelles",
+#         "Fresno",
+#         "Habanero",
+#         "Hungarian Wax",
+#         "Jalapeno",
+#         "Long Hot",
+#         "Poblano",
+#         "Serrano",
+#         "Shishito",
+#     ]
+
+#     # Get source from request, default to 'USDA'
+#     selected_source = request.args.get("source", "USDA")
+
+#     # Calculate the date 7 days ago
+#     seven_days_ago = datetime.now(timezone("US/Pacific")) - timedelta(days=7)
+
+#     recent_prices = {commodity: {} for commodity in commodities}
+
+#     # Fetch the most recent maximum prices for each commodity and city within the last 7 days
+#     for commodity in commodities:
+#         # Handle special case: If the commodity is "Cubanelles" and the source is "USDA", search for "Cubanelle"
+#         if commodity == "Cubanelles" and selected_source == "USDA":
+
+#             commodity_to_query = "Cubanelle"
+#         else:
+#             commodity_to_query = commodity
+
+#         for city in cities:
+#             price_entry = (
+#                 db.session.query(
+#                     func.max(PriceData.price).label("max_price"),
+#                     PriceData.year,
+#                     PriceData.day,
+#                 )
+#                 .filter(
+#                     PriceData.commodity
+#                     == commodity_to_query,  # Use the adjusted commodity name
+#                     func.upper(PriceData.city_name) == city.upper(),
+#                     PriceData.year >= seven_days_ago.year,
+#                     PriceData.day >= seven_days_ago.timetuple().tm_yday,
+#                 )
+#                 .group_by(PriceData.year, PriceData.day)
+#                 .order_by(PriceData.year.desc(), PriceData.day.desc())
+#                 .first()
+#             )
+
+#             # If a price is found, store it; otherwise, store '-'
+#             if price_entry:
+#                 recent_prices[commodity][city] = price_entry.max_price
+#             else:
+#                 recent_prices[commodity][city] = "-"
+
+#     return jsonify({"prices": recent_prices})
+
+
 @app.route("/api/most_recent_prices", methods=["GET"])
-# @jwt_required()
 def api_most_recent_prices():
-    # List of cities and commodities
+    # List of cities and commodities (as before)
     cities = [
-        "Baltimore",
-        "Boston",
-        "Chicago",
-        "Columbia",
-        "Miami",
-        "New York",
-        "Philadelphia",
-        "Los Angeles",
+        "Baltimore", "Boston", "Chicago", "Columbia",
+        "Miami", "New York", "Philadelphia", "Los Angeles"
     ]
     commodities = [
-        "Anaheim",
-        "Cubanelles",
-        "Fresno",
-        "Habanero",
-        "Hungarian Wax",
-        "Jalapeno",
-        "Long Hot",
-        "Poblano",
-        "Serrano",
-        "Shishito",
+        "Anaheim", "Cubanelles", "Fresno", "Habanero",
+        "Hungarian Wax", "Jalapeno", "Long Hot", "Poblano",
+        "Serrano", "Shishito"
     ]
-
-    # Get source from request, default to 'USDA'
+    
+    # Get the selected source, defaulting to 'USDA'
     selected_source = request.args.get("source", "USDA")
 
-    # Calculate the date 7 days ago
-    seven_days_ago = datetime.now(timezone("US/Pacific")) - timedelta(days=7)
+    # Calculate the threshold timestamp for the last 7 days.
+    threshold = datetime.now(timezone("US/Pacific")) - timedelta(days=7)
 
-    recent_prices = {commodity: {} for commodity in commodities}
+    # Query the database for maximum prices by commodity and city over the last 7 days.
+    # This query assumes that PriceData has a timestamp column.
+    results = (
+        db.session.query(
+            PriceData.commodity,
+            PriceData.city_name,
+            func.max(PriceData.price).label("max_price")
+        )
+        .filter(PriceData.timestamp >= threshold)
+        .group_by(PriceData.commodity, PriceData.city_name)
+        .all()
+    )
 
-    # Fetch the most recent maximum prices for each commodity and city within the last 7 days
-    for commodity in commodities:
-        # Handle special case: If the commodity is "Cubanelles" and the source is "USDA", search for "Cubanelle"
-        if commodity == "Cubanelles" and selected_source == "USDA":
+    # Initialize the dictionary with all commodities and cities set to "-"
+    recent_prices = {commodity: {city: "-" for city in cities} for commodity in commodities}
 
-            commodity_to_query = "Cubanelle"
+    # Process the query results.
+    for commodity, city_name, max_price in results:
+        # Handle the special case for "Cubanelles" when the source is USDA.
+        # If the commodity in the data is "Cubanelle" and the request source is USDA, we want to map it to "Cubanelles".
+        if commodity == "Cubanelle" and selected_source == "USDA":
+            commodity_name = "Cubanelles"
         else:
-            commodity_to_query = commodity
+            commodity_name = commodity
 
+        # Use case-insensitive matching for city names.
+        # Here, we check if the city from the result matches any city in our predefined list.
         for city in cities:
-            price_entry = (
-                db.session.query(
-                    func.max(PriceData.price).label("max_price"),
-                    PriceData.year,
-                    PriceData.day,
-                )
-                .filter(
-                    PriceData.commodity
-                    == commodity_to_query,  # Use the adjusted commodity name
-                    func.upper(PriceData.city_name) == city.upper(),
-                    PriceData.year >= seven_days_ago.year,
-                    PriceData.day >= seven_days_ago.timetuple().tm_yday,
-                )
-                .group_by(PriceData.year, PriceData.day)
-                .order_by(PriceData.year.desc(), PriceData.day.desc())
-                .first()
-            )
-
-            # If a price is found, store it; otherwise, store '-'
-            if price_entry:
-                recent_prices[commodity][city] = price_entry.max_price
-            else:
-                recent_prices[commodity][city] = "-"
+            if city.upper() == city_name.upper():
+                recent_prices[commodity_name][city] = max_price
+                break  # Found the matching city, no need to check further
 
     return jsonify({"prices": recent_prices})
 
-
-  
 
 @app.route("/api/historical_data", methods=["GET"])
 # @jwt_required()
