@@ -10,9 +10,9 @@ import React, { useContext } from 'react';
 import axios from 'axios';
 import ProtectedRoute from './components/protectedRoute';
 import WeatherPage from './pages/WeatherPage';
-import DashAnalytics from './pages/analytics'
+import DashAnalytics from './pages/analytics';
 // Axios Defaults
-// 
+//
 axios.defaults.baseURL = 'https://ark-foods-0594c413a329.herokuapp.com'; // Heroku backend
 // axios.defaults.baseURL = 'http://localhost:5500/'; // local backend
 
@@ -76,7 +76,7 @@ const App = () => {
               </ProtectedRoute>
             }
           />
-            <Route
+          <Route
             path="/analytics"
             element={
               <ProtectedRoute roles={['admin', 'owner']}>
@@ -84,9 +84,7 @@ const App = () => {
               </ProtectedRoute>
             }
           />
-
         </Routes>
-        
       </UserProvider>
     </Router>
   );

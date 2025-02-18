@@ -595,6 +595,7 @@ function AdminDashboard() {
         }
       );
   
+    
       setForecastData(response.data);
     } catch (error) {
       console.error("Error calculating forecast:", error.response?.data || error.message);

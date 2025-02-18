@@ -78,6 +78,10 @@ from sqlalchemy.exc import SQLAlchemyError
 from flask import send_from_directory
 from notebook import get_best_start_dates, fetch_data_from_api
 from fetch_shipping_point_data import fetch_shipping_point_data  # Replace with the correct module name
+from flask_caching import Cache
+import hashlib
+from flask import request, make_response
+
 
 
 
@@ -102,6 +106,47 @@ def serve(path):
         return send_from_directory(app.static_folder, path)
     else:
         return send_from_directory(app.static_folder, "index.html")
+
+
+# Configure Flask-Caching to use Redis
+app.config['CACHE_TYPE'] = 'redis'
+app.config['CACHE_REDIS_URL'] = 'redis://localhost:6379/0'  # Adjust if needed
+# app.config['CACHE_REDIS_URL'] = os.environ.get("REDIS_URL", "redis://<MEMORISTORE_IP>:6379/0")
+cache = Cache(app)
+
+
+
+# Redis implementation for the caching of data coming from the db
+def generate_cache_key():
+    # Use the full path (which includes query parameters)
+    key = request.full_path  # e.g., "/api/sales_dashboard?commodity=Jalapeno&source=USDA"
+    # Optionally, you can hash it to ensure it's a consistent format
+    return hashlib.md5(key.encode('utf-8')).hexdigest()
+
+
+@app.before_request
+def serve_from_cache():
+    if request.method == 'GET':
+        cache_key = generate_cache_key()
+        cached_response = cache.get(cache_key)
+        if cached_response:
+            app.logger.info(f"Cache hit for key: {cache_key}")
+            response = make_response(cached_response)
+            response.headers["Content-Type"] = "application/json"
+            return response
+        else:
+            app.logger.info(f"Cache miss for key: {cache_key}")
+
+@app.after_request
+def cache_response(response):
+    if request.method == 'GET' and response.status_code == 200:
+        cache_key = generate_cache_key()
+        cache.set(cache_key, response.get_data(), timeout=86400)
+        app.logger.info(f"Cached response for key: {cache_key}")
+    return response
+
+
+
 
 
 
@@ -1535,6 +1580,12 @@ def sales_dashboard_api():
 
 
 
+@app.route("/api/test_cache", methods=["GET"])
+def test_cache():
+    return jsonify({"message": "Hello from cache test"})
+
+
+
 # Registration route
 @app.route("/api/register", methods=["POST"])
 def register():
@@ -1582,69 +1633,8 @@ def register():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# @app.route("/register", methods=["GET", "POST"])
-# def register():
-#     form = RegisterForm()
-#     if form.validate_on_submit():
-#         hashed_password = generate_password_hash(form.password.data, method="scrypt")
-#         new_user = User(
-#             username=form.username.data,
-#             email=form.email.data,
-#             password=hashed_password,
-#             role=form.role.data,
-#             approved=False,
-#         )
-#         db.session.add(new_user)
-#         db.session.commit()
-#         flash(
-#             f"Registration successful! You registered as {form.role.data}. Your account must be approved by an admin or owner.",
-#             "success",
-#         )
-#         return redirect(url_for("login"))
-#     return render_template("register.html", form=form)
 
 
-
-
-# @app.route("/login", methods=["GET", "POST"])
-# def login():
-#     try:
-#         # Parse JSON data from the request
-#         data = request.json
-#         email = data.get("email")
-#         password = data.get("password")
-
-#         # Check if email and password are provided
-#         if not email or not password:
-#             return jsonify({"error": "Email and password are required"}), 400
-
-#         # Fetch the user from the database
-#         user = User.query.filter_by(email=email).first()
-
-#         # Validate the user and password
-#         if user and check_password_hash(user.password, password):
-#             if not user.approved:
-#                 return jsonify({"error": "Your account is not approved yet. Please wait for approval."}), 403
-
-#             # Log the user in
-#             login_user(user)
-
-#             # Set session variables
-#             session["username"] = user.username
-#             session["role"] = user.role
-#             session.permanent = True
-#             session['user_id'] = user.id
-
-#             return jsonify({
-#                 "message": "Login successful!",
-#                 "role": user.role,
-#                 "username": user.username,
-#                 "user_id": user.id,
-#             }), 200
-#         else:
-#             return jsonify({"error": "Invalid email or password"}), 401
-#     except Exception as e:
-#         return jsonify({"error": str(e)}), 500
 
 @app.route("/api/protected", methods=["GET"])
 # @jwt_required()
@@ -1653,7 +1643,6 @@ def protected():
     return jsonify({"logged_in_as": current_user}), 200
 
 
-from flask_jwt_extended import create_access_token
 from datetime import timedelta
 
 @app.route("/api/login", methods=["POST"])
@@ -1883,76 +1872,7 @@ def api_best_sell_market():
     return jsonify({"best_market": best_market_data})
 
 
-# @app.route("/api/most_recent_prices", methods=["GET"])
-# # @jwt_required()
-# def api_most_recent_prices():
-#     # List of cities and commodities
-#     cities = [
-#         "Baltimore",
-#         "Boston",
-#         "Chicago",
-#         "Columbia",
-#         "Miami",
-#         "New York",
-#         "Philadelphia",
-#         "Los Angeles",
-#     ]
-#     commodities = [
-#         "Anaheim",
-#         "Cubanelles",
-#         "Fresno",
-#         "Habanero",
-#         "Hungarian Wax",
-#         "Jalapeno",
-#         "Long Hot",
-#         "Poblano",
-#         "Serrano",
-#         "Shishito",
-#     ]
 
-#     # Get source from request, default to 'USDA'
-#     selected_source = request.args.get("source", "USDA")
-
-#     # Calculate the date 7 days ago
-#     seven_days_ago = datetime.now(timezone("US/Pacific")) - timedelta(days=7)
-
-#     recent_prices = {commodity: {} for commodity in commodities}
-
-#     # Fetch the most recent maximum prices for each commodity and city within the last 7 days
-#     for commodity in commodities:
-#         # Handle special case: If the commodity is "Cubanelles" and the source is "USDA", search for "Cubanelle"
-#         if commodity == "Cubanelles" and selected_source == "USDA":
-
-#             commodity_to_query = "Cubanelle"
-#         else:
-#             commodity_to_query = commodity
-
-#         for city in cities:
-#             price_entry = (
-#                 db.session.query(
-#                     func.max(PriceData.price).label("max_price"),
-#                     PriceData.year,
-#                     PriceData.day,
-#                 )
-#                 .filter(
-#                     PriceData.commodity
-#                     == commodity_to_query,  # Use the adjusted commodity name
-#                     func.upper(PriceData.city_name) == city.upper(),
-#                     PriceData.year >= seven_days_ago.year,
-#                     PriceData.day >= seven_days_ago.timetuple().tm_yday,
-#                 )
-#                 .group_by(PriceData.year, PriceData.day)
-#                 .order_by(PriceData.year.desc(), PriceData.day.desc())
-#                 .first()
-#             )
-
-#             # If a price is found, store it; otherwise, store '-'
-#             if price_entry:
-#                 recent_prices[commodity][city] = price_entry.max_price
-#             else:
-#                 recent_prices[commodity][city] = "-"
-
-#     return jsonify({"prices": recent_prices})
 
 
 from sqlalchemy.sql.expression import tuple_
@@ -3431,147 +3351,6 @@ def get_shipping_empricial_probability():
 
 
 
-
-from scipy import stats
-
-
-# terminal correlation for USDA data
-
-# @app.route("/api/terminal_correlation", methods=["GET"])
-# def get_terminal_correlation():
-#     try:
-#         # Query data with proper filtering
-#         source = request.args.get('source', 'ProduceIQ')  # Default to USDA
-#         query = text("""
-#     SELECT 
-#         commodity,
-#         price,
-#         DATE(DATE(year || '-01-01'), '+' || (day - 1) || ' days') as date
-#             FROM price_data
-#             WHERE source = :source
-#             ORDER BY date, commodity
-#         """)
-        
-#         result = db.session.execute(query, {'source': source}).fetchall()
-#         print(f"Query result length: {len(result)}")  # Debugging log
-
-#         if not result:
-#             return jsonify({"error": "No data found"}), 404
-
-#         # Create DataFrame and process data
-#         df = pd.DataFrame(result, columns=['commodity', 'price', 'date'])
-#         print(f"Initial DataFrame shape: {df.shape}")  # Debugging log
-
-#         # Ensure 'date' column is treated as datetime
-#         df['date'] = pd.to_datetime(df['date'])
-
-#         # Handle duplicate (date, commodity) entries by aggregating
-#         df = df.groupby(['date', 'commodity'], as_index=False)['price'].mean()
-#         print(f"DataFrame shape after grouping: {df.shape}")  # Debugging log
-
-#         # Create pivot table
-#         pivot_df = df.pivot(index='date', columns='commodity', values='price')
-#         print(f"Pivot table shape: {pivot_df.shape}")  # Debugging log
-
-#         del df
-#         import gc
-#         gc.collect()
-
-#         # Forward fill missing values before calculating percentage change
-#         pivot_df = pivot_df.ffill(limit=3)  # Forward fill up to 3 missing values
-#         returns = pivot_df.pct_change()  # Calculate percentage change
-#         print(f"Returns DataFrame shape before filtering: {returns.shape}")  # Debugging log
-
-#         # Remove columns with too many missing values
-#         min_valid_ratio = 0.3  # At least 30% valid data
-#         valid_columns = returns.columns[returns.count() > len(returns) * min_valid_ratio]
-#         returns = returns[valid_columns]
-#         print(f"Returns DataFrame shape after filtering: {returns.shape}")  # Debugging log
-
-#         del pivot_df
-#         gc.collect()
-
-#         # Calculate correlation matrix
-#         correlation_matrix = returns.corr(method='pearson')
-#         correlation_matrix.fillna(0, inplace=True)
-#         print(f"Correlation matrix shape: {correlation_matrix.shape}")  # Debugging log
-
-#         # Prepare data for plotting
-#         labels = correlation_matrix.columns.tolist()
-#         z_values = correlation_matrix.values.tolist()
-
-#         # Reverse the order of y-axis labels and rows in z_values
-#         reversed_labels = labels[::-1]  # Reverse the y-axis labels
-#         reversed_z_values = z_values[::-1]  # Reverse the rows of the correlation matrix
-
-#         # Create annotations dynamically for reversed labels and z_values
-#         annotations = [
-#             {
-#                 "x": labels[col],
-#                 "y": reversed_labels[row],  # Adjust for reversed y-axis
-#                 "text": f"{reversed_z_values[row][col]:.2f}",  # Use reversed data
-#                 "showarrow": False,
-#                 "font": {
-#                     "color": "white",
-#                     "size": 10,
-#                 },
-#             }
-#             for row in range(len(reversed_labels))
-#             for col in range(len(labels))
-#         ]
-
-#         # Prepare Plotly chart
-#         chart = {
-#             "data": [
-#                 {
-#                     "z": reversed_z_values,  # Use reversed rows for heatmap
-#                     "x": labels,
-#                     "y": reversed_labels,  # Use reversed y-axis labels
-#                     "type": "heatmap",
-#                     "colorscale": "CoolWarm",
-#                     "showscale": True,
-#                     "text": [[f"{val:.2f}" for val in row] for row in reversed_z_values],
-#                     "hoverinfo": "text",
-#                 }
-#             ],
-#             "layout": {
-#                 "title": "Correlation Matrix of Terminal Market Prices",
-#                 "xaxis": {
-#                     "title": "Commodities",
-#                     "tickangle": -45,
-#                     "automargin": True,
-#                 },
-#                 "yaxis": {
-#                     "title": "Commodities",
-#                     "automargin": True,
-#                 },
-#                 "height": 600,
-#                 "width": 600,
-#                 "annotations": annotations,
-#             },
-#         }
-
-#         # Add summary statistics
-#         summary_stats = {
-#             "total_records": len(returns),  # Updated to use 'returns'
-#             "unique_commodities": len(labels),
-#             "date_range": {
-#                 "start": returns.index.min().strftime('%Y-%m-%d'),
-#                 "end": returns.index.max().strftime('%Y-%m-%d'),
-#             },
-#             "average_correlation": float(correlation_matrix.mean().mean()),
-#         }
-
-#         print(f"Final chart labels: {len(labels)}, annotations: {len(annotations)}")  # Debugging log
-
-#         return jsonify({"chart": chart, "stats": summary_stats}), 200
-
-#     except Exception as e:
-#         app.logger.error(f"Error generating terminal correlation chart: {str(e)}")
-#         import traceback
-#         traceback.print_exc()
-#         return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
-
 @app.route("/api/terminal_correlation", methods=["GET"])
 def get_terminal_correlation():
     try:
@@ -3712,143 +3491,6 @@ def get_terminal_correlation():
 
 
 
-
-# shipping correlation for ProduceIQ data
-
-# @app.route("/api/shipping_correlation", methods=["GET"])
-# def get_shipping_correlation():
-#     try:
-#         # Query data with proper filtering
-#         source = request.args.get('source', 'ProduceIQ')  # Default to USDA
-#         query = text("""
-#     SELECT 
-#         commodity,
-#         price,
-#         DATE(DATE(year || '-01-01'), '+' || (day - 1) || ' days') as date
-#     FROM price_data
-#     WHERE source = :source
-#     ORDER BY date, commodity
-# """)
-        
-#         result = db.session.execute(query, {'source': source}).fetchall()
-#         print(f"Query result length: {len(result)}")  # Debugging log
-
-#         if not result:
-#             return jsonify({"error": "No data found"}), 404
-
-#         # Create DataFrame and process data
-#         df = pd.DataFrame(result, columns=['commodity', 'price', 'date'])
-#         print(f"Initial DataFrame shape: {df.shape}")  # Debugging log
-
-#         # Ensure 'date' column is treated as datetime
-#         df['date'] = pd.to_datetime(df['date'])
-
-#         # Handle duplicate (date, commodity) entries by aggregating
-#         df = df.groupby(['date', 'commodity'], as_index=False)['price'].mean()
-#         print(f"DataFrame shape after grouping: {df.shape}")  # Debugging log
-
-#         # Create pivot table
-#         pivot_df = df.pivot(index='date', columns='commodity', values='price')
-#         print(f"Pivot table shape: {pivot_df.shape}")  # Debugging log
-
-#         del df
-#         import gc
-#         gc.collect()
-
-#         # Forward fill missing values before calculating percentage change
-#         pivot_df = pivot_df.ffill(limit=3)  # Forward fill up to 3 missing values
-#         returns = pivot_df.pct_change()  # Calculate percentage change
-#         print(f"Returns DataFrame shape before filtering: {returns.shape}")  # Debugging log
-
-#         # Remove columns with too many missing values
-#         min_valid_ratio = 0.3  # At least 30% valid data
-#         valid_columns = returns.columns[returns.count() > len(returns) * min_valid_ratio]
-#         returns = returns[valid_columns]
-#         print(f"Returns DataFrame shape after filtering: {returns.shape}")  # Debugging log
-
-#         del pivot_df
-#         gc.collect()
-
-#         # Calculate correlation matrix
-#         correlation_matrix = returns.corr(method='pearson')
-#         correlation_matrix.fillna(0, inplace=True)
-#         print(f"Correlation matrix shape: {correlation_matrix.shape}")  # Debugging log
-
-#         # Prepare data for plotting
-#         labels = correlation_matrix.columns.tolist()
-#         z_values = correlation_matrix.values.tolist()
-
-#         # Reverse the order of y-axis labels and rows in z_values
-#         reversed_labels = labels[::-1]  # Reverse the y-axis labels
-#         reversed_z_values = z_values[::-1]  # Reverse the rows of the correlation matrix
-
-#         # Create annotations dynamically for reversed labels and z_values
-#         annotations = [
-#             {
-#                 "x": labels[col],
-#                 "y": reversed_labels[row],  # Adjust for reversed y-axis
-#                 "text": f"{reversed_z_values[row][col]:.2f}",  # Use reversed data
-#                 "showarrow": False,
-#                 "font": {
-#                     "color": "white",
-#                     "size": 10,
-#                 },
-#             }
-#             for row in range(len(reversed_labels))
-#             for col in range(len(labels))
-#         ]
-
-#         # Prepare Plotly chart
-#         chart = {
-#             "data": [
-#                 {
-#                     "z": reversed_z_values,  # Use reversed rows for heatmap
-#                     "x": labels,
-#                     "y": reversed_labels,  # Use reversed y-axis labels
-#                     "type": "heatmap",
-#                     "colorscale": "CoolWarm",
-#                     "showscale": True,
-#                     "text": [[f"{val:.2f}" for val in row] for row in reversed_z_values],
-#                     "hoverinfo": "text",
-#                 }
-#             ],
-#             "layout": {
-#                 "title": "Correlation Matrix of Shipping Prices",
-#                 "xaxis": {
-#                     "title": "Commodities",
-#                     "tickangle": -45,
-#                     "automargin": True,
-#                 },
-#                 "yaxis": {
-#                     "title": "Commodities",
-#                     "automargin": True,
-#                 },
-#                 "height": 600,
-#                 "width": 600,
-#                 "annotations": annotations,
-#             },
-#         }
-
-#         # Add summary statistics
-#         summary_stats = {
-#             "total_records": len(returns),  # Updated to use 'returns'
-#             "unique_commodities": len(labels),
-#             "date_range": {
-#                 "start": returns.index.min().strftime('%Y-%m-%d'),
-#                 "end": returns.index.max().strftime('%Y-%m-%d'),
-#             },
-#             "average_correlation": float(correlation_matrix.mean().mean()),
-#         }
-
-#         print(f"Final chart labels: {len(labels)}, annotations: {len(annotations)}")  # Debugging log
-
-#         return jsonify({"chart": chart, "stats": summary_stats}), 200
-
-#     except Exception as e:
-#         app.logger.error(f"Error generating shipping correlation chart: {str(e)}")
-#         import traceback
-#         traceback.print_exc()
-#         return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
 
 
 @app.route("/api/shipping_correlation", methods=["GET"])
@@ -4583,3 +4225,5 @@ def shipping_rolling_correlations():
 # Run the app
 if __name__ == "__main__":
     app.run(debug=True)
+
+# Initialize the cache extension
