@@ -148,20 +148,32 @@ def cache_response(response):
 
 
 
-
-
 CORS(
     app,
     supports_credentials=True,
     resources={
         r"/api/*": {
             "origins": [
-                "http://localhost:3000",  # Local frontend
-                "https://ark-foods-0594c413a329.herokuapp.com/",  # Production frontend
+                "http://localhost:3000",  # Local frontend (for development)
+                "http://34.28.202.145"  # Replace with your new production domain or public IP
             ]
         }
     },
 )
+
+
+# CORS(
+#     app,
+#     supports_credentials=True,
+#     resources={
+#         r"/api/*": {
+#             "origins": [
+#                 "http://localhost:3000",  # Local frontend
+#                 "https://ark-foods-0594c413a329.herokuapp.com/",  # Production frontend
+#             ]
+#         }
+#     },
+# )
 
 
 @jwt.unauthorized_loader
