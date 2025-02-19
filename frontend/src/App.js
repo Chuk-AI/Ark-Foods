@@ -14,8 +14,9 @@ import DashAnalytics from './pages/analytics';
 // Axios Defaults
 //
 // axios.defaults.baseURL = 'https://ark-foods-0594c413a329.herokuapp.com'; // Heroku backend
-// axios.defaults.baseURL = 'http://localhost:5500/'; // local backend
-axios.defaults.baseURL = 'https://arkfoods.klicksai.com'; // or your custom domain
+
+axios.defaults.baseURL = 'http://localhost:5500/'; // local backend
+// axios.defaults.baseURL = 'https://arkfoods.klicksai.com'; // or your custom domain
 
 // Add Authorization header for all requests
 axios.interceptors.request.use((config) => {

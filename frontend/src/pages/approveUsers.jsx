@@ -31,12 +31,15 @@ function ApproveUsers() {
   const handleApprove = async (userId) => {
     try {
       const token = localStorage.getItem('authToken');
-      const response = await axios.post(`/api/approve_user/${userId}`, {}, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      console.log(response.data.message);
+      const response = await axios.post(
+        `/api/approve_user/${userId}`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
       setUsers(users.filter((user) => user.id !== userId));
     } catch (error) {
       console.error('Error approving user:', error);
@@ -46,7 +49,7 @@ function ApproveUsers() {
   if (!isAuthenticated || (userRole !== 'owner' && userRole !== 'admin')) {
     return <div>Access Denied. You do not have permission to view this page.</div>;
   }
-  
+
   return (
     <div>
       <Header />
@@ -68,11 +71,7 @@ function ApproveUsers() {
                 <td>{user.email}</td>
                 <td>{user.role}</td>
                 <td>
-                  <button
-                    type="button"
-                    className="btn btn-success"
-                    onClick={() => handleApprove(user.id)}
-                  >
+                  <button type="button" className="btn btn-success" onClick={() => handleApprove(user.id)}>
                     Approve
                   </button>
                 </td>

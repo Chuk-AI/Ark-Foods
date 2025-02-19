@@ -155,7 +155,7 @@ CORS(
         r"/api/*": {
             "origins": [
                 "http://localhost:3000",  # Local frontend (for development)
-                "https://arkfoods.klicksai.com"  # Replace with your new production domain or public IP
+                # "https://arkfoods.klicksai.com"  # Replace with your new production domain or public IP
             ]
         }
     },

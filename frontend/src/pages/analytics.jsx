@@ -10,8 +10,8 @@ import TerminalViolinPlot from '../components/terminalViolin';
 import ShippingViolinPlot from '../components/shippingViolin'; // Import the new component
 
 export default function DashAnalytics() {
-  const terminalColors = ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40"];
-  const shippingColors = ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40"];
+  const terminalColors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
+  const shippingColors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
 
   return (
     <div className="analytics-page">
@@ -22,36 +22,26 @@ export default function DashAnalytics() {
         <TerminalViolinPlot />
       </div>
 
-   {/* Shipping Violin Plot */}
-   <div>
+      {/* Shipping Violin Plot */}
+      <div>
         <ShippingViolinPlot />
       </div>
-      
+
       {/* Empirical Probability for Terminal Prices */}
       <div className="terminal-empricial-container d-flex">
         <div className="">
-        <EmpiricalChart
-        apiEndpoint="/api/terminal_empricial_probability"
-        title="Terminal Empirical Probability"
-        colors={terminalColors}
-        />
+          <EmpiricalChart apiEndpoint="/api/terminal_empricial_probability" title="Terminal Empirical Probability" colors={terminalColors} />
         </div>
       </div>
-
-   
 
       {/* Empirical Probability for Shipping Prices */}
-        <div className="shipping-empricial-container d-flex">
+      <div className="shipping-empricial-container d-flex">
         <div>
-        <EmpiricalChart
-        apiEndpoint="/api/shipping_empricial_probability"
-        title="Shipping Empirical Probability"
-        colors={shippingColors}
-        />
+          <EmpiricalChart apiEndpoint="/api/shipping_empricial_probability" title="Shipping Empirical Probability" colors={shippingColors} />
         </div>
       </div>
 
-      <div className='correlationsHeight'>
+      <div className="correlationsHeight">
         <CorrelationsPlots />
       </div>
 

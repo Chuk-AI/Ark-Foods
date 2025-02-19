@@ -83,12 +83,8 @@ function SalesDashboard() {
   // const [terminalViolinData, setTerminalViolinData] = useState([]);
   // const [shippingViolinData, setShippingViolinData] = useState([]);
 
-
-
-
   // const terminalColors = ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40"];
   // const shippingColors = ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40"];
-
 
   // best sell market
   const handleCommodityChange = (e) => {
@@ -147,7 +143,7 @@ function SalesDashboard() {
   // Shipping Point Price Data States
   const [shippingPointFilterState, setShippingPointFilterState] = useState({
     commodities: ['Habanero'], // Default to one or more items
-    regions: ["mexico crossings through texas"], // Default to one or more regions
+    regions: ['mexico crossings through texas'], // Default to one or more regions
     source: 'ProduceIQ', // Default source for shipping point price
     startDate: '2024-11-01', // Default to a valid date
     endDate: new Date().toISOString().split('T')[0], // current day as endDate
@@ -285,7 +281,7 @@ function SalesDashboard() {
     if (rightSidebar) {
       rightSidebar.classList.toggle('collapsed'); // Use 'collapsed' for consistency
     } else {
-      console.error('Right sidebar reference is null');
+      console.log('');
     }
   };
 
@@ -293,7 +289,6 @@ function SalesDashboard() {
   const toggleBlockSize = (blockId, blockTitle) => {
     setMinimizedBlocks((prev) => {
       if (prev.includes(blockId)) {
-
         // Restore the block
         const blockElement = document.getElementById(blockId);
         blockElement.classList.remove('hidden');
@@ -670,9 +665,7 @@ function SalesDashboard() {
 
       const data = await response.json();
       updateHistoricalChart(data);
-    } catch (error) {
-      console.log(' historical data');
-    }
+    } catch (error) {}
   };
 
   const handleDownloadChart = () => {
@@ -827,7 +820,6 @@ function SalesDashboard() {
               color: '#666666',
               font: { size: 11 },
             },
-          
           },
           datalabels: {
             display: false, // Globally disable datalabels
@@ -842,7 +834,6 @@ function SalesDashboard() {
 
   const currentDate = new Date().toISOString().split('T')[0];
 
-
   const fetchShippingPointPriceData = async (filters = null) => {
     // Use default data if no filters are provided
     const defaultFilters = {
@@ -852,14 +843,13 @@ function SalesDashboard() {
       startDate: '2024-10-01',
       endDate: new Date().toISOString().split('T')[0], // current day as endDate
     };
-  
+
     const appliedFilters = filters || defaultFilters;
-  
+
     try {
-  
       const token = localStorage.getItem('authToken');
       if (!token) throw new Error('No token found');
-  
+
       const params = new URLSearchParams({
         commodities: appliedFilters.commodities.join(','),
         regions: appliedFilters.regions.join(','),
@@ -869,13 +859,13 @@ function SalesDashboard() {
         averageCommodities: appliedFilters.averageCommodities?.toString() || 'false',
         averageRegions: appliedFilters.averageRegions?.toString() || 'false',
       });
-  
+
       const response = await fetch(`/api/shipping_point_price?${params.toString()}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
-  
+
       if (!response.ok) {
         if (response.status === 401) {
           alert('Session expired. Please log in again.');
@@ -884,14 +874,11 @@ function SalesDashboard() {
         }
         throw new Error('Failed to fetch Shipping Point Price data');
       }
-  
+
       const data = await response.json();
       updateShippingPointPriceChart(data); // Update chart with fetched data
-    } catch (error) {
-      console.error('Error fetching Shipping Point Price data:', error);
-    }
+    } catch (error) {}
   };
-  
 
   // useEffect(() => {
   //   fetchShippingPointPriceData({
@@ -905,7 +892,6 @@ function SalesDashboard() {
   useEffect(() => {
     fetchShippingPointPriceData(); // Fetch default data on mount
   }, []);
-
 
   return (
     <div>
@@ -1214,11 +1200,13 @@ function SalesDashboard() {
                   value={shippingPointFilterState.regions}
                   onChange={handleShippingRegionChange}
                 >
-                  {['Central and South Florida', 'south georgia', 'mexico crossings through texas', 'mexico crossings through nogales arizona', 'Virginia'].map((region) => (
-                    <option key={region} value={region}>
-                      {region}
-                    </option>
-                  ))}
+                  {['Central and South Florida', 'south georgia', 'mexico crossings through texas', 'mexico crossings through nogales arizona', 'Virginia'].map(
+                    (region) => (
+                      <option key={region} value={region}>
+                        {region}
+                      </option>
+                    )
+                  )}
                 </select>
               </div>
 
@@ -1285,42 +1273,42 @@ function SalesDashboard() {
 
         {/* Main Content */}
         <div className="main-content flex-grow-1">
-        <div id="most-recent-price-section" className="section">
-                <div className="row mb-4 salesBody most-recent-container">
-                  <div className="col-12 mb-4">
-                    <div className="card resizable-block" id="most-recent-prices-card" data-block-title="Most Recent Prices">
-                      <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                        <h2>Most Recent Prices</h2>
-                        <button
-                          className="btn btn-sm btn-outline-light toggle-size"
-                          data-block-title="Most Recent Prices"
-                          onClick={() => toggleBlockSize('most-recent-prices-card', 'Most Recent Prices')}
-                        >
-                          Minimize
-                        </button>
-                      </div>
-                      <div className="card-body p-0">
-                        <table className="table table-striped table-hover table-bordered" id="most-recent-prices-table">
-                          <thead className="thead-dark">
-                            <tr>
-                              <th>Commodity</th>
-                              <th>Baltimore</th>
-                              <th>Boston</th>
-                              <th>Chicago</th>
-                              <th>Columbia</th>
-                              <th>Miami</th>
-                              <th>New York</th>
-                              <th>Philadelphia</th>
-                              <th>Los Angeles</th>
-                            </tr>
-                          </thead>
-                          <tbody>{updateMostRecentPricesTable()}</tbody>
-                        </table>
-                      </div>
-                    </div>
+          <div id="most-recent-price-section" className="section">
+            <div className="row mb-4 salesBody most-recent-container">
+              <div className="col-12 mb-4">
+                <div className="card resizable-block" id="most-recent-prices-card" data-block-title="Most Recent Prices">
+                  <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <h2>Most Recent Prices</h2>
+                    <button
+                      className="btn btn-sm btn-outline-light toggle-size"
+                      data-block-title="Most Recent Prices"
+                      onClick={() => toggleBlockSize('most-recent-prices-card', 'Most Recent Prices')}
+                    >
+                      Minimize
+                    </button>
+                  </div>
+                  <div className="card-body p-0">
+                    <table className="table table-striped table-hover table-bordered" id="most-recent-prices-table">
+                      <thead className="thead-dark">
+                        <tr>
+                          <th>Commodity</th>
+                          <th>Baltimore</th>
+                          <th>Boston</th>
+                          <th>Chicago</th>
+                          <th>Columbia</th>
+                          <th>Miami</th>
+                          <th>New York</th>
+                          <th>Philadelphia</th>
+                          <th>Los Angeles</th>
+                        </tr>
+                      </thead>
+                      <tbody>{updateMostRecentPricesTable()}</tbody>
+                    </table>
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
 
           <div id="best-sell-market-section" className="section">
             <div className="row mb-4 sales-Body">
@@ -1364,7 +1352,7 @@ function SalesDashboard() {
                             </td>
                           </tr>
                         )}
-                      </tbody>{' '}
+                      </tbody>
                     </table>
                   </div>
                 </div>
@@ -1389,7 +1377,7 @@ function SalesDashboard() {
                 </div>
               </div>
               {/* Row 2: Most Recent Prices Table */}
-          
+
               {/* Seasonal Trends */}
               <div id="seasonal-trends-section" className="section">
                 <div className="col-lg-12 mb-4">
@@ -1457,7 +1445,6 @@ function SalesDashboard() {
                   </div>
                 </div>
               </div>
-   
 
               <div ref={rightSidebarRef} id="minimized-sidebar" className=" collapsed">
                 <div id="right-sidebar-toggle" onClick={toggleRightSidebar}>
@@ -1486,5 +1473,3 @@ function SalesDashboard() {
 }
 
 export default SalesDashboard;
-
-
