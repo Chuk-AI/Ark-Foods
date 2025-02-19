@@ -183,16 +183,16 @@ def custom_unauthorized_response(err):
 load_dotenv()
 
 # setting up env variable for IBM API keys
-EIS_API_KEY = os.getenv("EIS_API_KEY")
-EIS_TENANT_ID = os.getenv("EIS_TENANT_ID")
-EIS_ORG_ID = os.getenv("EIS_ORG_ID")
-if not all([EIS_API_KEY, EIS_TENANT_ID, EIS_ORG_ID]):
-    logging.error(
-        "One or more IBM credentials are missing in the environment variables."
-    )
-print(f"API Key: {os.getenv('EIS_API_KEY')}")
-print(f"Tenant ID: {os.getenv('EIS_TENANT_ID')}")
-print(f"Endpoint: https://api.ibm.com/geospatial/run/na/core/v3/query")
+# EIS_API_KEY = os.getenv("EIS_API_KEY")
+# EIS_TENANT_ID = os.getenv("EIS_TENANT_ID")
+# EIS_ORG_ID = os.getenv("EIS_ORG_ID")
+# if not all([EIS_API_KEY, EIS_TENANT_ID, EIS_ORG_ID]):
+#     logging.error(
+#         "One or more IBM credentials are missing in the environment variables."
+#     )
+# print(f"API Key: {os.getenv('EIS_API_KEY')}")
+# print(f"Tenant ID: {os.getenv('EIS_TENANT_ID')}")
+# print(f"Endpoint: https://api.ibm.com/geospatial/run/na/core/v3/query")
 
 
 # Enable CORS
