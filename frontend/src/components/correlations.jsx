@@ -19,7 +19,6 @@ export default function CorrelationsPlots() {
         return response.json();
       })
       .then((data) => {
-        console.log('Received terminal correlation chart data:', data);
         setTerminalChart(data.chart); // Save only the chart part
       })
       .catch((error) => {
@@ -35,7 +34,6 @@ export default function CorrelationsPlots() {
         return response.json();
       })
       .then((data) => {
-        console.log('Received shipping correlation chart data:', data);
         setShippingChart(data.chart); // Save only the chart part
       })
       .catch((error) => {
@@ -63,13 +61,7 @@ export default function CorrelationsPlots() {
       <div className="corr-section">
         {terminalChart ? (
           <div className="terminal-corr-section">
-            <Plot
-              data={terminalChart.data}
-              layout={terminalChart.layout}
-              onInitialized={(figure) => console.log('Terminal Chart Initialized:', figure)}
-              onUpdate={(figure) => console.log('Terminal Chart Updated:', figure)}
-              onError={(err) => console.error('Error rendering Terminal Chart:', err)}
-            />
+            <Plot data={terminalChart.data} layout={terminalChart.layout} onError={(err) => console.error('Error rendering Terminal Chart:', err)} />
           </div>
         ) : (
           <p>Terminal Correlation Loading...</p>
@@ -77,13 +69,7 @@ export default function CorrelationsPlots() {
 
         {shippingChart ? (
           <div className="shipping-corr-section">
-            <Plot
-              data={shippingChart.data}
-              layout={shippingChart.layout}
-              onInitialized={(figure) => console.log('Shipping Chart Initialized:', figure)}
-              onUpdate={(figure) => console.log('Shipping Chart Updated:', figure)}
-              onError={(err) => console.error('Error rendering Shipping Chart:', err)}
-            />
+            <Plot data={shippingChart.data} layout={shippingChart.layout} onError={(err) => console.error('Error rendering Shipping Chart:', err)} />
           </div>
         ) : (
           <p>Shipping Correlation Loading...</p>

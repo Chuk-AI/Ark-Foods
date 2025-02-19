@@ -162,7 +162,6 @@ function SalesDashboard() {
   });
 
   // Handlers for Shipping Point Price
-
   const handleShippingCommodityChange = (e) => {
     setShippingPointFilterState((prev) => ({
       ...prev,
@@ -494,7 +493,7 @@ function SalesDashboard() {
 
       seasonalChartRef.current.chart = newChart; // Save chart instance
     } catch (error) {
-      console.error('Error fetching seasonal data:', error);
+      console.error('');
     }
   };
 
