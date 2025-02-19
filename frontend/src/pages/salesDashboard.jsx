@@ -202,6 +202,42 @@ function SalesDashboard() {
     }));
   };
 
+  const [seasonalFilterState, setSeasonalFilterState] = useState({
+    commodities: ['Anaheim'], // Default commodity
+    cities: ['New York'], // Default city
+    startDate: '2024-01-01', // Default start date
+    endDate: new Date().toISOString().split('T')[0], // Current date as end date
+  });
+
+  const [appliedSeasonalFilters, setAppliedSeasonalFilters] = useState({
+    commodities: ['Anaheim'],
+    cities: ['New York'],
+    startDate: '2024-01-01',
+    endDate: new Date().toISOString().split('T')[0],
+  });
+
+  const handleSeasonalCommodityChange = (e) => {
+    setSeasonalFilterState((prev) => ({
+      ...prev,
+      commodities: Array.from(e.target.selectedOptions, (opt) => opt.value),
+    }));
+  };
+
+  const handleSeasonalCityChange = (e) => {
+    setSeasonalFilterState((prev) => ({
+      ...prev,
+      cities: Array.from(e.target.selectedOptions, (opt) => opt.value),
+    }));
+  };
+
+  const handleSeasonalStartDateChange = (e) => {
+    setSeasonalFilterState((prev) => ({ ...prev, startDate: e.target.value }));
+  };
+
+  const handleSeasonalEndDateChange = (e) => {
+    setSeasonalFilterState((prev) => ({ ...prev, endDate: e.target.value }));
+  };
+
   // Section Titles
   const sectionTitles = {
     'best-sell-market-section': 'Best Sell Market',
@@ -385,6 +421,10 @@ function SalesDashboard() {
     fetchBestSellMarket(appliedFilters);
   }, []);
 
+  useEffect(() => {
+    updateSeasonalChart(appliedSeasonalFilters);
+  }, []);
+
   // Fetch Most Recent Prices Data
   const fetchMostRecentPrices = async () => {
     try {
@@ -451,14 +491,12 @@ function SalesDashboard() {
 
   const seasonalChartRef = useRef(null); // Ref for Seasonal Chart
 
-  const updateSeasonalChart = async () => {
+  const updateSeasonalChart = async (filters = appliedSeasonalFilters) => {
     const params = new URLSearchParams();
-    if (commodities.length > 0) params.append('commodities', commodities.join(','));
-    if (cities.length > 0) params.append('cities', cities.join(','));
-    if (startDate && endDate) {
-      params.append('start_date', startDate);
-      params.append('end_date', endDate);
-    }
+    params.append('commodities', filters.commodities.join(','));
+    params.append('cities', filters.cities.join(','));
+    params.append('start_date', filters.startDate);
+    params.append('end_date', filters.endDate);
 
     try {
       const response = await fetch(`/api/sales_seasonal_prices?${params.toString()}`);
@@ -467,12 +505,10 @@ function SalesDashboard() {
       const data = await response.json();
       const ctx = seasonalChartRef.current.getContext('2d');
 
-      // Destroy existing chart instance
       if (seasonalChartRef.current.chart) {
         seasonalChartRef.current.chart.destroy();
       }
 
-      // Create new chart
       const newChart = new Chart(ctx, {
         type: 'bar',
         data: {
@@ -491,19 +527,22 @@ function SalesDashboard() {
         options: { responsive: true },
       });
 
-      seasonalChartRef.current.chart = newChart; // Save chart instance
+      seasonalChartRef.current.chart = newChart;
     } catch (error) {
-      console.error('');
+      console.error('Error fetching seasonal chart data:', error);
     }
   };
 
   const handleApplySeasonalFilters = () => {
+    const { startDate, endDate } = seasonalFilterState;
+
     if ((startDate && !endDate) || (!startDate && endDate)) {
-      // alert("Please provide both start date and end date.");
+      alert('Please provide both start date and end date.');
       return;
     }
 
-    updateSeasonalChart();
+    setAppliedSeasonalFilters(seasonalFilterState); // Apply filters
+    updateSeasonalChart(seasonalFilterState); // Fetch data using applied filters
   };
 
   // Fetch initial chart data on component mount
@@ -974,8 +1013,8 @@ function SalesDashboard() {
                 <select
                   id="commodityFilterSeasonal"
                   className="form-control"
-                  value={commodities}
-                  onChange={(e) => setCommodities(Array.from(e.target.selectedOptions, (opt) => opt.value))}
+                  value={seasonalFilterState.commodities}
+                  onChange={handleSeasonalCommodityChange}
                   multiple
                 >
                   {['Anaheim', 'Cubanelles', 'Fresno', 'Habanero', 'Hungarian Wax', 'Jalapeno', 'Long Hot', 'Poblano', 'Serrano', 'Shishito'].map((item) => (
@@ -990,13 +1029,7 @@ function SalesDashboard() {
                 <label htmlFor="cityFilterSeasonal" className="font-weight-bold">
                   City
                 </label>
-                <select
-                  id="cityFilterSeasonal"
-                  className="form-control"
-                  value={cities}
-                  onChange={(e) => setCities(Array.from(e.target.selectedOptions, (opt) => opt.value))}
-                  multiple
-                >
+                <select id="cityFilterSeasonal" className="form-control" value={seasonalFilterState.cities} onChange={handleSeasonalCityChange} multiple>
                   {['New York', 'Chicago', 'Los Angeles', 'Miami', 'Philadelphia', 'Boston', 'Baltimore', 'Columbia'].map((city) => (
                     <option key={city} value={city}>
                       {city}
@@ -1013,9 +1046,8 @@ function SalesDashboard() {
                   type="date"
                   id="startDateFilterSeasonal"
                   className="form-control"
-                  placeholder="YYYY-MM-DD"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
+                  value={seasonalFilterState.startDate}
+                  onChange={handleSeasonalStartDateChange}
                 />
               </div>
 
@@ -1027,9 +1059,8 @@ function SalesDashboard() {
                   type="date"
                   id="endDateFilterSeasonal"
                   className="form-control"
-                  placeholder="YYYY-MM-DD"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
+                  value={seasonalFilterState.endDate}
+                  onChange={handleSeasonalEndDateChange}
                 />
               </div>
 
