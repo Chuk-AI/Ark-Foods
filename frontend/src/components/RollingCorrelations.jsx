@@ -11,7 +11,7 @@ const RollingCorrelation = () => {
   const [chartType, setChartType] = useState('terminal'); // Terminal or Shipping
   const [dataSource, setDataSource] = useState('USDA'); // Default to USDA
 
-  const commodities = ['Anaheim', 'Cubanelles', 'Fresno', 'Habanero', 'Hungarian Wax', 'Jalapeno', 'Long Hot', 'Poblano', 'Serrano', 'Shishito'];
+  const commodities = ['Anaheim', 'Cubanelle', 'Fresno', 'Habanero', 'Hungarian Wax', 'Jalapeno', 'Long Hot', 'Poblano', 'Serrano', 'Shishito'];
 
   const fetchRollingCorrelation = async () => {
     // Reset error and chart data
