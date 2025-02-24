@@ -8,13 +8,37 @@ const RollingCorrelation = () => {
   const [window, setWindow] = useState(30);
   const [chartData, setChartData] = useState(null);
   const [error, setError] = useState('');
-  const [chartType, setChartType] = useState('terminal'); // Terminal or Shipping
-  const [dataSource, setDataSource] = useState('USDA'); // Default to USDA
+  const [chartType, setChartType] = useState('terminal'); // "terminal" or "shipping"
+  const [dataSource, setDataSource] = useState('USDA');   // "USDA" or "ProduceIQ"
 
-  const commodities = ['Anaheim', 'Cubanelle', 'Fresno', 'Habanero', 'Hungarian Wax', 'Jalapeno', 'Long Hot', 'Poblano', 'Serrano', 'Shishito'];
+  // Example commodity list with "Cubanelles" displayed:
+  const commodities = [
+    'Anaheim',
+    'Cubanelles',  // <-- Shown to the user
+    'Fresno',
+    'Habanero',
+    'Hungarian Wax',
+    'Jalapeno',
+    'Long Hot',
+    'Poblano',
+    'Serrano',
+    'Shishito'
+  ];
+
+  /**
+   * Utility function to map "Cubanelles" -> "Cubanelle" if USDA is chosen.
+   * Otherwise keep the commodity as is.
+   */
+  const getCommodityNameForSource = (commodity, source) => {
+    // If it’s Cubanelles and the user selected USDA, rename it to Cubanelle
+    if (commodity === 'Cubanelles' && source === 'USDA') {
+      return 'Cubanelle';
+    }
+    // Otherwise, keep it the same
+    return commodity;
+  };
 
   const fetchRollingCorrelation = async () => {
-    // Reset error and chart data
     setError('');
     setChartData(null);
 
@@ -29,18 +53,23 @@ const RollingCorrelation = () => {
     }
 
     try {
-      const endpoint = chartType === 'terminal' ? '/api/terminal_rolling_correlations' : '/api/shipping_rolling_correlations';
+      // Convert user’s chosen commodity names to correct names for the chosen data source
+      const finalSeries1 = getCommodityNameForSource(series1, dataSource);
+      const finalSeries2 = getCommodityNameForSource(series2, dataSource);
+
+      const endpoint =
+        chartType === 'terminal'
+          ? '/api/terminal_rolling_correlations'
+          : '/api/shipping_rolling_correlations';
 
       const response = await fetch(endpoint, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          series1,
-          series2,
+          series1: finalSeries1,
+          series2: finalSeries2,
           window,
-          source: dataSource, // Include the selected data source
+          source: dataSource, // e.g. "USDA" or "ProduceIQ"
         }),
       });
 
@@ -66,9 +95,7 @@ const RollingCorrelation = () => {
     <div className="rolling-correlation-container">
       <h2>Rolling Correlations</h2>
       <div className="form-container">
-        {/* Select chart type: terminal or shipping */}
-
-        {/* Select first commodity */}
+        {/* First Commodity */}
         <label>
           First Commodity:
           <select value={series1} onChange={(e) => setSeries1(e.target.value)}>
@@ -81,7 +108,7 @@ const RollingCorrelation = () => {
           </select>
         </label>
 
-        {/* Select second commodity */}
+        {/* Second Commodity */}
         <label>
           Second Commodity:
           <select value={series2} onChange={(e) => setSeries2(e.target.value)}>
@@ -94,41 +121,64 @@ const RollingCorrelation = () => {
           </select>
         </label>
 
-        {/* Rolling window input */}
+        {/* Rolling window */}
         <div className="rolling-window">
           <label>
             Rolling Window (days):
-            <input type="number" min="5" value={window} onChange={(e) => setWindow(e.target.value)} />
+            <input
+              type="number"
+              min="5"
+              value={window}
+              onChange={(e) => setWindow(e.target.value)}
+            />
           </label>
         </div>
+
+        {/* Chart Type radio: Terminal vs. Shipping */}
         <div className="radio-buttons">
           <label>
-            <input type="radio" value="terminal" checked={chartType === 'terminal'} onChange={() => setChartType('terminal')} />
+            <input
+              type="radio"
+              value="terminal"
+              checked={chartType === 'terminal'}
+              onChange={() => setChartType('terminal')}
+            />
             Terminal
           </label>
           <label>
-            <input type="radio" value="shipping" checked={chartType === 'shipping'} onChange={() => setChartType('shipping')} />
+            <input
+              type="radio"
+              value="shipping"
+              checked={chartType === 'shipping'}
+              onChange={() => setChartType('shipping')}
+            />
             Shipping
           </label>
         </div>
 
-        {/* Data source toggle */}
+        {/* Data Source Toggle (USDA / ProduceIQ) */}
         <div className="slider-switch-container">
           <div className="slider-switch" onClick={toggleDataSource}>
-            <div className={`slider-switch-thumb ${dataSource === 'ProduceIQ' ? 'right' : ''}`}>{dataSource}</div>
+            <div
+              className={`slider-switch-thumb ${
+                dataSource === 'ProduceIQ' ? 'right' : ''
+              }`}
+            >
+              {dataSource}
+            </div>
           </div>
         </div>
 
-        {/* Generate chart button */}
+        {/* Button to generate chart */}
         <button className="generate-chart-button" onClick={fetchRollingCorrelation}>
           Generate Chart
         </button>
       </div>
 
-      {/* Display errors */}
+      {/* Error message, if any */}
       {error && <div className="error-message">{error}</div>}
 
-      {/* Render backend-rendered chart */}
+      {/* Chart display */}
       <div className="rolling-chart-box">
         {chartData && (
           <div className="rolling-chart-container">
