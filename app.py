@@ -884,6 +884,46 @@ def fetch_shipping():
 
 
 
+@app.route("/api/test_ibm_live", methods=["GET"])
+def test_ibm_live():
+    # Example parameters – adjust as needed
+    lat = 26.4187
+    lon = -81.4173
+    # Build a sample query JSON payload for a variable, e.g., TAVG
+    iso_8601 = "%Y-%m-%dT%H:%M:%SZ"
+    query_json = {
+        "layers": [
+            {
+                "type": "raster",
+                "id": 50685,  # ID for TAVG
+                "temporal": {
+                    "intervals": [
+                        {
+                            "start": (datetime.utcnow() - timedelta(minutes=1)).strftime(iso_8601),
+                            "end": (datetime.utcnow() + timedelta(minutes=1)).strftime(iso_8601)
+                        }
+                    ]
+                },
+                "dimensions": [
+                    {"name": "forecast", "value": "01"},
+                    {"name": "horizon", "value": 0}
+                ],
+            }
+        ],
+        "spatial": {"type": "point", "coordinates": [lon, lat]},
+        "temporal": {"intervals": [{"snapshot": "1982-01-01T00:00:00Z"}]},
+        "outputType": "json"
+    }
+
+    try:
+        # This sends the query live to IBM’s PAIRS API
+        # # df = query.submit(query_json).point_data_as_dataframe()
+        df = query.submit(query_json, client=eis_client).point_data_as_dataframe()
+
+        # Return the data directly as JSON
+        return jsonify(df.to_dict(orient="records"))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 import numpy as np
@@ -891,10 +931,162 @@ import pandas as pd
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 import ibmpairs.query as query
-from ibmpairs.client import get_client
 import logging
 
 
+# def fetch_and_store_weather_forecast(
+#     start_forecast_date,
+#     end_forecast_horizon_date,
+#     start_forecast_horizon_date,
+#     start_ensembles,
+#     end_ensembles,
+#     store_in_excel,
+# ):
+
+#     # IBM API Configuration
+#     eis_client = get_client(
+#         api_key="PHXfXSpwiWwQ9NoUg9IYhhaf24cXmmMwZa0zPoW23hktX8",
+#         tenant_id="7370463f-df01-4aa0-b204-d6d15ff71f85",
+#         org_id=EIS_ORG_ID,
+#         legacy=False,
+#     )
+
+#     # Forecast parameters
+#     layers_TWC = {"PRECIP": 50686, "TAVG": 50685}
+#     iso_8601 = "%Y-%m-%dT%H:%M:%SZ"
+
+#     # List of cities with their latitude and longitude
+#     cities = {
+#         "Immokalee Fl": {"lat": "26.4187", "lon": "-81.4173"},
+#         "Palm Beach County, fl": {"lat": "26.7153", "lon": "-80.0534"},
+#         "Vineland NJ": {"lat": "39.4802", "lon": "-75.0138"},
+#         "Sodus, Michigan": {"lat": "42.0086", "lon": "-86.3614"},
+#         "Sinaloa": {"lat": "25.1721", "lon": "-107.4795"},
+#         "Sonora": {"lat": "29.2972", "lon": "-110.3309"},
+#         "Ensenada": {"lat": "31.86613056", "lon": "-116.59971944"},
+#         "Baja Mx": {"lat": "28.0444", "lon": "-115.2062"},
+#         "Culican": {"lat": "24.8091", "lon": "-107.3940"},
+#         "Hendersonville, NC": {"lat": "35.3187", "lon": "-82.4610"},
+#         "Cameron SC": {"lat": "33.5568", "lon": "-80.7151"},
+#         "Adel, Ga": {"lat": "31.13633333", "lon": "-83.42216389"},
+#         "Lake Park Ga": {"lat": "30.6844", "lon": "-83.1849"},
+#         "Bowling Green Fl": {"lat": "27.6386", "lon": "-81.8265"},
+#     }
+
+#     # Ensure 'start_forecast_horizon_date' and 'end_forecast_horizon_date' are datetime objects
+#     if isinstance(start_forecast_horizon_date, str):
+#         start_forecast_horizon_date = datetime.strptime(
+#             start_forecast_horizon_date, "%Y-%m-%d"
+#         )
+#     if isinstance(end_forecast_horizon_date, str):
+#         end_forecast_horizon_date = datetime.strptime(
+#             end_forecast_horizon_date, "%Y-%m-%d"
+#         )
+
+#     # Ensure 'start_forecast_date' is a datetime object
+#     if isinstance(start_forecast_date, str):
+#         start_forecast_date = datetime.strptime(start_forecast_date, "%Y-%m-%d")
+
+#     # Generate valid dates and horizons
+#     valid_dates_horizons = []
+#     count = 0
+#     date = start_forecast_horizon_date
+#     while date <= end_forecast_horizon_date:
+#         valid_date = date
+#         horizon = (valid_date - start_forecast_date).days
+#         valid_dates_horizons.append((valid_date, horizon))
+#         count += 1
+#         date += timedelta(days=1)
+#     logging.info(f"Generated {len(valid_dates_horizons)} forecast horizons.")
+
+#     # Ensemble members in smaller batches
+#     ensemble_members_batches = [
+#         [str(x).zfill(2) for x in range(i, min(i + 1, end_ensembles + 1))]
+#         for i in range(start_ensembles, end_ensembles + 1)
+#     ]
+
+#     # Loop over each city, variable, and ensemble members in batches
+#     for city, coordinates in cities.items():
+#         lat = float(coordinates["lat"])
+#         lon = float(coordinates["lon"])
+#         logging.info(f"Starting data query for city: {city} (lat: {lat}, lon: {lon})")
+#         temperature_adjustment = fetch_elevation_data(lat, lon)
+
+#         for VARIABLE in layers_TWC.keys():
+#             logging.info(f"Starting data query for variable: {VARIABLE}")
+#             for ensemble_members in ensemble_members_batches:
+#                 logging.info(f"Querying ensemble members: {ensemble_members}")
+
+#                 query_layers = []
+#                 for valid_date, horizon in valid_dates_horizons:
+#                     for ens in ensemble_members:
+#                         query_layers.append(
+#                             {
+#                                 "type": "raster",
+#                                 "id": layers_TWC[VARIABLE],
+#                                 "temporal": {
+#                                     "intervals": [
+#                                         {
+#                                             "start": (
+#                                                 valid_date - timedelta(seconds=60)
+#                                             ).strftime(iso_8601),
+#                                             "end": (
+#                                                 valid_date + timedelta(seconds=60)
+#                                             ).strftime(iso_8601),
+#                                         }
+#                                     ]
+#                                 },
+#                                 "dimensions": [
+#                                     {"name": "forecast", "value": ens},
+#                                     {"name": "horizon", "value": horizon},
+#                                 ],
+#                             }
+#                         )
+
+#                 # Construct query JSON payload
+#                 query_json = {
+#                     "layers": query_layers,
+#                     "spatial": {"type": "point", "coordinates": [lat, lon]},
+#                     "temporal": {"intervals": [{"snapshot": "1982-01-01"}]},
+#                     "outputType": "json",
+#                 }
+#                 logging.info(
+#                     f"Constructed query JSON for ensemble members {ensemble_members}."
+#                 )
+
+#                 # Submit the query and process the results
+#                 try:
+#                     logging.info("Submitting query to IBM PAIRS API.")
+#                     # df = query.submit(query_json).point_data_as_dataframe()
+#                     df = query.submit(query_json, client=eis_client).point_data_as_dataframe()
+
+
+#                     if df.empty:
+#                         logging.warning(
+#                             f"No data returned for ensemble members {ensemble_members}"
+#                         )
+#                         continue
+
+#                     logging.info(f"Data retrieved, processing {len(df)} records.")
+#                     if VARIABLE == "TAVG":
+#                         df["value"] = df["value"].astype(float) + temperature_adjustment
+#                     if store_in_excel == 1:
+#                         process_and_store_in_excel(df, city, lat, lon, VARIABLE)
+#                     else:
+#                         process_and_store_data(df, city, lat, lon, VARIABLE)
+#                     gc.collect()
+#                     df = None
+#                     gc.collect()
+#                 except Exception as e:
+#                     logging.error(f"Error during query submission for {VARIABLE}: {e}")
+#                     continue
+
+#     logging.info("Weather forecast data query completed successfully.")
+#     return "Weather forecast data query completed."
+
+
+
+#  Weather forecast data fetching insertion and pruning
 def fetch_and_store_weather_forecast(
     start_forecast_date,
     end_forecast_horizon_date,
@@ -903,7 +1095,6 @@ def fetch_and_store_weather_forecast(
     end_ensembles,
     store_in_excel,
 ):
-
     # IBM API Configuration
     eis_client = get_client(
         api_key="PHXfXSpwiWwQ9NoUg9IYhhaf24cXmmMwZa0zPoW23hktX8",
@@ -934,7 +1125,9 @@ def fetch_and_store_weather_forecast(
         "Bowling Green Fl": {"lat": "27.6386", "lon": "-81.8265"},
     }
 
-    # Ensure 'start_forecast_horizon_date' and 'end_forecast_horizon_date' are datetime objects
+    # Ensure date arguments are datetime objects
+    if isinstance(start_forecast_date, str):
+        start_forecast_date = datetime.strptime(start_forecast_date, "%Y-%m-%d")
     if isinstance(start_forecast_horizon_date, str):
         start_forecast_horizon_date = datetime.strptime(
             start_forecast_horizon_date, "%Y-%m-%d"
@@ -944,23 +1137,17 @@ def fetch_and_store_weather_forecast(
             end_forecast_horizon_date, "%Y-%m-%d"
         )
 
-    # Ensure 'start_forecast_date' is a datetime object
-    if isinstance(start_forecast_date, str):
-        start_forecast_date = datetime.strptime(start_forecast_date, "%Y-%m-%d")
-
-    # Generate valid dates and horizons
+    # Generate valid dates/horizons
     valid_dates_horizons = []
-    count = 0
-    date = start_forecast_horizon_date
-    while date <= end_forecast_horizon_date:
-        valid_date = date
-        horizon = (valid_date - start_forecast_date).days
-        valid_dates_horizons.append((valid_date, horizon))
-        count += 1
-        date += timedelta(days=1)
+    date_ptr = start_forecast_horizon_date
+    while date_ptr <= end_forecast_horizon_date:
+        horizon = (date_ptr - start_forecast_date).days
+        valid_dates_horizons.append((date_ptr, horizon))
+        date_ptr += timedelta(days=1)
+
     logging.info(f"Generated {len(valid_dates_horizons)} forecast horizons.")
 
-    # Ensemble members in smaller batches
+    # Build smaller batches of ensemble members
     ensemble_members_batches = [
         [str(x).zfill(2) for x in range(i, min(i + 1, end_ensembles + 1))]
         for i in range(start_ensembles, end_ensembles + 1)
@@ -971,76 +1158,220 @@ def fetch_and_store_weather_forecast(
         lat = float(coordinates["lat"])
         lon = float(coordinates["lon"])
         logging.info(f"Starting data query for city: {city} (lat: {lat}, lon: {lon})")
+
+        # Elevation-based temperature adjustment (if TAVG)
         temperature_adjustment = fetch_elevation_data(lat, lon)
 
         for VARIABLE in layers_TWC.keys():
             logging.info(f"Starting data query for variable: {VARIABLE}")
+
             for ensemble_members in ensemble_members_batches:
                 logging.info(f"Querying ensemble members: {ensemble_members}")
 
+                # Build up the query JSON
                 query_layers = []
                 for valid_date, horizon in valid_dates_horizons:
-                    for ens in ensemble_members:
-                        query_layers.append(
-                            {
-                                "type": "raster",
-                                "id": layers_TWC[VARIABLE],
-                                "temporal": {
-                                    "intervals": [
-                                        {
-                                            "start": (
-                                                valid_date - timedelta(seconds=60)
-                                            ).strftime(iso_8601),
-                                            "end": (
-                                                valid_date + timedelta(seconds=60)
-                                            ).strftime(iso_8601),
-                                        }
-                                    ]
-                                },
-                                "dimensions": [
-                                    {"name": "forecast", "value": ens},
-                                    {"name": "horizon", "value": horizon},
-                                ],
-                            }
-                        )
+                    query_layers.append(
+                        {
+                            "type": "raster",
+                            "id": layers_TWC[VARIABLE],
+                            "temporal": {
+                                "intervals": [
+                                    {
+                                        "start": (
+                                            valid_date - timedelta(seconds=60)
+                                        ).strftime(iso_8601),
+                                        "end": (
+                                            valid_date + timedelta(seconds=60)
+                                        ).strftime(iso_8601),
+                                    }
+                                ]
+                            },
+                            "dimensions": [
+                                {"name": "forecast", "value": ens}
+                                for ens in ensemble_members
+                            ]
+                            + [{"name": "horizon", "value": horizon}],
+                        }
+                    )
 
-                # Construct query JSON payload
                 query_json = {
                     "layers": query_layers,
                     "spatial": {"type": "point", "coordinates": [lat, lon]},
                     "temporal": {"intervals": [{"snapshot": "1982-01-01"}]},
                     "outputType": "json",
                 }
-                logging.info(
-                    f"Constructed query JSON for ensemble members {ensemble_members}."
-                )
 
-                # Submit the query and process the results
                 try:
                     logging.info("Submitting query to IBM PAIRS API.")
-                    df = query.submit(query_json).point_data_as_dataframe()
+                    df = query.submit(query_json, client=eis_client).point_data_as_dataframe()
+
                     if df.empty:
                         logging.warning(
-                            f"No data returned for ensemble members {ensemble_members}"
+                            f"No data returned for ensemble {ensemble_members} / {VARIABLE}"
                         )
                         continue
 
                     logging.info(f"Data retrieved, processing {len(df)} records.")
+
+                    # If TAVG, apply temperature adjustment
                     if VARIABLE == "TAVG":
                         df["value"] = df["value"].astype(float) + temperature_adjustment
+
+                    # ------------------------------------------------------------------
+                    # (A) If user wants to store in Excel instead of DB:
+                    # ------------------------------------------------------------------
                     if store_in_excel == 1:
                         process_and_store_in_excel(df, city, lat, lon, VARIABLE)
+                        # No DB insertion, so no pruning needed in that scenario.
                     else:
-                        process_and_store_data(df, city, lat, lon, VARIABLE)
+                        # ------------------------------------------------------------------
+                        # (B) Otherwise, insert into DB and prune old rows 1:1
+                        # ------------------------------------------------------------------
+                        new_rows = []
+                        for _, row in df.iterrows():
+                            try:
+                                date_val = int(row["timestamp"])
+                                value_val = float(row["value"])
+                                # property might look like "forecast:01; horizon:3"
+                                # so parse out ensemble:
+                                ens_str = row.get("property", "forecast:0").split(";")[0]
+                                ens_member = int(ens_str.split(":")[1])
+
+                                forecast_date = datetime.fromtimestamp(
+                                    date_val / 1000, tz=pytz.utc
+                                ).date()
+
+                                wf = WeatherForecast(
+                                    city_name=city,
+                                    latitude=lat,
+                                    longitude=lon,
+                                    forecast_date=forecast_date,
+                                    variable=VARIABLE,
+                                    forecasted_value=value_val,
+                                    ensemble_member=ens_member,
+                                    source="IBM",
+                                )
+                                new_rows.append(wf)
+                            except Exception as row_e:
+                                logging.error(f"Row parse error: {row_e}")
+                                continue
+
+                        # Insert all new rows
+                        db.session.add_all(new_rows)
+                        db.session.flush()  # so they get IDs
+
+                        n_inserted = len(new_rows)
+                        if n_inserted > 0:
+                            # Prune that many oldest rows
+                            subq = (
+                                db.session.query(WeatherForecast.id)
+                                .order_by(WeatherForecast.id.asc())
+                                .limit(n_inserted)
+                                .subquery()
+                            )
+                            db.session.query(WeatherForecast).filter(
+                                WeatherForecast.id.in_(subq)
+                            ).delete(synchronize_session=False)
+
+                        # Commit once after insert + prune
+                        db.session.commit()
+
+                    # Clean up memory usage
                     gc.collect()
                     df = None
                     gc.collect()
+
                 except Exception as e:
                     logging.error(f"Error during query submission for {VARIABLE}: {e}")
                     continue
 
     logging.info("Weather forecast data query completed successfully.")
     return "Weather forecast data query completed."
+
+
+
+# @app.route("/api/test_fake_weather_forecast")
+# def run_fake_weather_test():
+#     test_fake_weather_forecast_insertion_and_prune()
+#     return "Fake weather forecast test complete!"
+
+
+
+
+
+
+# def test_fake_weather_forecast_insertion_and_prune():
+#     """
+#     Inserts a few fake WeatherForecast rows and prunes the same number of oldest rows.
+#     """
+
+#     # 1) Create a fake DataFrame with columns we need.
+#     #    We'll store 'timestamp' in milliseconds since epoch
+#     #    and 'value' as the forecasted_value.
+#     #    Optionally you can add a column for 'ensemble_member' if you want multiple members.
+#     df = pd.DataFrame({
+#         "timestamp": [1680000000000, 1680000001000, 1680000002000],
+#         "value": [10.5, 12.2, 15.0],
+#         "ensemble_member": [1, 1, 1]   # or vary them if you want multiple ensemble members
+#     })
+
+#     # 2) Decide on a city_name, lat, lon, variable, and source
+#     city_name = "Fake City"
+#     lat = 26.4187
+#     lon = -81.4173
+#     variable = "PRECIP"      # or "TAVG", etc.
+#     source = "IBM"           # or "TestSource"
+
+#     # 3) Build WeatherForecast rows from the DataFrame
+#     new_rows = []
+#     for _, row in df.iterrows():
+#         try:
+#             timestamp_val = int(row["timestamp"])
+#             forecast_val = float(row["value"])
+#             ensemble = int(row["ensemble_member"])
+
+#             # Convert timestamp to a Python date
+#             forecast_date = datetime.utcfromtimestamp(timestamp_val / 1000).date()
+
+#             # Build the WeatherForecast object
+#             wdata = WeatherForecast(
+#                 city_name=city_name,
+#                 latitude=lat,
+#                 longitude=lon,
+#                 forecast_date=forecast_date,
+#                 variable=variable,
+#                 forecasted_value=forecast_val,
+#                 ensemble_member=ensemble,
+#                 source=source,
+#             )
+#             new_rows.append(wdata)
+#         except Exception as row_e:
+#             print(f"Error parsing row for {variable}: {row_e}")
+#             continue
+
+#     # 4) Insert all new rows
+#     db.session.add_all(new_rows)
+#     db.session.flush()  # so they get assigned IDs
+
+#     # 5) Prune the same number of oldest rows by ascending ID
+#     n_inserted = len(new_rows)
+#     if n_inserted > 0:
+#         subq = (
+#             db.session.query(WeatherForecast.id)
+#             .order_by(WeatherForecast.id.asc())
+#             .limit(n_inserted)
+#             .subquery()
+#         )
+#         db.session.query(WeatherForecast).filter(
+#             WeatherForecast.id.in_(subq)
+#         ).delete(synchronize_session=False)
+
+#     # 6) Commit
+#     db.session.commit()
+#     gc.collect()
+
+#     print(f"Inserted {n_inserted} fake WeatherForecast rows and pruned {n_inserted} oldest rows.")
 
 
 def process_and_store_data(df, city, lat, lon, VARIABLE):
@@ -1156,7 +1487,9 @@ def fetch_elevation_data(lat, lon):
         }
         try:
             logging.info(f"Submitting elevation data query for {VARIABLE}.")
-            df = query.submit(query_json).point_data_as_dataframe()
+            # df = query.submit(query_json).point_data_as_dataframe()
+            df = query.submit(query_json, client=eis_client).point_data_as_dataframe()
+
             if len(df) > 0:
                 elevation[VARIABLE] = float(df.iloc[0]["value"])
         except Exception as e:
@@ -1178,7 +1511,99 @@ def fetch_elevation_data(lat, lon):
     return temperature_adjustment
 
 
+
+
+
+
 # for climatology Data
+# def fetch_and_store_climatology_data(start_climo_date, end_climo_date):
+#     # IBM API Configuration
+#     eis_client = get_client(
+#         api_key=EIS_API_KEY, tenant_id=EIS_TENANT_ID, org_id=EIS_ORG_ID, legacy=False
+#     )
+
+#     # Climatology parameters
+#     layers_ERA5 = {"PRECIP": 51198, "TAVG": 51199}
+#     iso_8601 = "%Y-%m-%dT%H:%M:%SZ"
+
+#     # List of cities with their latitude and longitude
+#     cities = {
+#         "Ensenada": {"lat": "31.86613056", "lon": "-116.59971944"},
+#         "Baja Mx": {"lat": "28.0444", "lon": "-115.2062"},
+#         "Culican": {"lat": "24.8091", "lon": "-107.3940"},
+#         "Hendersonville, NC": {"lat": "35.3187", "lon": "-82.4610"},
+#         "Cameron SC": {"lat": "33.5568", "lon": "-80.7151"},
+#         "Adel, Ga": {"lat": "31.13633333", "lon": "-83.42216389"},
+#         "Lake Park Ga": {"lat": "30.6844", "lon": "-83.1849"},
+#         "Bowling Green Fl": {"lat": "27.6386", "lon": "-81.8265"},
+#     }
+
+#     # Loop over each city and variable
+#     for city, coordinates in cities.items():
+#         lat = float(coordinates["lat"])
+#         lon = float(coordinates["lon"])
+#         logging.info(
+#             f"Starting climatology data query for city: {city} (lat: {lat}, lon: {lon})"
+#         )
+
+#         # Fetch elevation data for temperature adjustment
+#         temperature_adjustment = fetch_elevation_data(lat, lon)
+
+#         for VARIABLE in layers_ERA5.keys():
+#             logging.info(f"Starting climatology data query for variable: {VARIABLE}")
+
+#             # Construct query JSON payload
+#             query_json = {
+#                 "layers": [{"type": "raster", "id": layers_ERA5[VARIABLE]}],
+#                 "spatial": {"type": "point", "coordinates": [lat, lon]},
+#                 "temporal": {
+#                     "intervals": [
+#                         {
+#                             "start": start_climo_date.strftime(iso_8601),
+#                             "end": end_climo_date.strftime(iso_8601),
+#                         }
+#                     ]
+#                 },
+#                 "outputType": "json",
+#             }
+#             logging.info(f"Constructed query JSON for climatology data.")
+
+#             # Submit the query and process the results
+#             try:
+#                 logging.info("Submitting query to IBM PAIRS API for climatology data.")
+#                 # df = query.submit(query_json).point_data_as_dataframe()
+#                 df = query.submit(query_json, client=eis_client).point_data_as_dataframe()
+
+#                 if df.empty:
+#                     logging.warning(
+#                         f"No data returned for climatology data for {VARIABLE}"
+#                     )
+#                     continue
+
+#                 # Apply temperature adjustment if the variable is TAVG
+#                 if VARIABLE == "TAVG":
+#                     df["value"] = df["value"].astype(float) + temperature_adjustment
+
+#                 logging.info(
+#                     f"Climatology data retrieved, processing {len(df)} records."
+#                 )
+#                 process_and_store_climatology_data(df, city, lat, lon, VARIABLE)
+#                 gc.collect()
+#                 df = None
+#                 gc.collect()
+#             except Exception as e:
+#                 logging.error(
+#                     f"Error during climatology data query for {VARIABLE}: {e}"
+#                 )
+#                 continue
+
+#     logging.info("Climatology data query completed successfully.")
+#     return "Climatology data query completed."
+
+
+
+# Insertion and pruning
+
 def fetch_and_store_climatology_data(start_climo_date, end_climo_date):
     # IBM API Configuration
     eis_client = get_client(
@@ -1209,13 +1634,13 @@ def fetch_and_store_climatology_data(start_climo_date, end_climo_date):
             f"Starting climatology data query for city: {city} (lat: {lat}, lon: {lon})"
         )
 
-        # Fetch elevation data for temperature adjustment
+        # Fetch elevation data for temperature adjustment (if TAVG)
         temperature_adjustment = fetch_elevation_data(lat, lon)
 
         for VARIABLE in layers_ERA5.keys():
             logging.info(f"Starting climatology data query for variable: {VARIABLE}")
 
-            # Construct query JSON payload
+            # Build the query JSON payload
             query_json = {
                 "layers": [{"type": "raster", "id": layers_ERA5[VARIABLE]}],
                 "spatial": {"type": "point", "coordinates": [lat, lon]},
@@ -1229,37 +1654,85 @@ def fetch_and_store_climatology_data(start_climo_date, end_climo_date):
                 },
                 "outputType": "json",
             }
-            logging.info(f"Constructed query JSON for climatology data.")
+            logging.info("Constructed query JSON for climatology data.")
 
             # Submit the query and process the results
             try:
                 logging.info("Submitting query to IBM PAIRS API for climatology data.")
-                df = query.submit(query_json).point_data_as_dataframe()
+                df = query.submit(query_json, client=eis_client).point_data_as_dataframe()
+
                 if df.empty:
-                    logging.warning(
-                        f"No data returned for climatology data for {VARIABLE}"
-                    )
+                    logging.warning(f"No data returned for climatology data for {VARIABLE}")
                     continue
 
                 # Apply temperature adjustment if the variable is TAVG
                 if VARIABLE == "TAVG":
                     df["value"] = df["value"].astype(float) + temperature_adjustment
 
-                logging.info(
-                    f"Climatology data retrieved, processing {len(df)} records."
-                )
-                process_and_store_climatology_data(df, city, lat, lon, VARIABLE)
+                logging.info(f"Climatology data retrieved, processing {len(df)} records.")
+
+                # ------------------------------------------------------------------
+                # Insert new rows and prune the oldest rows 1:1
+                # ------------------------------------------------------------------
+                new_rows = []
+                for _, row in df.iterrows():
+                    try:
+                        timestamp_val = int(row["timestamp"])
+                        value_val = float(row["value"])
+
+                        # Convert timestamp (ms) to a Python date
+                        cdate = datetime.utcfromtimestamp(timestamp_val / 1000).date()
+
+                        # Build the ClimatologyData object
+                        cdata = ClimatologyData(
+                            city_name=city,
+                            latitude=lat,
+                            longitude=lon,
+                            forecast_date=cdate,
+                            variable=VARIABLE,
+                            climatology_value=value_val,
+                            source="IBM",
+                        )
+                        new_rows.append(cdata)
+                    except Exception as row_e:
+                        logging.error(f"Error parsing row for {VARIABLE}: {row_e}")
+                        continue
+
+                # Insert all new rows in bulk
+                db.session.add_all(new_rows)
+                db.session.flush()  # so they get assigned IDs
+
+                # Prune the same number of oldest rows
+                n_inserted = len(new_rows)
+                if n_inserted > 0:
+                    # Identify the oldest rows by ascending ID (or created_at if you prefer)
+                    subq = (
+                        db.session.query(ClimatologyData.id)
+                        .order_by(ClimatologyData.id.asc())
+                        .limit(n_inserted)
+                        .subquery()
+                    )
+                    db.session.query(ClimatologyData).filter(
+                        ClimatologyData.id.in_(subq)
+                    ).delete(synchronize_session=False)
+
+                # Commit once after insert + prune
+                db.session.commit()
+
+                # Cleanup
                 gc.collect()
                 df = None
                 gc.collect()
+
             except Exception as e:
-                logging.error(
-                    f"Error during climatology data query for {VARIABLE}: {e}"
-                )
+                logging.error(f"Error during climatology data query for {VARIABLE}: {e}")
                 continue
 
     logging.info("Climatology data query completed successfully.")
     return "Climatology data query completed."
+
+
+
 
 
 def process_and_store_climatology_data(df, city, lat, lon, VARIABLE):

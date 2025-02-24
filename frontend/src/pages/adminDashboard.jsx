@@ -238,7 +238,7 @@ function AdminDashboard() {
                     <select id="variety" className="form-control" value={variety} onChange={(e) => setVariety(e.target.value)}>
                       <option value="Shishito">Shishito</option>
                       <option value="Anaheim">Anaheim</option>
-                      <option value="Cubanelles">Cubanelles</option>
+                      <option value="Cubanelle">Cubanelles</option>
                       <option value="Fresno">Fresno</option>
                       <option value="Habanero">Habanero</option>
                       <option value="Hungarian Wax">Hungarian Wax</option>
