@@ -3324,6 +3324,12 @@ def calculate_forecast():
     # 4) Subtract total costs from revenue
     revenue_after_costs = revenue_per_acre - total_costs
 
+
+        # Add the debug print here:
+    print("DEBUG: forecasted_price =", forecasted_price,
+          " revenue_per_acre_after_costings =", revenue_after_costs)
+
+
     return jsonify({
         "forecasted_price": round(forecasted_price, 2),
         "revenue_per_acre": round(revenue_per_acre, 2),
@@ -3333,42 +3339,6 @@ def calculate_forecast():
 
 
 
-
-@app.route("/api/calculate_custom_price", methods=["POST"])
-def calculate_custom_price():
-    data = request.json
-    # parse fields
-    custom_price = data.get("custom_price", 0)
-    yield_per_acre = data.get("yield_per_acre", 0)
-    cost_per_acre = data.get("cost_per_acre", 0)
-    harvest_cost_per_box = data.get("harvest_cost_per_box", 0)
-    cost_of_box = data.get("cost_of_box", 0)
-    boxes_bonus_per_yield = data.get("boxes_bonus_per_yield", 0)
-
-    try:
-        custom_price = float(custom_price)
-        yield_per_acre = float(yield_per_acre)
-        cost_per_acre = float(cost_per_acre)
-        harvest_cost_per_box = float(harvest_cost_per_box)
-        cost_of_box = float(cost_of_box)
-        boxes_bonus_per_yield = float(boxes_bonus_per_yield)
-    except ValueError:
-        return jsonify({"error": "Invalid numeric format."}), 400
-
-    # Recompute revenue using the same cost logic
-    custom_revenue = custom_price * yield_per_acre
-    total_costs = (
-        cost_per_acre
-        + (harvest_cost_per_box * yield_per_acre)
-        + (cost_of_box * yield_per_acre)
-        + (boxes_bonus_per_yield * yield_per_acre)
-    )
-    custom_revenue_after_costs = custom_revenue - total_costs
-
-    return jsonify({
-        "custom_revenue": round(custom_revenue, 2),
-        "custom_revenue_after_costs": round(custom_revenue_after_costs, 2),
-    })
 
 
 
