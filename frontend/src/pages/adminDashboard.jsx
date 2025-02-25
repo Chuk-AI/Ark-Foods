@@ -592,10 +592,11 @@ function AdminDashboard() {
     const totalCosts = cpa + (hc * ypa) + (cob * ypa) + (bb * ypa);
 
     // 3) Net revenue
-    const newRevenueAfter = newRevenue - totalCosts;
+    const newRevenueAfter = newPrice === 0 ? 0 : newRevenue - totalCosts;
 
     setCustomRevenue(newRevenue.toFixed(2));
     setCustomRevenueAfterCosts(newRevenueAfter.toFixed(2));
+    
   };
 
   /**
