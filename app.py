@@ -3315,11 +3315,11 @@ def calculate_forecast():
     season = determine_season_for_dashboard(forecast_date)
 
     # 3) Calculate total costs:
-    # cost_per_acre + (harvest_cost_per_box * yield_per_acre) + (cost_of_box * yield_per_acre) + (boxes_bonus_per_yield * yield_per_acre)
+    # cost_per_acre + (harvest_cost_per_box * yield_per_acre) + (cost_of_box * yield_per_acre) + (boxes_bonus_per_yield)
     total_costs = cost_per_acre \
         + (harvest_cost_per_box * yield_per_acre) \
         + (cost_of_box * yield_per_acre) \
-        + (boxes_bonus_per_yield * yield_per_acre)
+        + (boxes_bonus_per_yield)
 
     # 4) Subtract total costs from revenue
     revenue_after_costs = revenue_per_acre - total_costs

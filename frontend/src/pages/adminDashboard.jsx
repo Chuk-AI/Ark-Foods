@@ -589,7 +589,7 @@ function AdminDashboard() {
     const newRevenue = newPrice * ypa;
 
     // 2) Same total cost formula as /api/calculate_forecast
-    const totalCosts = cpa + (hc * ypa) + (cob * ypa) + (bb * ypa);
+    const totalCosts = cpa + (hc * ypa) + (cob * ypa) + bb ;
 
     // 3) Net revenue
     const newRevenueAfter = newPrice === 0 ? 0 : newRevenue - totalCosts;
