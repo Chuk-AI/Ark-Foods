@@ -3233,43 +3233,144 @@ def calculate_forecasted_price(variety, start_date, forecast_date):
 
 
 
+# @app.route("/api/calculate_forecast", methods=["POST"])
+# def calculate_forecast():
+#     # Parse JSON data from the request body
+#     data = request.json
+
+#     # Extract the form data (note: city is removed)
+#     variety = data.get("variety")
+#     start_date = data.get("start_date")
+#     forecast_date = data.get("forecast_date")
+#     yield_per_acre = data.get("yield_per_acre")
+
+#     # Validate the form inputs (remove city from the required fields)
+#     if not all([variety, start_date, forecast_date, yield_per_acre]):
+#         return jsonify({"error": "All form fields are required"}), 400
+
+#     try:
+#         # Convert the dates and yield per acre to appropriate data types
+#         start_date = datetime.strptime(start_date, "%Y-%m-%d")
+#         forecast_date = datetime.strptime(forecast_date, "%Y-%m-%d")
+#         yield_per_acre = float(yield_per_acre)
+#     except ValueError:
+#         return jsonify({"error": "Invalid date format or yield per acre"}), 400
+
+#     # Call the calculate_forecasted_price function without the city parameter,
+#     # or pass a default value if required by your logic.
+#     forecasted_price = calculate_forecasted_price(variety, start_date, forecast_date)
+#     revenue_per_acre = forecasted_price * yield_per_acre
+
+#     # Determine the season for the forecast date
+#     season = determine_season_for_dashboard(forecast_date)
+
+#     # Return the results
+#     return jsonify({
+#         "forecasted_price": round(forecasted_price, 2),
+#         "revenue_per_acre": round(revenue_per_acre, 2),
+#         "season": season,
+#     })
+
+
 @app.route("/api/calculate_forecast", methods=["POST"])
 def calculate_forecast():
-    # Parse JSON data from the request body
     data = request.json
 
-    # Extract the form data (note: city is removed)
+    # Required form fields
     variety = data.get("variety")
-    start_date = data.get("start_date")
-    forecast_date = data.get("forecast_date")
+    start_date_str = data.get("start_date")
+    forecast_date_str = data.get("forecast_date")
     yield_per_acre = data.get("yield_per_acre")
 
-    # Validate the form inputs (remove city from the required fields)
-    if not all([variety, start_date, forecast_date, yield_per_acre]):
+    # NEW cost fields
+    cost_per_acre = data.get("cost_per_acre", 0)
+    harvest_cost_per_box = data.get("harvest_cost_per_box", 0)
+    cost_of_box = data.get("cost_of_box", 0)
+    boxes_bonus_per_yield = data.get("boxes_bonus_per_yield", 0)
+
+    # Validate the main required fields
+    if not all([variety, start_date_str, forecast_date_str, yield_per_acre]):
         return jsonify({"error": "All form fields are required"}), 400
 
     try:
-        # Convert the dates and yield per acre to appropriate data types
-        start_date = datetime.strptime(start_date, "%Y-%m-%d")
-        forecast_date = datetime.strptime(forecast_date, "%Y-%m-%d")
+        # Convert to correct data types
+        start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
+        forecast_date = datetime.strptime(forecast_date_str, "%Y-%m-%d")
         yield_per_acre = float(yield_per_acre)
-    except ValueError:
-        return jsonify({"error": "Invalid date format or yield per acre"}), 400
 
-    # Call the calculate_forecasted_price function without the city parameter,
-    # or pass a default value if required by your logic.
+        # Convert the cost fields to float; default to 0 if missing
+        cost_per_acre = float(cost_per_acre) if cost_per_acre else 0
+        harvest_cost_per_box = float(harvest_cost_per_box) if harvest_cost_per_box else 0
+        cost_of_box = float(cost_of_box) if cost_of_box else 0
+        boxes_bonus_per_yield = float(boxes_bonus_per_yield) if boxes_bonus_per_yield else 0
+
+    except ValueError:
+        return jsonify({"error": "Invalid date or numeric format."}), 400
+
+    # 1) Calculate the forecasted price (already have your helper function):
     forecasted_price = calculate_forecasted_price(variety, start_date, forecast_date)
     revenue_per_acre = forecasted_price * yield_per_acre
 
-    # Determine the season for the forecast date
+    # 2) Determine the season
     season = determine_season_for_dashboard(forecast_date)
 
-    # Return the results
+    # 3) Calculate total costs:
+    # cost_per_acre + (harvest_cost_per_box * yield_per_acre) + (cost_of_box * yield_per_acre) + (boxes_bonus_per_yield * yield_per_acre)
+    total_costs = cost_per_acre \
+        + (harvest_cost_per_box * yield_per_acre) \
+        + (cost_of_box * yield_per_acre) \
+        + (boxes_bonus_per_yield * yield_per_acre)
+
+    # 4) Subtract total costs from revenue
+    revenue_after_costs = revenue_per_acre - total_costs
+
     return jsonify({
         "forecasted_price": round(forecasted_price, 2),
         "revenue_per_acre": round(revenue_per_acre, 2),
+        "revenue_per_acre_after_costings": round(revenue_after_costs, 2),
         "season": season,
     })
+
+
+
+
+@app.route("/api/calculate_custom_price", methods=["POST"])
+def calculate_custom_price():
+    data = request.json
+    # parse fields
+    custom_price = data.get("custom_price", 0)
+    yield_per_acre = data.get("yield_per_acre", 0)
+    cost_per_acre = data.get("cost_per_acre", 0)
+    harvest_cost_per_box = data.get("harvest_cost_per_box", 0)
+    cost_of_box = data.get("cost_of_box", 0)
+    boxes_bonus_per_yield = data.get("boxes_bonus_per_yield", 0)
+
+    try:
+        custom_price = float(custom_price)
+        yield_per_acre = float(yield_per_acre)
+        cost_per_acre = float(cost_per_acre)
+        harvest_cost_per_box = float(harvest_cost_per_box)
+        cost_of_box = float(cost_of_box)
+        boxes_bonus_per_yield = float(boxes_bonus_per_yield)
+    except ValueError:
+        return jsonify({"error": "Invalid numeric format."}), 400
+
+    # Recompute revenue using the same cost logic
+    custom_revenue = custom_price * yield_per_acre
+    total_costs = (
+        cost_per_acre
+        + (harvest_cost_per_box * yield_per_acre)
+        + (cost_of_box * yield_per_acre)
+        + (boxes_bonus_per_yield * yield_per_acre)
+    )
+    custom_revenue_after_costs = custom_revenue - total_costs
+
+    return jsonify({
+        "custom_revenue": round(custom_revenue, 2),
+        "custom_revenue_after_costs": round(custom_revenue_after_costs, 2),
+    })
+
+
 
 
 # API FOR Forecast visual
