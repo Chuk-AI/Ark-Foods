@@ -23,7 +23,7 @@ function SalesDashboard() {
   // const [commodity, setCommodity] = useState('Anaheim');
   const [shippingPrices, setShippingPrices] = useState({});
 
-  const [source, setSource] = useState('USDA');
+  const [source, setSource] = useState('ProduceIQ');
   const [last7Days, setLast7Days] = useState(false);
   const [bestMarketData, setBestMarketData] = useState([]);
   // const [chartInstance, setChartInstance] = useState(null);
@@ -81,15 +81,6 @@ function SalesDashboard() {
     averageCommodities: false,
     averageCities: false,
   });
-
-  // 1) A piece of state to hold the user’s choice for the most recent price filter
-const [mostRecentFilterState, setMostRecentFilterState] = useState({
-  source: 'USDA',  // or 'ProduceIQ' or 'Both'
-});
-
-const [appliedMostRecentFilters, setAppliedMostRecentFilters] = useState({
-  source: 'USDA',
-});
 
 
 
@@ -462,10 +453,11 @@ const [appliedMostRecentFilters, setAppliedMostRecentFilters] = useState({
   };
 
 // for most recent price filters
-  const handleApplyMostRecentFilters = () => {
-    setAppliedMostRecentFilters(mostRecentFilterState);
-    fetchMostRecentPrices(mostRecentFilterState.source); 
-  };
+const handleApplyMostRecentFilters = () => {
+  // Just call fetchMostRecentPrices with the main `source` state
+  fetchMostRecentPrices(source);
+};
+
   
 
   const updateMostRecentPricesTable = () => {
@@ -978,18 +970,14 @@ const [appliedMostRecentFilters, setAppliedMostRecentFilters] = useState({
                   <select
                     id="sourceFilterMostRecent"
                     className="form-control"
-                    value={mostRecentFilterState.source}
-                    onChange={(e) =>
-                      setMostRecentFilterState((prev) => ({
-                        ...prev,
-                        source: e.target.value,
-                      }))
-                    }
+                    value={source}
+                    onChange={(e) => setSource(e.target.value)}
                   >
                     <option value="USDA">USDA</option>
                     <option value="ProduceIQ">ProduceIQ</option>
                     <option value="Both">Both</option>
                   </select>
+
                 </div>
 
                 <button
