@@ -2495,8 +2495,6 @@ def api_most_recent_prices():
     selected_source = request.args.get("source", "USDA")
 
     # 2) Decide which sources to include in the query
-    #    - If "Both", we want both USDA & ProduceIQ
-    #    - Else, we only filter for that one source
     if selected_source == "Both":
         valid_sources = ["USDA", "ProduceIQ"]
     else:
@@ -2524,9 +2522,7 @@ def api_most_recent_prices():
     # ---------------------------------------------------------------------
     # Build a subquery that calculates the AVERAGE price for each commodity
     # + city + year + day. Then we pick only the "latest" day among the last 7
-    # for each city/commodity. 
-    # Note we only filter PriceData.source in valid_sources (which might be [USDA]
-    # or [ProduceIQ] or [USDA,ProduceIQ]).
+    # for each city/commodity.  BUT we exclude zero-priced rows from the average!
     # ---------------------------------------------------------------------
     subquery = (
         db.session.query(
@@ -2541,6 +2537,8 @@ def api_most_recent_prices():
             func.lower(PriceData.city_name).in_([c.lower() for c in cities]),
             tuple_(PriceData.year, PriceData.day).in_(date_filters),
             PriceData.source.in_(valid_sources),
+            # HERE is where we exclude 0-priced rows:
+            PriceData.price != 0
         )
         .group_by(
             PriceData.commodity,
@@ -2551,8 +2549,7 @@ def api_most_recent_prices():
         .subquery()
     )
 
-    # We use a window function to pick the row with the "latest" day
-    # per commodity + city. 
+    # Window function to pick the row with the "latest" day per commodity + city.
     window_func = func.row_number().over(
         partition_by=[subquery.c.commodity, subquery.c.city_name],
         order_by=[subquery.c.year.desc(), subquery.c.day.desc()],
@@ -2598,6 +2595,7 @@ def api_most_recent_prices():
                 recent_prices[original_commodity][original_city] = "-"
 
     return jsonify({"prices": recent_prices})
+
 
 
 
