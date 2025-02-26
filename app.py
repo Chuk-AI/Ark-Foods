@@ -2530,7 +2530,9 @@ def api_most_recent_prices():
             PriceData.city_name,
             PriceData.year,
             PriceData.day,
-            func.avg(PriceData.price).label("avg_price"),
+            func.avg(PriceData.price).label("avg_price")
+            .filter(PriceData.price > 0)
+
         )
         .filter(
             PriceData.commodity.in_(adjusted_commodities),
