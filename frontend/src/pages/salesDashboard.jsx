@@ -23,7 +23,7 @@ function SalesDashboard() {
   // const [commodity, setCommodity] = useState('Anaheim');
   const [shippingPrices, setShippingPrices] = useState({});
 
-  const [source, setSource] = useState('ProduceIQ');
+  const [source, setSource] = useState('both');
   const [last7Days, setLast7Days] = useState(false);
   const [bestMarketData, setBestMarketData] = useState([]);
   // const [chartInstance, setChartInstance] = useState(null);
