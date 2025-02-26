@@ -2364,6 +2364,108 @@ from sqlalchemy.sql.expression import tuple_
 from sqlalchemy import over, func
 
 
+# @app.route("/api/most_recent_prices", methods=["GET"])
+# def api_most_recent_prices():
+#     cities = [
+#         "Baltimore",
+#         "Boston",
+#         "Chicago",
+#         "Columbia",
+#         "Miami",
+#         "New York",
+#         "Philadelphia",
+#         "Los Angeles",
+#     ]
+#     commodities = [
+#         "Anaheim",
+#         "Cubanelles",
+#         "Fresno",
+#         "Habanero",
+#         "Hungarian Wax",
+#         "Jalapeno",
+#         "Long Hot",
+#         "Poblano",
+#         "Serrano",
+#         "Shishito",
+#     ]
+
+#     selected_source = request.args.get("source", "USDA")
+
+#     # Create commodity mapping
+#     commodity_map = {c: "Cubanelle" if (c == "Cubanelles" and selected_source == "USDA") else c 
+#                     for c in commodities}
+#     reverse_commodity_map = {v: k for k, v in commodity_map.items()}
+#     adjusted_commodities = list(commodity_map.values())
+
+#     # Generate date filters for the last 7 days
+#     tz = timezone("US/Pacific")
+#     seven_days_ago = datetime.now(tz) - timedelta(days=7)
+#     date_filters = [(d.year, d.timetuple().tm_yday) 
+#                    for d in [seven_days_ago + timedelta(days=i) for i in range(7)]]
+
+#     # Create city lookup map
+#     city_lower_map = {city.lower(): city for city in cities}
+
+#     # Build main query with window function
+#     subquery = (
+#         db.session.query(
+#             PriceData.commodity,
+#             PriceData.city_name,
+#             PriceData.year,
+#             PriceData.day,
+#             func.max(PriceData.price).label('max_price')
+#         )
+#         .filter(
+#             PriceData.commodity.in_(adjusted_commodities),
+#             func.lower(PriceData.city_name).in_([c.lower() for c in cities]),
+#             tuple_(PriceData.year, PriceData.day).in_(date_filters)
+#         )
+#         .group_by(PriceData.commodity, PriceData.city_name, PriceData.year, PriceData.day)
+#         .subquery()
+#     )
+
+#     # Correct window function usage
+#     window_func = func.row_number().over(
+#         partition_by=[subquery.c.commodity, subquery.c.city_name],
+#         order_by=[subquery.c.year.desc(), subquery.c.day.desc()]
+#     )
+
+#     ranked_query = (
+#         db.session.query(
+#             subquery.c.commodity,
+#             subquery.c.city_name,
+#             subquery.c.max_price,
+#             window_func.label('rn')
+#         )
+#         .subquery()
+#     )
+
+#     # Execute final query
+#     results = (
+#         db.session.query(
+#             ranked_query.c.commodity,
+#             ranked_query.c.city_name,
+#             ranked_query.c.max_price
+#         )
+#         .filter(ranked_query.c.rn == 1)
+#         .all()
+#     )
+
+#     # Initialize response structure with defaults
+#     recent_prices = {commodity: {city: "-" for city in cities} for commodity in commodities}
+
+#     # Update with actual results
+#     for row in results:
+#         original_commodity = reverse_commodity_map.get(row.commodity, row.commodity)
+#         normalized_city = row.city_name.lower()
+#         original_city = city_lower_map.get(normalized_city)
+        
+#         if original_city and original_commodity in recent_prices:
+#             recent_prices[original_commodity][original_city] = float(row.max_price) if row.max_price is not None else "-"
+
+#     return jsonify({"prices": recent_prices})
+  
+
 @app.route("/api/most_recent_prices", methods=["GET"])
 def api_most_recent_prices():
     cities = [
@@ -2389,82 +2491,115 @@ def api_most_recent_prices():
         "Shishito",
     ]
 
+    # 1) Read the user-selected source from the query parameter
     selected_source = request.args.get("source", "USDA")
 
-    # Create commodity mapping
-    commodity_map = {c: "Cubanelle" if (c == "Cubanelles" and selected_source == "USDA") else c 
-                    for c in commodities}
+    # 2) Decide which sources to include in the query
+    #    - If "Both", we want both USDA & ProduceIQ
+    #    - Else, we only filter for that one source
+    if selected_source == "Both":
+        valid_sources = ["USDA", "ProduceIQ"]
+    else:
+        valid_sources = [selected_source]
+
+    # 3) Handle the "Cubanelle" vs "Cubanelles" name difference for USDA
+    commodity_map = {
+        c: "Cubanelle" if (c == "Cubanelles" and selected_source == "USDA") else c
+        for c in commodities
+    }
     reverse_commodity_map = {v: k for k, v in commodity_map.items()}
     adjusted_commodities = list(commodity_map.values())
 
     # Generate date filters for the last 7 days
     tz = timezone("US/Pacific")
     seven_days_ago = datetime.now(tz) - timedelta(days=7)
-    date_filters = [(d.year, d.timetuple().tm_yday) 
-                   for d in [seven_days_ago + timedelta(days=i) for i in range(7)]]
+    date_filters = [
+        (d.year, d.timetuple().tm_yday)
+        for d in [seven_days_ago + timedelta(days=i) for i in range(7)]
+    ]
 
-    # Create city lookup map
+    # Create a lookup map for city names (case-insensitive)
     city_lower_map = {city.lower(): city for city in cities}
 
-    # Build main query with window function
+    # ---------------------------------------------------------------------
+    # Build a subquery that calculates the AVERAGE price for each commodity
+    # + city + year + day. Then we pick only the "latest" day among the last 7
+    # for each city/commodity. 
+    # Note we only filter PriceData.source in valid_sources (which might be [USDA]
+    # or [ProduceIQ] or [USDA,ProduceIQ]).
+    # ---------------------------------------------------------------------
     subquery = (
         db.session.query(
             PriceData.commodity,
             PriceData.city_name,
             PriceData.year,
             PriceData.day,
-            func.max(PriceData.price).label('max_price')
+            func.avg(PriceData.price).label("avg_price"),
         )
         .filter(
             PriceData.commodity.in_(adjusted_commodities),
             func.lower(PriceData.city_name).in_([c.lower() for c in cities]),
-            tuple_(PriceData.year, PriceData.day).in_(date_filters)
+            tuple_(PriceData.year, PriceData.day).in_(date_filters),
+            PriceData.source.in_(valid_sources),
         )
-        .group_by(PriceData.commodity, PriceData.city_name, PriceData.year, PriceData.day)
+        .group_by(
+            PriceData.commodity,
+            PriceData.city_name,
+            PriceData.year,
+            PriceData.day,
+        )
         .subquery()
     )
 
-    # Correct window function usage
+    # We use a window function to pick the row with the "latest" day
+    # per commodity + city. 
     window_func = func.row_number().over(
         partition_by=[subquery.c.commodity, subquery.c.city_name],
-        order_by=[subquery.c.year.desc(), subquery.c.day.desc()]
+        order_by=[subquery.c.year.desc(), subquery.c.day.desc()],
     )
 
     ranked_query = (
         db.session.query(
             subquery.c.commodity,
             subquery.c.city_name,
-            subquery.c.max_price,
-            window_func.label('rn')
+            subquery.c.avg_price,
+            window_func.label("rn"),
         )
         .subquery()
     )
 
-    # Execute final query
+    # Now pick only the row_number == 1 (the "latest" day) for each commodity/city
     results = (
         db.session.query(
             ranked_query.c.commodity,
             ranked_query.c.city_name,
-            ranked_query.c.max_price
+            ranked_query.c.avg_price,
         )
         .filter(ranked_query.c.rn == 1)
         .all()
     )
 
-    # Initialize response structure with defaults
-    recent_prices = {commodity: {city: "-" for city in cities} for commodity in commodities}
+    # Initialize the response structure
+    recent_prices = {
+        commodity: {city: "-" for city in cities}
+        for commodity in commodities
+    }
 
     # Update with actual results
     for row in results:
         original_commodity = reverse_commodity_map.get(row.commodity, row.commodity)
         normalized_city = row.city_name.lower()
         original_city = city_lower_map.get(normalized_city)
-        
+
         if original_city and original_commodity in recent_prices:
-            recent_prices[original_commodity][original_city] = float(row.max_price) if row.max_price is not None else "-"
+            if row.avg_price is not None:
+                recent_prices[original_commodity][original_city] = float(row.avg_price)
+            else:
+                recent_prices[original_commodity][original_city] = "-"
 
     return jsonify({"prices": recent_prices})
-  
+
+
 
 @app.route("/api/historical_data", methods=["GET"])
 # @jwt_required()

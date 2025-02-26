@@ -29,6 +29,7 @@ function SalesDashboard() {
   // const [chartInstance, setChartInstance] = useState(null);
   const [currentSectionTitle, setCurrentSectionTitle] = useState('Most Recent Price');
   const [filters, setFilters] = useState({
+    mostRecentPrice: true,
     bestSellMarket: false,
     map: false,
     seasonalTrends: false,
@@ -80,11 +81,17 @@ function SalesDashboard() {
     averageCommodities: false,
     averageCities: false,
   });
-  // const [terminalViolinData, setTerminalViolinData] = useState([]);
-  // const [shippingViolinData, setShippingViolinData] = useState([]);
 
-  // const terminalColors = ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40"];
-  // const shippingColors = ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40"];
+  // 1) A piece of state to hold the user’s choice for the most recent price filter
+const [mostRecentFilterState, setMostRecentFilterState] = useState({
+  source: 'USDA',  // or 'ProduceIQ' or 'Both'
+});
+
+const [appliedMostRecentFilters, setAppliedMostRecentFilters] = useState({
+  source: 'USDA',
+});
+
+
 
   // best sell market
   const handleCommodityChange = (e) => {
@@ -293,6 +300,7 @@ function SalesDashboard() {
   // Update Filters Based on Section
   const updateFiltersBasedOnSection = (sectionId) => {
     const updatedFilters = {
+      mostRecentPrice: sectionId === 'most-recent-price-section',
       bestSellMarket: sectionId === 'best-sell-market-section',
       seasonalTrends: sectionId === 'seasonal-trends-section',
       historicalData: sectionId === 'historical-data-section',
@@ -431,7 +439,7 @@ function SalesDashboard() {
       const token = localStorage.getItem('authToken');
       if (!token) throw new Error('No token found');
 
-      const response = await fetch('/api/most_recent_prices', {
+      const response = await fetch(`/api/most_recent_prices?source=${source}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -452,6 +460,13 @@ function SalesDashboard() {
       console.error('Error fetching most recent prices:', error);
     }
   };
+
+// for most recent price filters
+  const handleApplyMostRecentFilters = () => {
+    setAppliedMostRecentFilters(mostRecentFilterState);
+    fetchMostRecentPrices(mostRecentFilterState.source); 
+  };
+  
 
   const updateMostRecentPricesTable = () => {
     // console.log("Current Prices State:", prices); // Debug prices state
@@ -943,10 +958,50 @@ function SalesDashboard() {
           <div id="filters-content">
             <h2 id="current-section-title">{currentSectionTitle}</h2>
             {/* Filters (conditionally rendered based on the active section) */}
+            {filters.mostRecentPrice}
             {filters.bestSellMarket}
             {filters.seasonalTrends}
             {filters.historicalData}
             {filters.shippingPointPrice}
+
+
+
+              {/* Filters for Most Recent Price */} 
+              <form
+                id="filters-most-recent"
+                className={`filter-form ${filters.mostRecentPrice ? 'active' : 'd-none'}`}
+              >
+                <div className="form-group">
+                  <label htmlFor="sourceFilterMostRecent" className="font-weight-bold">
+                    Source
+                  </label>
+                  <select
+                    id="sourceFilterMostRecent"
+                    className="form-control"
+                    value={mostRecentFilterState.source}
+                    onChange={(e) =>
+                      setMostRecentFilterState((prev) => ({
+                        ...prev,
+                        source: e.target.value,
+                      }))
+                    }
+                  >
+                    <option value="USDA">USDA</option>
+                    <option value="ProduceIQ">ProduceIQ</option>
+                    <option value="Both">Both</option>
+                  </select>
+                </div>
+
+                <button
+                  type="button"
+                  className="btn btn-primary btn-block"
+                  onClick={handleApplyMostRecentFilters}
+                >
+                  Apply Filters
+                </button>
+              </form>
+
+
 
             {/* Filters for Best Sell Market */}
             <form id="filters-best-sell-market" className={`filter-form ${filters.bestSellMarket ? 'active' : 'd-none'}`}>
