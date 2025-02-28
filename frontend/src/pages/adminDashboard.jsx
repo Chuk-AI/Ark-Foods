@@ -992,37 +992,48 @@ const [totalCustomNetMargin, setTotalCustomNetMargin] = useState('0');
     const cob = parseFloat(row.costOfBox) || 0;
     const bb  = parseFloat(row.boxesBonusPerYield) || 0;
     const acreCount = parseFloat(row.acreCount) || 0;
-
-    // Forecast columns
+  
+    // 1) Forecast columns
     const forecastPrice = parseFloat(row.forecastedPrice) || 0;
-    const revAcre = forecastPrice * ypa;
-    const totalC = cpa + (hc * ypa) + (cob * ypa) + bb;
-    const revAfter = revAcre - totalC;
-
-    row.revenuePerAcre = revAcre.toFixed(2);
-    row.revenuePerAcreAfterCostings = revAfter.toFixed(2);
-
-    // If custom price is set
-    let cPrice = parseFloat(row.customForecastedPrice) || 0;
-    let cRevAcre = cPrice * ypa;
-    let cRevAfter = cRevAcre - totalC;
-
-    row.customRevenuePerAcre = cRevAcre.toFixed(2);
-    row.customRevenuePerAcreAfterCostings = cRevAfter.toFixed(2);
-
-    // Multiply by “No. of Acres”
-    let totRev = revAcre * acreCount;
-    let totRevAfter = revAfter * acreCount;
-    let totCustomRev = cRevAcre * acreCount;
-    let totCustomRevAfter = cRevAfter * acreCount;
-
-    row.totalRevenue = totRev.toFixed(2);
-    row.totalRevenueAfter = totRevAfter.toFixed(2);
-    row.totalCustomRevenue = totCustomRev.toFixed(2);
-    row.totalCustomRevenueAfter = totCustomRevAfter.toFixed(2);
-
+    const revenueAcre   = forecastPrice * ypa;
+    const totalCosts    = cpa + (hc * ypa) + (cob * ypa) + bb;
+    const revenueAcreAfter = revenueAcre - totalCosts;
+  
+    row.revenuePerAcre             = revenueAcre.toFixed(2);
+    row.revenuePerAcreAfterCostings= revenueAcreAfter.toFixed(2);
+  
+    const totalRev       = revenueAcre      * acreCount;
+    const totalRevAfter  = revenueAcreAfter * acreCount;
+    row.totalRevenue     = totalRev.toFixed(2);
+    row.totalRevenueAfter= totalRevAfter.toFixed(2);
+  
+    // 2) Custom columns
+    if (!row.customForecastedPrice || row.customForecastedPrice.trim() === "") {
+      // If blank, skip or show zero/blank in custom columns
+      row.customRevenuePerAcre             = "";
+      row.customRevenuePerAcreAfterCostings= "";
+      row.totalCustomRevenue               = "";
+      row.totalCustomRevenueAfter          = "";
+    } else {
+      // If the user actually typed something:
+      const customPriceNum = parseFloat(row.customForecastedPrice) || 0;
+  
+      const customRevAcre      = customPriceNum * ypa;
+      const customRevAcreAfter = customRevAcre - totalCosts;
+  
+      row.customRevenuePerAcre             = customRevAcre.toFixed(2);
+      row.customRevenuePerAcreAfterCostings= customRevAcreAfter.toFixed(2);
+  
+      const totCustomRev       = customRevAcre      * acreCount;
+      const totCustomRevAfter  = customRevAcreAfter * acreCount;
+  
+      row.totalCustomRevenue    = totCustomRev.toFixed(2);
+      row.totalCustomRevenueAfter = totCustomRevAfter.toFixed(2);
+    }
+  
     return row;
   }
+  
 
   // Recalc entire table’s derived fields + summary
   function recalcTable(table) {
