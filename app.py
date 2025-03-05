@@ -3206,14 +3206,12 @@ def calculate_forecast():
 
 
 
-from sqlalchemy import case, func, or_, and_
-
-@app.route('/api/price_averages', methods=['GET'])
+@app.route('/api/price_averages', methods=['GETs'])
 def get_price_averages():
     try:
         start_date = request.args.get('start_date')
         end_date = request.args.get('end_date')
-        source = request.args.get('source', 'both')
+        source = request.args.get('source', 'both').lower()
         city = request.args.get('city', 'All cities')
 
         if not start_date or not end_date:
@@ -3237,13 +3235,13 @@ def get_price_averages():
             "PHILADELPHIA": "Philadelphia",
         }
 
-        # Corrected `case()` syntax by unpacking the list using `*`
+        # Normalize city names (for USDA)
         normalized_city = case(
             *[(PriceData.city_name == key, value) for key, value in usda_city_mapping.items()],
             else_=PriceData.city_name
         ).label("normalized_city")
 
-        # Build query with merged city names
+        # **🔹 Fix: Apply Source Filter Before Aggregating**
         query = db.session.query(
             normalized_city,  # Use normalized city
             PriceData.commodity,
@@ -3256,15 +3254,17 @@ def get_price_averages():
             )
         )
 
-        # Apply source filter
-        if source.lower() != 'both':
-            query = query.filter(PriceData.source == source)
+        # Apply source filter **before grouping**
+        if source == 'usda':
+            query = query.filter(PriceData.source == "USDA")
+        elif source == 'produceiq':
+            query = query.filter(PriceData.source == "ProduceIQ")
 
         # Apply city filter with normalization
         if city.lower() != 'all cities':
             query = query.filter(normalized_city == city)
 
-        # Group by normalized city, commodity, and source
+        # Group and order results
         query = query.group_by(normalized_city, PriceData.commodity, PriceData.source)
         query = query.order_by(normalized_city, PriceData.commodity, PriceData.source)
 
