@@ -988,15 +988,20 @@ function AdminDashboard() {
                   </div>
 
                   <div className="filter-group">
-                    <label>City:</label>
-                    <select value={city} onChange={(e) => setCity(e.target.value)} className="form-control">
-                      <option value="All cities">All Cities</option>
-                      <option value="New York">New York</option>
-                      <option value="Los Angeles">Los Angeles</option>
-                      <option value="Chicago">Chicago</option>
-                      <option value="Miami">Miami</option>
-                    </select>
-                  </div>
+                  <label>City:</label>
+                  <select value={city} onChange={(e) => setCity(e.target.value)} className="form-control">
+                    <option value="All cities">All Cities</option>
+                    <option value="Baltimore">Baltimore</option>
+                    <option value="Boston">Boston</option>
+                    <option value="Chicago">Chicago</option>
+                    <option value="Columbia">Columbia</option>
+                    <option value="Los Angeles">Los Angeles</option>
+                    <option value="Miami">Miami</option>
+                    <option value="New York">New York</option>
+                    <option value="Philadelphia">Philadelphia</option>
+                  </select>
+                </div>
+
 
                   <div className="filter-group">
                     <button className="btn btn-primary generate-btn" onClick={handleGenerate} disabled={loading}>

@@ -10,7 +10,8 @@ from flask import (
     send_file,
 )
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, func, text, case
+
 from flask_login import (
     LoginManager,
     UserMixin,
@@ -28,7 +29,6 @@ from datetime import timedelta, datetime
 from flask_cors import CORS
 import pytz
 from pytz import timezone
-from sqlalchemy import text, func, or_
 import pandas as pd
 from dateutil import parser
 import gc  # garbage collection
@@ -3206,44 +3206,49 @@ def calculate_forecast():
 
 
 
+from sqlalchemy import case, func, or_, and_
+
 @app.route('/api/price_averages', methods=['GET'])
 def get_price_averages():
     try:
-        # Log all incoming parameters for debugging
-        app.logger.info(f"Received parameters: {request.args}")
-
-        # Get query parameters
         start_date = request.args.get('start_date')
         end_date = request.args.get('end_date')
-        source = request.args.get('source', 'both')  # Default to 'both'
+        source = request.args.get('source', 'both')
         city = request.args.get('city', 'All cities')
 
+        if not start_date or not end_date:
+            return jsonify({'error': 'Both start and end dates are required'}), 400
 
-        # More robust date validation
-        if not start_date:
-            app.logger.error("Missing start date")
-            return jsonify({'error': 'Start date is required'}), 400
-        
-        if not end_date:
-            app.logger.error("Missing end date")
-            return jsonify({'error': 'End date is required'}), 400
+        # Convert dates to year/day-of-year
+        start_date_obj = datetime.strptime(start_date, '%Y-%m-%d')
+        end_date_obj = datetime.strptime(end_date, '%Y-%m-%d')
+        start_year, start_day = start_date_obj.year, start_date_obj.timetuple().tm_yday
+        end_year, end_day = end_date_obj.year, end_date_obj.timetuple().tm_yday
 
-        try:
-            # Convert dates to year and day-of-year format
-            start_date_obj = datetime.strptime(start_date, '%Y-%m-%d')
-            end_date_obj = datetime.strptime(end_date, '%Y-%m-%d')
-        except ValueError as date_err:
-            app.logger.error(f"Date parsing error: {date_err}")
-            return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD'}), 400
+        # Mapping USDA city names to normalized names
+        usda_city_mapping = {
+            "BALTIMORE": "Baltimore",
+            "BOSTON": "Boston",
+            "CHICAGO": "Chicago",
+            "COLUMBIA": "Columbia",
+            "LOS ANGELES": "Los Angeles",
+            "MIAMI": "Miami",
+            "NEW YORK": "New York",
+            "PHILADELPHIA": "Philadelphia",
+        }
 
-        start_year = start_date_obj.year
-        start_day = start_date_obj.timetuple().tm_yday
-        end_year = end_date_obj.year
-        end_day = end_date_obj.timetuple().tm_yday
+        # Corrected `case()` syntax by unpacking the list using `*`
+        normalized_city = case(
+            *[(PriceData.city_name == key, value) for key, value in usda_city_mapping.items()],
+            else_=PriceData.city_name
+        ).label("normalized_city")
 
-        # Rest of your existing query logic remains the same
+        # Build query with merged city names
         query = db.session.query(
-            PriceData.commodity, PriceData.source, func.avg(PriceData.price).label('avg_price')
+            normalized_city,  # Use normalized city
+            PriceData.commodity,
+            PriceData.source,
+            func.avg(PriceData.price).label('avg_price')
         ).filter(
             or_(
                 and_(PriceData.year == start_year, PriceData.day >= start_day),
@@ -3251,22 +3256,24 @@ def get_price_averages():
             )
         )
 
-        # Filter by source
+        # Apply source filter
         if source.lower() != 'both':
             query = query.filter(PriceData.source == source)
 
-        # Filter by city
+        # Apply city filter with normalization
         if city.lower() != 'all cities':
-            query = query.filter(PriceData.city_name == city)
+            query = query.filter(normalized_city == city)
 
-        query = query.group_by(PriceData.commodity, PriceData.source)
-        query = query.order_by(PriceData.commodity, PriceData.source)
-        
+        # Group by normalized city, commodity, and source
+        query = query.group_by(normalized_city, PriceData.commodity, PriceData.source)
+        query = query.order_by(normalized_city, PriceData.commodity, PriceData.source)
+
         results = query.all()
 
         # Format results
         price_averages = [
             {
+                'city_name': row.normalized_city,
                 'commodity': row.commodity,
                 'source': row.source,
                 'avg_price': round(row.avg_price, 2)
@@ -3275,6 +3282,7 @@ def get_price_averages():
         ]
 
         return jsonify({'price_averages': price_averages}), 200
+
     except Exception as e:
         app.logger.error(f'Error fetching price averages: {str(e)}')
         return jsonify({'error': f'Internal server error: {str(e)}'}), 500
