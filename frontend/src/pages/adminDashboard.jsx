@@ -1022,7 +1022,7 @@ function AdminDashboard() {
                       {priceData.length > 0 ? (
                         priceData.map((item, index) => (
                           <tr key={index}>
-                            <td>{item.commodity}</td>
+                            <td>{item.source === "USDA" && item.commodity === "Cubanelle" ? "Cubanelles" : item.commodity}</td>
                             <td>{item.source}</td>
                             <td>${item.avg_price.toFixed(2)}</td>
                           </tr>
@@ -1033,6 +1033,7 @@ function AdminDashboard() {
                         </tr>
                       )}
                     </tbody>
+
                   </table>
                 </div>
               </div>
