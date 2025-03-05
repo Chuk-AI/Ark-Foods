@@ -162,19 +162,6 @@ CORS(
 )
 
 
-# CORS(
-#     app,
-#     supports_credentials=True,
-#     resources={
-#         r"/api/*": {
-#             "origins": [
-#                 "http://localhost:3000",  # Local frontend
-#                 "https://ark-foods-0594c413a329.herokuapp.com/",  # Production frontend
-#             ]
-#         }
-#     },
-# )
-
 
 @jwt.unauthorized_loader
 def custom_unauthorized_response(err):
@@ -311,16 +298,6 @@ class ShippingPriceData(db.Model):
     season = db.Column(db.String, nullable=True)  
 
     
-# class UPriceData(db.Model):
-#     __tablename__ = 'usda_price_data'
-
-#     id = db.Column(db.Integer, primary_key=True)
-#     city_name = db.Column(db.String(100), nullable=False)
-#     commodity = db.Column(db.String(100), nullable=False)
-#     year = db.Column(db.Integer, nullable=False)
-#     price = db.Column(db.Float, nullable=False)
-#     source = db.Column(db.String(50), nullable=False, default="USDA")
-#     season = db.Column(db.String(20), nullable=False)
 
 
 class UShippingPriceData(db.Model):
@@ -1853,33 +1830,6 @@ class LoginForm(FlaskForm):
     password = PasswordField("Password", validators=[InputRequired(), Length(min=8)])
     submit = SubmitField("Login")
 
-# # testing db connection
-# @app.route("/test_db")
-# def test_db():
-#     try:
-#         # Fetch the first 5 users from the database
-#         users = User.query.all()
-#         if users:
-#             # Create a response string with usernames and passwords
-#             response = "First 5 users:\n"
-#             for user in users:
-#                 response += f"Username: {user.email}, Password: {user.password}\n"
-#             return response
-#         else:
-#             return "Database is connected, but no users found."
-#     except Exception as e:
-#         return f"Error: {e}"
-
-# @app.route("/api/test_users", methods=["GET"])
-# def test_users():
-#     users = User.query.all()
-#     user_list = [
-#         {"id": user.id, "username": user.username, "email": user.email, "role": user.role, "password": user.password}
-#         for user in users
-#     ]
-#     return jsonify(user_list)
-
-
 
 # Home page
 @app.route("/api/")
@@ -1954,51 +1904,6 @@ def weather_dashboard():
     return render_template("weather_dashboard.html")
 
 
-# @app.route("/sales_dashboard", methods=["GET"])
-# # @login_required
-# def sales_dashboard():
-#     selected_commodity = request.args.get("commodity", "Jalapeno")
-#     selected_source = request.args.get("source", "Historical")
-
-#     # Get the most recent year and day
-#     latest_year = db.session.query(db.func.max(PriceData.year)).scalar()
-#     latest_day = (
-#         db.session.query(db.func.max(PriceData.day))
-#         .filter_by(year=latest_year)
-#         .scalar()
-#     )
-
-#     # Query the best sell market (city with the highest recent price)
-#     best_market = (
-#         db.session.query(
-#             PriceData.city_name,
-#             db.func.max(PriceData.price).label("max_price"),
-#             PriceData.year,
-#             PriceData.day,
-#         )
-#         .filter(
-#             PriceData.commodity == selected_commodity,
-#             PriceData.source == selected_source,
-#             PriceData.year == latest_year,
-#             PriceData.day == latest_day,
-#         )
-#         .group_by(PriceData.city_name, PriceData.year, PriceData.day)
-#         .order_by(db.desc("max_price"))
-#         .all()
-#     )
-
-#     # Check if query was successful
-#     if not best_market:
-#         best_market = []
-
-#     # Render the template and pass the variables
-#     return render_template(
-#         "sales_dashboard.html",
-#         best_market=best_market,  # Make sure to pass this variable
-#         selected_commodity=selected_commodity,
-#         selected_source=selected_source,
-#         datetime=datetime,  # Pass datetime to handle date formatting in the template
-#     )
 
 
 
@@ -2232,25 +2137,6 @@ def approve_user(user_id):
 
 
 
-# @app.route("/users", methods=["GET"])
-# # @login_required
-# def approve_users():
-#     # Check if the user is authenticated
-#     if not current_user.is_authenticated:
-#         return jsonify({"error": "User not authenticated"}), 401
-
-#     # Check if the user is an admin or owner
-#     if not current_user.is_admin() and not current_user.is_owner():
-#         return jsonify({"error": "Access denied!"}), 403
-
-#     # Fetch unapproved users
-#     unapproved_users = User.query.filter_by(approved=False).all()
-#     users = [
-#         {"id": user.id, "username": user.username, "email": user.email, "role": user.role}
-#         for user in unapproved_users
-#     ]
-#     return jsonify({"users": users}), 200
-
 
 # FrontEND API internal
 @app.route("/api/best_sell_market", methods=["GET"])
@@ -2360,111 +2246,6 @@ def api_best_sell_market():
 
 
 
-from sqlalchemy.sql.expression import tuple_
-from sqlalchemy import over, func
-
-
-# @app.route("/api/most_recent_prices", methods=["GET"])
-# def api_most_recent_prices():
-#     cities = [
-#         "Baltimore",
-#         "Boston",
-#         "Chicago",
-#         "Columbia",
-#         "Miami",
-#         "New York",
-#         "Philadelphia",
-#         "Los Angeles",
-#     ]
-#     commodities = [
-#         "Anaheim",
-#         "Cubanelles",
-#         "Fresno",
-#         "Habanero",
-#         "Hungarian Wax",
-#         "Jalapeno",
-#         "Long Hot",
-#         "Poblano",
-#         "Serrano",
-#         "Shishito",
-#     ]
-
-#     selected_source = request.args.get("source", "USDA")
-
-#     # Create commodity mapping
-#     commodity_map = {c: "Cubanelle" if (c == "Cubanelles" and selected_source == "USDA") else c 
-#                     for c in commodities}
-#     reverse_commodity_map = {v: k for k, v in commodity_map.items()}
-#     adjusted_commodities = list(commodity_map.values())
-
-#     # Generate date filters for the last 7 days
-#     tz = timezone("US/Pacific")
-#     seven_days_ago = datetime.now(tz) - timedelta(days=7)
-#     date_filters = [(d.year, d.timetuple().tm_yday) 
-#                    for d in [seven_days_ago + timedelta(days=i) for i in range(7)]]
-
-#     # Create city lookup map
-#     city_lower_map = {city.lower(): city for city in cities}
-
-#     # Build main query with window function
-#     subquery = (
-#         db.session.query(
-#             PriceData.commodity,
-#             PriceData.city_name,
-#             PriceData.year,
-#             PriceData.day,
-#             func.max(PriceData.price).label('max_price')
-#         )
-#         .filter(
-#             PriceData.commodity.in_(adjusted_commodities),
-#             func.lower(PriceData.city_name).in_([c.lower() for c in cities]),
-#             tuple_(PriceData.year, PriceData.day).in_(date_filters)
-#         )
-#         .group_by(PriceData.commodity, PriceData.city_name, PriceData.year, PriceData.day)
-#         .subquery()
-#     )
-
-#     # Correct window function usage
-#     window_func = func.row_number().over(
-#         partition_by=[subquery.c.commodity, subquery.c.city_name],
-#         order_by=[subquery.c.year.desc(), subquery.c.day.desc()]
-#     )
-
-#     ranked_query = (
-#         db.session.query(
-#             subquery.c.commodity,
-#             subquery.c.city_name,
-#             subquery.c.max_price,
-#             window_func.label('rn')
-#         )
-#         .subquery()
-#     )
-
-#     # Execute final query
-#     results = (
-#         db.session.query(
-#             ranked_query.c.commodity,
-#             ranked_query.c.city_name,
-#             ranked_query.c.max_price
-#         )
-#         .filter(ranked_query.c.rn == 1)
-#         .all()
-#     )
-
-#     # Initialize response structure with defaults
-#     recent_prices = {commodity: {city: "-" for city in cities} for commodity in commodities}
-
-#     # Update with actual results
-#     for row in results:
-#         original_commodity = reverse_commodity_map.get(row.commodity, row.commodity)
-#         normalized_city = row.city_name.lower()
-#         original_city = city_lower_map.get(normalized_city)
-        
-#         if original_city and original_commodity in recent_prices:
-#             recent_prices[original_commodity][original_city] = float(row.max_price) if row.max_price is not None else "-"
-
-#     return jsonify({"prices": recent_prices})
-  
 
 @app.route("/api/most_recent_prices", methods=["GET"])
 def api_most_recent_prices():
@@ -2749,15 +2530,6 @@ def historical_data():
         return jsonify({"error": str(e)}), 500
 
 
-
-
-@app.route('/api/test_db_connection')
-def test_db_connection():
-    try:
-        test_query = ShippingPriceData.query.first()
-        return jsonify({"success": bool(test_query)})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
 
 
 
@@ -3368,44 +3140,6 @@ def calculate_forecasted_price(variety, start_date, forecast_date):
 
 
 
-# @app.route("/api/calculate_forecast", methods=["POST"])
-# def calculate_forecast():
-#     # Parse JSON data from the request body
-#     data = request.json
-
-#     # Extract the form data (note: city is removed)
-#     variety = data.get("variety")
-#     start_date = data.get("start_date")
-#     forecast_date = data.get("forecast_date")
-#     yield_per_acre = data.get("yield_per_acre")
-
-#     # Validate the form inputs (remove city from the required fields)
-#     if not all([variety, start_date, forecast_date, yield_per_acre]):
-#         return jsonify({"error": "All form fields are required"}), 400
-
-#     try:
-#         # Convert the dates and yield per acre to appropriate data types
-#         start_date = datetime.strptime(start_date, "%Y-%m-%d")
-#         forecast_date = datetime.strptime(forecast_date, "%Y-%m-%d")
-#         yield_per_acre = float(yield_per_acre)
-#     except ValueError:
-#         return jsonify({"error": "Invalid date format or yield per acre"}), 400
-
-#     # Call the calculate_forecasted_price function without the city parameter,
-#     # or pass a default value if required by your logic.
-#     forecasted_price = calculate_forecasted_price(variety, start_date, forecast_date)
-#     revenue_per_acre = forecasted_price * yield_per_acre
-
-#     # Determine the season for the forecast date
-#     season = determine_season_for_dashboard(forecast_date)
-
-#     # Return the results
-#     return jsonify({
-#         "forecasted_price": round(forecasted_price, 2),
-#         "revenue_per_acre": round(revenue_per_acre, 2),
-#         "season": season,
-#     })
-
 
 @app.route("/api/calculate_forecast", methods=["POST"])
 def calculate_forecast():
@@ -3472,6 +3206,78 @@ def calculate_forecast():
 
 
 
+@app.route('/api/price_averages', methods=['GET'])
+def get_price_averages():
+    try:
+        # Log all incoming parameters for debugging
+        app.logger.info(f"Received parameters: {request.args}")
+
+        # Get query parameters
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        source = request.args.get('source', 'both')  # Default to 'both'
+        city = request.args.get('city', 'All cities')
+
+
+        # More robust date validation
+        if not start_date:
+            app.logger.error("Missing start date")
+            return jsonify({'error': 'Start date is required'}), 400
+        
+        if not end_date:
+            app.logger.error("Missing end date")
+            return jsonify({'error': 'End date is required'}), 400
+
+        try:
+            # Convert dates to year and day-of-year format
+            start_date_obj = datetime.strptime(start_date, '%Y-%m-%d')
+            end_date_obj = datetime.strptime(end_date, '%Y-%m-%d')
+        except ValueError as date_err:
+            app.logger.error(f"Date parsing error: {date_err}")
+            return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD'}), 400
+
+        start_year = start_date_obj.year
+        start_day = start_date_obj.timetuple().tm_yday
+        end_year = end_date_obj.year
+        end_day = end_date_obj.timetuple().tm_yday
+
+        # Rest of your existing query logic remains the same
+        query = db.session.query(
+            PriceData.commodity, PriceData.source, func.avg(PriceData.price).label('avg_price')
+        ).filter(
+            or_(
+                and_(PriceData.year == start_year, PriceData.day >= start_day),
+                and_(PriceData.year == end_year, PriceData.day <= end_day)
+            )
+        )
+
+        # Filter by source
+        if source.lower() != 'both':
+            query = query.filter(PriceData.source == source)
+
+        # Filter by city
+        if city.lower() != 'all cities':
+            query = query.filter(PriceData.city_name == city)
+
+        query = query.group_by(PriceData.commodity, PriceData.source)
+        query = query.order_by(PriceData.commodity, PriceData.source)
+        
+        results = query.all()
+
+        # Format results
+        price_averages = [
+            {
+                'commodity': row.commodity,
+                'source': row.source,
+                'avg_price': round(row.avg_price, 2)
+            }
+            for row in results
+        ]
+
+        return jsonify({'price_averages': price_averages}), 200
+    except Exception as e:
+        app.logger.error(f'Error fetching price averages: {str(e)}')
+        return jsonify({'error': f'Internal server error: {str(e)}'}), 500
 
 
 

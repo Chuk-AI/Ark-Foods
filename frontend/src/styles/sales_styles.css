@@ -416,3 +416,39 @@ select.form-control {
 .most-recent-container{
   width: 97.5%;
 }
+
+/* Checkbox Container */
+.checkbox-container {
+  display: flex;
+  flex-direction: column;
+  background: #f8f9fa;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+/* Individual Checkbox Item */
+.checkbox-item {
+  display: flex;
+  align-items: center;
+  padding: 5px 0;
+  cursor: pointer;
+}
+
+.checkbox-item input {
+  margin-right: 10px;
+}
+
+/* "Select All" Checkbox */
+.select-all {
+  font-weight: bold;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+}
+
+.select-all input {
+  margin-right: 10px;
+}

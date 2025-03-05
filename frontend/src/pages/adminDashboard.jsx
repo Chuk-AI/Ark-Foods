@@ -1,751 +1,3 @@
-// import React, { useState, useEffect } from 'react';
-// import axios from 'axios';
-// import Chart from 'chart.js/auto';
-// import ChartDataLabels from 'chartjs-plugin-datalabels';
-// import Header from '../components/header';
-// import Footer from '../components/footer';
-// import { Link } from 'react-router-dom';
-// import '../styles/adminDashboard.css';
-
-// // Register the datalabels plugin globally
-// Chart.register(ChartDataLabels);
-
-// function AdminDashboard() {
-//   const [user, setUser] = useState({
-//     isAuthenticated: false,
-//     isAdmin: false,
-//     isOwner: false,
-//   });
-
-//   // On mount, verify the user session
-//   useEffect(() => {
-//     const fetchUser = async () => {
-//       try {
-//         const token = localStorage.getItem('authToken');
-//         if (!token) throw new Error('No token found');
-//         const response = await axios.get('/api/current_user', {
-//           headers: { Authorization: `Bearer ${token}` },
-//         });
-//         const userData = response.data;
-//         setUser({
-//           isAuthenticated: true,
-//           isAdmin: userData.role === 'admin',
-//           isOwner: userData.role === 'owner',
-//         });
-//       } catch (error) {
-//         console.error('Error fetching user data:', error);
-//         if (error.response && error.response.status === 401) {
-//           alert('Session expired. Please log in again.');
-//           localStorage.removeItem('authToken');
-//         }
-//         setUser({ isAuthenticated: false, isAdmin: false, isOwner: false });
-//       }
-//     };
-//     fetchUser();
-//   }, []);
-
-//   // Commodity selection + forecast data
-//   const [variety, setVariety] = useState('Shishito');
-//   const [forecastData, setForecastData] = useState(null);
-//   const [chart, setChart] = useState(null);
-
-//   // Main form data (includes cost fields)
-//   const [formData, setFormData] = useState({
-//     startDate: '',
-//     forecastDate: '',
-//     yieldPerAcre: '',
-//     costPerAcre: '',
-//     harvestCostPerBox: '',
-//     costOfBox: '',
-//     boxesBonusPerYield: '',
-//   });
-
-//   // Custom price states for the single forecast card
-//   const [customPrice, setCustomPrice] = useState('');
-//   const [customRevenue, setCustomRevenue] = useState('');
-//   const [customRevenueAfterCosts, setCustomRevenueAfterCosts] = useState('');
-
-//   // The table data
-//   const [revenueTableData, setRevenueTableData] = useState([]);
-//   const [showRevenueCalculator, setShowRevenueCalculator] = useState(false);
-
-//   // Totals
-//   const [totalRevenue, setTotalRevenue] = useState(0);
-//   const [totalCostings, setTotalCostings] = useState(0);
-//   const [totalNetMargin, setTotalNetMargin] = useState(0);
-
-//   // On form change
-//   const handleInputChange = (e) => {
-//     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
-//   };
-
-//   // Single custom price logic
-//   const handleCustomPriceChange = (e) => {
-//     const newPrice = parseFloat(e.target.value) || 0;
-//     setCustomPrice(e.target.value);
-
-//     const ypa = parseFloat(formData.yieldPerAcre) || 0;
-//     const cpa = parseFloat(formData.costPerAcre) || 0;
-//     const hc  = parseFloat(formData.harvestCostPerBox) || 0;
-//     const cob = parseFloat(formData.costOfBox) || 0;
-//     const bb  = parseFloat(formData.boxesBonusPerYield) || 0;
-
-//     const newRevenue = newPrice * ypa;
-//     const totalCosts = cpa + (hc * ypa) + (cob * ypa) + bb;
-//     const newRevenueAfter = newRevenue - totalCosts;
-
-//     setCustomRevenue(newRevenue.toFixed(2));
-//     setCustomRevenueAfterCosts(newRevenueAfter.toFixed(2));
-//   };
-
-//   // Chart
-//   const updateChart = async () => {
-//     if (!variety) return;
-//     try {
-//       const token = localStorage.getItem('authToken');
-//       if (!token) throw new Error('No token found');
-
-//       const response = await axios.get('/api/seasonal_prices', {
-//         headers: { Authorization: `Bearer ${token}` },
-//         params: { variety },
-//       });
-
-//       const data = response.data;
-//       const canvas = document.getElementById('seasonPriceChart');
-//       if (!canvas) return;
-
-//       const ctx = canvas.getContext('2d');
-//       if (chart) chart.destroy();
-
-//       const newChart = new Chart(ctx, {
-//         type: 'bar',
-//         data: {
-//           labels: ['Spring', 'Summer', 'Autumn', 'Winter'],
-//           datasets: [
-//             {
-//               label: `Forecasted Price per Box for ${variety}`,
-//               data: [data.Spring, data.Summer, data.Autumn, data.Winter],
-//               backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0'],
-//               borderColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0'],
-//               borderWidth: 0.3,
-//               barPercentage: 0.4,
-//               categoryPercentage: 1,
-//             },
-//           ],
-//         },
-//         plugins: [ChartDataLabels],
-//         options: {
-//           responsive: true,
-//           plugins: {
-//             legend: { display: false },
-//             datalabels: {
-//               color: 'black',
-//               anchor: 'end',
-//               align: 'top',
-//               formatter: (value) => `$${value}`,
-//             },
-//           },
-//           scales: {
-//             x: { ticks: { color: 'black' } },
-//             y: { 
-//               ticks: { color: 'black' },
-//               title: {
-//                 display: true,
-//                 text: 'Price ($)',
-//                 color: 'black',
-//               },
-//             },
-//           },
-//         },
-//       });
-//       setChart(newChart);
-//     } catch (error) {
-//       console.error('Error fetching seasonal prices:', error);
-//       if (error.response && error.response.status === 401) {
-//         alert('Session expired. Please log in again.');
-//         localStorage.removeItem('authToken');
-//         window.location.href = '/login';
-//       }
-//     }
-//   };
-
-//   useEffect(() => {
-//     updateChart();
-//     // eslint-disable-next-line react-hooks/exhaustive-deps
-//   }, [variety]);
-
-//   // "Add variety" outside the table
-//   const addVarietyRow = () => {
-//     const newRow = {
-//       id: Date.now(),
-//       variety: '',
-//       yieldPerAcre: '',
-//       costPerAcre: '',
-//       harvestCostPerBox: '',
-//       costOfBox: '',
-//       boxesBonusPerYield: '',
-//       forecastedPrice: 0,
-//       revenuePerAcre: 0,
-//       revenuePerAcreAfterCostings: 0,
-//       customForecastedPrice: '',
-//       customRevenuePerAcre: 0,
-//       customRevenuePerAcreAfterCostings: 0,
-//     };
-//     setRevenueTableData((prev) => [...prev, newRow]);
-//   };
-
-//   // "Remove variety" on each row
-//   const removeVarietyRow = (rowId) => {
-//     const updated = revenueTableData.filter((r) => r.id !== rowId);
-//     setRevenueTableData(updated);
-//     calculateTotals(updated);
-//   };
-
-//   // handle changes in the table
-//   const handleTableInputChange = (rowId, field, value) => {
-//     const updated = revenueTableData.map((row) => {
-//       if (row.id === rowId) {
-//         return { ...row, [field]: value };
-//       }
-//       return row;
-//     });
-//     setRevenueTableData(updated);
-//   };
-
-//   // "Calculate All" button at bottom
-//   const handleCalculateAllRows = async () => {
-//     try {
-//       const token = localStorage.getItem('authToken');
-//       if (!token) throw new Error('No token found');
-
-//       // For each row, call the backend
-//       const updated = await Promise.all(
-//         revenueTableData.map(async (row) => {
-//           if (!row.variety) return row; // skip empty variety
-
-//           // Build payload from row + main form dates
-//           const payload = {
-//             variety: row.variety,
-//             start_date: formData.startDate,   // from the yield calc form
-//             forecast_date: formData.forecastDate, // from yield calc
-//             yield_per_acre: row.yieldPerAcre || 0,
-//             cost_per_acre: row.costPerAcre || 0,
-//             harvest_cost_per_box: row.harvestCostPerBox || 0,
-//             cost_of_box: row.costOfBox || 0,
-//             boxes_bonus_per_yield: row.boxesBonusPerYield || 0,
-//           };
-
-//           const response = await axios.post('/api/calculate_forecast', payload, {
-//             headers: { Authorization: `Bearer ${token}` },
-//           });
-
-//           const forecastedPrice = response.data.forecasted_price || 0;
-//           const revenuePerAcre = response.data.revenue_per_acre || 0;
-//           const revenueAfterCostings = response.data.revenue_per_acre_after_costings || 0;
-
-//           // Then recalc the row's custom columns if it has a customForecastedPrice
-//           let customRevenuePerAcre = 0;
-//           let customRevenuePerAcreAfterCostings = 0;
-//           if (row.customForecastedPrice) {
-//             // same logic
-//             const ypa = parseFloat(row.yieldPerAcre) || 0;
-//             const cpa = parseFloat(row.costPerAcre) || 0;
-//             const hc = parseFloat(row.harvestCostPerBox) || 0;
-//             const cob = parseFloat(row.costOfBox) || 0;
-//             const bb = parseFloat(row.boxesBonusPerYield) || 0;
-//             const cPrice = parseFloat(row.customForecastedPrice) || 0;
-
-//             customRevenuePerAcre = cPrice * ypa;
-//             const totalCost = cpa + (hc * ypa) + (cob * ypa) + bb;
-//             customRevenuePerAcreAfterCostings = customRevenuePerAcre - totalCost;
-//           }
-
-//           return {
-//             ...row,
-//             forecastedPrice,
-//             revenuePerAcre: revenuePerAcre.toFixed(2),
-//             revenueAfterCostings: revenueAfterCostings.toFixed(2),
-//             customRevenuePerAcre: customRevenuePerAcre.toFixed(2),
-//             customRevenuePerAcreAfterCostings: customRevenuePerAcreAfterCostings.toFixed(2),
-//           };
-//         })
-//       );
-
-//       setRevenueTableData(updated);
-//       calculateTotals(updated);
-//     } catch (error) {
-//       console.error('Error calculating all rows:', error);
-//       alert('Failed to recalc table rows.');
-//     }
-//   };
-
-//   // recalc summary totals
-//   const calculateTotals = (tableData) => {
-//     let totalRev = 0;
-//     let totalNet = 0;
-
-//     tableData.forEach((row) => {
-//       // If user entered customForecastedPrice, use custom columns
-//       if (row.customForecastedPrice) {
-//         totalRev += parseFloat(row.customRevenuePerAcre) || 0;
-//         totalNet += parseFloat(row.customRevenuePerAcreAfterCostings) || 0;
-//       } else {
-//         totalRev += parseFloat(row.revenuePerAcre) || 0;
-//         totalNet += parseFloat(row.revenueAfterCostings) || 0;
-//       }
-//     });
-
-//     const totalCost = totalRev - totalNet;
-//     setTotalRevenue(totalRev.toFixed(2));
-//     setTotalCostings(totalCost.toFixed(2));
-//     setTotalNetMargin(totalNet.toFixed(2));
-//   };
-
-//   // Single forecast form submission
-//   const handleSubmit = async (e) => {
-//     e.preventDefault();
-//     try {
-//       const token = localStorage.getItem('authToken');
-//       if (!token) throw new Error('No token found');
-
-//       const payload = {
-//         variety,
-//         start_date: formData.startDate,
-//         forecast_date: formData.forecastDate,
-//         yield_per_acre: formData.yieldPerAcre,
-//         cost_per_acre: formData.costPerAcre,
-//         harvest_cost_per_box: formData.harvestCostPerBox,
-//         cost_of_box: formData.costOfBox,
-//         boxes_bonus_per_yield: formData.boxesBonusPerYield,
-//       };
-
-//       const response = await axios.post('/api/calculate_forecast', payload, {
-//         headers: { Authorization: `Bearer ${token}` },
-//       });
-
-//       setForecastData(response.data);
-//       setCustomPrice('');
-//       setCustomRevenue('');
-//       setCustomRevenueAfterCosts('');
-
-//       // Initialize the table with one row
-//       const newRow = {
-//         id: Date.now(),
-//         variety,
-//         yieldPerAcre: formData.yieldPerAcre,
-//         costPerAcre: formData.costPerAcre,
-//         harvestCostPerBox: formData.harvestCostPerBox,
-//         costOfBox: formData.costOfBox,
-//         boxesBonusPerYield: formData.boxesBonusPerYield,
-//         forecastedPrice: response.data.forecasted_price.toFixed(2),
-//         revenuePerAcre: response.data.revenue_per_acre.toFixed(2),
-//         revenueAfterCostings: response.data.revenue_per_acre_after_costings.toFixed(2),
-//         customForecastedPrice: '',
-//         customRevenuePerAcre: 0,
-//         customRevenuePerAcreAfterCostings: 0,
-//       };
-//       setRevenueTableData([newRow]);
-//       setShowRevenueCalculator(true);
-
-//       // Recalc totals
-//       calculateTotals([newRow]);
-
-//     } catch (error) {
-//       console.error('Error calculating forecast:', error);
-//       alert('Unable to calculate forecast.');
-//     }
-//   };
-
-//   return (
-//     <div>
-//       <Header
-//         isAuthenticated={user.isAuthenticated}
-//         isAdmin={user.isAdmin}
-//         isOwner={user.isOwner}
-//       />
-//       <div className="container adminDash-section">
-//         <div className="mt-3 mb-3">
-//           <Link to="/approve_users" className="btn btn-primary">
-//             Approve Users
-//           </Link>
-//         </div>
-//         <h1 className="mt-4">Admin Dashboard</h1>
-//         <p>Welcome, Admin! You have Admin privileges.</p>
-
-//         <ul className="nav nav-tabs">
-//           <li className="nav-item">
-//             <a className="nav-link active" data-toggle="tab">
-//               Yield Calculator
-//             </a>
-//           </li>
-//         </ul>
-
-//         <div className="tab-content">
-//           <div className="tab-pane fade show active" id="yield-calculator">
-//             <div className="row mt-4">
-//               {/* Left column: Input Form */}
-//               <div className="col-md-6">
-//                 <form onSubmit={handleSubmit}>
-//                   <div className="form-group mb-3">
-//                     <label>Select Variety:</label>
-//                     <select
-//                       className="form-control"
-//                       value={variety}
-//                       onChange={(e) => setVariety(e.target.value)}
-//                     >
-//                       <option value="Shishito">Shishito</option>
-//                       <option value="Anaheim">Anaheim</option>
-//                       <option value="Cubanelle">Cubanelles</option>
-//                       <option value="Fresno">Fresno</option>
-//                       <option value="Habanero">Habanero</option>
-//                       <option value="Hungarian Wax">Hungarian Wax</option>
-//                       <option value="Jalapeno">Jalapeno</option>
-//                       <option value="Long Hot">Long Hot</option>
-//                       <option value="Poblano">Poblano</option>
-//                       <option value="Serrano">Serrano</option>
-//                     </select>
-//                   </div>
-
-//                   <div className="form-group mb-3">
-//                     <label>Enter Start Date:</label>
-//                     <input
-//                       type="date"
-//                       name="startDate"
-//                       className="form-control"
-//                       value={formData.startDate}
-//                       onChange={handleInputChange}
-//                       required
-//                     />
-//                   </div>
-
-//                   <div className="form-group mb-3">
-//                     <label>Enter Forecast Date:</label>
-//                     <input
-//                       type="date"
-//                       name="forecastDate"
-//                       className="form-control"
-//                       value={formData.forecastDate}
-//                       onChange={handleInputChange}
-//                       required
-//                     />
-//                   </div>
-
-//                   <div className="form-group mb-3">
-//                     <label>Enter Yield per Acre (Boxes per Acre):</label>
-//                     <input
-//                       type="number"
-//                       name="yieldPerAcre"
-//                       className="form-control"
-//                       value={formData.yieldPerAcre}
-//                       onChange={handleInputChange}
-//                       required
-//                     />
-//                   </div>
-
-//                   <div className="form-group mb-3">
-//                     <label>Cost per Acre ($):</label>
-//                     <input
-//                       type="number"
-//                       name="costPerAcre"
-//                       className="form-control"
-//                       value={formData.costPerAcre}
-//                       onChange={handleInputChange}
-//                     />
-//                   </div>
-
-//                   <div className="form-group mb-3">
-//                     <label>Harvest cost per box ($):</label>
-//                     <input
-//                       type="number"
-//                       name="harvestCostPerBox"
-//                       className="form-control"
-//                       value={formData.harvestCostPerBox}
-//                       onChange={handleInputChange}
-//                     />
-//                   </div>
-
-//                   <div className="form-group mb-3">
-//                     <label>Cost of box ($):</label>
-//                     <input
-//                       type="number"
-//                       name="costOfBox"
-//                       className="form-control"
-//                       value={formData.costOfBox}
-//                       onChange={handleInputChange}
-//                     />
-//                   </div>
-
-//                   <div className="form-group mb-3">
-//                     <label>Boxes bonus per yield per Acre ($):</label>
-//                     <input
-//                       type="number"
-//                       name="boxesBonusPerYield"
-//                       className="form-control"
-//                       value={formData.boxesBonusPerYield}
-//                       onChange={handleInputChange}
-//                     />
-//                   </div>
-
-//                   <button type="submit" className="btn btn-primary">
-//                     Calculate
-//                   </button>
-//                 </form>
-//               </div>
-
-//               {/* Right column: Forecast results + Custom Price */}
-//               <div className="col-md-6">
-//                 {forecastData ? (
-//                   <>
-//                     <div className="card Forecast-Results">
-//                       <div className="card-body">
-//                         <h2>Forecast Results</h2>
-//                         <table className="table table-bordered table-sm">
-//                           <tbody>
-//                             <tr>
-//                               <th>Forecasted Price per Box</th>
-//                               <td>${forecastData.forecasted_price}</td>
-//                             </tr>
-//                             <tr>
-//                               <th>Revenue per Acre</th>
-//                               <td>${forecastData.revenue_per_acre}</td>
-//                             </tr>
-//                             <tr>
-//                               <th>Revenue Per Acre after costings</th>
-//                               <td>
-//                                 {forecastData.revenue_per_acre_after_costings !== undefined
-//                                   ? `$${forecastData.revenue_per_acre_after_costings}`
-//                                   : 'N/A'}
-//                               </td>
-//                             </tr>
-//                             <tr>
-//                               <th>Season for Forecast Date</th>
-//                               <td>{forecastData.season}</td>
-//                             </tr>
-//                           </tbody>
-//                         </table>
-//                       </div>
-//                     </div>
-
-//                     <hr />
-
-//                     {/* Custom Price card */}
-//                     <div className="card Forecast-Results mt-3">
-//                       <div className="card-body">
-//                         <h2>Try a Custom Forecasted Price</h2>
-//                         <table className="table table-bordered table-sm">
-//                           <tbody>
-//                             <tr>
-//                               <th>Forecasted Price per Box</th>
-//                               <td>
-//                                 <input
-//                                   type="number"
-//                                   className="form-control"
-//                                   value={customPrice}
-//                                   onChange={handleCustomPriceChange}
-//                                 />
-//                               </td>
-//                             </tr>
-//                             <tr>
-//                               <th>Revenue per Acre</th>
-//                               <td>
-//                                 {customRevenue ? `$${customRevenue}` : ''}
-//                               </td>
-//                             </tr>
-//                             <tr>
-//                               <th>Revenue per Acre after costings</th>
-//                               <td>
-//                                 {customRevenueAfterCosts
-//                                   ? `$${customRevenueAfterCosts}`
-//                                   : ''}
-//                               </td>
-//                             </tr>
-//                           </tbody>
-//                         </table>
-//                       </div>
-//                     </div>
-//                   </>
-//                 ) : (
-//                   <p>No forecast available. Please enter the data and submit the form.</p>
-//                 )}
-//               </div>
-//             </div>
-
-//             {/* Revenue Calculator Section */}
-//             {showRevenueCalculator && (
-//               <div className="row mt-4">
-//                 <div className="col-md-12">
-//                   <h2 style={{textAlign:'center'}}>Revenue Calculator</h2>
-
-//                   <div className="summary-section mb-3">
-//                     <h3>Summary</h3>
-//                     <p>
-//                       The total Forecasted Revenue of your Selected Varieties is 
-//                       <strong> ${totalRevenue}</strong> and 
-//                       after the costings which are 
-//                       <strong> ${totalCostings}</strong>, 
-//                       your net margin will be 
-//                       <strong> ${totalNetMargin}</strong>.
-//                     </p>
-//                   </div>
-
-//                   {/* "Add variety" button outside the table */}
-//                   <div className="mb-2">
-//                     <button 
-//                       type="button" 
-//                       className="btn btn-sm btn-success"
-//                       onClick={addVarietyRow}
-//                     >
-//                       + Add Variety
-//                     </button>
-//                   </div>
-
-//                   <div className="table-responsive">
-//                     <table className="table table-bordered table-sm">
-//                       <thead>
-//                         <tr>
-//                           <th>Variety</th>
-//                           <th>Yield/Acre</th>
-//                           <th>Cost/Acre</th>
-//                           <th>Harvest $/Box</th>
-//                           <th>Cost of Box</th>
-//                           <th>Boxes Bonus</th>
-//                           <th>Forecast $</th>
-//                           <th>Revenue/Acre</th>
-//                           <th>Revenue/Acre After</th>
-//                           <th>Custom $</th>
-//                           <th>Custom Rev/Acre</th>
-//                           <th>Custom Rev/Acre After</th>
-//                           <th></th> {/* for minus button */}
-//                         </tr>
-//                       </thead>
-//                       <tbody>
-//                         {revenueTableData.map((row) => (
-//                           <tr key={row.id}>
-//                             <td style={{ minWidth: '110px' }}>
-//                               <select 
-//                                 className="form-control form-control-sm"
-//                                 value={row.variety}
-//                                 onChange={(e) => handleTableInputChange(row.id, 'variety', e.target.value)}
-//                               >
-//                                 <option value="">Select Variety</option>
-//                                 <option value="Shishito">Shishito</option>
-//                                 <option value="Anaheim">Anaheim</option>
-//                                 <option value="Cubanelle">Cubanelles</option>
-//                                 <option value="Fresno">Fresno</option>
-//                                 <option value="Habanero">Habanero</option>
-//                                 <option value="Hungarian Wax">Hungarian Wax</option>
-//                                 <option value="Jalapeno">Jalapeno</option>
-//                                 <option value="Long Hot">Long Hot</option>
-//                                 <option value="Poblano">Poblano</option>
-//                                 <option value="Serrano">Serrano</option>
-//                               </select>
-//                             </td>
-//                             <td>
-//                               <input
-//                                 type="number"
-//                                 className="form-control form-control-sm"
-//                                 value={row.yieldPerAcre}
-//                                 onChange={(e) => handleTableInputChange(row.id, 'yieldPerAcre', e.target.value)}
-//                               />
-//                             </td>
-//                             <td>
-//                               <input
-//                                 type="number"
-//                                 className="form-control form-control-sm"
-//                                 value={row.costPerAcre}
-//                                 onChange={(e) => handleTableInputChange(row.id, 'costPerAcre', e.target.value)}
-//                               />
-//                             </td>
-//                             <td>
-//                               <input
-//                                 type="number"
-//                                 className="form-control form-control-sm"
-//                                 value={row.harvestCostPerBox}
-//                                 onChange={(e) => handleTableInputChange(row.id, 'harvestCostPerBox', e.target.value)}
-//                               />
-//                             </td>
-//                             <td>
-//                               <input
-//                                 type="number"
-//                                 className="form-control form-control-sm"
-//                                 value={row.costOfBox}
-//                                 onChange={(e) => handleTableInputChange(row.id, 'costOfBox', e.target.value)}
-//                               />
-//                             </td>
-//                             <td>
-//                               <input
-//                                 type="number"
-//                                 className="form-control form-control-sm"
-//                                 value={row.boxesBonusPerYield}
-//                                 onChange={(e) => handleTableInputChange(row.id, 'boxesBonusPerYield', e.target.value)}
-//                               />
-//                             </td>
-//                             <td>${row.forecastedPrice}</td>
-//                             <td>${row.revenuePerAcre}</td>
-//                             <td>${row.revenuePerAcreAfterCostings}</td>
-//                             <td>
-//                               <input
-//                                 type="number"
-//                                 className="form-control form-control-sm"
-//                                 value={row.customForecastedPrice}
-//                                 onChange={(e) => handleTableInputChange(row.id, 'customForecastedPrice', e.target.value)}
-//                               />
-//                             </td>
-//                             <td>${row.customRevenuePerAcre}</td>
-//                             <td>${row.customRevenuePerAcreAfterCostings}</td>
-
-//                             {/* Red minus button to remove row */}
-//                             <td>
-//                               <button 
-//                                 type="button"
-//                                 className="btn btn-sm btn-danger"
-//                                 onClick={() => removeVarietyRow(row.id)}
-//                               >
-//                                 −
-//                               </button>
-//                             </td>
-//                           </tr>
-//                         ))}
-//                       </tbody>
-//                     </table>
-//                   </div>
-
-//                   {/* Button at the bottom to recalc all new varieties */}
-//                   <button 
-//                     type="button"
-//                     className="btn btn-info mt-2"
-//                     onClick={handleCalculateAllRows}
-//                   >
-//                     Calculate Forecast for All Rows
-//                   </button>
-//                 </div>
-//               </div>
-//             )}
-
-//             <hr />
-//             <div className="row">
-//               <div className="col-md-12">
-//                 <h2>Analytics: Forecasted Prices by Season</h2>
-//                 <canvas id="seasonPriceChart"></canvas>
-//               </div>
-//             </div>
-//           </div>
-//         </div>
-//       </div>
-//       <Footer />
-//     </div>
-//   );
-// }
-
-// export default AdminDashboard;
-
-
-
-
-
-
-
-
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import Chart from 'chart.js/auto';
@@ -829,10 +81,19 @@ function AdminDashboard() {
 
 
   // Custom totals for summary
-const [totalCustomRevenue, setTotalCustomRevenue] = useState('0');
-const [totalCustomCostings, setTotalCustomCostings] = useState('0');
-const [totalCustomNetMargin, setTotalCustomNetMargin] = useState('0');
+  const [totalCustomRevenue, setTotalCustomRevenue] = useState('0');
+  const [totalCustomCostings, setTotalCustomCostings] = useState('0');
+  const [totalCustomNetMargin, setTotalCustomNetMargin] = useState('0');
 
+
+  // for the commodity average table
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [source, setSource] = useState('both');
+  const [city, setCity] = useState('All cities');
+  const [priceData, setPriceData] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   // Chart instance
   const [chart, setChart] = useState(null);
@@ -1272,6 +533,36 @@ const [totalCustomNetMargin, setTotalCustomNetMargin] = useState('0');
     }
   }
   
+  const handleGenerate = async () => {
+    // Validate dates before sending
+    if (!startDate || !endDate) {
+        setError('Please select both start and end dates');
+        return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+        const response = await axios.get('/api/price_averages', {
+            params: {
+                start_date: startDate,
+                end_date: endDate,
+                source: source,
+                city: city
+            },
+    
+        });
+        
+        setPriceData(response.data.price_averages);
+    } catch (error) {
+        console.error('Error fetching price averages:', error.response ? error.response.data : error);
+        setError(error.response?.data?.error || 'An error occurred');
+    } finally {
+        setLoading(false);
+    }
+};
+
   
 
   return (
@@ -1658,6 +949,96 @@ const [totalCustomNetMargin, setTotalCustomNetMargin] = useState('0');
             </button>
 
             <hr />
+
+            {/* Commodity average prices generating table */}
+            <div className="commodity-prices-section">
+                <h2 className="text-center mt-4">Commodity Price Averages</h2>
+
+                {/* 🔹 Filters Section */}
+                <div className="filters-container">
+                  <div className="filter-group">
+                    <label>Start Date:</label>
+                    <input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      required
+                      className="form-control"
+                    />
+                  </div>
+
+                  <div className="filter-group">
+                    <label>End Date:</label>
+                    <input
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      required
+                      className="form-control"
+                    />
+                  </div>
+
+                  <div className="filter-group">
+                    <label>Source:</label>
+                    <select value={source} onChange={(e) => setSource(e.target.value)} className="form-control">
+                      <option value="both">Both</option>
+                      <option value="USDA">USDA</option>
+                      <option value="ProduceIQ">ProduceIQ</option>
+                    </select>
+                  </div>
+
+                  <div className="filter-group">
+                    <label>City:</label>
+                    <select value={city} onChange={(e) => setCity(e.target.value)} className="form-control">
+                      <option value="All cities">All Cities</option>
+                      <option value="New York">New York</option>
+                      <option value="Los Angeles">Los Angeles</option>
+                      <option value="Chicago">Chicago</option>
+                      <option value="Miami">Miami</option>
+                    </select>
+                  </div>
+
+                  <div className="filter-group">
+                    <button className="btn btn-primary generate-btn" onClick={handleGenerate} disabled={loading}>
+                      {loading ? 'Generating...' : 'Generate'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* 🔹 Error Message */}
+                {error && <div className="error-message">{error}</div>}
+
+                {/* 🔹 Commodity Prices Table */}
+                <div className="table-responsive">
+                  <table className="table table-bordered table-hover mt-3">
+                    <thead className="thead-dark">
+                      <tr>
+                        <th>Commodity</th>
+                        <th>Source</th>
+                        <th>Average Price ($)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {priceData.length > 0 ? (
+                        priceData.map((item, index) => (
+                          <tr key={index}>
+                            <td>{item.commodity}</td>
+                            <td>{item.source}</td>
+                            <td>${item.avg_price.toFixed(2)}</td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan="3" className="text-center">No data available</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+         <hr />
+
             <div className="row">
               <div className="col-md-12">
                 <h2>Analytics: Forecasted Prices by Season</h2>
