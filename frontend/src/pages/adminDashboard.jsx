@@ -991,14 +991,14 @@ function AdminDashboard() {
                   <label>City:</label>
                   <select value={city} onChange={(e) => setCity(e.target.value)} className="form-control">
                     <option value="All cities">All Cities</option>
-                    <option value="Baltimore">Baltimore</option>
-                    <option value="Boston">Boston</option>
-                    <option value="Chicago">Chicago</option>
-                    <option value="Columbia">Columbia</option>
-                    <option value="Los Angeles">Los Angeles</option>
-                    <option value="Miami">Miami</option>
-                    <option value="New York">New York</option>
-                    <option value="Philadelphia">Philadelphia</option>
+                    <option value="BALTIMORE">Baltimore</option>
+                    <option value="BOSTON">Boston</option>
+                    <option value="CHICAGO">Chicago</option>
+                    <option value="COLUMBIA">Columbia</option>
+                    <option value="LOS ANGELES">Los Angeles</option>
+                    <option value="MIAMI">Miami</option>
+                    <option value="NEW YORK">New York</option>
+                    <option value="PHILADELPHIA">Philadelphia</option>
                   </select>
                 </div>
 
