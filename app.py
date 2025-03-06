@@ -2248,6 +2248,12 @@ def api_best_sell_market():
 
 
 
+from flask import request, jsonify
+from sqlalchemy import func, and_, or_
+from sqlalchemy.sql import tuple_
+from pytz import timezone
+from datetime import datetime, timedelta
+
 @app.route("/api/most_recent_prices", methods=["GET"])
 def api_most_recent_prices():
     cities = [
@@ -2282,14 +2288,21 @@ def api_most_recent_prices():
 
     city_lower_map = {city.lower(): city for city in cities}
 
-    # ✅ FIX: Correct the `or_()` usage for filtering
-    city_filter_conditions = or_(
-        *[PriceData.city_name.ilike(city) for city in cities]
-    )
+    # ✅ Ensure cities filter does not break
+    if cities:
+        city_filter_conditions = or_(
+            *[PriceData.city_name.ilike(city) for city in cities]
+        )
+    else:
+        city_filter_conditions = True  # Acts as a no-op in filtering
 
-    date_filter_conditions = or_(
-        *[and_(PriceData.year == year, PriceData.day == day) for year, day in date_filters]
-    )
+    # ✅ Ensure date filter does not break
+    if date_filters:
+        date_filter_conditions = or_(
+            *[and_(PriceData.year == year, PriceData.day == day) for year, day in date_filters]
+        )
+    else:
+        date_filter_conditions = True  # Acts as a no-op in filtering
 
     subquery = (
         db.session.query(
@@ -2357,6 +2370,7 @@ def api_most_recent_prices():
                 recent_prices[original_commodity][original_city] = "-"
 
     return jsonify({"prices": recent_prices})
+
 
 
 
