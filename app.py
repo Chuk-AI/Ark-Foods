@@ -2311,8 +2311,8 @@ def api_most_recent_prices():
             PriceData.city_name,
             PriceData.year,
             PriceData.day,
-            func.avg(PriceData.price).label("avg_price")
-            .filter(PriceData.price > 0)
+            func.avg(func.nullif(PriceData.price, 0)).label("avg_price")
+
 
         )
         .filter(
