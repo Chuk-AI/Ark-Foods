@@ -10,8 +10,7 @@ from flask import (
     send_file,
 )
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import and_, or_, func, text, case, tuple_
-from sqlalchemy.sql import tuple_
+from sqlalchemy import and_, or_, func, text, case, true
 
 from flask_login import (
     LoginManager,
@@ -2248,11 +2247,7 @@ def api_best_sell_market():
 
 
 
-from flask import request, jsonify
-from sqlalchemy import func, and_, or_
-from sqlalchemy.sql import tuple_
-from pytz import timezone
-from datetime import datetime, timedelta
+
 
 @app.route("/api/most_recent_prices", methods=["GET"])
 def api_most_recent_prices():
@@ -2288,21 +2283,20 @@ def api_most_recent_prices():
 
     city_lower_map = {city.lower(): city for city in cities}
 
-    # ✅ Ensure cities filter does not break
+    # Fixed filter conditions using SQLAlchemy true()
     if cities:
         city_filter_conditions = or_(
             *[PriceData.city_name.ilike(city) for city in cities]
         )
     else:
-        city_filter_conditions = True  # Acts as a no-op in filtering
+        city_filter_conditions = true()
 
-    # ✅ Ensure date filter does not break
     if date_filters:
         date_filter_conditions = or_(
             *[and_(PriceData.year == year, PriceData.day == day) for year, day in date_filters]
         )
     else:
-        date_filter_conditions = True  # Acts as a no-op in filtering
+        date_filter_conditions = true()
 
     subquery = (
         db.session.query(
@@ -2314,10 +2308,10 @@ def api_most_recent_prices():
         )
         .filter(
             PriceData.commodity.in_(adjusted_commodities),
-            city_filter_conditions,  # ✅ Fix city filtering
-            date_filter_conditions,  # ✅ Fix date filtering
+            city_filter_conditions,
+            date_filter_conditions,
             PriceData.source.in_(valid_sources),
-            PriceData.price != 0  # ✅ Exclude zero prices
+            PriceData.price != 0
         )
         .group_by(
             PriceData.commodity,
@@ -2330,15 +2324,15 @@ def api_most_recent_prices():
 
     window_func = func.row_number().over(
         partition_by=[subquery.c.commodity, subquery.c.city_name],
-        order_by=[subquery.c.year.desc(), subquery.c.day.desc()],
-    )
+        order_by=[subquery.c.year.desc(), subquery.c.day.desc()]
+    ).label("rn")
 
     ranked_query = (
         db.session.query(
             subquery.c.commodity,
             subquery.c.city_name,
             subquery.c.avg_price,
-            window_func.label("rn"),
+            window_func
         )
         .subquery()
     )
