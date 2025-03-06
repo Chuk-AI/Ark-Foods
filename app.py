@@ -11,6 +11,7 @@ from flask import (
 )
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import and_, or_, func, text, case, tuple_
+from sqlalchemy.sql import tuple_
 
 from flask_login import (
     LoginManager,
@@ -2300,28 +2301,38 @@ def api_most_recent_prices():
     # Create a lookup map for city names (case-insensitive)
     city_lower_map = {city.lower(): city for city in cities}
 
-    # ---------------------------------------------------------------------
-    # Build a subquery that calculates the AVERAGE price for each commodity
-    # + city + year + day. Then we pick only the "latest" day among the last 7
-    # for each city/commodity.  BUT we exclude zero-priced rows from the average!
-    # ---------------------------------------------------------------------
+    # -----------------------------------------
+    # ✅ FIX 1: Replace `tuple_()` with explicit `or_()`
+    # -----------------------------------------
+    date_filter_conditions = or_(
+        and_(PriceData.year == year, PriceData.day == day)
+        for year, day in date_filters
+    )
+
+    # -----------------------------------------
+    # ✅ FIX 2: Ensure `city_name` filtering works correctly
+    # -----------------------------------------
+    city_filter_conditions = or_(
+        PriceData.city_name.ilike(city) for city in cities
+    )
+
+    # -----------------------------------------
+    # Build a subquery that calculates the AVERAGE price per commodity + city + year + day
+    # -----------------------------------------
     subquery = (
         db.session.query(
             PriceData.commodity,
             PriceData.city_name,
             PriceData.year,
             PriceData.day,
-            func.avg(func.nullif(PriceData.price, 0)).label("avg_price")
-
-
+            func.avg(func.nullif(PriceData.price, 0)).label("avg_price")  # ✅ Fix for zero filtering
         )
         .filter(
             PriceData.commodity.in_(adjusted_commodities),
-            func.lower(PriceData.city_name).in_([c.lower() for c in cities]),
-            tuple_(PriceData.year, PriceData.day).in_(date_filters),
+            city_filter_conditions,  # ✅ Fix city filtering
+            date_filter_conditions,  # ✅ Fix date filtering
             PriceData.source.in_(valid_sources),
-            # HERE is where we exclude 0-priced rows:
-            PriceData.price != 0
+            PriceData.price != 0  # ✅ Exclude zero prices
         )
         .group_by(
             PriceData.commodity,
