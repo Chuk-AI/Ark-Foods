@@ -2250,12 +2250,11 @@ from flask import Flask, request, jsonify
 from sqlalchemy import func, or_, and_, true, select, over
 from pytz import timezone
 
-# Assume that your Flask app, SQLAlchemy (db) and PriceData model are already configured
-app = Flask(__name__)
+# Assume your app, SQLAlchemy (db), and PriceData model are already configured
 
 @app.route("/api/most_recent_prices", methods=["GET"])
 def api_most_recent_prices():
-    # Define cities and commodities lists
+    # Define cities and commodities
     cities = [
         "Baltimore", "Boston", "Chicago", "Columbia",
         "Miami", "New York", "Philadelphia", "Los Angeles",
@@ -2271,7 +2270,7 @@ def api_most_recent_prices():
     else:
         valid_sources = [selected_source]
 
-    # Map commodities as needed
+    # Map commodities if needed
     commodity_map = {
         c: "Cubanelle" if (c == "Cubanelles" and selected_source == "USDA") else c
         for c in commodities
@@ -2279,7 +2278,7 @@ def api_most_recent_prices():
     reverse_commodity_map = {v: k for k, v in commodity_map.items()}
     adjusted_commodities = list(commodity_map.values())
 
-    # Create date filters for the past 7 days in US/Pacific timezone
+    # Create date filters for the past 7 days (US/Pacific timezone)
     tz = timezone("US/Pacific")
     seven_days_ago = datetime.now(tz) - timedelta(days=7)
     date_filters = [
@@ -2304,7 +2303,8 @@ def api_most_recent_prices():
     else:
         date_filter_conditions = true()
 
-    # Create the first CTE: aggregate average prices grouped by commodity, city, year, and day.
+    # --- First CTE: Aggregate average prices ---
+    # This CTE is named "price_subquery" and groups by commodity, city, year, and day.
     price_subquery_cte = (
         db.session.query(
             PriceData.commodity,
@@ -2328,14 +2328,14 @@ def api_most_recent_prices():
         )
     ).cte("price_subquery")
 
-    # Create a window function to rank rows (most recent first) per commodity and city.
+    # --- Second CTE: Apply window function to rank prices ---
+    # The window function orders each commodity/city group by year and day (latest first).
     window = over(
         func.row_number(),
         partition_by=[price_subquery_cte.c.commodity, price_subquery_cte.c.city_name],
         order_by=[price_subquery_cte.c.year.desc(), price_subquery_cte.c.day.desc()]
     )
 
-    # Build a second CTE that applies the window function.
     ranked_prices_cte = (
         select(
             price_subquery_cte.c.commodity,
@@ -2345,7 +2345,8 @@ def api_most_recent_prices():
         )
     ).cte("ranked_prices")
 
-    # Final query: select only the rows with rn = 1 (i.e. the most recent prices)
+    # --- Final Query ---
+    # Attach the parent CTE ("price_subquery") explicitly to the final query.
     final_query = (
         select(
             ranked_prices_cte.c.commodity,
@@ -2353,11 +2354,12 @@ def api_most_recent_prices():
             ranked_prices_cte.c.avg_price
         )
         .where(ranked_prices_cte.c.rn == 1)
+        .with_cte(price_subquery_cte)  # This ensures "price_subquery" is included
     )
 
     results = db.session.execute(final_query).all()
 
-    # Build the recent_prices dictionary using original commodity names and city names.
+    # Build the dictionary for recent prices, using original commodity and city names.
     recent_prices = {
         commodity: {city: "-" for city in cities}
         for commodity in commodities
@@ -2371,7 +2373,6 @@ def api_most_recent_prices():
             recent_prices[original_commodity][original_city] = float(row.avg_price) if row.avg_price is not None else "-"
 
     return jsonify({"prices": recent_prices})
-
 
 
 
