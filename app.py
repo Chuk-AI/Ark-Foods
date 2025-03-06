@@ -10,7 +10,7 @@ from flask import (
     send_file,
 )
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import and_, or_, func, text, case
+from sqlalchemy import and_, or_, func, text, case, tuple_
 
 from flask_login import (
     LoginManager,
