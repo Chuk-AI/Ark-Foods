@@ -2350,7 +2350,7 @@ def api_most_recent_prices():
             ranked_query.c.city_name,
             ranked_query.c.avg_price
         )
-        .filter(ranked_query.c.rn == 1)
+        .where(ranked_query.c.rn == 1)  # Use .where() instead of .filter() for subquery columns
         .all()
     )
 
