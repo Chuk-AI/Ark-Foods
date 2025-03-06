@@ -2247,8 +2247,6 @@ def api_best_sell_market():
 
 
 
-
-
 @app.route("/api/most_recent_prices", methods=["GET"])
 def api_most_recent_prices():
     cities = [
@@ -2322,37 +2320,27 @@ def api_most_recent_prices():
         .subquery(name='price_subquery')
     )
 
-    # Fixed window function using explicit column references
-    window = (
-        func.row_number()
-        .over(
-            partition_by=[subquery.c.commodity, subquery.c.city_name],
-            order_by=[subquery.c.year.desc(), subquery.c.day.desc()]
-        )
-        .label('rn')
-    )
+    # Using SQLAlchemy raw SQL to avoid ORM issues
+    from sqlalchemy import text
 
-    # Fixed ranked query structure
-    ranked_query = (
-        db.session.query(
-            subquery.c.commodity,
-            subquery.c.city_name,
-            subquery.c.avg_price,
-            window
-        )
-        .subquery(name='ranked_prices')
+    sql = text("""
+    WITH ranked_prices AS (
+        SELECT 
+            commodity, 
+            city_name, 
+            avg_price,
+            ROW_NUMBER() OVER (PARTITION BY commodity, city_name ORDER BY year DESC, day DESC) as rn
+        FROM price_subquery
     )
+    SELECT 
+        commodity, 
+        city_name, 
+        avg_price
+    FROM ranked_prices
+    WHERE rn = 1
+    """)
 
-    # Fixed final query with explicit column selection
-    results = (
-        db.session.query(
-            ranked_query.c.commodity,
-            ranked_query.c.city_name,
-            ranked_query.c.avg_price
-        )
-        .where(ranked_query.c.rn == 1)  # Use .where() instead of .filter() for subquery columns
-        .all()
-    )
+    results = db.session.execute(sql).all()
 
     recent_prices = {
         commodity: {city: "-" for city in cities}
@@ -2371,8 +2359,6 @@ def api_most_recent_prices():
                 recent_prices[original_commodity][original_city] = "-"
 
     return jsonify({"prices": recent_prices})
-
-
 
 
 
