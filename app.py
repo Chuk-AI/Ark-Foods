@@ -2251,38 +2251,21 @@ def api_best_sell_market():
 @app.route("/api/most_recent_prices", methods=["GET"])
 def api_most_recent_prices():
     cities = [
-        "Baltimore",
-        "Boston",
-        "Chicago",
-        "Columbia",
-        "Miami",
-        "New York",
-        "Philadelphia",
-        "Los Angeles",
+        "Baltimore", "Boston", "Chicago", "Columbia",
+        "Miami", "New York", "Philadelphia", "Los Angeles",
     ]
     commodities = [
-        "Anaheim",
-        "Cubanelles",
-        "Fresno",
-        "Habanero",
-        "Hungarian Wax",
-        "Jalapeno",
-        "Long Hot",
-        "Poblano",
-        "Serrano",
-        "Shishito",
+        "Anaheim", "Cubanelles", "Fresno", "Habanero", "Hungarian Wax",
+        "Jalapeno", "Long Hot", "Poblano", "Serrano", "Shishito",
     ]
 
-    # 1) Read the user-selected source from the query parameter
     selected_source = request.args.get("source", "USDA")
 
-    # 2) Decide which sources to include in the query
     if selected_source == "Both":
         valid_sources = ["USDA", "ProduceIQ"]
     else:
         valid_sources = [selected_source]
 
-    # 3) Handle the "Cubanelle" vs "Cubanelles" name difference for USDA
     commodity_map = {
         c: "Cubanelle" if (c == "Cubanelles" and selected_source == "USDA") else c
         for c in commodities
@@ -2290,7 +2273,6 @@ def api_most_recent_prices():
     reverse_commodity_map = {v: k for k, v in commodity_map.items()}
     adjusted_commodities = list(commodity_map.values())
 
-    # Generate date filters for the last 7 days
     tz = timezone("US/Pacific")
     seven_days_ago = datetime.now(tz) - timedelta(days=7)
     date_filters = [
@@ -2298,36 +2280,24 @@ def api_most_recent_prices():
         for d in [seven_days_ago + timedelta(days=i) for i in range(7)]
     ]
 
-    # Create a lookup map for city names (case-insensitive)
     city_lower_map = {city.lower(): city for city in cities}
 
-    # -----------------------------------------
-    # ✅ FIX 1: Replace `tuple_()` with explicit `or_()`
-    # -----------------------------------------
-    date_filter_conditions = or_(
-        and_(PriceData.year == year, PriceData.day == day)
-        for year, day in date_filters
+    # ✅ FIX: Correct the `or_()` usage for filtering
+    city_filter_conditions = or_(
+        *[PriceData.city_name.ilike(city) for city in cities]
     )
 
-    # -----------------------------------------
-    # ✅ FIX 2: Ensure `city_name` filtering works correctly
-    # -----------------------------------------
-  
-    city_filter_conditions = or_(
-    *[PriceData.city_name.ilike(city) for city in cities]  # ✅ Fix applied
-)
+    date_filter_conditions = or_(
+        *[and_(PriceData.year == year, PriceData.day == day) for year, day in date_filters]
+    )
 
-
-    # -----------------------------------------
-    # Build a subquery that calculates the AVERAGE price per commodity + city + year + day
-    # -----------------------------------------
     subquery = (
         db.session.query(
             PriceData.commodity,
             PriceData.city_name,
             PriceData.year,
             PriceData.day,
-            func.avg(func.nullif(PriceData.price, 0)).label("avg_price")  # ✅ Fix for zero filtering
+            func.avg(func.nullif(PriceData.price, 0)).label("avg_price")
         )
         .filter(
             PriceData.commodity.in_(adjusted_commodities),
@@ -2345,7 +2315,6 @@ def api_most_recent_prices():
         .subquery()
     )
 
-    # Window function to pick the row with the "latest" day per commodity + city.
     window_func = func.row_number().over(
         partition_by=[subquery.c.commodity, subquery.c.city_name],
         order_by=[subquery.c.year.desc(), subquery.c.day.desc()],
@@ -2361,7 +2330,6 @@ def api_most_recent_prices():
         .subquery()
     )
 
-    # Now pick only the row_number == 1 (the "latest" day) for each commodity/city
     results = (
         db.session.query(
             ranked_query.c.commodity,
@@ -2372,13 +2340,11 @@ def api_most_recent_prices():
         .all()
     )
 
-    # Initialize the response structure
     recent_prices = {
         commodity: {city: "-" for city in cities}
         for commodity in commodities
     }
 
-    # Update with actual results
     for row in results:
         original_commodity = reverse_commodity_map.get(row.commodity, row.commodity)
         normalized_city = row.city_name.lower()
@@ -2391,6 +2357,7 @@ def api_most_recent_prices():
                 recent_prices[original_commodity][original_city] = "-"
 
     return jsonify({"prices": recent_prices})
+
 
 
 
