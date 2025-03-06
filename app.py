@@ -2312,9 +2312,11 @@ def api_most_recent_prices():
     # -----------------------------------------
     # ✅ FIX 2: Ensure `city_name` filtering works correctly
     # -----------------------------------------
+  
     city_filter_conditions = or_(
-        PriceData.city_name.ilike(city) for city in cities
-    )
+    *[PriceData.city_name.ilike(city) for city in cities]  # ✅ Fix applied
+)
+
 
     # -----------------------------------------
     # Build a subquery that calculates the AVERAGE price per commodity + city + year + day
