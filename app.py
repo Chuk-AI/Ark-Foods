@@ -2245,134 +2245,134 @@ def api_best_sell_market():
 
 
 
-# from datetime import datetime, timedelta
-# from flask import Flask, request, jsonify
-# from sqlalchemy import func, or_, and_, true, select, over
-# from pytz import timezone
+from datetime import datetime, timedelta
+from flask import Flask, request, jsonify
+from sqlalchemy import func, or_, and_, true, select, over
+from pytz import timezone
 
-# # Assume your app, SQLAlchemy (db), and PriceData model are already configured
+# Assume your app, SQLAlchemy (db), and PriceData model are already configured
 
-# @app.route("/api/most_recent_prices", methods=["GET"])
-# def api_most_recent_prices():
-#     # Define cities and commodities
-#     cities = [
-#         "Baltimore", "Boston", "Chicago", "Columbia",
-#         "Miami", "New York", "Philadelphia", "Los Angeles",
-#     ]
-#     commodities = [
-#         "Anaheim", "Cubanelles", "Fresno", "Habanero", "Hungarian Wax",
-#         "Jalapeno", "Long Hot", "Poblano", "Serrano", "Shishito",
-#     ]
+@app.route("/api/most_recent_prices", methods=["GET"])
+def api_most_recent_prices():
+    # Define cities and commodities
+    cities = [
+        "Baltimore", "Boston", "Chicago", "Columbia",
+        "Miami", "New York", "Philadelphia", "Los Angeles",
+    ]
+    commodities = [
+        "Anaheim", "Cubanelles", "Fresno", "Habanero", "Hungarian Wax",
+        "Jalapeno", "Long Hot", "Poblano", "Serrano", "Shishito",
+    ]
 
-#     selected_source = request.args.get("source", "USDA")
-#     if selected_source == "Both":
-#         valid_sources = ["USDA", "ProduceIQ"]
-#     else:
-#         valid_sources = [selected_source]
+    selected_source = request.args.get("source", "USDA")
+    if selected_source == "Both":
+        valid_sources = ["USDA", "ProduceIQ"]
+    else:
+        valid_sources = [selected_source]
 
-#     # Map commodities if needed
-#     commodity_map = {
-#         c: "Cubanelle" if (c == "Cubanelles" and selected_source == "USDA") else c
-#         for c in commodities
-#     }
-#     reverse_commodity_map = {v: k for k, v in commodity_map.items()}
-#     adjusted_commodities = list(commodity_map.values())
+    # Map commodities if needed
+    commodity_map = {
+        c: "Cubanelle" if (c == "Cubanelles" and selected_source == "USDA") else c
+        for c in commodities
+    }
+    reverse_commodity_map = {v: k for k, v in commodity_map.items()}
+    adjusted_commodities = list(commodity_map.values())
 
-#     # Create date filters for the past 7 days (US/Pacific timezone)
-#     tz = timezone("US/Pacific")
-#     seven_days_ago = datetime.now(tz) - timedelta(days=7)
-#     date_filters = [
-#         (d.year, d.timetuple().tm_yday)
-#         for d in [seven_days_ago + timedelta(days=i) for i in range(7)]
-#     ]
+    # Create date filters for the past 7 days (US/Pacific timezone)
+    tz = timezone("US/Pacific")
+    seven_days_ago = datetime.now(tz) - timedelta(days=7)
+    date_filters = [
+        (d.year, d.timetuple().tm_yday)
+        for d in [seven_days_ago + timedelta(days=i) for i in range(7)]
+    ]
 
-#     city_lower_map = {city.lower(): city for city in cities}
+    city_lower_map = {city.lower(): city for city in cities}
 
-#     # Build filter conditions for cities and dates
-#     if cities:
-#         city_filter_conditions = or_(
-#             *[PriceData.city_name.ilike(city) for city in cities]
-#         )
-#     else:
-#         city_filter_conditions = true()
+    # Build filter conditions for cities and dates
+    if cities:
+        city_filter_conditions = or_(
+            *[PriceData.city_name.ilike(city) for city in cities]
+        )
+    else:
+        city_filter_conditions = true()
 
-#     if date_filters:
-#         date_filter_conditions = or_(
-#             *[and_(PriceData.year == year, PriceData.day == day) for year, day in date_filters]
-#         )
-#     else:
-#         date_filter_conditions = true()
+    if date_filters:
+        date_filter_conditions = or_(
+            *[and_(PriceData.year == year, PriceData.day == day) for year, day in date_filters]
+        )
+    else:
+        date_filter_conditions = true()
 
-#     # --- First CTE: Aggregate average prices ---
-#     # This CTE is named "price_subquery" and groups by commodity, city, year, and day.
-#     price_subquery_cte = (
-#         db.session.query(
-#             PriceData.commodity,
-#             PriceData.city_name,
-#             PriceData.year,
-#             PriceData.day,
-#             func.avg(func.nullif(PriceData.price, 0)).label("avg_price")
-#         )
-#         .filter(
-#             PriceData.commodity.in_(adjusted_commodities),
-#             city_filter_conditions,
-#             date_filter_conditions,
-#             PriceData.source.in_(valid_sources),
-#             PriceData.price != 0
-#         )
-#         .group_by(
-#             PriceData.commodity,
-#             PriceData.city_name,
-#             PriceData.year,
-#             PriceData.day,
-#         )
-#     ).cte("price_subquery")
+    # --- First CTE: Aggregate average prices ---
+    # This CTE is named "price_subquery" and groups by commodity, city, year, and day.
+    price_subquery_cte = (
+        db.session.query(
+            PriceData.commodity,
+            PriceData.city_name,
+            PriceData.year,
+            PriceData.day,
+            func.avg(func.nullif(PriceData.price, 0)).label("avg_price")
+        )
+        .filter(
+            PriceData.commodity.in_(adjusted_commodities),
+            city_filter_conditions,
+            date_filter_conditions,
+            PriceData.source.in_(valid_sources),
+            PriceData.price != 0
+        )
+        .group_by(
+            PriceData.commodity,
+            PriceData.city_name,
+            PriceData.year,
+            PriceData.day,
+        )
+    ).cte("price_subquery")
 
-#     # --- Second CTE: Apply window function to rank prices ---
-#     # The window function orders each commodity/city group by year and day (latest first).
-#     window = over(
-#         func.row_number(),
-#         partition_by=[price_subquery_cte.c.commodity, price_subquery_cte.c.city_name],
-#         order_by=[price_subquery_cte.c.year.desc(), price_subquery_cte.c.day.desc()]
-#     )
+    # --- Second CTE: Apply window function to rank prices ---
+    # The window function orders each commodity/city group by year and day (latest first).
+    window = over(
+        func.row_number(),
+        partition_by=[price_subquery_cte.c.commodity, price_subquery_cte.c.city_name],
+        order_by=[price_subquery_cte.c.year.desc(), price_subquery_cte.c.day.desc()]
+    )
 
-#     ranked_prices_cte = (
-#         select(
-#             price_subquery_cte.c.commodity,
-#             price_subquery_cte.c.city_name,
-#             price_subquery_cte.c.avg_price,
-#             window.label('rn')
-#         )
-#     ).cte("ranked_prices")
+    ranked_prices_cte = (
+        select(
+            price_subquery_cte.c.commodity,
+            price_subquery_cte.c.city_name,
+            price_subquery_cte.c.avg_price,
+            window.label('rn')
+        )
+    ).cte("ranked_prices")
 
-#     # --- Final Query ---
-#     # Attach the parent CTE ("price_subquery") explicitly to the final query.
-#     final_query = (
-#         select(
-#             ranked_prices_cte.c.commodity,
-#             ranked_prices_cte.c.city_name,
-#             ranked_prices_cte.c.avg_price
-#         )
-#         .where(ranked_prices_cte.c.rn == 1)
-#         .with_cte(price_subquery_cte)  # This ensures "price_subquery" is included
-#     )
+    # --- Final Query ---
+    # Attach the parent CTE ("price_subquery") explicitly to the final query.
+    final_query = (
+        select(
+            ranked_prices_cte.c.commodity,
+            ranked_prices_cte.c.city_name,
+            ranked_prices_cte.c.avg_price
+        )
+        .where(ranked_prices_cte.c.rn == 1)
+        .with_cte(price_subquery_cte)  # This ensures "price_subquery" is included
+    )
 
-#     results = db.session.execute(final_query).all()
+    results = db.session.execute(final_query).all()
 
-#     # Build the dictionary for recent prices, using original commodity and city names.
-#     recent_prices = {
-#         commodity: {city: "-" for city in cities}
-#         for commodity in commodities
-#     }
+    # Build the dictionary for recent prices, using original commodity and city names.
+    recent_prices = {
+        commodity: {city: "-" for city in cities}
+        for commodity in commodities
+    }
 
-#     for row in results:
-#         original_commodity = reverse_commodity_map.get(row.commodity, row.commodity)
-#         normalized_city = row.city_name.lower()
-#         original_city = city_lower_map.get(normalized_city)
-#         if original_city and original_commodity in recent_prices:
-#             recent_prices[original_commodity][original_city] = float(row.avg_price) if row.avg_price is not None else "-"
+    for row in results:
+        original_commodity = reverse_commodity_map.get(row.commodity, row.commodity)
+        normalized_city = row.city_name.lower()
+        original_city = city_lower_map.get(normalized_city)
+        if original_city and original_commodity in recent_prices:
+            recent_prices[original_commodity][original_city] = float(row.avg_price) if row.avg_price is not None else "-"
 
-#     return jsonify({"prices": recent_prices})
+    return jsonify({"prices": recent_prices})
 
 
 
