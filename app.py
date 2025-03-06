@@ -2245,8 +2245,6 @@ def api_best_sell_market():
 
 
 
-
-
 @app.route("/api/most_recent_prices", methods=["GET"])
 def api_most_recent_prices():
     cities = [
@@ -2296,6 +2294,7 @@ def api_most_recent_prices():
     else:
         date_filter_conditions = true()
 
+    # Use SQLAlchemy's SQL expression language instead of raw SQL
     subquery = (
         db.session.query(
             PriceData.commodity,
@@ -2317,30 +2316,43 @@ def api_most_recent_prices():
             PriceData.year,
             PriceData.day,
         )
-        .subquery(name='price_subquery')
+        .subquery()
     )
 
-    # Using SQLAlchemy raw SQL to avoid ORM issues
-    from sqlalchemy import text
+    # Use the subquery directly in a query instead of using raw SQL with text()
+    from sqlalchemy import select, over, func
 
-    sql = text("""
-    WITH ranked_prices AS (
-        SELECT 
-            commodity, 
-            city_name, 
-            avg_price,
-            ROW_NUMBER() OVER (PARTITION BY commodity, city_name ORDER BY year DESC, day DESC) as rn
-        FROM price_subquery
+    # Create a window function for row_number
+    window = over(
+        func.row_number(),
+        partition_by=[subquery.c.commodity, subquery.c.city_name],
+        order_by=[subquery.c.year.desc(), subquery.c.day.desc()]
     )
-    SELECT 
-        commodity, 
-        city_name, 
-        avg_price
-    FROM ranked_prices
-    WHERE rn = 1
-    """)
 
-    results = db.session.execute(sql).all()
+    # Build the main query with the window function
+    query = (
+        select(
+            subquery.c.commodity,
+            subquery.c.city_name,
+            subquery.c.avg_price,
+            window.label('rn')
+        )
+        .select_from(subquery)
+        .alias('ranked_prices')
+    )
+
+    # Select from the CTE where rn = 1
+    final_query = (
+        select(
+            query.c.commodity,
+            query.c.city_name,
+            query.c.avg_price
+        )
+        .select_from(query)
+        .where(query.c.rn == 1)
+    )
+
+    results = db.session.execute(final_query).all()
 
     recent_prices = {
         commodity: {city: "-" for city in cities}
