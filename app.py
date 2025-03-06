@@ -2250,12 +2250,12 @@ from flask import Flask, request, jsonify
 from sqlalchemy import func, or_, and_, true, select, over
 from pytz import timezone
 
-
-# Assuming you have already configured your SQLAlchemy "db" and imported your PriceData model
+# Assume that your Flask app, SQLAlchemy (db) and PriceData model are already configured
+app = Flask(__name__)
 
 @app.route("/api/most_recent_prices", methods=["GET"])
 def api_most_recent_prices():
-    # Define the cities and commodities
+    # Define cities and commodities lists
     cities = [
         "Baltimore", "Boston", "Chicago", "Columbia",
         "Miami", "New York", "Philadelphia", "Los Angeles",
@@ -2271,7 +2271,7 @@ def api_most_recent_prices():
     else:
         valid_sources = [selected_source]
 
-    # Map commodities if needed
+    # Map commodities as needed
     commodity_map = {
         c: "Cubanelle" if (c == "Cubanelles" and selected_source == "USDA") else c
         for c in commodities
@@ -2289,7 +2289,7 @@ def api_most_recent_prices():
 
     city_lower_map = {city.lower(): city for city in cities}
 
-    # Build filter conditions using SQLAlchemy's expressions
+    # Build filter conditions for cities and dates
     if cities:
         city_filter_conditions = or_(
             *[PriceData.city_name.ilike(city) for city in cities]
@@ -2304,9 +2304,8 @@ def api_most_recent_prices():
     else:
         date_filter_conditions = true()
 
-    # Build the subquery that aggregates average prices.
-    # Explicitly name the subquery so that it can be referenced properly in the SQL.
-    subquery = (
+    # Create the first CTE: aggregate average prices grouped by commodity, city, year, and day.
+    price_subquery_cte = (
         db.session.query(
             PriceData.commodity,
             PriceData.city_name,
@@ -2327,28 +2326,26 @@ def api_most_recent_prices():
             PriceData.year,
             PriceData.day,
         )
-        .subquery("price_subquery")  # Explicit subquery name
-    )
+    ).cte("price_subquery")
 
-    # Create a window function to rank rows per commodity and city by the latest date
+    # Create a window function to rank rows (most recent first) per commodity and city.
     window = over(
         func.row_number(),
-        partition_by=[subquery.c.commodity, subquery.c.city_name],
-        order_by=[subquery.c.year.desc(), subquery.c.day.desc()]
+        partition_by=[price_subquery_cte.c.commodity, price_subquery_cte.c.city_name],
+        order_by=[price_subquery_cte.c.year.desc(), price_subquery_cte.c.day.desc()]
     )
 
-    # Build the main query, and convert it to a CTE (common table expression)
+    # Build a second CTE that applies the window function.
     ranked_prices_cte = (
         select(
-            subquery.c.commodity,
-            subquery.c.city_name,
-            subquery.c.avg_price,
+            price_subquery_cte.c.commodity,
+            price_subquery_cte.c.city_name,
+            price_subquery_cte.c.avg_price,
             window.label('rn')
         )
-        .select_from(subquery)
     ).cte("ranked_prices")
 
-    # Select only the rows with rn = 1 from the CTE
+    # Final query: select only the rows with rn = 1 (i.e. the most recent prices)
     final_query = (
         select(
             ranked_prices_cte.c.commodity,
@@ -2360,7 +2357,7 @@ def api_most_recent_prices():
 
     results = db.session.execute(final_query).all()
 
-    # Build the recent_prices dictionary, using the original commodity names and cities.
+    # Build the recent_prices dictionary using original commodity names and city names.
     recent_prices = {
         commodity: {city: "-" for city in cities}
         for commodity in commodities
@@ -2371,10 +2368,7 @@ def api_most_recent_prices():
         normalized_city = row.city_name.lower()
         original_city = city_lower_map.get(normalized_city)
         if original_city and original_commodity in recent_prices:
-            if row.avg_price is not None:
-                recent_prices[original_commodity][original_city] = float(row.avg_price)
-            else:
-                recent_prices[original_commodity][original_city] = "-"
+            recent_prices[original_commodity][original_city] = float(row.avg_price) if row.avg_price is not None else "-"
 
     return jsonify({"prices": recent_prices})
 
