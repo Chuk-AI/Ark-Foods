@@ -2319,29 +2319,36 @@ def api_most_recent_prices():
             PriceData.year,
             PriceData.day,
         )
-        .subquery()
+        .subquery(name='price_subquery')
     )
 
-    window_func = func.row_number().over(
-        partition_by=[subquery.c.commodity, subquery.c.city_name],
-        order_by=[subquery.c.year.desc(), subquery.c.day.desc()]
-    ).label("rn")
+    # Fixed window function using explicit column references
+    window = (
+        func.row_number()
+        .over(
+            partition_by=[subquery.c.commodity, subquery.c.city_name],
+            order_by=[subquery.c.year.desc(), subquery.c.day.desc()]
+        )
+        .label('rn')
+    )
 
+    # Fixed ranked query structure
     ranked_query = (
         db.session.query(
             subquery.c.commodity,
             subquery.c.city_name,
             subquery.c.avg_price,
-            window_func
+            window
         )
-        .subquery()
+        .subquery(name='ranked_prices')
     )
 
+    # Fixed final query with explicit column selection
     results = (
         db.session.query(
             ranked_query.c.commodity,
             ranked_query.c.city_name,
-            ranked_query.c.avg_price,
+            ranked_query.c.avg_price
         )
         .filter(ranked_query.c.rn == 1)
         .all()
