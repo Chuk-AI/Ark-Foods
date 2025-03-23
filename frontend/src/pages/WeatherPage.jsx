@@ -12,9 +12,11 @@ const WeatherPage = () => {
     const precipChartRef = useRef(null);
     const tempChartRef = useRef(null);
     const ensembleChartRef = useRef(null);
+    const [alphabet, setAlphabet] = useState("A")
 
 
- 
+
+
   return (
     <div>
         <Header/>
@@ -33,6 +35,8 @@ const WeatherPage = () => {
           tempChartRef={tempChartRef}
         />
       </div>
+
+
         <Footer/>
     </div>
   )

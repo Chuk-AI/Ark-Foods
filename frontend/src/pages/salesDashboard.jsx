@@ -5,12 +5,12 @@ import 'chartjs-adapter-moment';
 import 'chartjs-adapter-luxon';
 import L from 'leaflet'; // For Leaflet maps
 import 'leaflet/dist/leaflet.css';
-import XLSX from 'xlsx'; // For handling Excel files
 import moment from 'moment'; // For date-time handling
 import { useEffect, useState, useRef } from 'react';
 import Header from '../components/header';
 import Footer from '../components/footer';
 import '../styles/sales_styles.css';
+import * as XLSX from 'xlsx';
 
 
 function SalesDashboard() {
@@ -44,6 +44,7 @@ function SalesDashboard() {
   const [historicalChart, setHistoricalChart] = useState(null);
 
   const [shippingPointPriceChart, setShippingPointPriceChart] = useState(null);
+  const [historicalData, setHistoricalData] = useState(null);
 
   const [filterState, setFilterState] = useState({
     commodity: 'Anaheim',
@@ -457,6 +458,49 @@ function SalesDashboard() {
     bestSellChartRef.current.chart = newChart; // Save chart instance for cleanup
   };
 
+
+  const handleDownload = () => {
+    // Trigger download of the chart image
+    handleDownloadChart();
+  
+    // Trigger download of the Excel data
+    handleDownloadExcel();
+  };
+  
+
+  const handleDownloadExcel = () => {
+    if (!historicalData) {
+      alert("No historical data available to download.");
+      return;
+    }
+  
+    const { labels, datasets } = historicalData;
+    // Create a header row: first column is Date then one column per dataset label
+    const headerRow = ["Date", ...datasets.map(ds => ds.label)];
+    
+    // Build rows for each date
+    const dataRows = labels.map((date, index) => {
+      const row = [date];
+      datasets.forEach(ds => {
+        // Each dataset's value for the date is at the same index as in labels
+        row.push(ds.data[index]);
+      });
+      return row;
+    });
+  
+    // Combine header and data
+    const worksheetData = [headerRow, ...dataRows];
+  
+    // Generate worksheet and workbook using XLSX
+    const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Historical Data");
+  
+    // Trigger file download
+    XLSX.writeFile(workbook, "historical_data.xlsx");
+  };
+  
+
   // Handle Apply Filters Button
   const handleApplyBestSellFilters = () => {
     setAppliedFilters(filterState); // Update applied filters
@@ -757,6 +801,7 @@ const handleApplyMostRecentFilters = () => {
       }
 
       const data = await response.json();
+      setHistoricalData(data); // Save data for export
       updateHistoricalChart(data);
     } catch (error) {}
   };
@@ -1567,9 +1612,11 @@ const handleApplyMostRecentFilters = () => {
                       </div>
                       <div className="card-body ">
                         <canvas id="historicalChart" ref={historicalChartRef} width="400" height="400"></canvas>
-                        <button className="btn btn-primary mt-3" onClick={handleDownloadChart}>
+                        <button className="btn btn-primary mt-3" onClick={handleDownload}>
                           Download Chart & Data
                         </button>
+                        
+
                       </div>
                     </div>
                   </div>
