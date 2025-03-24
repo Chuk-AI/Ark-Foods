@@ -85,7 +85,6 @@ from flask import request, make_response
 
 
 
-
 # Configuration for Logging
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -788,11 +787,12 @@ def fetch_daily_data():
                     # Map back to the desired format
                     variety_name = standardized_name.get(variety_name, variety_name)
 
-                    city_name = item.get("terminalMarketCityName")
+                    city_name = item.get("terminalMarketCityName", "").strip().lower().title()
                     year = item.get("isoYear")
                     day_of_year = item.get("day")
                     price = item.get("price")
                     source = "ProduceIQ"
+
 
                     # Calculate the season based on the month
                     month = (
@@ -1831,6 +1831,36 @@ class LoginForm(FlaskForm):
     submit = SubmitField("Login")
 
 
+
+
+
+
+@app.route("/api/normalize_price_data")
+def normalize_price_data():
+    try:
+        records = PriceData.query.all()
+        updated = 0
+
+        for record in records:
+            original_city = record.city_name
+            original_commodity = record.commodity
+
+            normalized_city = original_city.strip().lower().title()
+            normalized_commodity = original_commodity.strip().lower().title()
+
+            if original_city != normalized_city or original_commodity != normalized_commodity:
+                record.city_name = normalized_city
+                record.commodity = normalized_commodity
+                updated += 1
+
+        db.session.commit()
+        return jsonify({"status": "success", "updated_records": updated})
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
 # Home page
 @app.route("/api/")
 # @jwt_required()
@@ -2391,37 +2421,32 @@ def historical_data():
         )
         avg_cities = request.args.get("averageCities", "false").lower() == "true"
 
-        # Debug: Log received parameters
         app.logger.info(f"Commodities: {commodities}")
         app.logger.info(f"Cities: {cities}")
         app.logger.info(f"Start Date: {start_date}, End Date: {end_date}")
         app.logger.info(f"Avg Commodities: {avg_commodities}, Avg Cities: {avg_cities}")
 
-        # Standardize Cubanelles based on source
+        # Standardize Cubanelles
         standardized_commodities = [
             "Cubanelle" if commodity.lower().startswith("cubanelle") else commodity
             for commodity in commodities
         ]
 
-        # Convert dates
         start_dt = datetime.strptime(start_date, "%Y-%m-%d")
         end_dt = datetime.strptime(end_date, "%Y-%m-%d")
 
-        # Calculate day of year for both dates
         start_day = start_dt.timetuple().tm_yday
         end_day = end_dt.timetuple().tm_yday
 
-        # Debug: Log date range
         app.logger.info(f"Start Day: {start_day}, End Day: {end_day}")
 
-        # Query the database with proper date filtering and restrict to source 'USDA'
+        # Case-insensitive filter for commodity and city name
         query = PriceData.query.filter(
-            PriceData.commodity.in_(standardized_commodities),
+            func.upper(PriceData.commodity).in_([c.upper() for c in standardized_commodities]),
             func.upper(PriceData.city_name).in_([city.upper() for city in cities]),
             PriceData.source == "USDA",
         )
 
-        # Add year-specific conditions
         if start_dt.year == end_dt.year:
             query = query.filter(
                 PriceData.year == start_dt.year,
@@ -2439,17 +2464,14 @@ def historical_data():
         query = query.order_by(PriceData.year.asc(), PriceData.day.asc())
         data = query.all()
 
-        # Debug: Log raw query results
         app.logger.info(f"Query Results: {len(data)} records fetched.")
 
         if not data:
             return jsonify({"labels": [], "datasets": []}), 200
 
-        # Process data with dates we actually have
         price_series = {}
         all_dates = set()
 
-        # Group data based on averaging preferences
         for entry in data:
             entry_date = datetime(entry.year, 1, 1) + timedelta(days=entry.day - 1)
 
@@ -2462,17 +2484,19 @@ def historical_data():
             display_commodity = (
                 "Cubanelles"
                 if entry.commodity.lower().startswith("cubanelle")
-                else entry.commodity
+                else entry.commodity.strip().title()
             )
+            display_city = entry.city_name.strip().lower().title()
+
 
             if avg_commodities and avg_cities:
                 series_key = "Average Price"
             elif avg_commodities:
-                series_key = entry.city_name
+                series_key = display_city
             elif avg_cities:
                 series_key = display_commodity
             else:
-                series_key = f"{display_commodity} - {entry.city_name}"
+                series_key = f"{display_commodity} - {display_city}"
 
             if series_key not in price_series:
                 price_series[series_key] = {}
@@ -2483,13 +2507,9 @@ def historical_data():
             price_series[series_key][date_str]["sum"] += entry.price
             price_series[series_key][date_str]["count"] += 1
 
-        # Debug: Log processed series
         app.logger.info(f"Price Series: {price_series}")
 
-        # Sort dates
         sorted_dates = sorted(list(all_dates))
-
-        # Create datasets for each series
         colors = ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40"]
         datasets = []
 
@@ -2511,11 +2531,9 @@ def historical_data():
                 }
             )
 
-        # Cleanup
         del data, price_series, all_dates
         gc.collect()
 
-        # Debug: Log datasets
         app.logger.info(f"Datasets: {datasets}")
 
         return jsonify({"labels": sorted_dates, "datasets": datasets})
@@ -2523,9 +2541,6 @@ def historical_data():
     except Exception as e:
         app.logger.error(f"Error: {str(e)}")
         return jsonify({"error": str(e)}), 500
-
-
-
 
 
 #  route for the shipping point price
