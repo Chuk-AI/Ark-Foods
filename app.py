@@ -98,6 +98,35 @@ app = Flask(__name__, static_folder= 'frontend/build', static_url_path="/")
 app.config['JWT_SECRET_KEY'] = 'your_secret_key'  # Replace with a strong secret key
 jwt = JWTManager(app)
 
+
+@app.route("/api/normalize_price_data")
+def normalize_price_data():
+    try:
+        records = PriceData.query.all()
+        updated = 0
+
+        for record in records:
+            original_city = record.city_name
+            original_commodity = record.commodity
+
+            normalized_city = original_city.strip().lower().title()
+            normalized_commodity = original_commodity.strip().lower().title()
+
+            if original_city != normalized_city or original_commodity != normalized_commodity:
+                record.city_name = normalized_city
+                record.commodity = normalized_commodity
+                updated += 1
+
+        db.session.commit()
+        return jsonify({"status": "success", "updated_records": updated})
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+
+
 @app.route("/", defaults={"path": ""})
 @app.route("/<path:path>")
 def serve(path):
@@ -1834,31 +1863,6 @@ class LoginForm(FlaskForm):
 
 
 
-
-@app.route("/api/normalize_price_data")
-def normalize_price_data():
-    try:
-        records = PriceData.query.all()
-        updated = 0
-
-        for record in records:
-            original_city = record.city_name
-            original_commodity = record.commodity
-
-            normalized_city = original_city.strip().lower().title()
-            normalized_commodity = original_commodity.strip().lower().title()
-
-            if original_city != normalized_city or original_commodity != normalized_commodity:
-                record.city_name = normalized_city
-                record.commodity = normalized_commodity
-                updated += 1
-
-        db.session.commit()
-        return jsonify({"status": "success", "updated_records": updated})
-
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"status": "error", "message": str(e)}), 500
 
 
 # Home page
