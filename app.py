@@ -140,6 +140,7 @@ def serve(path):
 app.config['CACHE_TYPE'] = 'redis'
 app.config['CACHE_REDIS_URL'] = 'redis://localhost:6379/0'  # Adjust if needed
 # app.config['CACHE_REDIS_URL'] = os.environ.get("REDIS_URL", "redis://<MEMORISTORE_IP>:6379/0")
+
 cache = Cache(app)
 
 
@@ -169,7 +170,15 @@ def serve_from_cache():
 def cache_response(response):
     if request.method == 'GET' and response.status_code == 200:
         cache_key = generate_cache_key()
-        cache.set(cache_key, response.get_data(), timeout=86400)
+        # time out 
+        ttl = 86400  # Set TTL to 1 day (24 hours)
+        # For more dynamic TTL, you can calculate it based on some parameters
+        # e.g., setting a shorter TTL for endpoints that change often
+        if 'historical_data' in request.full_path:
+            ttl = 3600  # Shorter TTL of 1 hour for historical data
+ 
+
+        cache.set(cache_key, response.get_data(), timeout=ttl)
         app.logger.info(f"Cached response for key: {cache_key}")
     return response
 
@@ -2411,9 +2420,9 @@ def api_most_recent_prices():
 
 
 
-@app.route("/api/historical_data", methods=["GET"])
-# @jwt_required()
-def historical_data():
+# @app.route("/api/historical_data", methods=["GET"])
+# # @jwt_required()
+# def historical_data():
     try:
         # Fetch parameters from the frontend
         commodities = request.args.get("commodities", "").split(",")
@@ -2425,10 +2434,7 @@ def historical_data():
         )
         avg_cities = request.args.get("averageCities", "false").lower() == "true"
 
-        app.logger.info(f"Commodities: {commodities}")
-        app.logger.info(f"Cities: {cities}")
-        app.logger.info(f"Start Date: {start_date}, End Date: {end_date}")
-        app.logger.info(f"Avg Commodities: {avg_commodities}, Avg Cities: {avg_cities}")
+   
 
         # Standardize Cubanelles
         standardized_commodities = [
@@ -2545,6 +2551,145 @@ def historical_data():
     except Exception as e:
         app.logger.error(f"Error: {str(e)}")
         return jsonify({"error": str(e)}), 500
+
+@app.route("/api/historical_data", methods=["GET"])
+def historical_data():
+    try:
+        # Fetch parameters from the frontend
+        commodities = request.args.get("commodities", "").split(",")
+        cities = request.args.get("cities", "").split(",")
+        start_date = request.args.get("start_date")
+        end_date = request.args.get("end_date")
+        avg_commodities = (
+            request.args.get("averageCommodities", "false").lower() == "true"
+        )
+        avg_cities = request.args.get("averageCities", "false").lower() == "true"
+        
+        # Create a cache key based on the request parameters
+        cache_key = f"historical_data:{start_date}:{end_date}:{','.join(commodities)}:{','.join(cities)}"
+        
+        # Check cache for existing data
+        cached_data = cache.get(cache_key)
+        if cached_data:
+            return jsonify(cached_data)
+
+        # Standardize Cubanelles
+        standardized_commodities = [
+            "Cubanelle" if commodity.lower().startswith("cubanelle") else commodity
+            for commodity in commodities
+        ]
+
+        start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+        end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+
+        start_day = start_dt.timetuple().tm_yday
+        end_day = end_dt.timetuple().tm_yday
+
+        # Database query with optimized filters
+        query = PriceData.query.filter(
+            func.upper(PriceData.commodity).in_([c.upper() for c in standardized_commodities]),
+            func.upper(PriceData.city_name).in_([city.upper() for city in cities]),
+            PriceData.source == "USDA",
+        )
+
+        if start_dt.year == end_dt.year:
+            query = query.filter(
+                PriceData.year == start_dt.year,
+                PriceData.day.between(start_day, end_day),
+            )
+        else:
+            query = query.filter(
+                or_(
+                    and_(PriceData.year == start_dt.year, PriceData.day >= start_day),
+                    and_(PriceData.year == end_dt.year, PriceData.day <= end_day),
+                    and_(PriceData.year > start_dt.year, PriceData.year < end_dt.year),
+                )
+            )
+
+        # Adding pagination or limiting the number of rows fetched (optional)
+        query = query.limit(5000)  # Limit the number of rows to 5000
+
+        data = query.all()
+
+        if not data:
+            return jsonify({"labels": [], "datasets": []}), 200
+
+        price_series = {}
+        all_dates = set()
+
+        for entry in data:
+            entry_date = datetime(entry.year, 1, 1) + timedelta(days=entry.day - 1)
+
+            if entry_date < start_dt or entry_date > end_dt:
+                continue
+
+            date_str = entry_date.strftime("%Y-%m-%d")
+            all_dates.add(date_str)
+
+            display_commodity = (
+                "Cubanelles"
+                if entry.commodity.lower().startswith("cubanelle")
+                else entry.commodity.strip().title()
+            )
+            display_city = entry.city_name.strip().lower().title()
+
+            # Group data based on averaging preferences
+            if avg_commodities and avg_cities:
+                series_key = "Average Price"
+            elif avg_commodities:
+                series_key = display_city
+            elif avg_cities:
+                series_key = display_commodity
+            else:
+                series_key = f"{display_commodity} - {display_city}"
+
+            if series_key not in price_series:
+                price_series[series_key] = {}
+
+            if date_str not in price_series[series_key]:
+                price_series[series_key][date_str] = {"sum": 0, "count": 0}
+
+            price_series[series_key][date_str]["sum"] += entry.price
+            price_series[series_key][date_str]["count"] += 1
+
+        sorted_dates = sorted(list(all_dates))
+        colors = ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40"]
+        datasets = []
+
+        for idx, (series_name, date_data) in enumerate(price_series.items()):
+            series_data = []
+            for date in sorted_dates:
+                if date in date_data:
+                    avg_price = date_data[date]["sum"] / date_data[date]["count"]
+                    series_data.append(round(avg_price, 2))
+                else:
+                    series_data.append(None)
+
+            datasets.append(
+                {
+                    "label": series_name,
+                    "data": series_data,
+                    "borderColor": colors[idx % len(colors)],
+                    "backgroundColor": colors[idx % len(colors)],
+                }
+            )
+
+        # Prepare the data to return
+        result = {"labels": sorted_dates, "datasets": datasets}
+
+        # Cache the result for future use
+        cache.set(cache_key, result)
+
+        del data, price_series, all_dates
+        gc.collect()
+
+        return jsonify(result)
+
+    except Exception as e:
+        app.logger.error(f"Error: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+
 
 
 #  route for the shipping point price

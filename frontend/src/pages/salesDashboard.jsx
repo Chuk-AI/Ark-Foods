@@ -45,7 +45,10 @@ function SalesDashboard() {
 
   const [shippingPointPriceChart, setShippingPointPriceChart] = useState(null);
   const [historicalData, setHistoricalData] = useState(null);
+  const [shippingPointPriceChartData, setShippingPointPriceChartData] = useState(null);
 
+
+  
   const [filterState, setFilterState] = useState({
     commodity: 'Anaheim',
     source: 'USDA',
@@ -283,6 +286,59 @@ function SalesDashboard() {
     }));
   };
 
+
+  const handleDownloadShipping = () => {
+    handleDownloadShippingPointExcel();
+    handleDownloadShippingPointChart();
+  }
+
+
+
+  const handleDownloadShippingPointExcel = () => {
+    if (!shippingPointPriceChartData) {
+      alert("No shipping point price data available to download.");
+      return;
+    }
+  
+    const { labels, datasets } = shippingPointPriceChartData; // Assuming shippingPointPriceChartData is the data for the chart
+    
+    // Create a header row
+    const headerRow = ["Date", ...datasets.map(ds => ds.label)];
+    
+    // Build rows for each date
+    const dataRows = labels.map((date, index) => {
+      const row = [date];
+      datasets.forEach(ds => {
+        row.push(ds.data[index]);
+      });
+      return row;
+    });
+  
+    // Combine header and data
+    const worksheetData = [headerRow, ...dataRows];
+  
+    // Generate worksheet and workbook using XLSX
+    const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Shipping Point Data");
+  
+    // Trigger file download
+    XLSX.writeFile(workbook, "shipping_point_data.xlsx");
+  };
+  
+
+
+  const handleDownloadShippingPointChart = () => {
+    if (shippingPointPriceChart) {
+      const canvas = document.getElementById('shippingPointPriceChart');
+      const imageLink = document.createElement('a');
+      imageLink.download = 'shipping_point_price_chart.png';
+      imageLink.href = canvas.toDataURL('image/png');
+      imageLink.click();
+    }
+  };
+  
+
   
   
   // Section Titles
@@ -473,6 +529,9 @@ function SalesDashboard() {
       alert("No historical data available to download.");
       return;
     }
+
+
+
   
     const { labels, datasets } = historicalData;
     // Create a header row: first column is Date then one column per dataset label
@@ -551,6 +610,8 @@ const handleApplyMostRecentFilters = () => {
 };
 
   
+
+
 
   const updateMostRecentPricesTable = () => {
     // console.log("Current Prices State:", prices); // Debug prices state
@@ -661,6 +722,10 @@ const handleApplyMostRecentFilters = () => {
       console.error('Canvas element not found');
       return;
     }
+
+
+
+    
 
     const ctx = historicalChartRef.current.getContext('2d');
 
@@ -860,18 +925,20 @@ const handleApplyMostRecentFilters = () => {
       console.error('Canvas element not found');
       return;
     }
-
+  
     const ctx = shippingPointPriceChartRef.current.getContext('2d');
-
+  
     if (shippingPointPriceChart) {
       shippingPointPriceChart.destroy();
     }
-
+  
     if (!chartData || !chartData.labels.length || !chartData.datasets.length) {
       alert('No data available for the Shipping Point Price chart.');
       return;
     }
-
+  
+    setShippingPointPriceChartData(chartData); // Save chart data for download
+  
     const datasets = chartData.datasets.map((dataset, index) => ({
       ...dataset,
       fill: false,
@@ -883,7 +950,7 @@ const handleApplyMostRecentFilters = () => {
       borderColor: dataset.borderColor || getColor(index),
       backgroundColor: dataset.backgroundColor || getColor(index),
     }));
-
+  
     const newChart = new Chart(ctx, {
       type: 'line',
       data: {
@@ -960,15 +1027,16 @@ const handleApplyMostRecentFilters = () => {
             },
           },
           datalabels: {
-            display: false, // Globally disable datalabels
+            display: false,
           },
         },
         interaction: { mode: 'index', intersect: false },
       },
     });
-
+  
     setShippingPointPriceChart(newChart);
   };
+  
 
   const currentDate = new Date().toISOString().split('T')[0];
 
@@ -1623,27 +1691,37 @@ const handleApplyMostRecentFilters = () => {
                 </div>
               </div>
               {/* Shipping Point Price */}
-              <div id="shipping-point-price-section" className="section">
-                <div className="row mb-4 salesBody">
-                  <div className="col-12 mb-4">
-                    <div className="card resizable-block" id="shipping-point-price-card" data-block-title="Shipping Point Price">
-                      <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                        <h2>Shipping Point Price</h2>
-                        <button
-                          className="btn btn-sm btn-outline-light toggle-size"
-                          data-block-title="Shipping Point Price"
-                          onClick={() => toggleBlockSize('shipping-point-price-card', 'Shipping Point Price')}
-                        >
-                          Minimize
-                        </button>
-                      </div>
-                      <div className="card-body">
-                        <canvas id="shippingPointPriceChart" ref={shippingPointPriceChartRef} width="400" height="400"></canvas>
-                      </div>
+            <div id="shipping-point-price-section" className="section">
+              <div className="row mb-4 salesBody">
+                <div className="col-12 mb-4">
+                  <div className="card resizable-block" id="shipping-point-price-card" data-block-title="Shipping Point Price">
+                    <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                      <h2>Shipping Point Price</h2>
+                      <button
+                        className="btn btn-sm btn-outline-light toggle-size"
+                        data-block-title="Shipping Point Price"
+                        onClick={() => toggleBlockSize('shipping-point-price-card', 'Shipping Point Price')}
+                      >
+                        Minimize
+                      </button>
+                    </div>
+                    <div className="card-body">
+                      <canvas id="shippingPointPriceChart" ref={shippingPointPriceChartRef} width="400" height="400"></canvas>
+
+                      {/* Download Buttons */}
+                      <button
+                        className="btn btn-primary mt-3"
+                        onClick={handleDownloadShipping} // Trigger chart download
+                      >
+                        Download Chart and Data
+                      </button>
+                
                     </div>
                   </div>
                 </div>
               </div>
+            </div>
+
 
               <div ref={rightSidebarRef} id="minimized-sidebar" className=" collapsed">
                 <div id="right-sidebar-toggle" onClick={toggleRightSidebar}>
