@@ -3496,35 +3496,39 @@ def get_seasonal_prices():
 
 
 @app.route("/api/sales_seasonal_prices", methods=["GET"])
-# # @jwt_required()
 def get_sales_seasonal_prices():
+    # Fetch request parameters
     commodities_str = request.args.get("commodities")
     cities_str = request.args.get("cities")
     start_date_str = request.args.get("start_date")
     end_date_str = request.args.get("end_date")
 
+    # Log received parameters
+    app.logger.info(f"Received request with commodities: {commodities_str}, cities: {cities_str}, start_date: {start_date_str}, end_date: {end_date_str}")
+
     # Convert commodities and cities to lists if provided, else use all
     if commodities_str:
         commodities = commodities_str.split(",")
-        # Handle special case for "Cubanelles"
         commodities = [
             "Cubanelle" if commodity == "Cubanelles" else commodity
             for commodity in commodities
         ]
     else:
-        # Fetch all distinct commodities from the database
         commodities = [
             row[0] for row in db.session.query(PriceData.commodity).distinct().all()
         ]
 
     if cities_str:
         cities = cities_str.split(",")
-        cities = [city.upper() for city in cities]
+       
     else:
-        # Fetch all distinct cities from the database
         cities = [
             row[0] for row in db.session.query(PriceData.city_name).distinct().all()
         ]
+
+    # Log converted commodities and cities
+    app.logger.info(f"Commodities: {commodities}")
+    app.logger.info(f"Cities: {cities}")
 
     # Convert start_date and end_date to datetime objects if provided
     start_date = None
@@ -3539,10 +3543,13 @@ def get_sales_seasonal_prices():
         if start_date > end_date:
             return jsonify({"error": "Start date cannot be after end date."}), 400
 
+    # Log the dates
+    app.logger.info(f"Start Date: {start_date}, End Date: {end_date}")
+
     # Prepare the query
     query = db.session.query(PriceData.season, PriceData.price).filter(
         PriceData.commodity.in_(commodities),
-        PriceData.city_name.in_(cities),
+        func.lower(PriceData.city_name).in_([city.lower() for city in cities]),
         PriceData.source.in_(["USDA", "Historical"]),
     )
 
@@ -3552,6 +3559,9 @@ def get_sales_seasonal_prices():
         start_day = start_date.timetuple().tm_yday
         end_year = end_date.year
         end_day = end_date.timetuple().tm_yday
+
+        # Log the filter conditions for date range
+        app.logger.info(f"Query Filters: Commodities: {commodities}, Cities: {cities}, Start Year: {start_year}, End Year: {end_year}, Start Day: {start_day}, End Day: {end_day}")
 
         if start_year == end_year:
             query = query.filter(
@@ -3568,8 +3578,13 @@ def get_sales_seasonal_prices():
                 )
             )
 
-    # Retrieve data
-    data = query.all()
+    # Retrieve data - Ensure this happens in the proper order
+    try:
+        data = query.all()
+        app.logger.info(f"Retrieved data: {data}")
+    except Exception as e:
+        app.logger.error(f"Error during query execution: {str(e)}")
+        return jsonify({"error": "Error retrieving data from the database."}), 500
 
     # Calculate average prices per season
     seasonal_prices = {}
@@ -3580,6 +3595,9 @@ def get_sales_seasonal_prices():
             season_price_data[season] = []
         season_price_data[season].append(price)
 
+    # Log the seasonal price data
+    app.logger.info(f"Seasonal price data: {season_price_data}")
+
     # Calculate average price for each season
     for season in ["Spring", "Summer", "Autumn", "Winter"]:
         prices = season_price_data.get(season, [])
@@ -3588,6 +3606,9 @@ def get_sales_seasonal_prices():
             seasonal_prices[season] = round(average_price, 2)
         else:
             seasonal_prices[season] = 0.0
+
+    # Log final seasonal prices
+    app.logger.info(f"Final seasonal prices: {seasonal_prices}")
 
     return jsonify(seasonal_prices)
 
