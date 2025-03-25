@@ -2620,8 +2620,8 @@ def historical_data():
         for entry in data:
             entry_date = datetime(entry.year, 1, 1) + timedelta(days=entry.day - 1)
 
-            if entry_date < start_dt or entry_date > end_dt:
-                continue
+            # if entry_date < start_dt or entry_date > end_dt:
+            #     continue
 
             date_str = entry_date.strftime("%Y-%m-%d")
             all_dates.add(date_str)
