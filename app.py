@@ -2633,6 +2633,7 @@ def historical_data():
             )
             display_city = entry.city_name.strip().lower().title()
 
+
             # Group data based on averaging preferences
             if avg_commodities and avg_cities:
                 series_key = "Average Price"
