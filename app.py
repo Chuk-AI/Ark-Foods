@@ -3907,37 +3907,53 @@ def shipping_price_violin():
 
 # terminal empricial probability chart fetch
 
+from sqlalchemy import func
 
 @app.route('/api/terminal_empricial_probability', methods=['GET'])
 def get_terminal_empricial_probability():
     try:
-        # Query the database
-        data = db.session.query(PriceData.commodity, PriceData.price).filter(PriceData.source == 'USDA').all()
+        # Query to get mean and standard deviation directly from the database
+        data = db.session.query(
+            PriceData.commodity,
+            func.avg(PriceData.price).label('avg_price'),
+            func.stddev(PriceData.price).label('std_dev_price')
+        ).filter(PriceData.source == 'USDA') \
+         .group_by(PriceData.commodity).all()
+
         if not data:
             return jsonify([])
 
-        # Convert data to DataFrame
-        df = pd.DataFrame(data, columns=['commodity', 'price'])
-        df['price'] = pd.to_numeric(df['price'], errors='coerce')
-        df = df.dropna(subset=['price'])
-
         # Prepare chart data
         charts = []
-        grouped = df.groupby('commodity')
 
-        for commodity, group in grouped:
-            prices = group['price'].values
-            if len(prices) == 0:
-                continue
+        for commodity, avg_price, std_dev_price in data:
+            # Create histogram (you may still need to calculate this in memory)
+            prices = db.session.query(PriceData.price).filter(PriceData.commodity == commodity, PriceData.source == 'USDA').all()
+            prices = [price[0] for price in prices]  # Extract price values from tuples
 
-            mean = prices.mean()
-            std_dev = prices.std()
-
-            # Create histogram and traces
             hist, bin_edges = np.histogram(prices, bins=50)
-            histogram_trace = go.Bar(x=bin_edges[:-1].tolist(), y=hist.tolist(), name=f"{commodity} Histogram", marker_color="#636EFA")
-            mean_trace = go.Scatter(x=[mean, mean], y=[0, max(hist)], mode="lines", line=dict(color="red", dash="dash"), name=f"{commodity} Mean")
-            std_dev_trace = go.Scatter(x=[mean - std_dev, mean + std_dev], y=[0, 0], mode="markers", marker=dict(color="blue", size=8, symbol="cross"), name=f"{commodity} Std Dev")
+
+            # Create traces for the histogram, mean, and standard deviation
+            histogram_trace = go.Bar(
+                x=bin_edges[:-1].tolist(), 
+                y=hist.tolist(),
+                name=f"{commodity} Histogram",
+                marker_color="#636EFA"
+            )
+            mean_trace = go.Scatter(
+                x=[avg_price, avg_price], 
+                y=[0, max(hist)], 
+                mode="lines", 
+                line=dict(color="red", dash="dash"), 
+                name=f"{commodity} Mean"
+            )
+            std_dev_trace = go.Scatter(
+                x=[avg_price - std_dev_price, avg_price + std_dev_price], 
+                y=[0, 0], 
+                mode="markers", 
+                marker=dict(color="blue", size=8, symbol="cross"), 
+                name=f"{commodity} Std Dev"
+            )
 
             # Prepare layout
             layout = {
@@ -3965,7 +3981,6 @@ def get_terminal_empricial_probability():
         error_message = traceback.format_exc()
         print("Error Traceback:", error_message)
         return jsonify({"error": str(e)}), 500
-
 
 
 
