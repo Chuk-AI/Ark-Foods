@@ -3912,50 +3912,69 @@ from sqlalchemy import func
 @app.route('/api/terminal_empricial_probability', methods=['GET'])
 def get_terminal_empricial_probability():
     try:
-        # Query to get mean and standard deviation directly from the database
-        data = db.session.query(
-            PriceData.commodity,
-            func.avg(PriceData.price).label('avg_price'),
-            func.stddev(PriceData.price).label('std_dev_price')
-        ).filter(PriceData.source == 'USDA') \
-         .group_by(PriceData.commodity).all()
+        # Get the time frame from query parameters (default to '7d')
+        time_frame = request.args.get('timeFrame', '7d')
 
-        if not data:
+        # Map timeFrame to PostgreSQL-compatible intervals
+        time_intervals = {
+            "3d": "3 days",
+            "7d": "7 days",
+            "1m": "1 month",
+            "3m": "3 months",
+            "1y": "1 year",
+        }
+
+        # Get the corresponding PostgreSQL interval for the time frame
+        postgres_interval = time_intervals.get(time_frame.lower(), '7 days')
+
+        # Query to get mean and standard deviation directly from the database
+        query = text(f"""
+            SELECT commodity, price, source
+            FROM price_data
+            WHERE source = 'USDA'
+            AND make_date(year, 1, 1) + (day - 1) * INTERVAL '1 day' >= NOW() - INTERVAL '{postgres_interval}'
+            AND price > 2
+        """)
+        result = db.session.execute(query).fetchall()
+
+        if not result:
             return jsonify([])
 
-        # Prepare chart data
+        # Group data by commodity
+        grouped_data = {}
+        for row in result:
+            commodity, price, source = row
+            if commodity not in grouped_data:
+                grouped_data[commodity] = []
+            grouped_data[commodity].append(price)
+
+        # Create violin traces
         charts = []
-
-        for commodity, avg_price, std_dev_price in data:
-            # Create histogram (you may still need to calculate this in memory)
-            prices = db.session.query(PriceData.price).filter(PriceData.commodity == commodity, PriceData.source == 'USDA').all()
-            prices = [price[0] for price in prices]  # Extract price values from tuples
-
+        for commodity, prices in grouped_data.items():
             hist, bin_edges = np.histogram(prices, bins=50)
-
-            # Create traces for the histogram, mean, and standard deviation
             histogram_trace = go.Bar(
                 x=bin_edges[:-1].tolist(), 
                 y=hist.tolist(),
                 name=f"{commodity} Histogram",
                 marker_color="#636EFA"
             )
+            mean = np.mean(prices)
+            std_dev = np.std(prices)
             mean_trace = go.Scatter(
-                x=[avg_price, avg_price], 
+                x=[mean, mean], 
                 y=[0, max(hist)], 
                 mode="lines", 
                 line=dict(color="red", dash="dash"), 
                 name=f"{commodity} Mean"
             )
             std_dev_trace = go.Scatter(
-                x=[avg_price - std_dev_price, avg_price + std_dev_price], 
+                x=[mean - std_dev, mean + std_dev], 
                 y=[0, 0], 
                 mode="markers", 
                 marker=dict(color="blue", size=8, symbol="cross"), 
                 name=f"{commodity} Std Dev"
             )
 
-            # Prepare layout
             layout = {
                 "title": f"{commodity} Price Distribution",
                 "xaxis": {"title": "Price", "automargin": True},
@@ -3967,7 +3986,6 @@ def get_terminal_empricial_probability():
                 "paper_bgcolor": "white",
             }
 
-            # Append chart JSON
             charts.append({
                 "commodity": commodity,
                 "data": [histogram_trace.to_plotly_json(), mean_trace.to_plotly_json(), std_dev_trace.to_plotly_json()],
@@ -3977,10 +3995,9 @@ def get_terminal_empricial_probability():
         return jsonify(charts), 200
 
     except Exception as e:
-        import traceback
-        error_message = traceback.format_exc()
+        error_message = str(e)
         print("Error Traceback:", error_message)
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": error_message}), 500
 
 
 
@@ -3992,35 +4009,69 @@ def get_terminal_empricial_probability():
 @app.route('/api/shipping_empricial_probability', methods=['GET'])
 def get_shipping_empricial_probability():
     try:
-        # Query the database
-        data = db.session.query(ShippingPriceData.commodity, ShippingPriceData.price).filter(ShippingPriceData.source == 'ProduceIQ').all()
-        if not data:
+        # Get the time frame from query parameters (default to '7d')
+        time_frame = request.args.get('timeFrame', '7d')
+
+        # Map timeFrame to PostgreSQL-compatible intervals
+        time_intervals = {
+            "3d": "3 days",
+            "7d": "7 days",
+            "1m": "1 month",
+            "3m": "3 months",
+            "1y": "1 year",
+        }
+
+        # Get the corresponding PostgreSQL interval for the time frame
+        postgres_interval = time_intervals.get(time_frame.lower(), '7 days')
+
+        # Query to get shipping data from ProduceIQ within the given time frame
+        query = text(f"""
+            SELECT commodity, price
+            FROM shipping_price_data
+            WHERE source = 'ProduceIQ'
+            AND make_date(year, 1, 1) + (day - 1) * INTERVAL '1 day' >= NOW() - INTERVAL '{postgres_interval}'
+            AND price > 2
+        """)
+        result = db.session.execute(query).fetchall()
+
+        if not result:
             return jsonify([])
 
-        # Convert data to DataFrame
-        df = pd.DataFrame(data, columns=['commodity', 'price'])
-        df['price'] = pd.to_numeric(df['price'], errors='coerce')
-        df = df.dropna(subset=['price'])
+        # Group data by commodity
+        grouped_data = {}
+        for row in result:
+            commodity, price = row
+            if commodity not in grouped_data:
+                grouped_data[commodity] = []
+            grouped_data[commodity].append(price)
 
-        # Prepare chart data
+        # Create violin traces
         charts = []
-        grouped = df.groupby('commodity')
-
-        for commodity, group in grouped:
-            prices = group['price'].values
-            if len(prices) == 0:
-                continue
-
-            mean = prices.mean()
-            std_dev = prices.std()
-
-            # Create histogram and traces
+        for commodity, prices in grouped_data.items():
             hist, bin_edges = np.histogram(prices, bins=50)
-            histogram_trace = go.Bar(x=bin_edges[:-1].tolist(), y=hist.tolist(), name=f"{commodity} Histogram", marker_color="green")
-            mean_trace = go.Scatter(x=[mean, mean], y=[0, max(hist)], mode="lines", line=dict(color="red", dash="dash"), name=f"{commodity} Mean")
-            std_dev_trace = go.Scatter(x=[mean - std_dev, mean + std_dev], y=[0, 0], mode="markers", marker=dict(color="green", size=8, symbol="cross"), name=f"{commodity} Std Dev")
+            histogram_trace = go.Bar(
+                x=bin_edges[:-1].tolist(),
+                y=hist.tolist(),
+                name=f"{commodity} Histogram",
+                marker_color="green"
+            )
+            mean = np.mean(prices)
+            std_dev = np.std(prices)
+            mean_trace = go.Scatter(
+                x=[mean, mean], 
+                y=[0, max(hist)], 
+                mode="lines", 
+                line=dict(color="red", dash="dash"), 
+                name=f"{commodity} Mean"
+            )
+            std_dev_trace = go.Scatter(
+                x=[mean - std_dev, mean + std_dev], 
+                y=[0, 0], 
+                mode="markers", 
+                marker=dict(color="green", size=8, symbol="cross"), 
+                name=f"{commodity} Std Dev"
+            )
 
-            # Prepare layout
             layout = {
                 "title": f"{commodity} Price Distribution",
                 "xaxis": {"title": "Price", "automargin": True},
@@ -4032,7 +4083,6 @@ def get_shipping_empricial_probability():
                 "paper_bgcolor": "white",
             }
 
-            # Append chart JSON
             charts.append({
                 "commodity": commodity,
                 "data": [histogram_trace.to_plotly_json(), mean_trace.to_plotly_json(), std_dev_trace.to_plotly_json()],
@@ -4042,10 +4092,9 @@ def get_shipping_empricial_probability():
         return jsonify(charts), 200
 
     except Exception as e:
-        import traceback
-        error_message = traceback.format_exc()
+        error_message = str(e)
         print("Error Traceback:", error_message)
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": error_message}), 500
 
 
 

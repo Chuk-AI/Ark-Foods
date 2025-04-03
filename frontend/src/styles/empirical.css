@@ -42,3 +42,21 @@
   box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.1); /* Subtle shadow */
   text-align: center; /* Center-align chart content */
 }
+.time-frame-filters {
+  margin: 20px 0;
+  display: flex;
+  justify-content: flex-start;
+  gap: 10px;
+}
+
+.time-frame-button {
+  padding: 8px 16px;
+  border: 1px solid #ccc;
+  background-color: #fff;
+  cursor: pointer;
+}
+
+.time-frame-button.active {
+  background-color: #33b1a7;
+  color: white;
+}
