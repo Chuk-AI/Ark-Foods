@@ -3365,8 +3365,8 @@ def calculate_forecast():
 
 
 
-
-@app.route('/api/price_averages', methods=['GETs'])
+# Endpoint to get price averages with normalized commodity names
+@app.route('/api/price_averages', methods=['GET'])
 def get_price_averages():
     try:
         start_date = request.args.get('start_date')
@@ -3395,16 +3395,19 @@ def get_price_averages():
             "PHILADELPHIA": "Philadelphia",
         }
 
-        # Normalize city names (for USDA)
+        # Normalize city names using a SQLAlchemy CASE expression
         normalized_city = case(
             *[(PriceData.city_name == key, value) for key, value in usda_city_mapping.items()],
             else_=PriceData.city_name
         ).label("normalized_city")
 
-        # **🔹 Fix: Apply Source Filter Before Aggregating**
+        # Normalize commodity by trimming whitespace and converting to lowercase
+        normalized_commodity = func.trim(func.lower(PriceData.commodity)).label("normalized_commodity")
+
+        # Build the query filtering by date range
         query = db.session.query(
-            normalized_city,  # Use normalized city
-            PriceData.commodity,
+            normalized_city,
+            normalized_commodity,
             PriceData.source,
             func.avg(PriceData.price).label('avg_price')
         ).filter(
@@ -3414,27 +3417,27 @@ def get_price_averages():
             )
         )
 
-        # Apply source filter **before grouping**
+        # Apply source filter if specified
         if source == 'usda':
             query = query.filter(PriceData.source == "USDA")
         elif source == 'produceiq':
             query = query.filter(PriceData.source == "ProduceIQ")
 
-        # Apply city filter with normalization
+        # Apply city filter if not "All cities"
         if city.lower() != 'all cities':
             query = query.filter(normalized_city == city)
 
-        # Group and order results
-        query = query.group_by(normalized_city, PriceData.commodity, PriceData.source)
-        query = query.order_by(normalized_city, PriceData.commodity, PriceData.source)
+        # Group and order by normalized city, normalized commodity, and source
+        query = query.group_by(normalized_city, normalized_commodity, PriceData.source)
+        query = query.order_by(normalized_city, normalized_commodity, PriceData.source)
 
         results = query.all()
 
-        # Format results
+        # Format the results
         price_averages = [
             {
                 'city_name': row.normalized_city,
-                'commodity': row.commodity,
+                'commodity': row.normalized_commodity,
                 'source': row.source,
                 'avg_price': round(row.avg_price, 2)
             }
