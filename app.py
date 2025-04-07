@@ -2592,12 +2592,13 @@ def historical_data():
             PriceData.source == source,
         )
 
-        # Add date filtering logic
+        # Fix the date filtering logic
         if start_dt.year == end_dt.year:
             # If the start and end dates are in the same year
             query = query.filter(
                 PriceData.year == start_dt.year,
-                PriceData.day.between(start_day, end_day),
+                PriceData.day >= start_day,  # Include start_day
+                PriceData.day <= end_day     # Include end_day
             )
         else:
             # If the start and end dates span multiple years
@@ -2683,7 +2684,6 @@ def historical_data():
     except Exception as e:
         app.logger.error(f"Error: {str(e)}")
         return jsonify({"error": str(e)}), 500
-
 
 
 #  route for the shipping point price
