@@ -840,6 +840,8 @@ const handleApplyMostRecentFilters = () => {
 
   const fetchHistoricalData = async (filters) => {
     const { commodities, cities, source, startDate, endDate, averageCommodities, averageCities } = filters;
+    console.log('Selected source:', source);  // Log the source value
+
 
     try {
       const token = localStorage.getItem('authToken');

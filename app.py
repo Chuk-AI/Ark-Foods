@@ -2560,18 +2560,13 @@ def historical_data():
         cities = request.args.get("cities", "").split(",")
         start_date = request.args.get("start_date")
         end_date = request.args.get("end_date")
+        source = request.args.get("source")
         avg_commodities = (
             request.args.get("averageCommodities", "false").lower() == "true"
         )
         avg_cities = request.args.get("averageCities", "false").lower() == "true"
-        
-        # Create a cache key based on the request parameters
-        cache_key = f"historical_data:{start_date}:{end_date}:{','.join(commodities)}:{','.join(cities)}"
-        
-        # Check cache for existing data
-        cached_data = cache.get(cache_key)
-        if cached_data:
-            return jsonify(cached_data)
+
+        app.logger.info(f"Source: {source}")
 
         # Standardize Cubanelles
         standardized_commodities = [
@@ -2579,25 +2574,33 @@ def historical_data():
             for commodity in commodities
         ]
 
+        # Convert string dates to datetime objects
         start_dt = datetime.strptime(start_date, "%Y-%m-%d")
         end_dt = datetime.strptime(end_date, "%Y-%m-%d")
 
+        # Calculate day of the year for both start and end dates
         start_day = start_dt.timetuple().tm_yday
         end_day = end_dt.timetuple().tm_yday
 
-        # Database query with optimized filters
+        # Debug: Log date range
+        app.logger.info(f"Start Day: {start_day}, End Day: {end_day}")
+
+        # Query the database with proper date filtering
         query = PriceData.query.filter(
             func.upper(PriceData.commodity).in_([c.upper() for c in standardized_commodities]),
             func.upper(PriceData.city_name).in_([city.upper() for city in cities]),
-            PriceData.source == "USDA",
+            PriceData.source == source,
         )
 
+        # Add date filtering logic
         if start_dt.year == end_dt.year:
+            # If the start and end dates are in the same year
             query = query.filter(
                 PriceData.year == start_dt.year,
                 PriceData.day.between(start_day, end_day),
             )
         else:
+            # If the start and end dates span multiple years
             query = query.filter(
                 or_(
                     and_(PriceData.year == start_dt.year, PriceData.day >= start_day),
@@ -2606,23 +2609,18 @@ def historical_data():
                 )
             )
 
-        # Adding pagination or limiting the number of rows fetched (optional)
-        query = query.limit(5000)  # Limit the number of rows to 5000
-
         data = query.all()
+        app.logger.info(f"Query returned {len(data)} records")
 
         if not data:
             return jsonify({"labels": [], "datasets": []}), 200
 
+        # Process and group data by date and commodity/city
         price_series = {}
         all_dates = set()
 
         for entry in data:
             entry_date = datetime(entry.year, 1, 1) + timedelta(days=entry.day - 1)
-
-            # if entry_date < start_dt or entry_date > end_dt:
-            #     continue
-
             date_str = entry_date.strftime("%Y-%m-%d")
             all_dates.add(date_str)
 
@@ -2632,7 +2630,6 @@ def historical_data():
                 else entry.commodity.strip().title()
             )
             display_city = entry.city_name.strip().lower().title()
-
 
             # Group data based on averaging preferences
             if avg_commodities and avg_cities:
@@ -2653,10 +2650,12 @@ def historical_data():
             price_series[series_key][date_str]["sum"] += entry.price
             price_series[series_key][date_str]["count"] += 1
 
+        # Sort the dates
         sorted_dates = sorted(list(all_dates))
         colors = ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40"]
         datasets = []
 
+        # Create datasets for each series
         for idx, (series_name, date_data) in enumerate(price_series.items()):
             series_data = []
             for date in sorted_dates:
@@ -2675,21 +2674,15 @@ def historical_data():
                 }
             )
 
-        # Prepare the data to return
+        # Prepare the final result
         result = {"labels": sorted_dates, "datasets": datasets}
 
-        # Cache the result for future use
-        cache.set(cache_key, result)
-
-        del data, price_series, all_dates
-        gc.collect()
-
+        # Return the result as JSON
         return jsonify(result)
 
     except Exception as e:
         app.logger.error(f"Error: {str(e)}")
         return jsonify({"error": str(e)}), 500
-
 
 
 
@@ -2709,12 +2702,6 @@ def shipping_point_price():
         )
         avg_regions = request.args.get("averageRegions", "false").lower() == "true"
 
-        # Debug: Log received parameters
-        app.logger.info(f"Commodities: {commodities}")
-        app.logger.info(f"Regions: {regions}")
-        app.logger.info(f"Start Date: {start_date}, End Date: {end_date}")
-        app.logger.info(f"Source: {source}")
-        app.logger.info(f"Avg Commodities: {avg_commodities}, Avg Regions: {avg_regions}")
 
         # Convert dates
         start_dt = datetime.strptime(start_date, "%Y-%m-%d")
