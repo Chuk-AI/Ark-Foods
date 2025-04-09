@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Header from '../components/header';
 import ForecastLineChart from '../components/ForecastLineChart';
 import BreakEvenEstimator from '../components/BreakEvenEstimator';
+import HarvestPlanner from '../components/HarvestPlanner';
 import '../styles/dynamic.css'; // Make sure to import the CSS file
 
 export default function DynamicAnalytics() {
@@ -23,6 +24,12 @@ export default function DynamicAnalytics() {
       name: 'Break Even Estimator', 
       icon: 'fa-calculator',
       description: 'Analyze profitability and market price comparisons'
+    },
+    { 
+      id: 'harvestPlanner', 
+      name: 'Harvest Planner', 
+      icon: 'fa-seedling',
+      description: 'Optimize your planting and harvesting strategy with data-driven insights'
     }
   ];
 
@@ -33,6 +40,8 @@ export default function DynamicAnalytics() {
         return <ForecastLineChart />;
       case 'breakEven':
         return <BreakEvenEstimator />;
+        case 'harvestPlanner':
+          return <HarvestPlanner />;
       default:
         return null;
     }
