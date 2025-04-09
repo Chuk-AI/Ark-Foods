@@ -11,6 +11,7 @@ import axios from 'axios';
 import ProtectedRoute from './components/protectedRoute';
 import WeatherPage from './pages/WeatherPage';
 import DashAnalytics from './pages/analytics';
+import DynamicAnalytics from './pages/dynamicAnalytics';
 // Axios Defaults
 //
 
@@ -82,6 +83,14 @@ const App = () => {
             element={
               <ProtectedRoute roles={['admin', 'owner']}>
                 <DashAnalytics />
+              </ProtectedRoute>
+            }
+          />
+           <Route
+            path="/dynamic_analytics"
+            element={
+              <ProtectedRoute roles={['admin', 'owner']}>
+                <DynamicAnalytics />
               </ProtectedRoute>
             }
           />

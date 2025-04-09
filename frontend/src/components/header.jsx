@@ -89,6 +89,16 @@ function Header() {
                   </li>
                 )}
 
+                  {/* Analytics */}
+                  {hasAccess([UserRole.OWNER, UserRole.ADMIN, UserRole.SALES]) && (
+                  <li className={`nav-item ${isActive("/dynamic_analytics")}`}>
+                    <Link className="nav-link" to="/dynamic_analytics">
+                      Dynamic Analytics
+                    </Link>
+                  </li>
+                )}
+
+
                 {/* Weather Dashboard */}
                 {hasAccess([UserRole.OWNER, UserRole.ADMIN]) && (
                   <li className={`nav-item ${isActive("/weather_dashboard")}`}>
