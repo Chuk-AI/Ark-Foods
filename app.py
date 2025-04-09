@@ -3558,74 +3558,54 @@ def get_forecast_line_data():
         commodities = request.args.get("commodities", "").split(",")
         cities = request.args.get("cities", "").split(",")
         avg_commodities = request.args.get("averageCommodities", "false").lower() == "true"
-        avg_cities = request.args.get("averageCities", "false").lower() == "true"
+        forecast_years = int(request.args.get("forecastYears", "1"))  # Default to 1 year forecast
         
-        # Get date range parameters
-        today = datetime.now()
-        default_start = today.strftime("%Y-%m-%d")
-        default_end = (today.replace(year=today.year + 2)).strftime("%Y-%m-%d")
-        
-        start_date_str = request.args.get("startDate", default_start)
-        end_date_str = request.args.get("endDate", default_end)
-        
-        # Convert string dates to datetime objects
-        start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
-        end_date = datetime.strptime(end_date_str, "%Y-%m-%d")
-        
-        # Check if required parameters are missing or empty
-        if not commodities or commodities[0] == '':
-            return jsonify({"error": "Missing commodities"}), 400
-            
-        if not cities or cities[0] == '':
-            return jsonify({"error": "Missing cities"}), 400
+        # Check if commodities or cities are missing or empty
+        if not commodities or commodities[0] == '' or not cities or cities[0] == '':
+            return jsonify({"error": "Missing commodities or cities"}), 400
 
-        # Define seasons for reference
+        # Get current date for forecasting
+        current_date = datetime.now()
+        current_year = current_date.year
+        
+        # Get seasons and create future season labels
         seasons = ["Winter", "Spring", "Summer", "Autumn"]
         
-        # Generate a list of dates between start_date and end_date at quarterly intervals
-        # This will represent our x-axis points for the forecast chart
-        forecast_dates = []
-        forecast_labels = []
-        
-        # Start with the first day of the quarter for the start_date
-        current_date = start_date
-        
-        # Map month to season
-        def get_season(date):
-            month = date.month
-            if 3 <= month <= 5:
-                return "Spring"
-            elif 6 <= month <= 8:
-                return "Summer"
-            elif 9 <= month <= 11:
-                return "Autumn"
-            else:  # 12, 1, 2
-                return "Winter"
-        
-        # Generate dates and labels for each quarter from start to end date
-        while current_date <= end_date:
-            season = get_season(current_date)
-            forecast_dates.append(current_date)
-            forecast_labels.append(f"{season} {current_date.year}")
+        # Determine current season
+        month = current_date.month
+        if 3 <= month <= 5:
+            current_season = "Spring"
+        elif 6 <= month <= 8:
+            current_season = "Summer"
+        elif 9 <= month <= 11:
+            current_season = "Autumn"
+        else:
+            current_season = "Winter"
             
-            # Move to the next quarter (approximately 3 months)
-            if current_date.month <= 3:  # Winter -> Spring
-                current_date = current_date.replace(month=4, day=1)  # April 1st
-            elif current_date.month <= 6:  # Spring -> Summer
-                current_date = current_date.replace(month=7, day=1)  # July 1st
-            elif current_date.month <= 9:  # Summer -> Autumn
-                current_date = current_date.replace(month=10, day=1)  # October 1st
-            else:  # Autumn -> Winter (next year)
-                current_date = current_date.replace(year=current_date.year + 1, month=1, day=1)  # January 1st
+        # Create season labels for the forecast period
+        season_labels = []
+        
+        # Start with the current season
+        current_season_index = seasons.index(current_season)
+        for year in range(current_year, current_year + forecast_years + 1):
+            for i in range(4):  # 4 seasons per year
+                season_index = (current_season_index + i) % 4
+                season_label = f"{seasons[season_index]} {year}"
+                season_labels.append(season_label)
+        
+        # Limit to current season + forecast_years * 4 seasons
+        start_index = 0  # Start from current season
+        end_index = 1 + (forecast_years * 4)  # Current season + forecast_years * 4 seasons
+        season_labels = season_labels[start_index:end_index]
         
         # Dictionary to store results
         result = {
-            "labels": forecast_labels,
+            "labels": season_labels,
             "datasets": []
         }
         
         # Define the start date for historical data (use several years back for better forecasting)
-        historical_start_date = datetime(start_date.year - 5, 1, 1)  # Use 5 years of historical data
+        start_date = datetime(current_year - 5, 1, 1)  # Use 5 years of historical data
         
         # Colors for datasets
         colors = ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40"]
@@ -3634,20 +3614,19 @@ def get_forecast_line_data():
         commodity_city_seasonal_data = {}
         
         for commodity in commodities:
-            commodity_city_seasonal_data[commodity] = {}
-            
             for city in cities:
-                commodity_city_seasonal_data[commodity][city] = {}
+                key = f"{commodity}_{city}"
+                commodity_city_seasonal_data[key] = {}
                 
                 for season in seasons:
-                    # Query data for the given commodity, city and season, considering multiple years of historical data
+                    # Query data for the given variety, city, and season, considering multiple years of historical data
                     historical_data = (
                         db.session.query(PriceData.price, PriceData.year)
                         .filter(
                             PriceData.commodity == commodity,  # Match the commodity
-                            func.upper(PriceData.city_name) == city.upper(),  # Match the city (case insensitive)
+                            PriceData.city_name == city,  # Match the city
                             PriceData.season == season,  # Match the season
-                            PriceData.year >= historical_start_date.year,  # Consider data from several years back
+                            PriceData.year >= start_date.year,  # Consider data from several years back
                             PriceData.source.in_(["USDA", "Historical"]),  # Data sources
                         )
                         .all()
@@ -3669,7 +3648,7 @@ def get_forecast_line_data():
                         
                         yearly_avgs = []
                         years = []
-                        for year, data in sorted(years_data.items()):
+                        for year, data in years_data.items():
                             if data["count"] > 0:
                                 yearly_avgs.append(data["sum"] / data["count"])
                                 years.append(year)
@@ -3693,57 +3672,57 @@ def get_forecast_line_data():
                                     trend_factor = slope / (sum_y / n)
                         
                         # Store seasonal data with average price and trend
-                        commodity_city_seasonal_data[commodity][city][season] = {
+                        commodity_city_seasonal_data[key][season] = {
                             "avg_price": avg_price,
                             "trend_factor": trend_factor
                         }
                     else:
                         # No historical data, use defaults
-                        commodity_city_seasonal_data[commodity][city][season] = {
+                        commodity_city_seasonal_data[key][season] = {
                             "avg_price": 0,
                             "trend_factor": 0.02  # Default 2% annual growth
                         }
         
-        # Process data for the chart based on averaging options
-        # All combinations: by commodity by city, average commodities, average cities, average both
-        if avg_commodities and avg_cities:
+        # Process data for the chart
+        if avg_commodities:
             # Average across all commodities and cities
             forecast_prices = []
             
-            for date, label in zip(forecast_dates, forecast_labels):
-                season = label.split()[0]  # Extract season from label
-                forecast_year = date.year
+            for season_label in season_labels:
+                parts = season_label.split()
+                season = parts[0]
+                forecast_year = int(parts[1])
                 
-                # Calculate years from base year (historical start) for trending
-                base_year = historical_start_date.year
-                years_from_base = forecast_year - base_year
+                # Calculate years from current year for trending
+                years_from_now = forecast_year - current_year
                 
                 # Calculate average forecasted price across all commodities and cities
                 total_price = 0
-                valid_combinations = 0
+                valid_entries = 0
                 
                 for commodity in commodities:
                     for city in cities:
-                        if season in commodity_city_seasonal_data.get(commodity, {}).get(city, {}):
-                            seasonal_data = commodity_city_seasonal_data[commodity][city][season]
+                        key = f"{commodity}_{city}"
+                        if season in commodity_city_seasonal_data[key]:
+                            seasonal_data = commodity_city_seasonal_data[key][season]
                             base_price = seasonal_data["avg_price"]
                             trend = seasonal_data["trend_factor"]
                             
                             # Apply trend factor to get forecasted price
-                            forecasted_price = base_price * (1 + trend * years_from_base)
+                            forecasted_price = base_price * (1 + trend * years_from_now)
                             
                             if forecasted_price > 0:
                                 total_price += forecasted_price
-                                valid_combinations += 1
+                                valid_entries += 1
                 
                 # Add to forecast array
-                if valid_combinations > 0:
-                    avg_forecast_price = round(total_price / valid_combinations, 2)
+                if valid_entries > 0:
+                    avg_forecast_price = round(total_price / valid_entries, 2)
                     forecast_prices.append(avg_forecast_price)
                 else:
                     forecast_prices.append(0)
             
-            # Add the overall averaged dataset
+            # Add the averaged dataset
             result["datasets"].append({
                 "label": "Average Forecast Price",
                 "data": forecast_prices,
@@ -3751,141 +3730,50 @@ def get_forecast_line_data():
                 "backgroundColor": colors[0],
                 "borderDash": [5, 5]  # Dashed line for forecast
             })
-        
-        elif avg_commodities:
-            # Average across commodities, but separate by city
-            for city_idx, city in enumerate(cities):
-                forecast_prices = []
-                
-                for date, label in zip(forecast_dates, forecast_labels):
-                    season = label.split()[0]  # Extract season from label
-                    forecast_year = date.year
-                    
-                    # Calculate years from base year (historical start) for trending
-                    base_year = historical_start_date.year
-                    years_from_base = forecast_year - base_year
-                    
-                    # Calculate average forecasted price across all commodities for this city
-                    total_price = 0
-                    valid_commodities = 0
-                    
-                    for commodity in commodities:
-                        if season in commodity_city_seasonal_data.get(commodity, {}).get(city, {}):
-                            seasonal_data = commodity_city_seasonal_data[commodity][city][season]
-                            base_price = seasonal_data["avg_price"]
-                            trend = seasonal_data["trend_factor"]
-                            
-                            # Apply trend factor to get forecasted price
-                            forecasted_price = base_price * (1 + trend * years_from_base)
-                            
-                            if forecasted_price > 0:
-                                total_price += forecasted_price
-                                valid_commodities += 1
-                    
-                    # Add to forecast array
-                    if valid_commodities > 0:
-                        avg_forecast_price = round(total_price / valid_commodities, 2)
-                        forecast_prices.append(avg_forecast_price)
-                    else:
-                        forecast_prices.append(0)
-                
-                # Add a dataset for this city (averaged across commodities)
-                result["datasets"].append({
-                    "label": f"{city} Forecast",
-                    "data": forecast_prices,
-                    "borderColor": colors[city_idx % len(colors)],
-                    "backgroundColor": colors[city_idx % len(colors)],
-                    "borderDash": [5, 5]  # Dashed line for forecast
-                })
-                
-        elif avg_cities:
-            # Average across cities, but separate by commodity
-            for commodity_idx, commodity in enumerate(commodities):
-                forecast_prices = []
-                
-                for date, label in zip(forecast_dates, forecast_labels):
-                    season = label.split()[0]  # Extract season from label
-                    forecast_year = date.year
-                    
-                    # Calculate years from base year (historical start) for trending
-                    base_year = historical_start_date.year
-                    years_from_base = forecast_year - base_year
-                    
-                    # Calculate average forecasted price across all cities for this commodity
-                    total_price = 0
-                    valid_cities = 0
-                    
-                    for city in cities:
-                        if season in commodity_city_seasonal_data.get(commodity, {}).get(city, {}):
-                            seasonal_data = commodity_city_seasonal_data[commodity][city][season]
-                            base_price = seasonal_data["avg_price"]
-                            trend = seasonal_data["trend_factor"]
-                            
-                            # Apply trend factor to get forecasted price
-                            forecasted_price = base_price * (1 + trend * years_from_base)
-                            
-                            if forecasted_price > 0:
-                                total_price += forecasted_price
-                                valid_cities += 1
-                    
-                    # Add to forecast array
-                    if valid_cities > 0:
-                        avg_forecast_price = round(total_price / valid_cities, 2)
-                        forecast_prices.append(avg_forecast_price)
-                    else:
-                        forecast_prices.append(0)
-                
-                # Add a dataset for this commodity (averaged across cities)
-                result["datasets"].append({
-                    "label": f"{commodity} Forecast",
-                    "data": forecast_prices,
-                    "borderColor": colors[commodity_idx % len(colors)],
-                    "backgroundColor": colors[commodity_idx % len(colors)],
-                    "borderDash": [5, 5]  # Dashed line for forecast
-                })
-                
         else:
-            # No averaging - show each commodity-city combination
-            dataset_idx = 0
-            for commodity_idx, commodity in enumerate(commodities):
-                for city_idx, city in enumerate(cities):
+            # Process each commodity and city combination individually
+            dataset_index = 0
+            for commodity in commodities:
+                for city in cities:
+                    key = f"{commodity}_{city}"
                     forecast_prices = []
                     
-                    for date, label in zip(forecast_dates, forecast_labels):
-                        season = label.split()[0]  # Extract season from label
-                        forecast_year = date.year
+                    for season_label in season_labels:
+                        parts = season_label.split()
+                        season = parts[0]
+                        forecast_year = int(parts[1])
                         
-                        # Calculate years from base year (historical start) for trending
-                        base_year = historical_start_date.year
-                        years_from_base = forecast_year - base_year
+                        # Calculate years from current year for trending
+                        years_from_now = forecast_year - current_year
                         
                         # Get seasonal data
-                        if season in commodity_city_seasonal_data.get(commodity, {}).get(city, {}):
-                            seasonal_data = commodity_city_seasonal_data[commodity][city][season]
+                        if season in commodity_city_seasonal_data[key]:
+                            seasonal_data = commodity_city_seasonal_data[key][season]
                             base_price = seasonal_data["avg_price"]
                             trend = seasonal_data["trend_factor"]
                             
                             # Apply trend factor to get forecasted price
-                            forecasted_price = base_price * (1 + trend * years_from_base)
+                            forecasted_price = base_price * (1 + trend * years_from_now)
                             forecast_prices.append(round(forecasted_price, 2))
                         else:
                             forecast_prices.append(0)
                     
-                    # Add a dataset for this commodity-city combination
+                    # Add a dataset for this commodity and city
                     result["datasets"].append({
                         "label": f"{commodity} - {city} Forecast",
                         "data": forecast_prices,
-                        "borderColor": colors[dataset_idx % len(colors)],
-                        "backgroundColor": colors[dataset_idx % len(colors)],
+                        "borderColor": colors[dataset_index % len(colors)],
+                        "backgroundColor": colors[dataset_index % len(colors)],
                         "borderDash": [5, 5]  # Dashed line for forecast
                     })
-                    dataset_idx += 1
+                    
+                    dataset_index += 1
+        
         return jsonify(result)
         
     except Exception as e:
         app.logger.error(f"Error in forecast line data: {str(e)}")
         return jsonify({"error": str(e)}), 500
-    
 
 
 # Existing calculate_forecast helper functions can be reused

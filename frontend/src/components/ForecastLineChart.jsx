@@ -10,32 +10,28 @@ import * as XLSX from 'xlsx';
 const ForecastLineChart = () => {
   const [forecastChart, setForecastChart] = useState(null);
   const [forecastData, setForecastData] = useState(null);
-  const [showFilters, setShowFilters] = useState(true); // Default to showing filters on mobile
   const [commoditiesList, setCommoditiesList] = useState([
     'Anaheim', 'Cubanelle', 'Jalapeno', 'Poblano', 'Serrano', 'Shishito'
   ]);
+
   
-  const [citiesList, setCitiesList] = useState([
-    "Baltimore", "Boston", "Chicago", "Columbia", "Miami", "New York", "Philadelphia", "Los Angeles"
-  ]);
-  
+   const [citiesList, setCitiesList] = useState([
+      "Baltimore", "Boston", "Chicago", "Columbia", "Miami", "New York", "Philadelphia", "Los Angeles"
+    ]);
+    
   // Forecast Data States
   const [forecastFilterState, setForecastFilterState] = useState({
     commodities: ['Shishito'], // Default to one or more items
-    cities: ['New York'], // Default to New York
+    cities: ['Baltimore'], // Default to one or more cities
     averageCommodities: false,
-    averageCities: false,
-    startDate: new Date().toISOString().split('T')[0], // Default to current date
-    endDate: new Date(new Date().setFullYear(new Date().getFullYear() + 2)).toISOString().split('T')[0], // Default to current date + 2 years
+    forecastYears: 1, // Default to 1 year of forecasting
   });
 
   const [appliedForecastFilters, setAppliedForecastFilters] = useState({
     commodities: ['Shishito'],
-    cities: ['New York'],
+    cities: ['Baltimore'],
     averageCommodities: false,
-    averageCities: false,
-    startDate: new Date().toISOString().split('T')[0],
-    endDate: new Date(new Date().setFullYear(new Date().getFullYear() + 2)).toISOString().split('T')[0],
+    forecastYears: 1,
   });
 
   const forecastChartRef = useRef(null);
@@ -72,31 +68,11 @@ const ForecastLineChart = () => {
     }));
   };
 
-  // Handle Average Cities Change
-  const handleAverageCitiesChange = (e) => {
+  // Handle Forecast Years Change
+  const handleForecastYearsChange = (e) => {
     setForecastFilterState((prev) => ({
       ...prev,
-      averageCities: e.target.checked,
-    }));
-  };
-
-  // Handle Start Date Change
-  const handleStartDateChange = (e) => {
-    const newStartDate = e.target.value;
-    setForecastFilterState((prev) => ({
-      ...prev,
-      startDate: newStartDate,
-      // Ensure endDate is not before startDate
-      endDate: prev.endDate < newStartDate ? newStartDate : prev.endDate,
-    }));
-  };
-
-  // Handle End Date Change
-  const handleEndDateChange = (e) => {
-    const newEndDate = e.target.value;
-    setForecastFilterState((prev) => ({
-      ...prev,
-      endDate: newEndDate,
+      forecastYears: parseInt(e.target.value),
     }));
   };
 
@@ -167,6 +143,25 @@ const ForecastLineChart = () => {
               color: '#666666',
               padding: { top: 10, bottom: 10 },
             },
+            afterDraw: (chart) => {
+              if (chart.tooltip._active && chart.tooltip._active.length) {
+                const activePoint = chart.tooltip._active[0];
+                const ctx = chart.ctx;
+                const x = activePoint.element.x;
+                const topY = chart.scales.y.top;
+                const bottomY = chart.scales.y.bottom;
+
+                // Draw vertical line
+                ctx.save();
+                ctx.beginPath();
+                ctx.moveTo(x, topY);
+                ctx.lineTo(x, bottomY);
+                ctx.lineWidth = 1;
+                ctx.strokeStyle = '#FF0000';
+                ctx.stroke();
+                ctx.restore();
+              }
+            },
           },
           y: {
             display: true,
@@ -225,6 +220,23 @@ const ForecastLineChart = () => {
           datalabels: {
             display: false, // Globally disable datalabels
           },
+          annotation: {
+            annotations: {
+              line1: {
+                type: 'line',
+                xMin: futureStartIndex - 0.5,
+                xMax: futureStartIndex - 0.5,
+                borderColor: 'rgba(150, 150, 150, 0.5)',
+                borderWidth: 2,
+                borderDash: [5, 5],
+                label: {
+                  content: 'Forecast Starts',
+                  enabled: true,
+                  position: 'top',
+                }
+              }
+            }
+          }
         },
         interaction: { mode: 'index', intersect: false },
       },
@@ -234,7 +246,7 @@ const ForecastLineChart = () => {
   };
 
   const fetchForecastData = async (filters) => {
-    const { commodities, cities, averageCommodities, averageCities, startDate, endDate } = filters;
+    const { commodities, cities, averageCommodities, forecastYears } = filters;
 
     try {
       const token = localStorage.getItem('authToken');
@@ -246,9 +258,7 @@ const ForecastLineChart = () => {
           commodities: commodities.join(','),
           cities: cities.join(','),
           averageCommodities: averageCommodities,
-          averageCities: averageCities,
-          startDate: filters.startDate,
-          endDate: filters.endDate
+          forecastYears: forecastYears
         },
       });
 
@@ -309,207 +319,134 @@ const ForecastLineChart = () => {
   const handleApplyForecastFilters = () => {
     setAppliedForecastFilters(forecastFilterState); // Apply current filter state
     fetchForecastData(forecastFilterState); // Fetch data using new filters
-    
-    // Close the filter panel on mobile after applying
-    if (window.innerWidth < 992) {
-      setShowFilters(false);
-    }
   };
 
   return (
-    <div className="container-fluid p-0">
-      <div className="row">
-        {/* Filter Panel - Left Side Column */}
-        <div className="col-lg-3">
-          <div className={`filter-sidebar ${showFilters ? 'show' : 'd-none d-lg-block'}`} style={{ display: 'block' }}>
-            <div className="card mb-4" style={{ border: '1px solid #dee2e6' }}>
-              <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                <h5 className="mb-0">Forecast Filters</h5>
-                <button 
-                  className="btn btn-sm btn-outline-light d-lg-none"
-                  onClick={() => setShowFilters(false)}
-                >
-                  <i className="fas fa-times"></i>
-                </button>
-              </div>
-              <div className="card-body" style={{ 
-        padding: '15px', 
-        height: 'calc(100% - 56px)', // Subtract header height
-        overflowY: 'auto' // This enables scrolling
-      }}>           
-             <form id="filters-forecast-data" className="filter-form" style={{ display: 'block' }}>
-                  {/* Commodity Filter with Checkboxes */}
-                  <div className="form-group" style={{ marginBottom: '1rem' }}>
-                    <label className="font-weight-bold" style={{ display: 'block', marginBottom: '0.5rem' }}>Commodity</label>
-                    <div style={{ marginBottom: '0.5rem' }}>
-                      <label style={{ display: 'block', marginBottom: '0.5rem' }}>
+    <div id="forecast-line-section" className="section">
+      <div className="row mb-4 salesBody">
+        <div className="col-md-3">
+          {/* Filter Panel */}
+          <div className="card">
+            <div className="card-header bg-primary text-white">
+              <h3>Forecast Filters</h3>
+            </div>
+            <div className="card-body">
+              <form id="filters-forecast-data" className="filter-form active">
+                {/* Commodity Filter with Checkboxes */}
+                <div className="form-group">
+                  <label className="font-weight-bold">Commodity</label>
+                  <div className="checkbox-container">
+                    <label className="select-all">
+                      <input
+                        type="checkbox"
+                        checked={forecastFilterState.commodities.length === commoditiesList.length}
+                        onChange={(e) => handleSelectAllForecast(e, 'commodities')}
+                      />
+                      Select All
+                    </label>
+
+                    {commoditiesList.map((commodity) => (
+                      <label key={commodity} className="checkbox-item">
                         <input
                           type="checkbox"
-                          checked={forecastFilterState.commodities.length === commoditiesList.length}
-                          onChange={(e) => handleSelectAllForecast(e, 'commodities')}
-                          style={{ marginRight: '0.5rem' }}
+                          value={commodity}
+                          checked={forecastFilterState.commodities.includes(commodity)}
+                          onChange={(e) => handleCheckboxChangeForecast(e, 'commodities')}
                         />
-                        Select All
+                        {commodity}
                       </label>
-                      <div style={{ maxHeight: '150px', overflowY: 'auto', border: '1px solid #dee2e6', padding: '8px' }}>
-                        {commoditiesList.map((commodity) => (
-                          <label key={commodity} style={{ display: 'block', marginBottom: '0.25rem' }}>
-                            <input
-                              type="checkbox"
-                              value={commodity}
-                              checked={forecastFilterState.commodities.includes(commodity)}
-                              onChange={(e) => handleCheckboxChangeForecast(e, 'commodities')}
-                              style={{ marginRight: '0.5rem' }}
-                            />
-                            {commodity}
-                          </label>
-                        ))}
-                      </div>
-                    </div>
+                    ))}
                   </div>
-  
-                  {/* Average Commodities Checkbox */}
-                  <div className="form-group form-check" style={{ marginBottom: '1rem' }}>
-                    <input
-                      type="checkbox"
-                      className="form-check-input"
-                      id="averageCommoditiesForecast"
-                      checked={forecastFilterState.averageCommodities}
-                      onChange={handleAverageCommoditiesChange}
-                      style={{ marginRight: '0.5rem' }}
-                    />
-                    <label className="form-check-label font-weight-bold" htmlFor="averageCommoditiesForecast">
-                      Average over Commodities
+                </div>
+
+                {/* City Filter with Checkboxes */}
+                <div className="form-group">
+                  <label className="font-weight-bold">City</label>
+                  <div className="checkbox-container">
+                    <label className="select-all">
+                      <input
+                        type="checkbox"
+                        checked={forecastFilterState.cities.length === citiesList.length}
+                        onChange={(e) => handleSelectAllForecast(e, 'cities')}
+                      />
+                      Select All
                     </label>
-                  </div>
-  
-                  {/* City Filter with Checkboxes */}
-                  <div className="form-group" style={{ marginBottom: '1rem' }}>
-                    <label className="font-weight-bold" style={{ display: 'block', marginBottom: '0.5rem' }}>City</label>
-                    <div style={{ marginBottom: '0.5rem' }}>
-                      <label style={{ display: 'block', marginBottom: '0.5rem' }}>
+
+                    {citiesList.map((city) => (
+                      <label key={city} className="checkbox-item">
                         <input
                           type="checkbox"
-                          checked={forecastFilterState.cities.length === citiesList.length}
-                          onChange={(e) => handleSelectAllForecast(e, 'cities')}
-                          style={{ marginRight: '0.5rem' }}
+                          value={city}
+                          checked={forecastFilterState.cities.includes(city)}
+                          onChange={(e) => handleCheckboxChangeForecast(e, 'cities')}
                         />
-                        Select All
+                        {city}
                       </label>
-                      <div style={{ maxHeight: '150px', overflowY: 'auto', border: '1px solid #dee2e6', padding: '8px' }}>
-                        {citiesList.map((city) => (
-                          <label key={city} style={{ display: 'block', marginBottom: '0.25rem' }}>
-                            <input
-                              type="checkbox"
-                              value={city}
-                              checked={forecastFilterState.cities.includes(city)}
-                              onChange={(e) => handleCheckboxChangeForecast(e, 'cities')}
-                              style={{ marginRight: '0.5rem' }}
-                            />
-                            {city}
-                          </label>
-                        ))}
-                      </div>
-                    </div>
+                    ))}
                   </div>
-  
-                  {/* Average Cities Checkbox */}
-                  <div className="form-group form-check" style={{ marginBottom: '1rem' }}>
-                    <input
-                      type="checkbox"
-                      className="form-check-input"
-                      id="averageCitiesForecast"
-                      checked={forecastFilterState.averageCities}
-                      onChange={handleAverageCitiesChange}
-                      style={{ marginRight: '0.5rem' }}
-                    />
-                    <label className="form-check-label font-weight-bold" htmlFor="averageCitiesForecast">
-                      Average over Cities
-                    </label>
-                  </div>
-  
-                  {/* Date Range Filters */}
-                  <div className="form-group" style={{ marginBottom: '1rem' }}>
-                    <label className="font-weight-bold" style={{ display: 'block', marginBottom: '0.5rem' }}>Start Date</label>
-                    <input
-                      type="date"
-                      className="form-control"
-                      value={forecastFilterState.startDate}
-                      onChange={handleStartDateChange}
-                      style={{ width: '100%', padding: '0.375rem 0.75rem', border: '1px solid #ced4da', borderRadius: '0.25rem' }}
-                    />
-                  </div>
-                  <div className="form-group" style={{ marginBottom: '1rem' }}>
-                    <label className="font-weight-bold" style={{ display: 'block', marginBottom: '0.5rem' }}>End Date</label>
-                    <input
-                      type="date"
-                      className="form-control"
-                      value={forecastFilterState.endDate}
-                      onChange={handleEndDateChange}
-                      min={forecastFilterState.startDate}
-                      style={{ width: '100%', padding: '0.375rem 0.75rem', border: '1px solid #ced4da', borderRadius: '0.25rem' }}
-                    />
-                  </div>
-  
-                  {/* Apply Filters Button */}
-                  <button 
-                    type="button" 
-                    className="btn btn-primary btn-block" 
-                    onClick={handleApplyForecastFilters}
-                    style={{ 
-                      width: '100%', 
-                      backgroundColor: '#007bff', 
-                      color: 'white',
-                      padding: '0.375rem 0.75rem',
-                      border: '1px solid transparent',
-                      borderRadius: '0.25rem'
-                    }}
+                </div>
+
+                {/* Average Commodities Checkbox */}
+                <div className="form-group form-check">
+                  <input
+                    type="checkbox"
+                    className="form-check-input"
+                    id="averageCommoditiesForecast"
+                    checked={forecastFilterState.averageCommodities}
+                    onChange={handleAverageCommoditiesChange}
+                  />
+                  <label className="form-check-label font-weight-bold" htmlFor="averageCommoditiesForecast">
+                    Average over Commodities
+                  </label>
+                </div>
+
+                {/* Forecast Years Selector */}
+                <div className="form-group">
+                  <label className="font-weight-bold">Forecast Years</label>
+                  <select 
+                    className="form-control" 
+                    value={forecastFilterState.forecastYears}
+                    onChange={handleForecastYearsChange}
                   >
-                    Apply Filters
-                  </button>
-                </form>
-              </div>
+                    <option value="1">1 Year</option>
+                    {/* <option value="2">2 Years</option>
+                    <option value="3">3 Years</option>
+                    <option value="5">5 Years</option> */}
+                  </select>
+                </div>
+
+                {/* Apply Filters Button */}
+                <button type="button" className="btn btn-primary btn-block" onClick={handleApplyForecastFilters}>
+                  Apply Filters
+                </button>
+              </form>
             </div>
           </div>
         </div>
-  
-        {/* Chart Display - Right Side Column */}
-        <div className="col-lg-9">
-          <div className="card mb-4" style={{ border: '1px solid #dee2e6' }}>
+
+        <div className="col-md-9">
+          {/* Chart Display */}
+          <div className="card resizable-block" id="forecast-line-data-card" data-block-title="Forecast Line Data">
             <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-              <h4 className="mb-0">Price Forecast Trends</h4>
-              <div>
-                <button
-                  className="btn btn-sm btn-outline-light mr-2 d-inline-block d-lg-none"
-                  onClick={() => setShowFilters(true)}
-                >
-                  <i className="fas fa-filter"></i> Filters
-                </button>
-                <button 
-                  className="btn btn-sm btn-outline-light"
-                  onClick={() => window.toggleBlockSize && window.toggleBlockSize('forecast-line-data-card', 'Forecast Line Data')}
-                >
-                  <i className="fas fa-expand-arrows-alt"></i>
-                </button>
-              </div>
+              <h2>Price Forecast Trends</h2>
+              <button
+                className="btn btn-sm btn-outline-light toggle-size"
+                data-block-title="Forecast Line Data"
+                onClick={() => window.toggleBlockSize && window.toggleBlockSize('forecast-line-data-card', 'Forecast Line Data')}
+              >
+                Minimize
+              </button>
             </div>
-            <div className="card-body" style={{ padding: '15px' }}>
-              <div className="chart-container" style={{ position: 'relative', height: '60vh', width: '100%' }}>
-                <canvas id="forecastLineChart" ref={forecastChartRef}></canvas>
+            <div className="card-body">
+              <div className="mb-3">
+                <p className="text-muted">
+                  <i className="fas fa-info-circle"></i> This chart shows forecasted prices based on historical seasonal patterns. 
+                  Dashed lines represent forecasted prices. Select commodities, cities, and forecast period using the filters.
+                </p>
               </div>
-              <div className="mt-3 d-flex justify-content-end">
-                <button 
-                  className="btn btn-primary" 
-                  onClick={handleDownload}
-                  style={{ 
-                    backgroundColor: '#007bff', 
-                    color: 'white',
-                    padding: '0.375rem 0.75rem',
-                    border: '1px solid transparent',
-                    borderRadius: '0.25rem'
-                  }}
-                >
-                  <i className="fas fa-download mr-2"></i>
+              <canvas id="forecastLineChart" ref={forecastChartRef} width="400" height="400"></canvas>
+              <div className="mt-3">
+                <button className="btn btn-primary" onClick={handleDownload}>
                   Download Chart & Data
                 </button>
               </div>
