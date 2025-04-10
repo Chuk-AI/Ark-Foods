@@ -4378,7 +4378,6 @@ def update_break_even_estimation(estimation_id):
 
 
 
-
 @app.route('/api/commodities', methods=['GET'])
 # @jwt_required()
 def get_commodities():
@@ -4387,12 +4386,24 @@ def get_commodities():
         # Get unique commodity names from price data
         commodities = db.session.query(PriceData.commodity).distinct().all()
         commodity_list = [commodity[0] for commodity in commodities]
-        return jsonify(sorted(commodity_list))
+        
+        # Standardize commodity names
+        standardized_commodities = []
+        for commodity in commodity_list:
+            # Handle the specific case of Cubanelle/Cubanelles
+            if commodity.lower() in ['cubanelle', 'cubanelles']:
+                if 'Cubanelles' not in standardized_commodities:
+                    standardized_commodities.append('Cubanelles')
+            else:
+                standardized_commodities.append(commodity)
+        
+        return jsonify(sorted(standardized_commodities))
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
 
 
-
+    
 # A function to check whether the current route should be cached
 def should_cache_route():
     return request.path not in app.config['CACHE_NO_CACHE_ROUTES']
