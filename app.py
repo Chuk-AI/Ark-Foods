@@ -8,6 +8,8 @@ from flask import (
     session,
     jsonify,
     send_file,
+    Blueprint
+
 )
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import and_, or_, func, text, case, true
@@ -96,6 +98,13 @@ CSV_DIRECTORY = "data/"
 # Initialize Flask app
 app = Flask(__name__, static_folder= 'frontend/build', static_url_path="/")
 app.config['JWT_SECRET_KEY'] = 'your_secret_key'  # Replace with a strong secret key
+app.config['DEBUG'] = True
+app.config['CACHE_NO_CACHE_ROUTES'] = [
+    '/api/delete-alert-by-id',
+    '/api/clear-alerts',
+    '/api/alert-settings',
+    '/api/alert-entries-fresh'
+]
 jwt = JWTManager(app)
 
 
@@ -193,11 +202,18 @@ CORS(
         r"/api/*": {
             "origins": [
                 "http://localhost:3000",  # Local frontend (for development)
-                "https://arkfoods.klicksai.com"  # Replace with your new production domain or public IP
+                "https://arkfoods.klicksai.com"  # Replace with your production domain
+            ],
+            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],  # Add OPTIONS
+            "allow_headers": [
+                "Content-Type", 
+                "Authorization", 
+                "Access-Control-Allow-Credentials"
             ]
         }
     },
 )
+
 
 
 
@@ -438,6 +454,65 @@ class ClimatologyData(db.Model):
     climatology_value = db.Column(db.Float, nullable=False)
     source = db.Column(db.String(50), nullable=False)  # Data source (e.g., ERA5)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class AlertSetting(db.Model):
+    """Model for price alert settings."""
+    
+    __tablename__ = 'alert_settings'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    city = db.Column(db.String(100), nullable=False)  
+    commodity = db.Column(db.String(100), nullable=False)
+    threshold = db.Column(db.Float, nullable=False, default=5.0)  # Default 5% threshold
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<AlertSetting {self.id}: {self.commodity} @ {self.threshold}%>'
+    
+    def to_dict(self):
+        """Convert instance to dictionary."""
+        return {
+            'id': self.id,
+            'city': self.city,         # Include the city field
+            'commodity': self.commodity,
+            'threshold': self.threshold,
+            'isActive': self.is_active,
+            'createdAt': self.created_at.isoformat(),
+            'updatedAt': self.updated_at.isoformat()
+        }
+
+
+
+class Notification(db.Model):
+    """Model for notifications."""
+    
+    __tablename__ = 'notifications'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    alert_setting_id = db.Column(db.Integer, db.ForeignKey('alert_settings.id'), nullable=True)
+    title = db.Column(db.String(200), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    read = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Relationship with AlertSetting
+    alert_setting = db.relationship('AlertSetting', backref=db.backref('notifications', lazy=True))
+    
+    def __repr__(self):
+        return f'<Notification {self.id}: {self.title}>'
+    
+    def to_dict(self):
+        """Convert instance to dictionary."""
+        return {
+            'id': self.id,
+            'title': self.title,
+            'message': self.message,
+            'read': self.read,
+            'created_at': self.created_at.isoformat(),
+            'alert_setting_id': self.alert_setting_id
+        }
 
 
 # USDA DATA IMPORT SETTINGS HERE!
@@ -3627,7 +3702,7 @@ def get_forecast_line_data():
                             PriceData.city_name == city,  # Match the city
                             PriceData.season == season,  # Match the season
                             PriceData.year >= start_date.year,  # Consider data from several years back
-                            PriceData.source.in_(["USDA", "Historical"]),  # Data sources
+                            PriceData.source == "ProduceIQ"
                         )
                         .all()
                     )
@@ -3777,11 +3852,179 @@ def get_forecast_line_data():
 
 
 
-# Add this route to your Flask application
+@app.route("/api/volatility_data", methods=["GET"])
+def get_volatility_data():
+    try:
+        # Parse request parameters
+        commodities = request.args.get("commodities", "").split(",")
+        cities = request.args.get("cities", "").split(",")
+        years_str = request.args.get("years", "").split(",")
+        display_type = request.args.get("displayType", "monthly")
+        
+        # Convert years to integers
+        years = [int(year) for year in years_str if year.strip()]
+        
+        # Check if commodities or cities are missing or empty
+        if not commodities or commodities[0] == '' or not cities or cities[0] == '':
+            return jsonify({"error": "Missing commodities or cities"}), 400
+            
+        # Check if years are missing
+        if not years:
+            current_year = datetime.now().year
+            years = [current_year - 1]  # Default to previous year
+            
+        # Define result structure
+        result = {
+            "labels": [],
+            "datasets": []
+        }
+        
+        # Define months and seasons for labels
+        months = ["January", "February", "March", "April", "May", "June", 
+                 "July", "August", "September", "October", "November", "December"]
+        seasons = ["Winter", "Spring", "Summer", "Autumn"]
+        
+        # Set labels based on display type
+        if display_type == "monthly":
+            result["labels"] = months
+        else:  # seasonal
+            result["labels"] = seasons
+            
+        # Colors for datasets
+        colors = ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40"]
+        color_index = 0
+        
+        # Process data for each commodity and city combination
+        for commodity in commodities:
+            for city in cities:
+                # Create dataset for this combination
+                dataset_label = f"{commodity} - {city}"
+                
+                # Initialize volatility data array
+                volatility_data = []
+                
+                if display_type == "monthly":
+                    # Calculate monthly volatility
+                    for month_idx, month in enumerate(months, 1):
+                        # Query price data for this commodity, city, month across selected years
+                        month_volatility = calculate_monthly_volatility(commodity, city, month_idx, years)
+                        volatility_data.append(round(month_volatility, 2))
+                else:
+                    # Calculate seasonal volatility
+                    for season in seasons:
+                        # Query price data for this commodity, city, season across selected years
+                        season_volatility = calculate_seasonal_volatility(commodity, city, season, years)
+                        volatility_data.append(round(season_volatility, 2))
+                
+                # Add dataset to result
+                result["datasets"].append({
+                    "label": dataset_label,
+                    "data": volatility_data,
+                    "borderColor": colors[color_index % len(colors)],
+                    "backgroundColor": colors[color_index % len(colors)],
+                })
+                
+                color_index += 1
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        app.logger.error(f"Error in volatility data: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
-from datetime import datetime, timedelta
-from flask import request, jsonify
-import requests
+def calculate_monthly_volatility(commodity, city, month, years):
+    """Calculate price volatility (high-low spread) for a given month."""
+    try:
+        volatility = 0.0
+        
+        # For each year, get the price range (high - low) for the specified month
+        year_volatilities = []
+        
+        for year in years:
+            # Calculate the day range for the given month in this year
+            first_day, last_day = get_month_day_range(month, year)
+            
+            # Query the min and max prices for this period
+            price_range = db.session.query(
+                func.max(PriceData.price).label('max_price'),
+                func.min(PriceData.price).label('min_price')
+            ).filter(
+                PriceData.commodity == commodity,
+                PriceData.city_name == city,
+                PriceData.year == year,
+                PriceData.day >= first_day,
+                PriceData.day <= last_day,
+                PriceData.source == "ProduceIQ"
+            ).first()
+            
+            # Calculate volatility if we have data
+            if price_range and price_range.max_price is not None and price_range.min_price is not None:
+                month_volatility = price_range.max_price - price_range.min_price
+                if month_volatility > 0:
+                    year_volatilities.append(month_volatility)
+        
+        # Average the volatilities across years
+        if year_volatilities:
+            volatility = sum(year_volatilities) / len(year_volatilities)
+            
+        return volatility
+        
+    except Exception as e:
+        app.logger.error(f"Error calculating monthly volatility: {str(e)}")
+        return 0.0
+
+def calculate_seasonal_volatility(commodity, city, season, years):
+    """Calculate price volatility (high-low spread) for a given season."""
+    try:
+        volatility = 0.0
+        
+        # For each year, get the price range (high - low) for the specified season
+        year_volatilities = []
+        
+        for year in years:
+            # Query the min and max prices for this period
+            price_range = db.session.query(
+                func.max(PriceData.price).label('max_price'),
+                func.min(PriceData.price).label('min_price')
+            ).filter(
+                PriceData.commodity == commodity,
+                PriceData.city_name == city,
+                PriceData.year == year,
+                PriceData.season == season,
+                PriceData.source == "ProduceIQ"
+            ).first()
+            
+            # Calculate volatility if we have data
+            if price_range and price_range.max_price is not None and price_range.min_price is not None:
+                season_volatility = price_range.max_price - price_range.min_price
+                if season_volatility > 0:
+                    year_volatilities.append(season_volatility)
+        
+        # Average the volatilities across years
+        if year_volatilities:
+            volatility = sum(year_volatilities) / len(year_volatilities)
+            
+        return volatility
+        
+    except Exception as e:
+        app.logger.error(f"Error calculating seasonal volatility: {str(e)}")
+        return 0.0
+
+def get_month_day_range(month, year):
+    """Helper function to get the day of year range for a given month."""
+    from datetime import datetime, timedelta
+    from calendar import monthrange
+    
+    # Get the first day of the month
+    first_date = datetime(year, month, 1)
+    first_day = first_date.timetuple().tm_yday
+    
+    # Get the last day of the month
+    _, last_day_of_month = monthrange(year, month)
+    last_date = datetime(year, month, last_day_of_month)
+    last_day = last_date.timetuple().tm_yday
+    
+    return first_day, last_day
 
 # Add this route to your Flask application
 
@@ -4143,6 +4386,582 @@ def update_break_even_estimation(estimation_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": f"Failed to update estimation: {str(e)}"}), 500
+
+
+
+
+
+
+
+@app.route('/api/commodities', methods=['GET'])
+# @jwt_required()
+def get_commodities():
+    """Get list of available commodities."""
+    try:
+        # Get unique commodity names from price data
+        commodities = db.session.query(PriceData.commodity).distinct().all()
+        commodity_list = [commodity[0] for commodity in commodities]
+        return jsonify(sorted(commodity_list))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+
+# A function to check whether the current route should be cached
+def should_cache_route():
+    return request.path not in app.config['CACHE_NO_CACHE_ROUTES']
+
+# Update your caching logic in the relevant routes:
+
+
+@app.route('/debug/check-price-alerts', methods=['GET'])
+def debug_price_alerts():
+    from alert_service import check_price_alerts
+    
+    try:
+        check_price_alerts()
+        return jsonify({"status": "Price alert check completed"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+
+
+@app.route('/api/alert-entries-fresh', methods=['GET'])
+def get_alert_settings_fresh():
+    """Fetch all alert settings with guaranteed fresh data."""
+    try:
+        # Always bypass cache for this route
+        print(f"Fetching fresh alert settings for route: {request.path}")
+        
+        # Query the database directly to get the most recent data
+        settings = AlertSetting.query.all()
+        result = [alert.to_dict() for alert in settings]
+        
+        # Completely remove any cached data
+        cache.clear()  # This clears entire cache
+        
+        # Create response with aggressive no-cache headers
+        response = jsonify(result)
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0, s-maxage=0, proxy-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        response.headers['X-Accel-Expires'] = '0'  # Nginx cache control
+        
+        return response
+    
+    except Exception as e:
+        print(f"Error fetching alert settings: {str(e)}")
+        
+        response = jsonify({
+            "error": "Failed to retrieve alert settings",
+            "details": str(e)
+        })
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0, s-maxage=0, proxy-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        response.headers['X-Accel-Expires'] = '0'
+        
+        return response, 500
+
+
+
+@app.route('/api/alert-settings/<int:alert_id>', methods=['PATCH'])
+def update_alert_setting(alert_id):
+    """Update an existing alert setting."""
+    data = request.json
+    
+    try:
+        # Find the alert setting
+        alert = AlertSetting.query.filter_by(id=alert_id).first()  # Removed user_id check
+        
+        if not alert:
+            return jsonify({"error": "Alert setting not found"}), 404
+        
+        # Update fields
+        if 'threshold' in data:
+            alert.threshold = float(data['threshold'])
+        
+        if 'isActive' in data:
+            alert.is_active = bool(data['isActive'])
+        
+        alert.updated_at = datetime.utcnow()
+        db.session.commit()
+        
+        return jsonify(alert.to_dict())
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/delete-alert-by-id', methods=['POST'])
+def delete_alert_by_id():
+    """Delete an alert by ID, reset the sequence, and update the cache."""
+    try:
+        data = request.json
+        alert_id = data.get('id')
+        
+        if not alert_id:
+            response = jsonify({"error": "Alert ID is required"})
+            response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+            response.headers['Pragma'] = 'no-cache'
+            response.headers['Expires'] = '0'
+            return response, 400
+        
+        print(f"Attempting to delete alert with ID: {alert_id}")
+        
+        # Invalidate the cache before making any changes to the database
+        cache.delete('alert_settings')  # Delete cached data to ensure fresh data
+        
+        # Find the alert by ID
+        alert = AlertSetting.query.get(alert_id)
+        
+        if not alert:
+            print(f"No alert found with ID: {alert_id}")
+            response = jsonify({"error": "No alert found with this ID"})
+            response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+            response.headers['Pragma'] = 'no-cache'
+            response.headers['Expires'] = '0'
+            return response, 404
+        
+        # Delete the alert
+        db.session.delete(alert)
+        db.session.commit()
+
+        # Reset the SQLite sequence after deletion (to continue the correct auto-increment)
+        db.session.execute(f"UPDATE sqlite_sequence SET seq = (SELECT MAX(id) FROM alert_settings) WHERE name = 'alert_settings'")
+        db.session.commit()
+
+        # After deletion, re-fetch all alerts and update the cache
+        settings = AlertSetting.query.all()
+        result = [alert.to_dict() for alert in settings]
+        
+        # Set the updated list of alerts to the cache
+        cache.set('alert_settings', result, timeout=300)  # Cache for 5 minutes
+        
+        response = jsonify({
+            "success": True, 
+            "message": f"Alert with ID {alert_id} deleted successfully",
+            "deleted_alert": {
+                "id": alert.id,
+                "commodity": alert.commodity,
+                "threshold": alert.threshold
+            }
+        })
+        
+        # Add no-cache headers
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        
+        return response
+    
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error deleting alert: {str(e)}")
+        
+        response = jsonify({"error": str(e)})
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        
+        return response, 500
+
+
+@app.route('/api/alert-settings', methods=['POST'])
+def create_alert_setting():
+    """Create a new alert setting and update the cache."""
+    # Log the incoming request details
+    app.logger.info(f"Received alert setting creation request: {request.json}")
+    
+    try:
+        # Validate request data
+        data = request.json
+        if not data:
+            response = jsonify({"error": "No data provided"})
+            response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+            response.headers['Pragma'] = 'no-cache'
+            response.headers['Expires'] = '0'
+            return response, 400
+
+        # Validate city (required field)
+        city = data.get('city')
+        if not city or not isinstance(city, str):
+            response = jsonify({"error": "Valid city is required"})
+            response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+            response.headers['Pragma'] = 'no-cache'
+            response.headers['Expires'] = '0'
+            return response, 400
+        
+        # Validate commodity (required field)
+        commodity = data.get('commodity')
+        if not commodity or not isinstance(commodity, str):
+            response = jsonify({"error": "Valid commodity is required"})
+            response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+            response.headers['Pragma'] = 'no-cache'
+            response.headers['Expires'] = '0'
+            return response, 400
+        
+        # Validate and sanitize threshold
+        try:
+            threshold = float(data.get('threshold', 5.0))
+            # Add reasonable bounds check if needed
+            if threshold <= 0 or threshold > 100:
+                raise ValueError("Threshold must be between 0 and 100")
+        except (TypeError, ValueError):
+            response = jsonify({"error": "Invalid threshold value"})
+            response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+            response.headers['Pragma'] = 'no-cache'
+            response.headers['Expires'] = '0'
+            return response, 400
+        
+        # Validate is_active (use default if not provided)
+        is_active = bool(data.get('isActive', True))
+        
+        # Check for duplicate alert setting using city, commodity, and threshold
+        existing_alert = AlertSetting.query.filter_by(
+            city=city,
+            commodity=commodity,
+            threshold=threshold
+        ).first()
+        
+        if existing_alert:
+            response = jsonify({
+                "error": "An alert setting for this commodity and city with the same threshold already exists",
+                "existing_alert_id": existing_alert.id
+            })
+            response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+            response.headers['Pragma'] = 'no-cache'
+            response.headers['Expires'] = '0'
+            return response, 409  # Conflict status code
+        
+        # Create new alert setting with city included
+        new_alert = AlertSetting(
+            city=city.strip(),
+            commodity=commodity.strip(),
+            threshold=threshold,
+            is_active=is_active
+        )
+        
+        # Add the new alert to the session and commit
+        db.session.add(new_alert)
+        db.session.commit()
+        
+        # Fetch all alert settings after insertion to update cache
+        settings = AlertSetting.query.all()
+        result = [alert.to_dict() for alert in settings]
+        
+        # Set the updated result to the cache for 5 minutes
+        cache.set('alert_settings', result, timeout=300)
+        
+        # Log successful creation
+        app.logger.info(f"Alert setting created: City={city}, Commodity={commodity}, Threshold={threshold}")
+        
+        # Prepare response
+        response = jsonify(new_alert.to_dict())
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        
+        return response, 201
+    
+    except SQLAlchemyError as db_error:
+        db.session.rollback()
+        app.logger.error(f"Database error during alert setting creation: {str(db_error)}")
+        
+        response = jsonify({
+            "error": "Database error occurred",
+            "details": str(db_error)
+        })
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        
+        return response, 500
+    
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Unexpected error during alert setting creation: {str(e)}")
+        
+        response = jsonify({
+            "error": "An unexpected error occurred",
+            "details": str(e)
+        })
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        
+        return response, 500
+
+    
+
+@app.route('/api/notifications', methods=['GET'])
+def get_notifications():
+    """Get all notifications."""
+    try:
+        notifications = Notification.query.all()  # Removed user_id filter
+        return jsonify([notification.to_dict() for notification in notifications])
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/notifications/<int:notification_id>', methods=['PATCH'])
+def update_notification(notification_id):
+    """Update a notification (mark as read)."""
+    data = request.json
+    
+    try:
+        # Find the notification
+        notification = Notification.query.filter_by(id=notification_id).first()  # Removed user_id check
+        
+        if not notification:
+            return jsonify({"error": "Notification not found"}), 404
+        
+        # Update read status
+        if 'read' in data:
+            notification.read = bool(data['read'])
+        
+        db.session.commit()
+        
+        return jsonify(notification.to_dict())
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/notifications/<int:notification_id>', methods=['DELETE'])
+def delete_notification(notification_id):
+    """Delete a notification."""
+    try:
+        # Find the notification
+        notification = Notification.query.filter_by(id=notification_id).first()  # Removed user_id check
+        
+        if not notification:
+            return jsonify({"error": "Notification not found"}), 404
+        
+        db.session.delete(notification)
+        db.session.commit()
+        
+        return jsonify({"message": "Notification deleted successfully"})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/notifications/mark-all-read', methods=['POST'])
+def mark_all_read():
+    """Mark all notifications as read."""
+    try:
+        # Update all unread notifications
+        notifications = Notification.query.filter_by(read=False).all()  # Removed user_id filter
+        
+        for notification in notifications:
+            notification.read = True
+        
+        db.session.commit()
+        
+        return jsonify({"message": f"{len(notifications)} notifications marked as read"})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+    
+@app.route('/api/notifications/unread-count', methods=['GET'])
+def get_unread_count():
+    """Get count of unread notifications."""
+    try:
+        # Count unread notifications
+        count = Notification.query.filter_by(read=False).count()  # Removed user_id filter
+        
+        return jsonify({"count": count})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+
+
+
+# ############### Testing
+@app.route('/api/test-price-trigger', methods=['GET'])
+def test_price_trigger():
+    """Create test price data and trigger alert check."""
+    try:
+        # Get current date info
+        today = datetime.now()
+        current_year = today.year
+        current_day = today.timetuple().tm_yday
+        
+        # Previous day
+        previous_day = current_day - 1
+        previous_year = current_year
+        if previous_day <= 0:
+            previous_day = 365
+            previous_year = current_year - 1
+        
+        # Get existing alert settings
+        alerts = AlertSetting.query.all()
+        if not alerts:
+            return jsonify({"error": "No alert settings found to test"}), 404
+        
+        created_data = []
+        for alert in alerts:
+            # Calculate threshold price (how much increase would trigger the alert)
+            base_price = 10.0
+            increase_pct = float(alert.threshold)
+            new_price = base_price * (1 + (increase_pct / 100) + 0.01)  # Just over the threshold
+            
+            # Create previous day data
+            previous = PriceData(
+                commodity=alert.commodity,
+                city_name="Test City",
+                year=previous_year,
+                day=previous_day,
+                price=base_price,
+                source="ProduceIQ",
+                season="Spring"
+            )
+            db.session.add(previous)
+            
+            # Create current day data with price increase
+            current = PriceData(
+                commodity=alert.commodity,
+                city_name="Test City",
+                year=current_year,
+                day=current_day,
+                price=new_price,
+                source="ProduceIQ",
+                season="Spring"
+            )
+            db.session.add(current)
+            
+            created_data.append({
+                "commodity": alert.commodity,
+                "previous": {"day": previous_day, "year": previous_year, "price": base_price},
+                "current": {"day": current_day, "year": current_year, "price": new_price},
+                "increase_pct": ((new_price - base_price) / base_price) * 100,
+                "threshold": alert.threshold
+            })
+        
+        db.session.commit()
+        
+        # Now run the alert check
+        from alert_service import check_price_alerts
+        check_price_alerts()
+        
+        # Check if notifications were created
+        notifications = Notification.query.all()
+        notif_data = []
+        for notif in notifications:
+            notif_data.append({
+                "id": notif.id,
+                "title": notif.title,
+                "message": notif.message,
+                "read": notif.read,
+                "created_at": notif.created_at.isoformat(),
+                "alert_setting_id": notif.alert_setting_id
+            })
+        
+        return jsonify({
+            "message": "Alert testing completed",
+            "price_data_created": created_data,
+            "notifications_count": len(notifications),
+            "notifications": notif_data
+        })
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error testing price triggers: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/debug-alert-service', methods=['GET'])
+def debug_alert_service():
+    """Debug issues with the alert service."""
+    try:
+        # Import your alert service
+        from alert_service import check_price_alerts
+        
+        # Get latest price data for debugging
+        latest_data_query = db.session.query(func.max(PriceData.day), PriceData.year).filter(
+            PriceData.source == "ProduceIQ"
+        ).first()
+        
+        # Properly extract values from Row object
+        if latest_data_query:
+            latest_day = latest_data_query[0]
+            latest_year = latest_data_query[1]
+            latest_data = {"day": latest_day, "year": latest_year}
+        else:
+            latest_data = {"day": None, "year": None}
+        
+        print(f"Latest price data: {latest_data}")
+        
+        # Get all active alerts
+        active_alerts = AlertSetting.query.filter_by(is_active=True).all()
+        active_alerts_info = []
+        for alert in active_alerts:
+            active_alerts_info.append({
+                "id": alert.id,
+                "commodity": alert.commodity,
+                "threshold": alert.threshold
+            })
+        
+        # Check for each active alert if there's price data for its commodity
+        price_data_found = []
+        for alert in active_alerts:
+            # Look for price data matching this alert's commodity
+            data = PriceData.query.filter(
+                PriceData.commodity == alert.commodity,
+                PriceData.source == "ProduceIQ"
+            ).order_by(PriceData.year.desc(), PriceData.day.desc()).limit(2).all()
+            
+            data_info = []
+            for d in data:
+                data_info.append({
+                    "day": d.day, 
+                    "year": d.year, 
+                    "price": d.price
+                })
+            
+            price_data_found.append({
+                "commodity": alert.commodity,
+                "records_found": len(data),
+                "price_data": data_info
+            })
+        
+        return jsonify({
+            "latest_price_data": latest_data,
+            "active_alerts": active_alerts_info,
+            "price_data_found": price_data_found,
+            "notifications_exist": Notification.query.count() > 0
+        })
+    except Exception as e:
+        print(f"Error debugging alert service: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/test-notification-creation', methods=['GET'])
+def test_create_notification():
+    """Test endpoint to check if notification creation works."""
+    try:
+        # Create a test notification directly
+        test_notification = Notification(
+            title="Test Notification",
+            message="This is a test notification",
+            read=False
+        )
+        
+        db.session.add(test_notification)
+        db.session.commit()
+        
+        return jsonify({
+            "success": True, 
+            "notification_id": test_notification.id,
+            "message": "Test notification created successfully"
+        })
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error creating test notification: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 
 

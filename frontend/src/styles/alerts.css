@@ -1,0 +1,109 @@
+/* Alerts.css */
+
+/* Tab styling */
+.nav-tabs .nav-link {
+    border: none;
+    background: transparent;
+    padding: 0.5rem 1rem;
+    margin-right: 0.5rem;
+    font-weight: 500;
+  }
+  
+  .card-header-tabs .nav-link.active {
+    background-color: #fff;
+    border-bottom: 2px solid #0d6efd;
+  }
+  
+  /* Notification list styling */
+  .notification-list {
+    max-height: 600px;
+    overflow-y: auto;
+  }
+  
+  .notification-item {
+    border-left: 3px solid #dee2e6;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    background-color: #f8f9fa;
+    border-radius: 0.25rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  
+  .notification-item:hover {
+    background-color: #f1f3f5;
+    border-left-color: #adb5bd;
+  }
+  
+  .notification-item.unread {
+    border-left-color: #dc3545;
+    background-color: rgba(220, 53, 69, 0.05);
+  }
+  
+  .notification-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+  }
+  
+  .notification-title {
+    margin: 0;
+    font-size: 1.1rem;
+  }
+  
+  .notification-message {
+    margin-bottom: 0.5rem;
+  }
+  
+  .notification-meta {
+    display: flex;
+    justify-content: space-between;
+  }
+  
+  /* Alert settings form */
+  .create-alert-form {
+    background-color: #f8f9fa;
+    padding: 1.5rem;
+    border-radius: 0.25rem;
+    margin-bottom: 2rem;
+  }
+  
+  /* Table styling */
+  .table tbody tr:hover {
+    background-color: rgba(13, 110, 253, 0.05);
+  }
+  
+  /* Badge styling for unread count */
+  .badge {
+    font-size: 0.75rem;
+    font-weight: 500;
+    padding: 0.2rem 0.5rem;
+  }
+  
+  /* Status switch */
+  .form-switch {
+    padding-left: 2.5rem;
+  }
+  
+  .form-switch .form-check-input {
+    width: 2rem;
+    margin-left: -2.5rem;
+  }
+  
+  .form-check-input:checked {
+    background-color: #198754;
+    border-color: #198754;
+  }
+  
+  /* Responsive fixes */
+  @media (max-width: 768px) {
+    .notification-header {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    
+    .notification-actions {
+      margin-top: 0.5rem;
+    }
+  }

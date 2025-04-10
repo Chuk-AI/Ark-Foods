@@ -1,11 +1,10 @@
-
-
 import React, { useState } from 'react';
 import Header from '../components/header';
 import ForecastLineChart from '../components/ForecastLineChart';
 import BreakEvenEstimator from '../components/BreakEvenEstimator';
 import HarvestPlanner from '../components/HarvestPlanner';
-import '../styles/dynamic.css'; // Make sure to import the CSS file
+import VolatilityChart from '../components/VolatilityChart';
+import '../styles/dynamic.css';
 
 export default function DynamicAnalytics() {
   // State to track which chart is currently selected
@@ -18,6 +17,12 @@ export default function DynamicAnalytics() {
       name: 'Price Forecast Trends', 
       icon: 'fa-chart-line',
       description: 'View forecasted price trends based on seasonal patterns'
+    },
+    { 
+      id: 'volatility', 
+      name: 'Market Volatility', 
+      icon: 'fa-chart-area',
+      description: 'Analyze price fluctuations to identify stable vs. risky market periods'
     },
     { 
       id: 'breakEven', 
@@ -38,10 +43,12 @@ export default function DynamicAnalytics() {
     switch (activeChart) {
       case 'forecastLine':
         return <ForecastLineChart />;
+      case 'volatility':
+        return <VolatilityChart />;
       case 'breakEven':
         return <BreakEvenEstimator />;
-        case 'harvestPlanner':
-          return <HarvestPlanner />;
+      case 'harvestPlanner':
+        return <HarvestPlanner />;
       default:
         return null;
     }
@@ -65,7 +72,7 @@ export default function DynamicAnalytics() {
             {/* Chart Selection Cards */}
             <div className="row mb-4">
               {chartOptions.map(chart => (
-                <div key={chart.id} className="col-md-4 mb-4">
+                <div key={chart.id} className="col-md-3 mb-4">
                   <div 
                     className="chart-option-card p-4 text-center h-100"
                     onClick={() => setActiveChart(chart.id)}

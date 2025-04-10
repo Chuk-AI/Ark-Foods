@@ -12,8 +12,8 @@ import ProtectedRoute from './components/protectedRoute';
 import WeatherPage from './pages/WeatherPage';
 import DashAnalytics from './pages/analytics';
 import DynamicAnalytics from './pages/dynamicAnalytics';
+import Alerts from './pages/Alerts';
 // Axios Defaults
-//
 
 // axios.defaults.baseURL = 'http://localhost:5500/'; // local backend
 axios.defaults.baseURL = 'https://arkfoods.klicksai.com'; // or your custom domain
@@ -91,6 +91,14 @@ const App = () => {
             element={
               <ProtectedRoute roles={['admin', 'owner']}>
                 <DynamicAnalytics />
+              </ProtectedRoute>
+            }
+          />
+           <Route
+            path="/alerts"
+            element={
+              <ProtectedRoute roles={['admin', 'owner']}>
+                <Alerts />
               </ProtectedRoute>
             }
           />
