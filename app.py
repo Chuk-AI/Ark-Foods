@@ -455,6 +455,8 @@ class ClimatologyData(db.Model):
     source = db.Column(db.String(50), nullable=False)  # Data source (e.g., ERA5)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+
+
 class AlertSetting(db.Model):
     """Model for price alert settings."""
     
@@ -2553,140 +2555,124 @@ def api_most_recent_prices():
     return jsonify({"prices": recent_prices})
 
 
+@app.route("/api/sales_seasonal_prices", methods=["GET"])
+def get_sales_seasonal_prices():
+    # Fetch request parameters
+    commodities_str = request.args.get("commodities")
+    cities_str = request.args.get("cities")
+    start_date_str = request.args.get("start_date")
+    end_date_str = request.args.get("end_date")
 
+    # Log received parameters
+    app.logger.info(f"Received request with commodities: {commodities_str}, cities: {cities_str}, start_date: {start_date_str}, end_date: {end_date_str}")
 
-
-# @app.route("/api/historical_data", methods=["GET"])
-# # @jwt_required()
-# def historical_data():
-    try:
-        # Fetch parameters from the frontend
-        commodities = request.args.get("commodities", "").split(",")
-        cities = request.args.get("cities", "").split(",")
-        start_date = request.args.get("start_date")
-        end_date = request.args.get("end_date")
-        avg_commodities = (
-            request.args.get("averageCommodities", "false").lower() == "true"
-        )
-        avg_cities = request.args.get("averageCities", "false").lower() == "true"
-
-   
-
-        # Standardize Cubanelles
-        standardized_commodities = [
-            "Cubanelle" if commodity.lower().startswith("cubanelle") else commodity
+    # Convert commodities and cities to lists if provided, else use all
+    if commodities_str:
+        commodities = commodities_str.split(",")
+        commodities = [
+            "Cubanelle" if commodity == "Cubanelles" else commodity
             for commodity in commodities
         ]
+    else:
+        commodities = [
+            row[0] for row in db.session.query(PriceData.commodity).distinct().all()
+        ]
 
-        start_dt = datetime.strptime(start_date, "%Y-%m-%d")
-        end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+    if cities_str:
+        cities = cities_str.split(",")
+       
+    else:
+        cities = [
+            row[0] for row in db.session.query(PriceData.city_name).distinct().all()
+        ]
 
-        start_day = start_dt.timetuple().tm_yday
-        end_day = end_dt.timetuple().tm_yday
+    # Log converted commodities and cities
+    app.logger.info(f"Commodities: {commodities}")
+    app.logger.info(f"Cities: {cities}")
 
-        app.logger.info(f"Start Day: {start_day}, End Day: {end_day}")
+    # Convert start_date and end_date to datetime objects if provided
+    start_date = None
+    end_date = None
+    if start_date_str and end_date_str:
+        try:
+            start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
+            end_date = datetime.strptime(end_date_str, "%Y-%m-%d")
+        except ValueError:
+            return jsonify({"error": "Invalid date format. Use YYYY-MM-DD."}), 400
 
-        # Case-insensitive filter for commodity and city name
-        query = PriceData.query.filter(
-            func.upper(PriceData.commodity).in_([c.upper() for c in standardized_commodities]),
-            func.upper(PriceData.city_name).in_([city.upper() for city in cities]),
-            PriceData.source == "USDA",
-        )
+        if start_date > end_date:
+            return jsonify({"error": "Start date cannot be after end date."}), 400
 
-        if start_dt.year == end_dt.year:
+    # Log the dates
+    app.logger.info(f"Start Date: {start_date}, End Date: {end_date}")
+
+    # Prepare the query
+    query = db.session.query(PriceData.season, PriceData.price).filter(
+        PriceData.commodity.in_(commodities),
+        func.lower(PriceData.city_name).in_([city.lower() for city in cities]),
+        PriceData.source.in_(["USDA", "Historical"]),
+    )
+
+    # Apply date filters if both start_date and end_date are provided
+    if start_date and end_date:
+        start_year = start_date.year
+        start_day = start_date.timetuple().tm_yday
+        end_year = end_date.year
+        end_day = end_date.timetuple().tm_yday
+
+        # Log the filter conditions for date range
+        app.logger.info(f"Query Filters: Commodities: {commodities}, Cities: {cities}, Start Year: {start_year}, End Year: {end_year}, Start Day: {start_day}, End Day: {end_day}")
+
+        if start_year == end_year:
             query = query.filter(
-                PriceData.year == start_dt.year,
-                PriceData.day.between(start_day, end_day),
+                PriceData.year == start_year,
+                PriceData.day >= start_day,
+                PriceData.day <= end_day,
             )
         else:
             query = query.filter(
                 or_(
-                    and_(PriceData.year == start_dt.year, PriceData.day >= start_day),
-                    and_(PriceData.year == end_dt.year, PriceData.day <= end_day),
-                    and_(PriceData.year > start_dt.year, PriceData.year < end_dt.year),
+                    and_(PriceData.year == start_year, PriceData.day >= start_day),
+                    and_(PriceData.year == end_year, PriceData.day <= end_day),
+                    and_(PriceData.year > start_year, PriceData.year < end_year),
                 )
             )
 
-        query = query.order_by(PriceData.year.asc(), PriceData.day.asc())
+    # Retrieve data - Ensure this happens in the proper order
+    try:
         data = query.all()
-
-        app.logger.info(f"Query Results: {len(data)} records fetched.")
-
-        if not data:
-            return jsonify({"labels": [], "datasets": []}), 200
-
-        price_series = {}
-        all_dates = set()
-
-        for entry in data:
-            entry_date = datetime(entry.year, 1, 1) + timedelta(days=entry.day - 1)
-
-            if entry_date < start_dt or entry_date > end_dt:
-                continue
-
-            date_str = entry_date.strftime("%Y-%m-%d")
-            all_dates.add(date_str)
-
-            display_commodity = (
-                "Cubanelles"
-                if entry.commodity.lower().startswith("cubanelle")
-                else entry.commodity.strip().title()
-            )
-            display_city = entry.city_name.strip().lower().title()
-
-
-            if avg_commodities and avg_cities:
-                series_key = "Average Price"
-            elif avg_commodities:
-                series_key = display_city
-            elif avg_cities:
-                series_key = display_commodity
-            else:
-                series_key = f"{display_commodity} - {display_city}"
-
-            if series_key not in price_series:
-                price_series[series_key] = {}
-
-            if date_str not in price_series[series_key]:
-                price_series[series_key][date_str] = {"sum": 0, "count": 0}
-
-            price_series[series_key][date_str]["sum"] += entry.price
-            price_series[series_key][date_str]["count"] += 1
-
-        app.logger.info(f"Price Series: {price_series}")
-
-        sorted_dates = sorted(list(all_dates))
-        colors = ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40"]
-        datasets = []
-
-        for idx, (series_name, date_data) in enumerate(price_series.items()):
-            series_data = []
-            for date in sorted_dates:
-                if date in date_data:
-                    avg_price = date_data[date]["sum"] / date_data[date]["count"]
-                    series_data.append(round(avg_price, 2))
-                else:
-                    series_data.append(None)
-
-            datasets.append(
-                {
-                    "label": series_name,
-                    "data": series_data,
-                    "borderColor": colors[idx % len(colors)],
-                    "backgroundColor": colors[idx % len(colors)],
-                }
-            )
-
-        del data, price_series, all_dates
-        gc.collect()
-
-        app.logger.info(f"Datasets: {datasets}")
-
-        return jsonify({"labels": sorted_dates, "datasets": datasets})
-
+        app.logger.info(f"Retrieved data: {data}")
     except Exception as e:
-        app.logger.error(f"Error: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        app.logger.error(f"Error during query execution: {str(e)}")
+        return jsonify({"error": "Error retrieving data from the database."}), 500
+
+    # Calculate average prices per season
+    seasonal_prices = {}
+    season_price_data = {}
+
+    for season, price in data:
+        if season not in season_price_data:
+            season_price_data[season] = []
+        season_price_data[season].append(price)
+
+    # Log the seasonal price data
+    app.logger.info(f"Seasonal price data: {season_price_data}")
+
+    # Calculate average price for each season
+    for season in ["Spring", "Summer", "Autumn", "Winter"]:
+        prices = season_price_data.get(season, [])
+        if prices:
+            average_price = sum(prices) / len(prices)
+            seasonal_prices[season] = round(average_price, 2)
+        else:
+            seasonal_prices[season] = 0.0
+
+    # Log final seasonal prices
+    app.logger.info(f"Final seasonal prices: {seasonal_prices}")
+
+    return jsonify(seasonal_prices)
+
+
 
 @app.route("/api/historical_data", methods=["GET"])
 def historical_data():
