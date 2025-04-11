@@ -103,7 +103,8 @@ app.config['CACHE_NO_CACHE_ROUTES'] = [
     '/api/delete-alert-by-id',
     '/api/clear-alerts',
     '/api/alert-settings',
-    '/api/alert-entries-fresh'
+    '/api/alert-entries-fresh',
+    '/api/break_even'
 ]
 jwt = JWTManager(app)
 
@@ -4260,17 +4261,43 @@ def save_break_even_estimation():
 
 @app.route("/api/break_even", methods=["GET"])
 def get_break_even_estimations():
-    """Get all break-even estimations"""
+    """Get all break-even estimations with guaranteed fresh data."""
     try:
+        # Always bypass cache for this route
+        print(f"Fetching fresh break-even estimations for route: {request.path}")
+        
         # Query all estimations, ordered by creation date (newest first)
         estimations = BreakEvenEstimation.query.order_by(desc(BreakEvenEstimation.created_at)).all()
         
         # Convert to dictionaries for JSON response
         result = [estimation.to_dict() for estimation in estimations]
         
-        return jsonify(result), 200
+        # Completely remove any cached data
+        cache.clear()  # This clears the entire cache
+        
+        # Create response with aggressive no-cache headers
+        response = jsonify(result)
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0, s-maxage=0, proxy-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        response.headers['X-Accel-Expires'] = '0'  # Nginx cache control
+        
+        return response, 200
+    
     except Exception as e:
-        return jsonify({"error": f"Failed to retrieve estimations: {str(e)}"}), 500
+        print(f"Error fetching break-even estimations: {str(e)}")
+        
+        response = jsonify({
+            "error": "Failed to retrieve break-even estimations",
+            "details": str(e)
+        })
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0, s-maxage=0, proxy-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        response.headers['X-Accel-Expires'] = '0'
+        
+        return response, 500
+
 
 @app.route("/api/break_even/<int:estimation_id>", methods=["GET"])
 def get_break_even_estimation(estimation_id):

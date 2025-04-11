@@ -19,7 +19,7 @@ const BreakEvenEstimator = () => {
   const [savedEstimations, setSavedEstimations] = useState([]);
   
   const [commoditiesList, setCommoditiesList] = useState([
-    'Anaheim', 'Cubanelle', 'Jalapeno', 'Poblano', 'Serrano', 'Shishito'
+    'Anaheim', 'Cubanelles', 'Jalapeno', 'Poblano', 'Serrano', 'Shishito'
   ]);
   
   const [citiesList, setCitiesList] = useState([
@@ -71,7 +71,12 @@ const BreakEvenEstimator = () => {
       if (!token) throw new Error('No token found');
       
       const response = await axios.get('/api/break_even', {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        },
       });
       
       setSavedEstimations(response.data);
