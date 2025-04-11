@@ -4403,7 +4403,7 @@ def get_commodities():
     
 
 
-    
+
 # A function to check whether the current route should be cached
 def should_cache_route():
     return request.path not in app.config['CACHE_NO_CACHE_ROUTES']
@@ -4525,9 +4525,18 @@ def delete_alert_by_id():
         db.session.delete(alert)
         db.session.commit()
 
-        # Reset the SQLite sequence after deletion (to continue the correct auto-increment)
-        db.session.execute(f"UPDATE sqlite_sequence SET seq = (SELECT MAX(id) FROM alert_settings) WHERE name = 'alert_settings'")
-        db.session.commit()
+        # Reset the sequence (different for SQLite vs PostgreSQL)
+        try:
+            if 'sqlite' in db.engine.url.drivername:
+                # SQLite sequence reset
+                db.session.execute(text("UPDATE sqlite_sequence SET seq = (SELECT MAX(id) FROM alert_settings) WHERE name = 'alert_settings'"))
+            elif 'postgresql' in db.engine.url.drivername:
+                # PostgreSQL sequence reset
+                db.session.execute(text("SELECT setval('alert_settings_id_seq', (SELECT MAX(id) FROM alert_settings))"))
+            db.session.commit()
+        except Exception as seq_error:
+            # If sequence reset fails, just log it but don't fail the whole operation
+            print(f"Error resetting sequence: {str(seq_error)}")
 
         # After deletion, re-fetch all alerts and update the cache
         settings = AlertSetting.query.all()
@@ -4563,7 +4572,6 @@ def delete_alert_by_id():
         response.headers['Expires'] = '0'
         
         return response, 500
-
 
 @app.route('/api/alert-settings', methods=['POST'])
 def create_alert_setting():
