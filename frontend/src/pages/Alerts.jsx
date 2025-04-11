@@ -373,7 +373,7 @@ const handleDeleteAlert = async (alertItem) => {
                               className="form-control" 
                               id="threshold"
                               name="threshold"
-                              min="1"
+                              min="-100"  // Allow negative values down to -100%
                               max="100"
                               value={newAlert.threshold}
                               onChange={handleInputChange}

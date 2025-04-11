@@ -5,10 +5,6 @@ from sqlalchemy import func, desc, and_
 from app import db
 from app import AlertSetting, Notification, PriceData, app
 
-
-
-
-
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -16,7 +12,7 @@ logger = logging.getLogger(__name__)
 def check_price_alerts():
     """
     Main function to check for price alerts.
-    This is called by the scheduler to check for significant price increases.
+    This is called by the scheduler to check for significant price changes.
     """
     logger.info(f"Running price alert check at {datetime.now()}")
     
@@ -31,34 +27,40 @@ def check_price_alerts():
             # Get the latest and previous prices specifically for this commodity
             latest_price_data = PriceData.query.filter(
                 PriceData.commodity == alert.commodity,
+                PriceData.city_name == alert.city,
                 PriceData.source == "ProduceIQ"
             ).order_by(PriceData.year.desc(), PriceData.day.desc()).first()
             
             if not latest_price_data:
-                logger.warning(f"No current price found for {alert.commodity}")
+                logger.warning(f"No current price found for {alert.commodity} in {alert.city}")
                 continue
             
             # Get second most recent price data for this commodity
             previous_price_data = PriceData.query.filter(
                 PriceData.commodity == alert.commodity,
+                PriceData.city_name == alert.city,
                 PriceData.source == "ProduceIQ",
                 ((PriceData.year < latest_price_data.year) | 
                 ((PriceData.year == latest_price_data.year) & (PriceData.day < latest_price_data.day)))
             ).order_by(PriceData.year.desc(), PriceData.day.desc()).first()
             
             if not previous_price_data:
-                logger.warning(f"No previous price found for {alert.commodity}")
+                logger.warning(f"No previous price found for {alert.commodity} in {alert.city}")
                 continue
             
             logger.info(f"Found data: Latest price=${latest_price_data.price} on day {latest_price_data.day}/{latest_price_data.year}, Previous price=${previous_price_data.price} on day {previous_price_data.day}/{previous_price_data.year}")
             
-            # Calculate price increase percentage
-            price_increase_pct = ((latest_price_data.price - previous_price_data.price) / previous_price_data.price) * 100
-            logger.info(f"Price increase: {price_increase_pct:.2f}% (threshold: {alert.threshold}%)")
+            # Calculate price change percentage
+            price_change_pct = ((latest_price_data.price - previous_price_data.price) / previous_price_data.price) * 100
+            logger.info(f"Price change: {price_change_pct:.2f}% (threshold: {alert.threshold}%)")
             
-            # Check if threshold is exceeded
-            if price_increase_pct >= alert.threshold:
-                logger.info(f"Alert triggered for {alert.commodity}: {price_increase_pct:.2f}% increase")
+            # Check if threshold is exceeded - handle both positive and negative thresholds
+            if (alert.threshold >= 0 and price_change_pct >= alert.threshold) or \
+               (alert.threshold < 0 and price_change_pct <= alert.threshold):
+                
+                # Description based on whether it's an increase or decrease
+                change_type = "increase" if price_change_pct >= 0 else "decrease"
+                logger.info(f"Alert triggered for {alert.commodity}: {price_change_pct:.2f}% {change_type}")
                 
                 # Check if we already sent this alert
                 existing_notification = Notification.query.filter(
@@ -70,13 +72,20 @@ def check_price_alerts():
                 
                 if not existing_notification:
                     # Create notification
-                    title = f"{alert.commodity} Price Alert: {price_increase_pct:.1f}% Increase"
-                    
-                    message = (
-                        f"The price of {alert.commodity} has increased by {price_increase_pct:.1f}%, "
-                        f"from ${previous_price_data.price:.2f} to ${latest_price_data.price:.2f}. "
-                        f"This exceeds your alert threshold of {alert.threshold:.1f}%."
-                    )
+                    if price_change_pct >= 0:
+                        title = f"{alert.commodity} Price Alert: {price_change_pct:.1f}% Increase"
+                        message = (
+                            f"The price of {alert.commodity} in {alert.city} has increased by {price_change_pct:.1f}%, "
+                            f"from ${previous_price_data.price:.2f} to ${latest_price_data.price:.2f}. "
+                            f"This exceeds your alert threshold of {alert.threshold:.1f}%."
+                        )
+                    else:
+                        title = f"{alert.commodity} Price Alert: {abs(price_change_pct):.1f}% Decrease"
+                        message = (
+                            f"The price of {alert.commodity} in {alert.city} has decreased by {abs(price_change_pct):.1f}%, "
+                            f"from ${previous_price_data.price:.2f} to ${latest_price_data.price:.2f}. "
+                            f"This meets your alert threshold of {alert.threshold:.1f}%."
+                        )
                     
                     notification = Notification(
                         alert_setting_id=alert.id,
@@ -90,8 +99,7 @@ def check_price_alerts():
                 else:
                     logger.info(f"Alert already sent for {alert.commodity} within the last 24 hours")
         
-        # Commit all change
-        # s
+        # Commit all changes
         db.session.commit()
         logger.info("Price alert check completed successfully")
             
@@ -100,7 +108,7 @@ def check_price_alerts():
         logger.error(f"Error in price alert check: {str(e)}")
 
 def process_alert(alert, current_day, current_year):
-    """Process a single alert setting to check for price increases."""
+    """Process a single alert setting to check for price changes."""
     try:
         # Get the latest price for this commodity
         latest_price = get_latest_price(alert.city, alert.commodity, current_day, current_year)
@@ -116,13 +124,15 @@ def process_alert(alert, current_day, current_year):
             logger.warning(f"No previous price found for {alert.commodity}")
             return
             
-        # Calculate the price increase percentage
-        price_increase_pct = ((latest_price - previous_price) / previous_price) * 100
+        # Calculate the price change percentage
+        price_change_pct = ((latest_price - previous_price) / previous_price) * 100
         
-        # Check if threshold is exceeded
-        if price_increase_pct >= alert.threshold:
+        # Check if threshold is exceeded - handle both positive and negative thresholds
+        if (alert.threshold >= 0 and price_change_pct >= alert.threshold) or \
+           (alert.threshold < 0 and price_change_pct <= alert.threshold):
             # Threshold exceeded, create notification
-            logger.info(f"Alert triggered for {alert.commodity}: {price_increase_pct:.2f}% increase")
+            change_type = "increase" if price_change_pct >= 0 else "decrease"
+            logger.info(f"Alert triggered for {alert.commodity}: {price_change_pct:.2f}% {change_type}")
             
             # Check if we already sent this alert
             existing_notification = Notification.query.filter(
@@ -137,7 +147,7 @@ def process_alert(alert, current_day, current_year):
                     alert, 
                     latest_price, 
                     previous_price, 
-                    price_increase_pct
+                    price_change_pct
                 )
             else:
                 logger.info(f"Alert already sent for {alert.commodity} within the last 24 hours")
@@ -159,7 +169,6 @@ def get_latest_price(city, commodity, current_day, current_year):
     
     return price_data.price if price_data else None
 
-# Add to alert_service.py
 def test_notification_creation():
     """Test if notification creation works properly."""
     try:
@@ -204,6 +213,7 @@ def get_previous_price(city, commodity, current_day, current_year):
     # If no data for yesterday, try to find the most recent data before today
     if not previous_price_data:
         previous_price_data = PriceData.query.filter(
+            PriceData.city_name == city,  # Add city filter
             PriceData.commodity == commodity,
             ((PriceData.year < current_year) | 
              ((PriceData.year == current_year) & (PriceData.day < current_day))),
@@ -213,16 +223,23 @@ def get_previous_price(city, commodity, current_day, current_year):
     return previous_price_data.price if previous_price_data else None
 
 
-def create_price_alert_notification(alert, latest_price, previous_price, price_increase_pct):
+def create_price_alert_notification(alert, latest_price, previous_price, price_change_pct):
     """Create a notification for a price alert."""
-    # Format the notification
-    title = f"{alert.commodity} Price Alert: {price_increase_pct:.1f}% Increase"
-    
-    message = (
-        f"The price of {alert.commodity} has increased by {price_increase_pct:.1f}%, "
-        f"from ${previous_price:.2f} to ${latest_price:.2f}. "
-        f"This exceeds your alert threshold of {alert.threshold:.1f}%."
-    )
+    # Format the notification based on whether it's an increase or decrease
+    if price_change_pct >= 0:
+        title = f"{alert.commodity} Price Alert: {price_change_pct:.1f}% Increase"
+        message = (
+            f"The price of {alert.commodity} in {alert.city} has increased by {price_change_pct:.1f}%, "
+            f"from ${previous_price:.2f} to ${latest_price:.2f}. "
+            f"This exceeds your alert threshold of {alert.threshold:.1f}%."
+        )
+    else:
+        title = f"{alert.commodity} Price Alert: {abs(price_change_pct):.1f}% Decrease"
+        message = (
+            f"The price of {alert.commodity} in {alert.city} has decreased by {abs(price_change_pct):.1f}%, "
+            f"from ${previous_price:.2f} to ${latest_price:.2f}. "
+            f"This meets your alert threshold of {alert.threshold:.1f}%."
+        )
     
     # Create the notification
     notification = Notification(
@@ -233,7 +250,7 @@ def create_price_alert_notification(alert, latest_price, previous_price, price_i
     )
     
     db.session.add(notification)
-    logger.info(f"Created notification for user {alert.user_id}: {title}")
+    logger.info(f"Created notification for alert {alert.id}: {title}")
 
 
 def update_price_history():
@@ -245,5 +262,7 @@ def update_price_history():
     return
 
 
-with app.app_context():
-    check_price_alerts()
+# Only run this if the file is executed directly
+if __name__ == "__main__":
+    with app.app_context():
+        check_price_alerts()

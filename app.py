@@ -3838,7 +3838,6 @@ def get_forecast_line_data():
         return jsonify({"error": str(e)}), 500
 
 
-
 @app.route("/api/volatility_data", methods=["GET"])
 def get_volatility_data():
     try:
@@ -3874,8 +3873,10 @@ def get_volatility_data():
         # Set labels based on display type
         if display_type == "monthly":
             result["labels"] = months
+            volatility_data = calculate_monthly_volatility_bulk(commodities, cities, years)
         else:  # seasonal
             result["labels"] = seasons
+            volatility_data = calculate_seasonal_volatility_bulk(commodities, cities, years)
             
         # Colors for datasets
         colors = ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40"]
@@ -3887,29 +3888,16 @@ def get_volatility_data():
                 # Create dataset for this combination
                 dataset_label = f"{commodity} - {city}"
                 
-                # Initialize volatility data array
-                volatility_data = []
-                
-                if display_type == "monthly":
-                    # Calculate monthly volatility
-                    for month_idx, month in enumerate(months, 1):
-                        # Query price data for this commodity, city, month across selected years
-                        month_volatility = calculate_monthly_volatility(commodity, city, month_idx, years)
-                        volatility_data.append(round(month_volatility, 2))
-                else:
-                    # Calculate seasonal volatility
-                    for season in seasons:
-                        # Query price data for this commodity, city, season across selected years
-                        season_volatility = calculate_seasonal_volatility(commodity, city, season, years)
-                        volatility_data.append(round(season_volatility, 2))
-                
-                # Add dataset to result
-                result["datasets"].append({
-                    "label": dataset_label,
-                    "data": volatility_data,
-                    "borderColor": colors[color_index % len(colors)],
-                    "backgroundColor": colors[color_index % len(colors)],
-                })
+                # Get data for this combination
+                key = f"{commodity}_{city}"
+                if key in volatility_data:
+                    # Add dataset to result
+                    result["datasets"].append({
+                        "label": dataset_label,
+                        "data": volatility_data[key],
+                        "borderColor": colors[color_index % len(colors)],
+                        "backgroundColor": colors[color_index % len(colors)],
+                    })
                 
                 color_index += 1
         
@@ -3919,87 +3907,145 @@ def get_volatility_data():
         app.logger.error(f"Error in volatility data: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-def calculate_monthly_volatility(commodity, city, month, years):
-    """Calculate price volatility (high-low spread) for a given month."""
+def calculate_monthly_volatility_bulk(commodities, cities, years):
+    """Calculate monthly volatility for multiple commodities and cities at once."""
     try:
-        volatility = 0.0
+        # Create a dictionary to store results
+        results = {}
         
-        # For each year, get the price range (high - low) for the specified month
-        year_volatilities = []
-        
+        # Prepare month ranges for all years
+        month_ranges = {}
         for year in years:
-            # Calculate the day range for the given month in this year
-            first_day, last_day = get_month_day_range(month, year)
-            
-            # Query the min and max prices for this period
-            price_range = db.session.query(
-                func.max(PriceData.price).label('max_price'),
-                func.min(PriceData.price).label('min_price')
-            ).filter(
-                PriceData.commodity == commodity,
-                PriceData.city_name == city,
-                PriceData.year == year,
-                PriceData.day >= first_day,
-                PriceData.day <= last_day,
-                PriceData.source == "ProduceIQ"
-            ).first()
-            
-            # Calculate volatility if we have data
-            if price_range and price_range.max_price is not None and price_range.min_price is not None:
-                month_volatility = price_range.max_price - price_range.min_price
-                if month_volatility > 0:
-                    year_volatilities.append(month_volatility)
+            month_ranges[year] = {}
+            for month in range(1, 13):
+                first_day, last_day = get_month_day_range(month, year)
+                month_ranges[year][month] = (first_day, last_day)
         
-        # Average the volatilities across years
-        if year_volatilities:
-            volatility = sum(year_volatilities) / len(year_volatilities)
+        # Build query for all commodity-city pairs
+        volatility_data = {}
+        
+        # Create temp table for faster querying if supported by DB
+        with db.engine.connect() as conn:
+            # Filter to just the data we need to analyze
+            filtered_data = db.session.query(
+                PriceData.commodity,
+                PriceData.city_name,
+                PriceData.year,
+                PriceData.day,
+                PriceData.price
+            ).filter(
+                PriceData.commodity.in_(commodities),
+                PriceData.city_name.in_(cities),
+                PriceData.year.in_(years),
+                PriceData.source == "ProduceIQ"
+            ).subquery()
             
-        return volatility
+            # For each commodity and city
+            for commodity in commodities:
+                for city in cities:
+                    key = f"{commodity}_{city}"
+                    volatility_data[key] = [0] * 12  # Initialize with zeros for 12 months
+                    
+                    # For each month
+                    for month_idx in range(1, 13):
+                        month_volatilities = []
+                        
+                        # For each year
+                        for year in years:
+                            first_day, last_day = month_ranges[year][month_idx]
+                            
+                            # Calculate min and max price for this month, year, commodity, city
+                            price_range = db.session.query(
+                                func.max(filtered_data.c.price).label('max_price'),
+                                func.min(filtered_data.c.price).label('min_price')
+                            ).filter(
+                                filtered_data.c.commodity == commodity,
+                                filtered_data.c.city_name == city,
+                                filtered_data.c.year == year,
+                                filtered_data.c.day >= first_day,
+                                filtered_data.c.day <= last_day
+                            ).first()
+                            
+                            # If we have valid data, calculate volatility
+                            if price_range and price_range.max_price and price_range.min_price:
+                                volatility = price_range.max_price - price_range.min_price
+                                if volatility > 0:
+                                    month_volatilities.append(volatility)
+                        
+                        # Calculate average volatility for this month across years
+                        if month_volatilities:
+                            avg_volatility = sum(month_volatilities) / len(month_volatilities)
+                            volatility_data[key][month_idx - 1] = round(avg_volatility, 2)
+        
+        return volatility_data
         
     except Exception as e:
-        app.logger.error(f"Error calculating monthly volatility: {str(e)}")
-        return 0.0
+        app.logger.error(f"Error calculating bulk monthly volatility: {str(e)}")
+        return {}
 
-def calculate_seasonal_volatility(commodity, city, season, years):
-    """Calculate price volatility (high-low spread) for a given season."""
+def calculate_seasonal_volatility_bulk(commodities, cities, years):
+    """Calculate seasonal volatility for multiple commodities and cities at once."""
     try:
-        volatility = 0.0
+        seasons = ["Winter", "Spring", "Summer", "Autumn"]
+        volatility_data = {}
         
-        # For each year, get the price range (high - low) for the specified season
-        year_volatilities = []
+        # Create a subquery with just the data we need
+        filtered_data = db.session.query(
+            PriceData.commodity,
+            PriceData.city_name,
+            PriceData.year,
+            PriceData.season,
+            PriceData.price
+        ).filter(
+            PriceData.commodity.in_(commodities),
+            PriceData.city_name.in_(cities),
+            PriceData.year.in_(years),
+            PriceData.source == "ProduceIQ"
+        ).subquery()
         
-        for year in years:
-            # Query the min and max prices for this period
-            price_range = db.session.query(
-                func.max(PriceData.price).label('max_price'),
-                func.min(PriceData.price).label('min_price')
-            ).filter(
-                PriceData.commodity == commodity,
-                PriceData.city_name == city,
-                PriceData.year == year,
-                PriceData.season == season,
-                PriceData.source == "ProduceIQ"
-            ).first()
-            
-            # Calculate volatility if we have data
-            if price_range and price_range.max_price is not None and price_range.min_price is not None:
-                season_volatility = price_range.max_price - price_range.min_price
-                if season_volatility > 0:
-                    year_volatilities.append(season_volatility)
+        # For each commodity and city
+        for commodity in commodities:
+            for city in cities:
+                key = f"{commodity}_{city}"
+                volatility_data[key] = [0] * 4  # Initialize with zeros for 4 seasons
+                
+                # For each season
+                for season_idx, season in enumerate(seasons):
+                    season_volatilities = []
+                    
+                    # For each year
+                    for year in years:
+                        # Calculate min and max price for this season, year, commodity, city
+                        price_range = db.session.query(
+                            func.max(filtered_data.c.price).label('max_price'),
+                            func.min(filtered_data.c.price).label('min_price')
+                        ).filter(
+                            filtered_data.c.commodity == commodity,
+                            filtered_data.c.city_name == city,
+                            filtered_data.c.year == year,
+                            filtered_data.c.season == season
+                        ).first()
+                        
+                        # If we have valid data, calculate volatility
+                        if price_range and price_range.max_price and price_range.min_price:
+                            volatility = price_range.max_price - price_range.min_price
+                            if volatility > 0:
+                                season_volatilities.append(volatility)
+                    
+                    # Calculate average volatility for this season across years
+                    if season_volatilities:
+                        avg_volatility = sum(season_volatilities) / len(season_volatilities)
+                        volatility_data[key][season_idx] = round(avg_volatility, 2)
         
-        # Average the volatilities across years
-        if year_volatilities:
-            volatility = sum(year_volatilities) / len(year_volatilities)
-            
-        return volatility
+        return volatility_data
         
     except Exception as e:
-        app.logger.error(f"Error calculating seasonal volatility: {str(e)}")
-        return 0.0
+        app.logger.error(f"Error calculating bulk seasonal volatility: {str(e)}")
+        return {}
 
 def get_month_day_range(month, year):
     """Helper function to get the day of year range for a given month."""
-    from datetime import datetime, timedelta
+    from datetime import datetime
     from calendar import monthrange
     
     # Get the first day of the month
@@ -4012,6 +4058,7 @@ def get_month_day_range(month, year):
     last_day = last_date.timetuple().tm_yday
     
     return first_day, last_day
+
 
 # Add this route to your Flask application
 
@@ -4810,190 +4857,6 @@ def get_unread_count():
 
 
 
-
-
-# ############### Testing
-@app.route('/api/test-price-trigger', methods=['GET'])
-def test_price_trigger():
-    """Create test price data and trigger alert check."""
-    try:
-        # Get current date info
-        today = datetime.now()
-        current_year = today.year
-        current_day = today.timetuple().tm_yday
-        
-        # Previous day
-        previous_day = current_day - 1
-        previous_year = current_year
-        if previous_day <= 0:
-            previous_day = 365
-            previous_year = current_year - 1
-        
-        # Get existing alert settings
-        alerts = AlertSetting.query.all()
-        if not alerts:
-            return jsonify({"error": "No alert settings found to test"}), 404
-        
-        created_data = []
-        for alert in alerts:
-            # Calculate threshold price (how much increase would trigger the alert)
-            base_price = 10.0
-            increase_pct = float(alert.threshold)
-            new_price = base_price * (1 + (increase_pct / 100) + 0.01)  # Just over the threshold
-            
-            # Create previous day data
-            previous = PriceData(
-                commodity=alert.commodity,
-                city_name="Test City",
-                year=previous_year,
-                day=previous_day,
-                price=base_price,
-                source="ProduceIQ",
-                season="Spring"
-            )
-            db.session.add(previous)
-            
-            # Create current day data with price increase
-            current = PriceData(
-                commodity=alert.commodity,
-                city_name="Test City",
-                year=current_year,
-                day=current_day,
-                price=new_price,
-                source="ProduceIQ",
-                season="Spring"
-            )
-            db.session.add(current)
-            
-            created_data.append({
-                "commodity": alert.commodity,
-                "previous": {"day": previous_day, "year": previous_year, "price": base_price},
-                "current": {"day": current_day, "year": current_year, "price": new_price},
-                "increase_pct": ((new_price - base_price) / base_price) * 100,
-                "threshold": alert.threshold
-            })
-        
-        db.session.commit()
-        
-        # Now run the alert check
-        from alert_service import check_price_alerts
-        check_price_alerts()
-        
-        # Check if notifications were created
-        notifications = Notification.query.all()
-        notif_data = []
-        for notif in notifications:
-            notif_data.append({
-                "id": notif.id,
-                "title": notif.title,
-                "message": notif.message,
-                "read": notif.read,
-                "created_at": notif.created_at.isoformat(),
-                "alert_setting_id": notif.alert_setting_id
-            })
-        
-        return jsonify({
-            "message": "Alert testing completed",
-            "price_data_created": created_data,
-            "notifications_count": len(notifications),
-            "notifications": notif_data
-        })
-    except Exception as e:
-        db.session.rollback()
-        print(f"Error testing price triggers: {str(e)}")
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route('/api/debug-alert-service', methods=['GET'])
-def debug_alert_service():
-    """Debug issues with the alert service."""
-    try:
-        # Import your alert service
-        from alert_service import check_price_alerts
-        
-        # Get latest price data for debugging
-        latest_data_query = db.session.query(func.max(PriceData.day), PriceData.year).filter(
-            PriceData.source == "ProduceIQ"
-        ).first()
-        
-        # Properly extract values from Row object
-        if latest_data_query:
-            latest_day = latest_data_query[0]
-            latest_year = latest_data_query[1]
-            latest_data = {"day": latest_day, "year": latest_year}
-        else:
-            latest_data = {"day": None, "year": None}
-        
-        print(f"Latest price data: {latest_data}")
-        
-        # Get all active alerts
-        active_alerts = AlertSetting.query.filter_by(is_active=True).all()
-        active_alerts_info = []
-        for alert in active_alerts:
-            active_alerts_info.append({
-                "id": alert.id,
-                "commodity": alert.commodity,
-                "threshold": alert.threshold
-            })
-        
-        # Check for each active alert if there's price data for its commodity
-        price_data_found = []
-        for alert in active_alerts:
-            # Look for price data matching this alert's commodity
-            data = PriceData.query.filter(
-                PriceData.commodity == alert.commodity,
-                PriceData.source == "ProduceIQ"
-            ).order_by(PriceData.year.desc(), PriceData.day.desc()).limit(2).all()
-            
-            data_info = []
-            for d in data:
-                data_info.append({
-                    "day": d.day, 
-                    "year": d.year, 
-                    "price": d.price
-                })
-            
-            price_data_found.append({
-                "commodity": alert.commodity,
-                "records_found": len(data),
-                "price_data": data_info
-            })
-        
-        return jsonify({
-            "latest_price_data": latest_data,
-            "active_alerts": active_alerts_info,
-            "price_data_found": price_data_found,
-            "notifications_exist": Notification.query.count() > 0
-        })
-    except Exception as e:
-        print(f"Error debugging alert service: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/api/test-notification-creation', methods=['GET'])
-def test_create_notification():
-    """Test endpoint to check if notification creation works."""
-    try:
-        # Create a test notification directly
-        test_notification = Notification(
-            title="Test Notification",
-            message="This is a test notification",
-            read=False
-        )
-        
-        db.session.add(test_notification)
-        db.session.commit()
-        
-        return jsonify({
-            "success": True, 
-            "notification_id": test_notification.id,
-            "message": "Test notification created successfully"
-        })
-    except Exception as e:
-        db.session.rollback()
-        print(f"Error creating test notification: {str(e)}")
-        return jsonify({"error": str(e)}), 500
 
 
 
