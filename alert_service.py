@@ -20,9 +20,10 @@ def check_price_alerts():
         # Process all active alert settings
         active_alerts = AlertSetting.query.filter_by(is_active=True).all()
         logger.info(f"Processing {len(active_alerts)} active alert settings")
+
         
         for alert in active_alerts:
-            logger.info(f"Checking alert for {alert.commodity} with threshold {alert.threshold}%")
+            logger.info(f"Checking alert for user {alert.user_id}, {alert.commodity} with threshold {alert.threshold}%")
             
             # Get the latest and previous prices specifically for this commodity
             latest_price_data = PriceData.query.filter(
@@ -60,7 +61,7 @@ def check_price_alerts():
                 
                 # Description based on whether it's an increase or decrease
                 change_type = "increase" if price_change_pct >= 0 else "decrease"
-                logger.info(f"Alert triggered for {alert.commodity}: {price_change_pct:.2f}% {change_type}")
+                logger.info(f"Alert triggered for user {alert.user_id}, {alert.commodity}: {price_change_pct:.2f}% {change_type}")
                 
                 # Check if we already sent this alert
                 existing_notification = Notification.query.filter(
@@ -88,6 +89,7 @@ def check_price_alerts():
                         )
                     
                     notification = Notification(
+                        user_id=alert.user_id,  # Include user_id from the alert
                         alert_setting_id=alert.id,
                         title=title,
                         message=message,
@@ -95,9 +97,9 @@ def check_price_alerts():
                     )
                     
                     db.session.add(notification)
-                    logger.info(f"Created notification: {title}")
+                    logger.info(f"Created notification for user {alert.user_id}: {title}")
                 else:
-                    logger.info(f"Alert already sent for {alert.commodity} within the last 24 hours")
+                    logger.info(f"Alert already sent for user {alert.user_id}, {alert.commodity} within the last 24 hours")
         
         # Commit all changes
         db.session.commit()
@@ -132,7 +134,7 @@ def process_alert(alert, current_day, current_year):
            (alert.threshold < 0 and price_change_pct <= alert.threshold):
             # Threshold exceeded, create notification
             change_type = "increase" if price_change_pct >= 0 else "decrease"
-            logger.info(f"Alert triggered for {alert.commodity}: {price_change_pct:.2f}% {change_type}")
+            logger.info(f"Alert triggered for user {alert.user_id}, {alert.commodity}: {price_change_pct:.2f}% {change_type}")
             
             # Check if we already sent this alert
             existing_notification = Notification.query.filter(
@@ -150,7 +152,7 @@ def process_alert(alert, current_day, current_year):
                     price_change_pct
                 )
             else:
-                logger.info(f"Alert already sent for {alert.commodity} within the last 24 hours")
+                logger.info(f"Alert already sent for user {alert.user_id}, {alert.commodity} within the last 24 hours")
                 
     except Exception as e:
         logger.error(f"Error processing alert {alert.id}: {str(e)}")
@@ -174,6 +176,7 @@ def test_notification_creation():
     try:
         # Create a test notification
         test_notification = Notification(
+            user_id=1,  # Add a default user ID for testing
             alert_setting_id=None,  # Can be null
             title="Test Notification",
             message="This is a test notification",
@@ -243,6 +246,7 @@ def create_price_alert_notification(alert, latest_price, previous_price, price_c
     
     # Create the notification
     notification = Notification(
+        user_id=alert.user_id,  # Include user_id from the alert
         alert_setting_id=alert.id,
         title=title,
         message=message,
@@ -250,7 +254,7 @@ def create_price_alert_notification(alert, latest_price, previous_price, price_c
     )
     
     db.session.add(notification)
-    logger.info(f"Created notification for alert {alert.id}: {title}")
+    logger.info(f"Created notification for user {alert.user_id}, alert {alert.id}: {title}")
 
 
 def update_price_history():

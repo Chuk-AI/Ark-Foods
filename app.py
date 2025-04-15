@@ -457,19 +457,22 @@ class ClimatologyData(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
-
 class AlertSetting(db.Model):
     """Model for price alert settings."""
     
     __tablename__ = 'alert_settings'
     
     id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)  # Add user_id
     city = db.Column(db.String(100), nullable=False)  
     commodity = db.Column(db.String(100), nullable=False)
     threshold = db.Column(db.Float, nullable=False, default=5.0)  # Default 5% threshold
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationship with User
+    user = db.relationship('User', backref=db.backref('alert_settings', lazy=True))
 
     def __repr__(self):
         return f'<AlertSetting {self.id}: {self.commodity} @ {self.threshold}%>'
@@ -478,7 +481,8 @@ class AlertSetting(db.Model):
         """Convert instance to dictionary."""
         return {
             'id': self.id,
-            'city': self.city,         # Include the city field
+            'user_id': self.user_id,
+            'city': self.city,
             'commodity': self.commodity,
             'threshold': self.threshold,
             'isActive': self.is_active,
@@ -486,21 +490,21 @@ class AlertSetting(db.Model):
             'updatedAt': self.updated_at.isoformat()
         }
 
-
-
 class Notification(db.Model):
     """Model for notifications."""
     
     __tablename__ = 'notifications'
     
     id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)  # Add user_id
     alert_setting_id = db.Column(db.Integer, db.ForeignKey('alert_settings.id'), nullable=True)
     title = db.Column(db.String(200), nullable=False)
     message = db.Column(db.Text, nullable=False)
     read = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    # Relationship with AlertSetting
+    # Relationships
+    user = db.relationship('User', backref=db.backref('notifications', lazy=True))
     alert_setting = db.relationship('AlertSetting', backref=db.backref('notifications', lazy=True))
     
     def __repr__(self):
@@ -510,13 +514,13 @@ class Notification(db.Model):
         """Convert instance to dictionary."""
         return {
             'id': self.id,
+            'user_id': self.user_id,
             'title': self.title,
             'message': self.message,
             'read': self.read,
             'created_at': self.created_at.isoformat(),
             'alert_setting_id': self.alert_setting_id
         }
-
 
 # USDA DATA IMPORT SETTINGS HERE!
 INTERESTED_CITIES = [
@@ -3908,12 +3912,14 @@ def get_volatility_data():
         return jsonify({"error": str(e)}), 500
 
 def calculate_monthly_volatility_bulk(commodities, cities, years):
-    """Calculate monthly volatility for multiple commodities and cities at once."""
+    """
+    Optimized calculation of monthly volatility (max - min) by fetching all
+    the needed data in one query and grouping/aggregating in Python.
+    """
     try:
-        # Create a dictionary to store results
-        results = {}
+        from collections import defaultdict
         
-        # Prepare month ranges for all years
+        # Precompute month ranges for each year (store as dictionary: {year: {month: (first_day, last_day)}})
         month_ranges = {}
         for year in years:
             month_ranges[year] = {}
@@ -3921,64 +3927,61 @@ def calculate_monthly_volatility_bulk(commodities, cities, years):
                 first_day, last_day = get_month_day_range(month, year)
                 month_ranges[year][month] = (first_day, last_day)
         
-        # Build query for all commodity-city pairs
-        volatility_data = {}
+        # Single query: Fetch all rows for the given commodities, cities, years, and source
+        all_data = db.session.query(
+            PriceData.commodity,
+            PriceData.city_name,
+            PriceData.year,
+            PriceData.day,
+            PriceData.price
+        ).filter(
+            PriceData.commodity.in_(commodities),
+            PriceData.city_name.in_(cities),
+            PriceData.year.in_(years),
+            PriceData.source == "ProduceIQ"
+        ).all()
         
-        # Create temp table for faster querying if supported by DB
-        with db.engine.connect() as conn:
-            # Filter to just the data we need to analyze
-            filtered_data = db.session.query(
-                PriceData.commodity,
-                PriceData.city_name,
-                PriceData.year,
-                PriceData.day,
-                PriceData.price
-            ).filter(
-                PriceData.commodity.in_(commodities),
-                PriceData.city_name.in_(cities),
-                PriceData.year.in_(years),
-                PriceData.source == "ProduceIQ"
-            ).subquery()
-            
-            # For each commodity and city
-            for commodity in commodities:
-                for city in cities:
-                    key = f"{commodity}_{city}"
-                    volatility_data[key] = [0] * 12  # Initialize with zeros for 12 months
+        # Group the data by commodity and city, then by year
+        # Structure: data[commodity_city][year] = list of (day, price)
+        data_by_combo = defaultdict(lambda: defaultdict(list))
+        for row in all_data:
+            key = f"{row.commodity}_{row.city_name}"
+            data_by_combo[key][row.year].append((row.day, row.price))
+        
+        # Initialize result dictionary for volatility data:
+        # volatility_data[commodity_city] = list of 12 average volatility values (one per month)
+        volatility_data = {}
+        for commodity in commodities:
+            for city in cities:
+                key = f"{commodity}_{city}"
+                # Create a placeholder list for 12 months (index 0 = January, ... 11 = December)
+                volatility_data[key] = [0] * 12
+                
+                # For each month, accumulate volatility from each year
+                for month in range(1, 13):
+                    volatilities = []
+                    for year in years:
+                        # Retrieve all rows for this commodity-city pair and year
+                        rows = data_by_combo[key].get(year, [])
+                        
+                        # Filter rows that fall within the current month range
+                        first_day, last_day = month_ranges[year][month]
+                        prices = [price for day, price in rows if first_day <= day <= last_day]
+                        
+                        if prices:
+                            # Calculate volatility for this year & month as (max - min)
+                            month_volatility = max(prices) - min(prices)
+                            # Only consider positive volatility
+                            if month_volatility > 0:
+                                volatilities.append(month_volatility)
                     
-                    # For each month
-                    for month_idx in range(1, 13):
-                        month_volatilities = []
-                        
-                        # For each year
-                        for year in years:
-                            first_day, last_day = month_ranges[year][month_idx]
-                            
-                            # Calculate min and max price for this month, year, commodity, city
-                            price_range = db.session.query(
-                                func.max(filtered_data.c.price).label('max_price'),
-                                func.min(filtered_data.c.price).label('min_price')
-                            ).filter(
-                                filtered_data.c.commodity == commodity,
-                                filtered_data.c.city_name == city,
-                                filtered_data.c.year == year,
-                                filtered_data.c.day >= first_day,
-                                filtered_data.c.day <= last_day
-                            ).first()
-                            
-                            # If we have valid data, calculate volatility
-                            if price_range and price_range.max_price and price_range.min_price:
-                                volatility = price_range.max_price - price_range.min_price
-                                if volatility > 0:
-                                    month_volatilities.append(volatility)
-                        
-                        # Calculate average volatility for this month across years
-                        if month_volatilities:
-                            avg_volatility = sum(month_volatilities) / len(month_volatilities)
-                            volatility_data[key][month_idx - 1] = round(avg_volatility, 2)
+                    # If we collected any volatilities for this month across years, average them
+                    if volatilities:
+                        avg_volatility = sum(volatilities) / len(volatilities)
+                        volatility_data[key][month - 1] = round(avg_volatility, 2)
         
         return volatility_data
-        
+
     except Exception as e:
         app.logger.error(f"Error calculating bulk monthly volatility: {str(e)}")
         return {}
@@ -4485,39 +4488,32 @@ def should_cache_route():
 # Update your caching logic in the relevant routes:
 
 
-@app.route('/debug/check-price-alerts', methods=['GET'])
-def debug_price_alerts():
-    from alert_service import check_price_alerts
-    
-    try:
-        check_price_alerts()
-        return jsonify({"status": "Price alert check completed"}), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
 
 
 @app.route('/api/alert-entries-fresh', methods=['GET'])
+@jwt_required()
 def get_alert_settings_fresh():
-    """Fetch all alert settings with guaranteed fresh data."""
+    """Fetch all alert settings for the current user with guaranteed fresh data."""
     try:
-        # Always bypass cache for this route
-        print(f"Fetching fresh alert settings for route: {request.path}")
+        # Get current user ID from the JWT token
+        current_user_id = get_jwt_identity()
         
-        # Query the database directly to get the most recent data
-        settings = AlertSetting.query.all()
+        # Always bypass cache for this route
+        print(f"Fetching fresh alert settings for user {current_user_id}")
+        
+        # Query the database directly to get the most recent data for this user
+        settings = AlertSetting.query.filter_by(user_id=current_user_id).all()
         result = [alert.to_dict() for alert in settings]
         
         # Completely remove any cached data
-        cache.clear()  # This clears entire cache
+        cache.delete(f'alert_settings:{current_user_id}')
         
         # Create response with aggressive no-cache headers
         response = jsonify(result)
         response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0, s-maxage=0, proxy-revalidate'
         response.headers['Pragma'] = 'no-cache'
         response.headers['Expires'] = '0'
-        response.headers['X-Accel-Expires'] = '0'  # Nginx cache control
+        response.headers['X-Accel-Expires'] = '0'
         
         return response
     
@@ -4537,121 +4533,16 @@ def get_alert_settings_fresh():
 
 
 
-@app.route('/api/alert-settings/<int:alert_id>', methods=['PATCH'])
-def update_alert_setting(alert_id):
-    """Update an existing alert setting."""
-    data = request.json
-    
-    try:
-        # Find the alert setting
-        alert = AlertSetting.query.filter_by(id=alert_id).first()  # Removed user_id check
-        
-        if not alert:
-            return jsonify({"error": "Alert setting not found"}), 404
-        
-        # Update fields
-        if 'threshold' in data:
-            alert.threshold = float(data['threshold'])
-        
-        if 'isActive' in data:
-            alert.is_active = bool(data['isActive'])
-        
-        alert.updated_at = datetime.utcnow()
-        db.session.commit()
-        
-        return jsonify(alert.to_dict())
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route('/api/delete-alert-by-id', methods=['POST'])
-def delete_alert_by_id():
-    """Delete an alert by ID, reset the sequence, and update the cache."""
-    try:
-        data = request.json
-        alert_id = data.get('id')
-        
-        if not alert_id:
-            response = jsonify({"error": "Alert ID is required"})
-            response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-            response.headers['Pragma'] = 'no-cache'
-            response.headers['Expires'] = '0'
-            return response, 400
-        
-        print(f"Attempting to delete alert with ID: {alert_id}")
-        
-        # Invalidate the cache before making any changes to the database
-        cache.delete('alert_settings')  # Delete cached data to ensure fresh data
-        
-        # Find the alert by ID
-        alert = AlertSetting.query.get(alert_id)
-        
-        if not alert:
-            print(f"No alert found with ID: {alert_id}")
-            response = jsonify({"error": "No alert found with this ID"})
-            response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-            response.headers['Pragma'] = 'no-cache'
-            response.headers['Expires'] = '0'
-            return response, 404
-        
-        # Delete the alert
-        db.session.delete(alert)
-        db.session.commit()
-
-        # Reset the sequence (different for SQLite vs PostgreSQL)
-        try:
-            if 'sqlite' in db.engine.url.drivername:
-                # SQLite sequence reset
-                db.session.execute(text("UPDATE sqlite_sequence SET seq = (SELECT MAX(id) FROM alert_settings) WHERE name = 'alert_settings'"))
-            elif 'postgresql' in db.engine.url.drivername:
-                # PostgreSQL sequence reset
-                db.session.execute(text("SELECT setval('alert_settings_id_seq', (SELECT MAX(id) FROM alert_settings))"))
-            db.session.commit()
-        except Exception as seq_error:
-            # If sequence reset fails, just log it but don't fail the whole operation
-            print(f"Error resetting sequence: {str(seq_error)}")
-
-        # After deletion, re-fetch all alerts and update the cache
-        settings = AlertSetting.query.all()
-        result = [alert.to_dict() for alert in settings]
-        
-        # Set the updated list of alerts to the cache
-        cache.set('alert_settings', result, timeout=300)  # Cache for 5 minutes
-        
-        response = jsonify({
-            "success": True, 
-            "message": f"Alert with ID {alert_id} deleted successfully",
-            "deleted_alert": {
-                "id": alert.id,
-                "commodity": alert.commodity,
-                "threshold": alert.threshold
-            }
-        })
-        
-        # Add no-cache headers
-        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-        response.headers['Pragma'] = 'no-cache'
-        response.headers['Expires'] = '0'
-        
-        return response
-    
-    except Exception as e:
-        db.session.rollback()
-        print(f"Error deleting alert: {str(e)}")
-        
-        response = jsonify({"error": str(e)})
-        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-        response.headers['Pragma'] = 'no-cache'
-        response.headers['Expires'] = '0'
-        
-        return response, 500
 
 @app.route('/api/alert-settings', methods=['POST'])
+@jwt_required()
 def create_alert_setting():
-    """Create a new alert setting and update the cache."""
+    """Create a new alert setting for the current user."""
+    # Get current user ID from the JWT token
+    current_user_id = get_jwt_identity()
+    
     # Log the incoming request details
-    app.logger.info(f"Received alert setting creation request: {request.json}")
+    app.logger.info(f"Received alert setting creation request for user {current_user_id}")
     
     try:
         # Validate request data
@@ -4684,9 +4575,7 @@ def create_alert_setting():
         # Validate and sanitize threshold
         try:
             threshold = float(data.get('threshold', 5.0))
-            # Add reasonable bounds check if needed
-            if threshold <= 0 or threshold > 100:
-                raise ValueError("Threshold must be between 0 and 100")
+            # No bounds check on threshold so it can be negative for price decreases
         except (TypeError, ValueError):
             response = jsonify({"error": "Invalid threshold value"})
             response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
@@ -4697,8 +4586,9 @@ def create_alert_setting():
         # Validate is_active (use default if not provided)
         is_active = bool(data.get('isActive', True))
         
-        # Check for duplicate alert setting using city, commodity, and threshold
+        # Check for duplicate alert setting for this user
         existing_alert = AlertSetting.query.filter_by(
+            user_id=current_user_id,
             city=city,
             commodity=commodity,
             threshold=threshold
@@ -4706,7 +4596,7 @@ def create_alert_setting():
         
         if existing_alert:
             response = jsonify({
-                "error": "An alert setting for this commodity and city with the same threshold already exists",
+                "error": "You already have an alert for this commodity and city with the same threshold",
                 "existing_alert_id": existing_alert.id
             })
             response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
@@ -4714,8 +4604,9 @@ def create_alert_setting():
             response.headers['Expires'] = '0'
             return response, 409  # Conflict status code
         
-        # Create new alert setting with city included
+        # Create new alert setting with user_id and city
         new_alert = AlertSetting(
+            user_id=current_user_id,
             city=city.strip(),
             commodity=commodity.strip(),
             threshold=threshold,
@@ -4726,15 +4617,13 @@ def create_alert_setting():
         db.session.add(new_alert)
         db.session.commit()
         
-        # Fetch all alert settings after insertion to update cache
-        settings = AlertSetting.query.all()
+        # Update the user-specific cache
+        settings = AlertSetting.query.filter_by(user_id=current_user_id).all()
         result = [alert.to_dict() for alert in settings]
-        
-        # Set the updated result to the cache for 5 minutes
-        cache.set('alert_settings', result, timeout=300)
+        cache.set(f'alert_settings:{current_user_id}', result, timeout=300)
         
         # Log successful creation
-        app.logger.info(f"Alert setting created: City={city}, Commodity={commodity}, Threshold={threshold}")
+        app.logger.info(f"Alert setting created for user {current_user_id}: City={city}, Commodity={commodity}, Threshold={threshold}")
         
         # Prepare response
         response = jsonify(new_alert.to_dict())
@@ -4744,23 +4633,9 @@ def create_alert_setting():
         
         return response, 201
     
-    except SQLAlchemyError as db_error:
-        db.session.rollback()
-        app.logger.error(f"Database error during alert setting creation: {str(db_error)}")
-        
-        response = jsonify({
-            "error": "Database error occurred",
-            "details": str(db_error)
-        })
-        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-        response.headers['Pragma'] = 'no-cache'
-        response.headers['Expires'] = '0'
-        
-        return response, 500
-    
     except Exception as e:
         db.session.rollback()
-        app.logger.error(f"Unexpected error during alert setting creation: {str(e)}")
+        app.logger.error(f"Error creating alert setting: {str(e)}")
         
         response = jsonify({
             "error": "An unexpected error occurred",
@@ -4770,28 +4645,138 @@ def create_alert_setting():
         response.headers['Pragma'] = 'no-cache'
         response.headers['Expires'] = '0'
         
-        return response, 500
+        return response, 500  
 
+
+@app.route('/api/alert-settings/<int:alert_id>', methods=['PATCH'])
+@jwt_required()
+def update_alert_setting(alert_id):
+    """Update an existing alert setting."""
+    current_user_id = get_jwt_identity()
+    data = request.json
     
+    try:
+        # Find the alert setting for this user
+        alert = AlertSetting.query.filter_by(
+            id=alert_id, 
+            user_id=current_user_id
+        ).first()
+        
+        if not alert:
+            return jsonify({"error": "Alert setting not found"}), 404
+        
+        # Update fields
+        if 'threshold' in data:
+            alert.threshold = float(data['threshold'])
+        
+        if 'isActive' in data:
+            alert.is_active = bool(data['isActive'])
+        
+        alert.updated_at = datetime.utcnow()
+        db.session.commit()
+        
+        return jsonify(alert.to_dict())
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/delete-alert-by-id', methods=['POST'])
+@jwt_required()
+def delete_alert_by_id():
+    """Delete an alert by ID for the current user."""
+    current_user_id = get_jwt_identity()
+    try:
+        data = request.json
+        alert_id = data.get('id')
+        
+        if not alert_id:
+            response = jsonify({"error": "Alert ID is required"})
+            response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+            response.headers['Pragma'] = 'no-cache'
+            response.headers['Expires'] = '0'
+            return response, 400
+        
+        # Find the alert by ID and user_id
+        alert = AlertSetting.query.filter_by(id=alert_id, user_id=current_user_id).first()
+        
+        if not alert:
+            response = jsonify({"error": "No alert found with this ID for your account"})
+            response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+            response.headers['Pragma'] = 'no-cache'
+            response.headers['Expires'] = '0'
+            return response, 404
+        
+        # Delete the alert
+        db.session.delete(alert)
+        db.session.commit()
+
+        # Update user's cache
+        cache.delete(f'alert_settings:{current_user_id}')
+        
+        response = jsonify({
+            "success": True, 
+            "message": f"Alert with ID {alert_id} deleted successfully",
+            "deleted_alert": {
+                "id": alert.id,
+                "commodity": alert.commodity,
+                "threshold": alert.threshold
+            }
+        })
+        
+        # Add no-cache headers
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        
+        return response
+    
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/notifications', methods=['GET'])
+@jwt_required()
 def get_notifications():
-    """Get all notifications."""
+    """Get all notifications for the current user."""
+    current_user_id = get_jwt_identity()
     try:
-        notifications = Notification.query.all()  # Removed user_id filter
+        notifications = Notification.query.filter_by(user_id=current_user_id).order_by(
+            Notification.created_at.desc()
+        ).all()
         return jsonify([notification.to_dict() for notification in notifications])
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/notifications/unread-count', methods=['GET'])
+@jwt_required()
+def get_unread_count():
+    """Get count of unread notifications for the current user."""
+    current_user_id = get_jwt_identity()
+    try:
+        # Count unread notifications for this user
+        count = Notification.query.filter_by(
+            user_id=current_user_id,
+            read=False
+        ).count()
+        
+        return jsonify({"count": count})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
 
 @app.route('/api/notifications/<int:notification_id>', methods=['PATCH'])
+@jwt_required()  # Add this decorator
 def update_notification(notification_id):
     """Update a notification (mark as read)."""
+    current_user_id = get_jwt_identity()  # Get the current user
     data = request.json
     
     try:
-        # Find the notification
-        notification = Notification.query.filter_by(id=notification_id).first()  # Removed user_id check
+        # Find the notification for this user
+        notification = Notification.query.filter_by(
+            id=notification_id,
+            user_id=current_user_id  # Only allow users to update their own notifications
+        ).first()
         
         if not notification:
             return jsonify({"error": "Notification not found"}), 404
@@ -4809,11 +4794,17 @@ def update_notification(notification_id):
 
 
 @app.route('/api/notifications/<int:notification_id>', methods=['DELETE'])
+@jwt_required()  # Add this decorator
 def delete_notification(notification_id):
     """Delete a notification."""
+    current_user_id = get_jwt_identity()  # Get the current user
+    
     try:
-        # Find the notification
-        notification = Notification.query.filter_by(id=notification_id).first()  # Removed user_id check
+        # Find the notification for this user
+        notification = Notification.query.filter_by(
+            id=notification_id,
+            user_id=current_user_id  # Only allow users to delete their own notifications
+        ).first()
         
         if not notification:
             return jsonify({"error": "Notification not found"}), 404
@@ -4828,11 +4819,17 @@ def delete_notification(notification_id):
 
 
 @app.route('/api/notifications/mark-all-read', methods=['POST'])
+@jwt_required()  # Add this decorator
 def mark_all_read():
-    """Mark all notifications as read."""
+    """Mark all notifications as read for the current user."""
+    current_user_id = get_jwt_identity()  # Get the current user
+    
     try:
-        # Update all unread notifications
-        notifications = Notification.query.filter_by(read=False).all()  # Removed user_id filter
+        # Update all unread notifications for this user only
+        notifications = Notification.query.filter_by(
+            user_id=current_user_id,
+            read=False
+        ).all()
         
         for notification in notifications:
             notification.read = True
@@ -4843,20 +4840,6 @@ def mark_all_read():
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
-    
-@app.route('/api/notifications/unread-count', methods=['GET'])
-def get_unread_count():
-    """Get count of unread notifications."""
-    try:
-        # Count unread notifications
-        count = Notification.query.filter_by(read=False).count()  # Removed user_id filter
-        
-        return jsonify({"count": count})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-
 
 
 
