@@ -3987,13 +3987,17 @@ def calculate_monthly_volatility_bulk(commodities, cities, years):
         return {}
 
 def calculate_seasonal_volatility_bulk(commodities, cities, years):
-    """Calculate seasonal volatility for multiple commodities and cities at once."""
+    """
+    Optimized calculation of seasonal volatility (max - min) by fetching
+    all data in one query and grouping/aggregating in memory.
+    """
     try:
-        seasons = ["Winter", "Spring", "Summer", "Autumn"]
-        volatility_data = {}
+        from collections import defaultdict
         
-        # Create a subquery with just the data we need
-        filtered_data = db.session.query(
+        seasons = ["Winter", "Spring", "Summer", "Autumn"]
+
+        # Single query: Fetch all rows for the given commodities, cities, years, and source.
+        all_data = db.session.query(
             PriceData.commodity,
             PriceData.city_name,
             PriceData.year,
@@ -4004,47 +4008,46 @@ def calculate_seasonal_volatility_bulk(commodities, cities, years):
             PriceData.city_name.in_(cities),
             PriceData.year.in_(years),
             PriceData.source == "ProduceIQ"
-        ).subquery()
+        ).all()
         
-        # For each commodity and city
+        # Group the data by commodity and city, then by year and season.
+        # Structure: data_by_combo[commodity_city][year][season] = list of prices
+        data_by_combo = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+        for row in all_data:
+            key = f"{row.commodity}_{row.city_name}"
+            data_by_combo[key][row.year][row.season].append(row.price)
+        
+        # Prepare the volatility results per commodity-city pair.
+        volatility_data = {}
         for commodity in commodities:
             for city in cities:
                 key = f"{commodity}_{city}"
-                volatility_data[key] = [0] * 4  # Initialize with zeros for 4 seasons
+                # Initialize with zeros for each of the 4 seasons.
+                volatility_data[key] = [0] * 4
                 
-                # For each season
+                # For each season, accumulate volatility across years.
                 for season_idx, season in enumerate(seasons):
-                    season_volatilities = []
-                    
-                    # For each year
+                    season_vols = []
                     for year in years:
-                        # Calculate min and max price for this season, year, commodity, city
-                        price_range = db.session.query(
-                            func.max(filtered_data.c.price).label('max_price'),
-                            func.min(filtered_data.c.price).label('min_price')
-                        ).filter(
-                            filtered_data.c.commodity == commodity,
-                            filtered_data.c.city_name == city,
-                            filtered_data.c.year == year,
-                            filtered_data.c.season == season
-                        ).first()
-                        
-                        # If we have valid data, calculate volatility
-                        if price_range and price_range.max_price and price_range.min_price:
-                            volatility = price_range.max_price - price_range.min_price
-                            if volatility > 0:
-                                season_volatilities.append(volatility)
+                        # Retrieve all prices for this commodity-city-year for the current season.
+                        prices = data_by_combo[key][year].get(season, [])
+                        if prices:
+                            # Calculate volatility as (max - min)
+                            vol = max(prices) - min(prices)
+                            if vol > 0:
+                                season_vols.append(vol)
                     
-                    # Calculate average volatility for this season across years
-                    if season_volatilities:
-                        avg_volatility = sum(season_volatilities) / len(season_volatilities)
-                        volatility_data[key][season_idx] = round(avg_volatility, 2)
+                    # Average volatility across years for this season.
+                    if season_vols:
+                        avg_vol = sum(season_vols) / len(season_vols)
+                        volatility_data[key][season_idx] = round(avg_vol, 2)
         
         return volatility_data
-        
+
     except Exception as e:
         app.logger.error(f"Error calculating bulk seasonal volatility: {str(e)}")
         return {}
+
 
 def get_month_day_range(month, year):
     """Helper function to get the day of year range for a given month."""
