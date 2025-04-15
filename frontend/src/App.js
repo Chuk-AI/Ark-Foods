@@ -18,6 +18,8 @@ import Alerts from './pages/Alerts';
 // axios.defaults.baseURL = 'http://localhost:5500/'; // local backend
 axios.defaults.baseURL = 'https://arkfoods.klicksai.com'; // or your custom domain
 
+
+
 // Add Authorization header for all requests
 axios.interceptors.request.use((config) => {
   const token = localStorage.getItem('authToken');
