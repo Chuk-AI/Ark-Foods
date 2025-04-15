@@ -333,7 +333,7 @@ const VolatilityChart = () => {
             <div className="card-header bg-primary text-white">
               <h3>Volatility Filters</h3>
             </div>
-            <div className="card-body">
+            <div className="card-body" style={{height:'600px'}}>
               <form id="filters-volatility-data" className="filter-form active">
                 {/* Display Type Selection */}
                 <div className="form-group">
@@ -442,21 +442,24 @@ const VolatilityChart = () => {
                 Minimize
               </button>
             </div>
-            <div className="card-body">
-              <div className="mb-3">
-                <p className="text-muted">
+            <div className="card-body" style={{height:'600px'}}>
+            {/* <p className="text-muted">
                   <i className="fas fa-info-circle"></i> This chart shows price volatility (high-low fluctuations) by month or season. 
                   Higher values indicate greater market instability and risk. Use the filters to customize your view.
-                </p>
-              </div>
-              <canvas id="volatilityChart" ref={volatilityChartRef} width="400" height="400"></canvas>
+                </p> */}
+            
+              <div className="card-body" style={{ height: '550px', overflow: 'hidden' }}>
+  <canvas id="volatilityChart" ref={volatilityChartRef} className="fixed-chart"></canvas>
+</div>
               <div className="mt-3">
-                <button className="btn btn-primary" onClick={handleDownload}>
-                  Download Chart & Data
-                </button>
+               
               </div>
             </div>
+           
           </div>
+          <button className="btn btn-primary" onClick={handleDownload}>
+                  Download Chart & Data
+                </button>
         </div>
       </div>
     </div>

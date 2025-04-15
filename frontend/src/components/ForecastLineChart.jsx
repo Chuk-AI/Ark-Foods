@@ -330,7 +330,7 @@ const ForecastLineChart = () => {
             <div className="card-header bg-primary text-white">
               <h3>Forecast Filters</h3>
             </div>
-            <div className="card-body">
+            <div className="card-body" style={{height:'600px'}}>
               <form id="filters-forecast-data" className="filter-form active">
                 {/* Commodity Filter with Checkboxes */}
                 <div className="form-group">
@@ -428,7 +428,7 @@ const ForecastLineChart = () => {
           {/* Chart Display */}
           <div className="card resizable-block" id="forecast-line-data-card" data-block-title="Forecast Line Data">
             <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-              <h2>Price Forecast Trends</h2>
+            
               <button
                 className="btn btn-sm btn-outline-light toggle-size"
                 data-block-title="Forecast Line Data"
@@ -437,21 +437,18 @@ const ForecastLineChart = () => {
                 Minimize
               </button>
             </div>
-            <div className="card-body">
-              <div className="mb-3">
-                <p className="text-muted">
-                  <i className="fas fa-info-circle"></i> This chart shows forecasted prices based on historical seasonal patterns. 
-                  Dashed lines represent forecasted prices. Select commodities, cities, and forecast period using the filters.
-                </p>
-              </div>
+            <div className="card-body" style={{height:'600px'}}>
+         
+              <div className="card-body" style={{ height: '550px', overflow: 'hidden' }}>
               <canvas id="forecastLineChart" ref={forecastChartRef} width="400" height="400"></canvas>
-              <div className="mt-3">
-                <button className="btn btn-primary" onClick={handleDownload}>
-                  Download Chart & Data
-                </button>
               </div>
+
+         
             </div>
           </div>
+          <button className="btn btn-primary" onClick={handleDownload}>
+                  Download Chart & Data
+                </button>
         </div>
       </div>
     </div>
