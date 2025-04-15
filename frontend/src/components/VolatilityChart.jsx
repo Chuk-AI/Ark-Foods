@@ -7,7 +7,7 @@ const VolatilityChart = () => {
   const [volatilityChart, setVolatilityChart] = useState(null);
   const [volatilityData, setVolatilityData] = useState(null);
   const [commoditiesList, setCommoditiesList] = useState([
-    'Anaheim', 'Cubanelle', 'Jalapeno', 'Poblano', 'Serrano', 'Shishito'
+    'Anaheim', 'Cubanelles', 'Jalapeno', 'Poblano', 'Serrano', 'Shishito'
   ]);
   
   const [citiesList, setCitiesList] = useState([
