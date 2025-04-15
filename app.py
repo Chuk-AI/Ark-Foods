@@ -4505,8 +4505,6 @@ def get_alert_settings_fresh():
         return response, 500
 
 
-
-
 @app.route('/api/alert-settings', methods=['POST'])
 @jwt_required()
 def create_alert_setting():

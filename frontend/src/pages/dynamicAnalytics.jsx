@@ -1,94 +1,56 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  Box, 
-  Container, 
-  Typography, 
-  Card, 
-  CardContent, 
-  Grid, 
-  Button, 
-  Paper,
-  AppBar,
-  Toolbar,
-  IconButton,
-  Divider,
-  useTheme,
-  useMediaQuery,
-  Fade,
-  Zoom 
-} from '@mui/material';
-import { 
-  ArrowBack as ArrowBackIcon,
-  HelpOutline as HelpOutlineIcon,
-  ShowChart as ShowChartIcon,
-  BarChart as BarChartIcon,
-  Calculate as CalculateIcon,
-  Spa as SpaIcon
-} from '@mui/icons-material';
+import React, { useState } from 'react';
 import Header from '../components/header';
 import ForecastLineChart from '../components/ForecastLineChart';
 import BreakEvenEstimator from '../components/BreakEvenEstimator';
 import HarvestPlanner from '../components/HarvestPlanner';
 import VolatilityChart from '../components/VolatilityChart';
 import '../styles/dynamic.css';
+import { 
+  ShowChart as ShowChartIcon,
+  BarChart as BarChartIcon,
+  Calculate as CalculateIcon,
+  Spa as SpaIcon
+} from '@mui/icons-material';
 
 export default function DynamicAnalytics() {
   // State to track which chart is currently selected
   const [activeChart, setActiveChart] = useState(null);
-  const [isTransitioning, setIsTransitioning] = useState(false);
-  
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
-  // Available chart options with MUI icons
+  // Available chart options
   const chartOptions = [
     { 
       id: 'forecastLine', 
       name: 'Price Forecast Trends', 
-      icon: <ShowChartIcon sx={{ fontSize: 48 }} />,
-      color: theme.palette.primary.main,
+      icon: 'fa-chart-line',
+      color: '#1976d2',
+      bgColor: '#e3f2fd',
       description: 'View forecasted price trends based on seasonal patterns'
     },
     { 
       id: 'volatility', 
       name: 'Market Volatility', 
-      icon: <BarChartIcon sx={{ fontSize: 48 }} />,
-      color: theme.palette.secondary.main,
+      icon: 'fa-chart-bar',  // Changed to bar chart for visibility
+      color: '#9c27b0', 
+      bgColor: '#f3e5f5',
       description: 'Analyze price fluctuations to identify stable vs. risky market periods'
     },
     { 
       id: 'breakEven', 
       name: 'Break Even Estimator', 
-      icon: <CalculateIcon sx={{ fontSize: 48 }} />,
-      color: theme.palette.success.main,
+      icon: 'fa-calculator',
+      color: '#2e7d32',
+      bgColor: '#e8f5e9',
       description: 'Analyze profitability and market price comparisons'
     },
     { 
       id: 'harvestPlanner', 
       name: 'Harvest Planner', 
-      icon: <SpaIcon sx={{ fontSize: 48 }} />,
-      color: theme.palette.warning.main,
+      icon: 'fa-seedling',
+      color: '#e65100',
+      bgColor: '#fff3e0',
       description: 'Optimize your planting and harvesting strategy with data-driven insights'
     }
   ];
-
-  // Handle chart selection with transition
-  const handleSelectChart = (chartId) => {
-    setIsTransitioning(true);
-    setTimeout(() => {
-      setActiveChart(chartId);
-      setIsTransitioning(false);
-    }, 300);
-  };
-
-  // Handle back button with transition
-  const handleBackToSelection = () => {
-    setIsTransitioning(true);
-    setTimeout(() => {
-      setActiveChart(null);
-      setIsTransitioning(false);
-    }, 300);
-  };
 
   // Function to render the selected chart
   const renderChart = () => {
@@ -106,179 +68,160 @@ export default function DynamicAnalytics() {
     }
   };
 
+  const renderCardIcon = (chart) => {
+    // Use Material UI icons instead
+    let icon;
+    switch(chart.id) {
+      case 'forecastLine':
+        icon = <ShowChartIcon style={{ fontSize: '32px', color: chart.color }} />;
+        break;
+      case 'volatility':
+        icon = <BarChartIcon style={{ fontSize: '32px', color: chart.color }} />;
+        break;
+      case 'breakEven':
+        icon = <CalculateIcon style={{ fontSize: '32px', color: chart.color }} />;
+        break;
+      case 'harvestPlanner':
+        icon = <SpaIcon style={{ fontSize: '32px', color: chart.color }} />;
+        break;
+      default:
+        icon = null;
+    }
+    
+    return (
+      <div style={{ 
+        width: '80px',
+        height: '80px',
+        borderRadius: '50%',
+        backgroundColor: chart.bgColor,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}>
+        {icon}
+      </div>
+    );
+  };
+  // Render the icon for each card
+ 
+
   return (
-    <Box sx={{ 
-      backgroundColor: '#f5f7fa',
-      minHeight: '100vh',
-      pb: 8 
-    }}>
+    <div>
       <Header />
       
-      <Container maxWidth="xl" sx={{ mt: 10, pt: 2 }}>
-        {/* Analytics Header with subtle gradient */}
-        {/* <Box 
-          sx={{ 
-            textAlign: 'center', 
-            mb: 6,
-            background: 'linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(233,245,255,0.5) 50%, rgba(255,255,255,0) 100%)',
-            py: 4,
-            borderRadius: 2
-          }}
-        >
-          <Typography 
-            variant="h3" 
-            component="h1" 
-            sx={{ 
-              fontWeight: 700, 
-              color: 'primary.main',
-              mb: 1
-            }}
-          >
-            Dynamic Analytics Dashboard
-          </Typography>
-          <Typography 
-            variant="h6" 
-            component="p"
-            color="text.secondary"
-            sx={{ maxWidth: 700, mx: 'auto' }}
-          >
-            Explore market data through interactive visualizations and forecasting tools
-          </Typography>
-        </Box> */}
+      <div className="container-fluid mt-5 pt-4">
+    
         
-        <Fade in={!isTransitioning} timeout={500}>
-          <Box>
-            {!activeChart ? (
-              <Grid container spacing={3} sx={{ mb: 6 }}>
-                {chartOptions.map((chart) => (
-                  <Grid item xs={12} sm={6} md={3} key={chart.id}>
-                    <Zoom in={!isTransitioning} style={{ transitionDelay: '100ms' }}>
-                      <Card 
-                        elevation={2}
-                        sx={{ 
-                          height: '100%',
-                          transition: 'all 0.3s ease',
-                          cursor: 'pointer',
-                          '&:hover': {
-                            transform: 'translateY(-5px)',
-                            boxShadow: '0 12px 20px -10px rgba(0,0,0,0.2)',
-                          }
-                        }}
-                        onClick={() => handleSelectChart(chart.id)}
-                      >
-                        <CardContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', p: 4 }}>
-                          <Box 
-                            sx={{
-                              borderRadius: '50%',
-                              p: 2,
-                              mb: 2,
-                              backgroundColor: `${chart.color}10`,
-                              color: chart.color,
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center'
-                            }}
-                          >
-                            {chart.icon}
-                          </Box>
-                          <Typography variant="h5" component="h3" sx={{ mb: 1, fontWeight: 600 }}>
-                            {chart.name}
-                          </Typography>
-                          <Typography 
-                            variant="body2" 
-                            color="text.secondary" 
-                            sx={{ 
-                              mb: 3,
-                              textAlign: 'center', 
-                              flexGrow: 1 
-                            }}
-                          >
-                            {chart.description}
-                          </Typography>
-                          <Button 
-                            variant="outlined" 
-                            color="primary"
-                            fullWidth
-                            sx={{ 
-                              mt: 'auto',
-                              borderRadius: 2,
-                              py: 1
-                            }}
-                          >
-                            View Analysis
-                          </Button>
-                        </CardContent>
-                      </Card>
-                    </Zoom>
-                  </Grid>
-                ))}
-              </Grid>
-            ) : (
-              <Box>
-                {/* Chart Display with floating toolbar */}
-                <Paper 
-                  elevation={2} 
-                  sx={{ 
-                    p: 2, 
-                    mb: 3,
-                    borderRadius: 2,
-                    display: 'flex',
-                    flexDirection: isMobile ? 'column' : 'row',
-                    justifyContent: 'space-between',
-                    alignItems: isMobile ? 'flex-start' : 'center',
-                    gap: 2
-                  }}
-                >
-                  <Button
-                    startIcon={<ArrowBackIcon />}
-                    variant="outlined"
-                    onClick={handleBackToSelection}
-                    size="small"
-                    sx={{ borderRadius: 2 }}
-                  >
-                    Back to Selection
-                  </Button>
-                  
-                  <Typography 
-                    variant="h5" 
-                    component="h2" 
-                    sx={{ 
-                      fontWeight: 600,
-                      color: chartOptions.find(c => c.id === activeChart)?.color
+        {!activeChart ? (
+          <>
+            {/* Chart Selection Cards */}
+            <div className="row">
+              {chartOptions.map((chart, index) => (
+                <div key={chart.id} className={`col-md-4 mb-4 ${index === 3 ? 'col-md-6 offset-md-3' : ''}`}>
+                  <div 
+                    className="chart-option-card"
+                    onClick={() => setActiveChart(chart.id)}
+                    style={{ 
+                      padding: '30px 20px',
+                      height: '100%',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      transition: 'all 0.3s ease',
+                      borderRadius: '10px',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
+                      border: 'none'
                     }}
                   >
-                    {chartOptions.find(c => c.id === activeChart)?.name}
-                  </Typography>
-                  
-                  <Button
-                    startIcon={<HelpOutlineIcon />}
-                    variant="text"
-                    color="primary"
-                    size="small"
-                  >
-                    Help & Guide
-                  </Button>
-                </Paper>
-                
-                {/* Actual chart container with shadow and rounded corners */}
-                <Paper 
-                  elevation={3} 
-                  sx={{ 
-                    borderRadius: 3,
-                    overflow: 'hidden',
-                    minHeight: '70vh',
-                    p: 0
-                  }}
-                >
-                  <Box sx={{ p: 3 }}>
-                    {renderChart()}
-                  </Box>
-                </Paper>
-              </Box>
-            )}
-          </Box>
-        </Fade>
-      </Container>
-    </Box>
+                    <div style={{ textAlign: 'center' }}>
+                      {renderCardIcon(chart)}
+                      <h3 style={{ 
+                        fontSize: '22px', 
+                        fontWeight: '600', 
+                        marginBottom: '16px',
+                        marginTop: '20px',
+                        color: '#333'
+                      }}>
+                        {chart.name}
+                      </h3>
+                      <p style={{ 
+                        color: '#666', 
+                        marginBottom: '25px',
+                        fontSize: '15px',
+                        lineHeight: '1.5',
+                        padding: '0 10px'
+                      }}>
+                        {chart.description}
+                      </p>
+                    </div>
+                    <div style={{ width: '100%' }}>
+                      <button 
+                        className="btn"
+                        style={{
+                          width: '100%',
+                          padding: '10px',
+                          color: chart.color,
+                          backgroundColor: 'transparent',
+                          border: `1px solid ${chart.color}`,
+                          borderRadius: '4px',
+                          fontWeight: '500',
+                          letterSpacing: '0.5px',
+                          transition: 'all 0.2s ease'
+                        }}
+                        onMouseOver={(e) => {
+                          e.currentTarget.style.backgroundColor = chart.color;
+                          e.currentTarget.style.color = 'white';
+                        }}
+                        onMouseOut={(e) => {
+                          e.currentTarget.style.backgroundColor = 'transparent';
+                          e.currentTarget.style.color = chart.color;
+                        }}
+                      >
+                        VIEW ANALYSIS
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Chart Display with Back Option */}
+            <div className="chart-toolbar d-flex justify-content-between align-items-center">
+              <button 
+                className="btn btn-outline-secondary"
+                onClick={() => setActiveChart(null)}
+                style={{
+                  padding: '8px 15px',
+                  fontSize: '14px',
+                  borderRadius: '4px',
+                  display: 'flex',
+                  alignItems: 'center'
+                }}
+              >
+                <i className="fas fa-arrow-left" style={{ marginRight: '8px' }}></i>
+                Back to Chart Selection
+              </button>
+              <h2 className="mb-0" style={{ fontSize: '24px', fontWeight: '600', color: chartOptions.find(c => c.id === activeChart)?.color }}>
+                {chartOptions.find(c => c.id === activeChart)?.name}
+              </h2>
+              <div className="chart-actions">
+                <button className="btn btn-outline-primary" style={{ padding: '8px 15px', fontSize: '14px' }}>
+                  <i className="fas fa-question-circle" style={{ marginRight: '8px' }}></i>
+                  Help
+                </button>
+              </div>
+            </div>
+            
+            {/* Render the active chart */}
+            <div className="active-chart-container" style={{ marginTop: '20px', backgroundColor: 'white', padding: '20px', borderRadius: '10px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+              {renderChart()}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
   );
 }
