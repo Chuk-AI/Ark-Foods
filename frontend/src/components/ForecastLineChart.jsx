@@ -11,7 +11,7 @@ const ForecastLineChart = () => {
   const [forecastChart, setForecastChart] = useState(null);
   const [forecastData, setForecastData] = useState(null);
   const [commoditiesList, setCommoditiesList] = useState([
-    'Anaheim', 'Cubanelle', 'Jalapeno', 'Poblano', 'Serrano', 'Shishito'
+    'Anaheim', 'Cubanelles', 'Jalapeno', 'Poblano', 'Serrano', 'Shishito'
   ]);
 
   
