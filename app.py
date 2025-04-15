@@ -3808,6 +3808,10 @@ def get_forecast_line_data():
         return jsonify({"error": str(e)}), 500
 
 
+
+
+
+
 @app.route("/api/volatility_data", methods=["GET"])
 def get_volatility_data():
     try:
