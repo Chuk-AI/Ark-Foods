@@ -536,32 +536,31 @@ function AdminDashboard() {
   const handleGenerate = async () => {
     // Validate dates before sending
     if (!startDate || !endDate) {
-        setError('Please select both start and end dates');
-        return;
+      setError('Please select both start and end dates');
+      return;
     }
-
+  
     setLoading(true);
     setError(null);
-
+  
     try {
-        const response = await axios.get('/api/price_averages', {
-            params: {
-                start_date: startDate,
-                end_date: endDate,
-                source: source,
-                city: city
-            },
-    
-        });
-        
-        setPriceData(response.data.price_averages);
+      const response = await axios.get('/api/price_averages', {
+        params: {
+          start_date: startDate,
+          end_date: endDate,
+          source: source,
+          city: city
+        },
+      });
+      
+      setPriceData(response.data.price_averages);
     } catch (error) {
-        console.error('Error fetching price averages:', error.response ? error.response.data : error);
-        setError(error.response?.data?.error || 'An error occurred');
+      console.error('Error fetching price averages:', error.response ? error.response.data : error);
+      setError(error.response?.data?.error || 'An error occurred');
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
-};
+  };
 
   
 
@@ -1015,32 +1014,31 @@ function AdminDashboard() {
 
                 {/* 🔹 Commodity Prices Table */}
                 <div className="table-responsive">
-                  <table className="table table-bordered table-hover mt-3">
-                    <thead className="thead-dark">
-                      <tr>
-                        <th>Commodity</th>
-                        <th>Source</th>
-                        <th>Average Price ($)</th>
+              <table className="table table-bordered table-hover mt-3">
+                <thead className="thead-dark">
+                  <tr>
+                    <th>Commodity</th>
+                    <th>Source</th>
+                    <th>Average Price ($)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {priceData.length > 0 ? (
+                    priceData.map((item, index) => (
+                      <tr key={index}>
+                        <td>{item.commodity}</td>
+                        <td>{item.source}</td>
+                        <td>${item.avg_price.toFixed(2)}</td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {priceData.length > 0 ? (
-                        priceData.map((item, index) => (
-                          <tr key={index}>
-                            <td>{item.source === "USDA" && item.commodity === "Cubanelle" ? "Cubanelles" : item.commodity}</td>
-                            <td>{item.source}</td>
-                            <td>${item.avg_price.toFixed(2)}</td>
-                          </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td colSpan="3" className="text-center">No data available</td>
-                        </tr>
-                      )}
-                    </tbody>
-
-                  </table>
-                </div>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="3" className="text-center">No data available</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
               </div>
 
          <hr />

@@ -3489,16 +3489,16 @@ def get_price_averages():
         end_date = request.args.get('end_date')
         source = request.args.get('source', 'both').lower()
         city = request.args.get('city', 'All cities')
-
+        
         if not start_date or not end_date:
             return jsonify({'error': 'Both start and end dates are required'}), 400
-
+        
         # Convert dates to year/day-of-year
         start_date_obj = datetime.strptime(start_date, '%Y-%m-%d')
         end_date_obj = datetime.strptime(end_date, '%Y-%m-%d')
         start_year, start_day = start_date_obj.year, start_date_obj.timetuple().tm_yday
         end_year, end_day = end_date_obj.year, end_date_obj.timetuple().tm_yday
-
+        
         # Mapping USDA city names to normalized names
         usda_city_mapping = {
             "BALTIMORE": "Baltimore",
@@ -3510,17 +3510,18 @@ def get_price_averages():
             "NEW YORK": "New York",
             "PHILADELPHIA": "Philadelphia",
         }
-
-        # Normalize city names using a SQLAlchemy CASE expression
+        
+        # Normalize city names
         normalized_city = case(
             *[(PriceData.city_name == key, value) for key, value in usda_city_mapping.items()],
             else_=PriceData.city_name
         ).label("normalized_city")
-
-        # Normalize commodity by trimming whitespace and converting to lowercase
-        normalized_commodity = func.trim(func.lower(PriceData.commodity)).label("normalized_commodity")
-
-        # Build the query filtering by date range
+        
+        # Normalize commodity name - ensure consistent naming between sources
+        # Handle special case where Cubanelle in USDA matches Cubanelles in ProduceIQ
+        normalized_commodity = func.lower(func.trim(PriceData.commodity)).label("normalized_commodity")
+        
+        # Build basic query filtering by date range
         query = db.session.query(
             normalized_city,
             normalized_commodity,
@@ -3529,44 +3530,149 @@ def get_price_averages():
         ).filter(
             or_(
                 and_(PriceData.year == start_year, PriceData.day >= start_day),
-                and_(PriceData.year == end_year, PriceData.day <= end_day)
+                and_(PriceData.year == end_year, PriceData.day <= end_day),
+                and_(PriceData.year > start_year, PriceData.year < end_year)
             )
         )
-
-        # Apply source filter if specified
+        
+        # Apply city filter if not "All cities"
+        if city.lower() != 'all cities':
+            query = query.filter(normalized_city == city)
+        
+        # Apply source filter if not "both"
         if source == 'usda':
             query = query.filter(PriceData.source == "USDA")
         elif source == 'produceiq':
             query = query.filter(PriceData.source == "ProduceIQ")
-
-        # Apply city filter if not "All cities"
-        if city.lower() != 'all cities':
-            query = query.filter(normalized_city == city)
-
-        # Group and order by normalized city, normalized commodity, and source
+        
+        # Group by city, commodity, and source
         query = query.group_by(normalized_city, normalized_commodity, PriceData.source)
-        query = query.order_by(normalized_city, normalized_commodity, PriceData.source)
-
+        query = query.order_by(normalized_commodity)
+        
         results = query.all()
-
-        # Format the results
-        price_averages = [
-            {
-                'city_name': row.normalized_city,
+        
+        # Convert query results to dictionary format for easier manipulation
+        raw_data = []
+        for row in results:
+            # Skip if no data (shouldn't happen with avg, but just in case)
+            if row.avg_price is None:
+                continue
+                
+            raw_data.append({
+                'city': row.normalized_city,
                 'commodity': row.normalized_commodity,
                 'source': row.source,
                 'avg_price': round(row.avg_price, 2)
-            }
-            for row in results
-        ]
-
+            })
+        
+        # Format the results based on filters
+        price_averages = []
+        
+        # Special handling for the "cubanelle/cubanelles" case
+        cubanelle_map = {
+            "cubanelle": "cubanelles",
+            "cubanelles": "cubanelles"
+        }
+        
+        # Standardize commodity names
+        for item in raw_data:
+            if item['commodity'] in cubanelle_map:
+                item['commodity'] = cubanelle_map[item['commodity']]
+        
+        # For "both" sources, we need to combine USDA and ProduceIQ
+        if source == 'both':
+            # Create a dictionary to combine by commodity (and city if relevant)
+            combined_data = {}
+            
+            if city.lower() == 'all cities':
+                # Combine by commodity across all cities and both sources
+                for item in raw_data:
+                    commodity = item['commodity']
+                    if commodity not in combined_data:
+                        combined_data[commodity] = {
+                            'commodity': commodity,
+                            'source': 'U/P',
+                            'sum_price': item['avg_price'],
+                            'count': 1
+                        }
+                    else:
+                        combined_data[commodity]['sum_price'] += item['avg_price']
+                        combined_data[commodity]['count'] += 1
+                
+                # Calculate averages and create the final output
+                for commodity, data in combined_data.items():
+                    price_averages.append({
+                        'commodity': commodity,
+                        'source': 'U/P',
+                        'avg_price': round(data['sum_price'] / data['count'], 2)
+                    })
+            else:
+                # Combine by commodity and city
+                for item in raw_data:
+                    key = (item['commodity'], item['city'])
+                    if key not in combined_data:
+                        combined_data[key] = {
+                            'commodity': item['commodity'],
+                            'city': item['city'],
+                            'source': 'Both',
+                            'sum_price': item['avg_price'],
+                            'count': 1
+                        }
+                    else:
+                        combined_data[key]['sum_price'] += item['avg_price']
+                        combined_data[key]['count'] += 1
+                
+                # Calculate averages
+                for data in combined_data.values():
+                    price_averages.append({
+                        'commodity': data['commodity'],
+                        'city_name': data['city'],
+                        'source': 'U/P',
+                        'avg_price': round(data['sum_price'] / data['count'], 2)
+                    })
+        else:
+            # For single source queries
+            if city.lower() == 'all cities':
+                # Combine by commodity across all cities
+                commodity_data = {}
+                for item in raw_data:
+                    commodity = item['commodity']
+                    if commodity not in commodity_data:
+                        commodity_data[commodity] = {
+                            'commodity': commodity,
+                            'source': item['source'],
+                            'sum_price': item['avg_price'],
+                            'count': 1
+                        }
+                    else:
+                        commodity_data[commodity]['sum_price'] += item['avg_price']
+                        commodity_data[commodity]['count'] += 1
+                
+                # Calculate averages
+                for commodity, data in commodity_data.items():
+                    price_averages.append({
+                        'commodity': commodity,
+                        'source': data['source'],
+                        'avg_price': round(data['sum_price'] / data['count'], 2)
+                    })
+            else:
+                # Direct mapping for specific city and source
+                for item in raw_data:
+                    price_averages.append({
+                        'commodity': item['commodity'],
+                        'city_name': item['city'],
+                        'source': item['source'],
+                        'avg_price': item['avg_price']
+                    })
+        
+        # Sort results by commodity for consistency
+        price_averages.sort(key=lambda x: x['commodity'])
+        
         return jsonify({'price_averages': price_averages}), 200
-
+    
     except Exception as e:
         app.logger.error(f'Error fetching price averages: {str(e)}')
         return jsonify({'error': f'Internal server error: {str(e)}'}), 500
-
-
 
 # API FOR Forecast visual
 @app.route("/api/seasonal_prices", methods=["GET"])
@@ -3625,7 +3731,7 @@ def get_forecast_line_data():
         # Parse request parameters
         commodities = request.args.get("commodities", "").split(",")
         cities = request.args.get("cities", "").split(",")
-        avg_commodities = request.args.get("averageCommodities", "false").lower() == "true"
+        avg_cities = request.args.get("averageCities", "false").lower() == "true"  # Changed from averageCommodities to averageCities
         forecast_years = int(request.args.get("forecastYears", "1"))  # Default to 1 year forecast
 
         # Validate inputs
@@ -3733,19 +3839,21 @@ def get_forecast_line_data():
         #################################################################
         # Forecast Calculation: Compute forecast prices using seasonal data
         #################################################################
-        if avg_commodities:
-            # Average across all commodities and cities
-            forecast_prices = []
-            for season_label in season_labels:
-                parts = season_label.split()
-                season = parts[0]
-                forecast_year = int(parts[1])
-                years_from_now = forecast_year - current_year
+        if avg_cities:
+            # Average across cities for each commodity (new logic)
+            dataset_index = 0
+            for commodity in commodities:
+                forecast_prices = []
+                for season_label in season_labels:
+                    parts = season_label.split()
+                    season = parts[0]
+                    forecast_year = int(parts[1])
+                    years_from_now = forecast_year - current_year
 
-                total_price = 0
-                valid_entries = 0
+                    # Average across all cities for this commodity
+                    total_price = 0
+                    valid_entries = 0
 
-                for commodity in commodities:
                     for city in cities:
                         key = f"{commodity}_{city}"
                         if season in commodity_city_seasonal_data[key]:
@@ -3757,21 +3865,22 @@ def get_forecast_line_data():
                                 total_price += forecasted_price
                                 valid_entries += 1
 
-                if valid_entries > 0:
-                    avg_forecast_price = round(total_price / valid_entries, 2)
-                    forecast_prices.append(avg_forecast_price)
-                else:
-                    forecast_prices.append(0)
+                    if valid_entries > 0:
+                        avg_forecast_price = round(total_price / valid_entries, 2)
+                        forecast_prices.append(avg_forecast_price)
+                    else:
+                        forecast_prices.append(0)
 
-            result["datasets"].append({
-                "label": "Average Forecast Price",
-                "data": forecast_prices,
-                "borderColor": colors[0],
-                "backgroundColor": colors[0],
-                "borderDash": [5, 5]
-            })
+                result["datasets"].append({
+                    "label": f"{commodity} - Avg. Across Cities",
+                    "data": forecast_prices,
+                    "borderColor": colors[dataset_index % len(colors)],
+                    "backgroundColor": colors[dataset_index % len(colors)],
+                    "borderDash": [5, 5]
+                })
+                dataset_index += 1
         else:
-            # Process each commodity and city combination individually
+            # Process each commodity and city combination individually (unchanged)
             dataset_index = 0
             for commodity in commodities:
                 for city in cities:
@@ -3811,232 +3920,210 @@ def get_forecast_line_data():
 
 
 
+# routes.py  (only the two modified call‑sites are shown)
 
 @app.route("/api/volatility_data", methods=["GET"])
 def get_volatility_data():
     try:
         # Parse request parameters
-        commodities = request.args.get("commodities", "").split(",")
+        commodity = request.args.get("commodity", "")  # Single string for commodity
         cities = request.args.get("cities", "").split(",")
-        years_str = request.args.get("years", "").split(",")
-        display_type = request.args.get("displayType", "monthly")
+        time_frame = request.args.get("timeFrame", "1m")  # Time frame parameter
         
-        # Convert years to integers
-        years = [int(year) for year in years_str if year.strip()]
+        # Check if commodity or cities are missing or empty
+        if not commodity or not cities or cities[0] == '':
+            return jsonify({"error": "Missing commodity or cities"}), 400
+            
+        # Always use current year
+        current_year = datetime.now().year
+            
+        # Convert time frame to number of days
+        days_to_fetch = 30  # Default to 1m
+        if time_frame == '1d':
+            days_to_fetch = 1
+        elif time_frame == '3d':
+            days_to_fetch = 3
+        elif time_frame == '7d':
+            days_to_fetch = 7
+        elif time_frame == '14d':
+            days_to_fetch = 14
+        # 1m is default 30 days
         
-        # Check if commodities or cities are missing or empty
-        if not commodities or commodities[0] == '' or not cities or cities[0] == '':
-            return jsonify({"error": "Missing commodities or cities"}), 400
-            
-        # Check if years are missing
-        if not years:
-            current_year = datetime.now().year
-            years = [current_year - 1]  # Default to previous year
-            
         # Define result structure
         result = {
             "labels": [],
             "datasets": []
         }
         
-        # Define months and seasons for labels
-        months = ["January", "February", "March", "April", "May", "June", 
-                 "July", "August", "September", "October", "November", "December"]
-        seasons = ["Winter", "Spring", "Summer", "Autumn"]
+        # Adjust labels based on time frame
+        if days_to_fetch <= 14:
+            # For shorter timeframes, use day-based labels
+            labels = []
+            today = datetime.now()
+            for i in range(days_to_fetch):
+                day = today - timedelta(days=days_to_fetch - i - 1)
+                labels.append(day.strftime("%b %d"))  # Format like "Apr 18"
+            result["labels"] = labels
+        else:
+            # For monthly view, use month names
+            result["labels"] = ["January", "February", "March", "April", "May", "June", 
+                     "July", "August", "September", "October", "November", "December"]
         
-        # Set labels based on display type
-        if display_type == "monthly":
-            result["labels"] = months
-            volatility_data = calculate_monthly_volatility_bulk(commodities, cities, years)
-        else:  # seasonal
-            result["labels"] = seasons
-            volatility_data = calculate_seasonal_volatility_bulk(commodities, cities, years)
+        # Fetch price range data (min/max) for the selected commodity, across cities
+        price_range_data = calculate_price_range_for_timeframe(commodity, cities, current_year, days_to_fetch)
             
-        # Colors for datasets
+        # Colors for the dataset
         colors = ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40"]
         color_index = 0
         
-        # Process data for each commodity and city combination
-        for commodity in commodities:
-            for city in cities:
-                # Create dataset for this combination
-                dataset_label = f"{commodity} - {city}"
-                
-                # Get data for this combination
-                key = f"{commodity}_{city}"
-                if key in volatility_data:
-                    # Add dataset to result
-                    result["datasets"].append({
-                        "label": dataset_label,
-                        "data": volatility_data[key],
-                        "borderColor": colors[color_index % len(colors)],
-                        "backgroundColor": colors[color_index % len(colors)],
-                    })
-                
-                color_index += 1
+        # Create dataset for this commodity's minimum prices
+        min_dataset = {
+            "label": f"{commodity} - Min Price",
+            "data": price_range_data.get("min", [0] * len(result["labels"])),
+            "borderColor": colors[color_index % len(colors)],
+            "backgroundColor": "transparent",
+            "borderWidth": 2,
+            "borderDash": [],
+            "pointRadius": 3,
+            "fill": 'false',
+            "type": "line"
+        }
+        
+        # Create dataset for this commodity's maximum prices
+        max_dataset = {
+            "label": f"{commodity} - Max Price",
+            "data": price_range_data.get("max", [0] * len(result["labels"])),
+            "borderColor": colors[color_index % len(colors)],
+            "backgroundColor": colors[color_index % len(colors)] + "33",  # Add transparency
+            "borderWidth": 2,
+            "borderDash": [],
+            "pointRadius": 3,
+            "fill": "-1",  # Fill to previous dataset (min price)
+            "type": "line"
+        }
+        
+        # Add datasets to result
+        result["datasets"].append(min_dataset)
+        result["datasets"].append(max_dataset)
         
         return jsonify(result)
         
     except Exception as e:
-        app.logger.error(f"Error in volatility data: {str(e)}")
+        app.logger.error(f"Error in price range data: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-def calculate_monthly_volatility_bulk(commodities, cities, years):
+
+def calculate_price_range_for_timeframe(commodity, cities, current_year, days_to_fetch):
     """
-    Optimized calculation of monthly volatility (max - min) by fetching all
-    the needed data in one query and grouping/aggregating in Python.
+    Calculate price ranges (min and max) for the selected commodity,
+    aggregated across all selected cities, for the specified timeframe.
     """
     try:
         from collections import defaultdict
+        from datetime import datetime, timedelta
         
-        # Precompute month ranges for each year (store as dictionary: {year: {month: (first_day, last_day)}})
-        month_ranges = {}
-        for year in years:
-            month_ranges[year] = {}
+        result = {
+            "min": [],
+            "max": []
+        }
+        
+        # If we're looking at a timeframe of 30 days or more (monthly view)
+        if days_to_fetch >= 30:
+            # Precompute month ranges for the current year
+            month_ranges = {}
             for month in range(1, 13):
-                first_day, last_day = get_month_day_range(month, year)
-                month_ranges[year][month] = (first_day, last_day)
-        
-        # Single query: Fetch all rows for the given commodities, cities, years, and source
-        all_data = db.session.query(
-            PriceData.commodity,
-            PriceData.city_name,
-            PriceData.year,
-            PriceData.day,
-            PriceData.price
-        ).filter(
-            PriceData.commodity.in_(commodities),
-            PriceData.city_name.in_(cities),
-            PriceData.year.in_(years),
-            PriceData.source == "ProduceIQ"
-        ).all()
-        
-        # Group the data by commodity and city, then by year
-        # Structure: data[commodity_city][year] = list of (day, price)
-        data_by_combo = defaultdict(lambda: defaultdict(list))
-        for row in all_data:
-            key = f"{row.commodity}_{row.city_name}"
-            data_by_combo[key][row.year].append((row.day, row.price))
-        
-        # Initialize result dictionary for volatility data:
-        # volatility_data[commodity_city] = list of 12 average volatility values (one per month)
-        volatility_data = {}
-        for commodity in commodities:
-            for city in cities:
-                key = f"{commodity}_{city}"
-                # Create a placeholder list for 12 months (index 0 = January, ... 11 = December)
-                volatility_data[key] = [0] * 12
+                first_day, last_day = get_month_day_range(month, current_year)
+                month_ranges[month] = (first_day, last_day)
+            
+            # Single query: Fetch all rows for the given commodity, cities, current year
+            all_data = db.session.query(
+                PriceData.city_name,
+                PriceData.day,
+                PriceData.price
+            ).filter(
+                PriceData.commodity == commodity,
+                PriceData.city_name.in_(cities),
+                PriceData.year == current_year,
+                PriceData.source == "ProduceIQ"
+            ).all()
+            
+            # Group the data by month
+            data_by_month = defaultdict(list)
+            for row in all_data:
+                # Determine month from day of year
+                for month, (first_day, last_day) in month_ranges.items():
+                    if first_day <= row.day <= last_day:
+                        data_by_month[month].append(row.price)
+                        break
+            
+            # For each month, calculate min and max across all cities
+            for month in range(1, 13):
+                month_prices = data_by_month.get(month, [])
                 
-                # For each month, accumulate volatility from each year
-                for month in range(1, 13):
-                    volatilities = []
-                    for year in years:
-                        # Retrieve all rows for this commodity-city pair and year
-                        rows = data_by_combo[key].get(year, [])
-                        
-                        # Filter rows that fall within the current month range
-                        first_day, last_day = month_ranges[year][month]
-                        prices = [price for day, price in rows if first_day <= day <= last_day]
-                        
-                        if prices:
-                            # Calculate volatility for this year & month as (max - min)
-                            month_volatility = max(prices) - min(prices)
-                            # Only consider positive volatility
-                            if month_volatility > 0:
-                                volatilities.append(month_volatility)
+                if month_prices:
+                    # Calculate min and max price for this month
+                    min_price = min(month_prices)
+                    max_price = max(month_prices)
                     
-                    # If we collected any volatilities for this month across years, average them
-                    if volatilities:
-                        avg_volatility = sum(volatilities) / len(volatilities)
-                        volatility_data[key][month - 1] = round(avg_volatility, 2)
+                    result["min"].append(round(min_price, 2))
+                    result["max"].append(round(max_price, 2))
+                else:
+                    result["min"].append(0)
+                    result["max"].append(0)
         
-        return volatility_data
+        # If we're looking at a shorter timeframe (days)
+        else:
+            # Get the current date and calculate the date range we need
+            today = datetime.now()
+            start_date = today - timedelta(days=days_to_fetch)
+            
+            # Get start and end days of the year
+            start_day_of_year = start_date.timetuple().tm_yday
+            end_day_of_year = today.timetuple().tm_yday
+            
+            # Query data for the specific day range
+            query_filter = [
+                PriceData.commodity == commodity,
+                PriceData.city_name.in_(cities),
+                PriceData.year == current_year,
+                PriceData.source == "ProduceIQ"
+            ]
+            
+            # Add day range filter
+            query_filter.append(PriceData.day >= start_day_of_year)
+            query_filter.append(PriceData.day <= end_day_of_year)
+            
+            # Fetch the data
+            daily_data = db.session.query(
+                PriceData.day,
+                PriceData.price
+            ).filter(*query_filter).all()
+            
+            # Group the data by day
+            prices_by_day = defaultdict(list)
+            for row in daily_data:
+                prices_by_day[row.day].append(row.price)
+            
+            # Process each day in the range
+            for i in range(days_to_fetch):
+                day = start_date + timedelta(days=i)
+                day_of_year = day.timetuple().tm_yday
+                
+                day_prices = prices_by_day.get(day_of_year, [])
+                
+                if day_prices:
+                    result["min"].append(round(min(day_prices), 2))
+                    result["max"].append(round(max(day_prices), 2))
+                else:
+                    result["min"].append(0)
+                    result["max"].append(0)
+        
+        return result
 
     except Exception as e:
-        app.logger.error(f"Error calculating bulk monthly volatility: {str(e)}")
-        return {}
+        app.logger.error(f"Error calculating price ranges: {str(e)}")
+        return {"min": [], "max": []}
 
-def calculate_seasonal_volatility_bulk(commodities, cities, years):
-    """
-    Optimized calculation of seasonal volatility (max - min) by fetching
-    all data in one query and grouping/aggregating in memory.
-    """
-    try:
-        from collections import defaultdict
-        
-        seasons = ["Winter", "Spring", "Summer", "Autumn"]
-
-        # Single query: Fetch all rows for the given commodities, cities, years, and source.
-        all_data = db.session.query(
-            PriceData.commodity,
-            PriceData.city_name,
-            PriceData.year,
-            PriceData.season,
-            PriceData.price
-        ).filter(
-            PriceData.commodity.in_(commodities),
-            PriceData.city_name.in_(cities),
-            PriceData.year.in_(years),
-            PriceData.source == "ProduceIQ"
-        ).all()
-        
-        # Group the data by commodity and city, then by year and season.
-        # Structure: data_by_combo[commodity_city][year][season] = list of prices
-        data_by_combo = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
-        for row in all_data:
-            key = f"{row.commodity}_{row.city_name}"
-            data_by_combo[key][row.year][row.season].append(row.price)
-        
-        # Prepare the volatility results per commodity-city pair.
-        volatility_data = {}
-        for commodity in commodities:
-            for city in cities:
-                key = f"{commodity}_{city}"
-                # Initialize with zeros for each of the 4 seasons.
-                volatility_data[key] = [0] * 4
-                
-                # For each season, accumulate volatility across years.
-                for season_idx, season in enumerate(seasons):
-                    season_vols = []
-                    for year in years:
-                        # Retrieve all prices for this commodity-city-year for the current season.
-                        prices = data_by_combo[key][year].get(season, [])
-                        if prices:
-                            # Calculate volatility as (max - min)
-                            vol = max(prices) - min(prices)
-                            if vol > 0:
-                                season_vols.append(vol)
-                    
-                    # Average volatility across years for this season.
-                    if season_vols:
-                        avg_vol = sum(season_vols) / len(season_vols)
-                        volatility_data[key][season_idx] = round(avg_vol, 2)
-        
-        return volatility_data
-
-    except Exception as e:
-        app.logger.error(f"Error calculating bulk seasonal volatility: {str(e)}")
-        return {}
-
-
-def get_month_day_range(month, year):
-    """Helper function to get the day of year range for a given month."""
-    from datetime import datetime
-    from calendar import monthrange
-    
-    # Get the first day of the month
-    first_date = datetime(year, month, 1)
-    first_day = first_date.timetuple().tm_yday
-    
-    # Get the last day of the month
-    _, last_day_of_month = monthrange(year, month)
-    last_date = datetime(year, month, last_day_of_month)
-    last_day = last_date.timetuple().tm_yday
-    
-    return first_day, last_day
-
-
-# Add this route to your Flask application
 
 from datetime import datetime, timedelta
 from flask import request, jsonify

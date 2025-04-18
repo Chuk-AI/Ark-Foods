@@ -23,14 +23,14 @@ const ForecastLineChart = () => {
   const [forecastFilterState, setForecastFilterState] = useState({
     commodities: ['Shishito'], // Default to one or more items
     cities: ['Baltimore'], // Default to one or more cities
-    averageCommodities: false,
+    averageCities: false, // Changed from averageCommodities to averageCities
     forecastYears: 1, // Default to 1 year of forecasting
   });
 
   const [appliedForecastFilters, setAppliedForecastFilters] = useState({
     commodities: ['Shishito'],
     cities: ['Baltimore'],
-    averageCommodities: false,
+    averageCities: false, // Changed from averageCommodities to averageCities
     forecastYears: 1,
   });
 
@@ -60,11 +60,11 @@ const ForecastLineChart = () => {
     }));
   };
 
-  // Handle Average Commodities Change
-  const handleAverageCommoditiesChange = (e) => {
+  // Handle Average Cities Change (renamed from handleAverageCommoditiesChange)
+  const handleAverageCitiesChange = (e) => {
     setForecastFilterState((prev) => ({
       ...prev,
-      averageCommodities: e.target.checked,
+      averageCities: e.target.checked,
     }));
   };
 
@@ -246,7 +246,7 @@ const ForecastLineChart = () => {
   };
 
   const fetchForecastData = async (filters) => {
-    const { commodities, cities, averageCommodities, forecastYears } = filters;
+    const { commodities, cities, averageCities, forecastYears } = filters;
 
     try {
       const token = localStorage.getItem('authToken');
@@ -257,7 +257,7 @@ const ForecastLineChart = () => {
         params: { 
           commodities: commodities.join(','),
           cities: cities.join(','),
-          averageCommodities: averageCommodities,
+          averageCities: averageCities, // Changed from averageCommodities to averageCities
           forecastYears: forecastYears
         },
       });
@@ -386,17 +386,17 @@ const ForecastLineChart = () => {
                   </div>
                 </div>
 
-                {/* Average Commodities Checkbox */}
+                {/* Average Cities Checkbox (replaced Average Commodities) */}
                 <div className="form-group form-check">
                   <input
                     type="checkbox"
                     className="form-check-input"
-                    id="averageCommoditiesForecast"
-                    checked={forecastFilterState.averageCommodities}
-                    onChange={handleAverageCommoditiesChange}
+                    id="averageCitiesForecast"
+                    checked={forecastFilterState.averageCities}
+                    onChange={handleAverageCitiesChange}
                   />
-                  <label className="form-check-label font-weight-bold" htmlFor="averageCommoditiesForecast">
-                    Average over Commodities
+                  <label className="form-check-label font-weight-bold" htmlFor="averageCitiesForecast">
+                    Average over Cities
                   </label>
                 </div>
 
