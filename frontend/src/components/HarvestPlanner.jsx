@@ -41,7 +41,16 @@ import '../styles/harvestPlanning.css';
 
 // List of supported pepper varieties
 const DEFAULT_COMMODITIES = [
-  'Anaheim', 'Cubanelles', 'Jalapeno', 'Poblano', 'Serrano', 'Shishito'
+  "Anaheim",
+  "Cubanelles",
+  "Fresno",
+  "Habanero",
+  "Hungarian Wax",
+  "Jalapeno",
+  "Long Hot",
+  "Poblano",
+  "Serrano",
+  "Shishito",
 ];
 
 // List of common markets

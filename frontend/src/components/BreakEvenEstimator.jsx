@@ -19,11 +19,20 @@ const BreakEvenEstimator = () => {
   const [savedEstimations, setSavedEstimations] = useState([]);
   
   const [commoditiesList, setCommoditiesList] = useState([
-    'Anaheim', 'Cubanelles', 'Jalapeno', 'Poblano', 'Serrano', 'Shishito'
+    "Anaheim",
+    "Cubanelles",
+    "Fresno",
+    "Habanero",
+    "Hungarian Wax",
+    "Jalapeno",
+    "Long Hot",
+    "Poblano",
+    "Serrano",
+    "Shishito",
   ]);
   
   const [citiesList, setCitiesList] = useState([
-    "Baltimore", "Boston", "Chicago", "Columbia", "Miami", "New York", "Philadelphia", "Los Angeles"
+    "Select All","Baltimore", "Boston", "Chicago", "Columbia", "Miami", "New York", "Philadelphia", "Los Angeles"
   ]);
   
   // Form State - Matches Revenue Calculator fields exactly
@@ -169,10 +178,12 @@ const BreakEvenEstimator = () => {
   const handleCalculate = async () => {
     setLoading(true);
     setError(null);
-    
+  
     try {
-      // 1. Calculate the forecast using the revenue calculator endpoint
-      const forecastResponse = await axios.post('/api/calculate_forecast', {
+      /* 1 ──────────────────────────────────
+         Run the revenue‑calculator endpoint
+      ────────────────────────────────────── */
+      const forecastResponse = await axios.post("/api/calculate_forecast", {
         variety: formState.variety,
         start_date: formState.start_date,
         forecast_date: formState.forecast_date,
@@ -180,45 +191,53 @@ const BreakEvenEstimator = () => {
         cost_per_acre: parseFloat(formState.cost_per_acre),
         harvest_cost_per_box: parseFloat(formState.harvest_cost_per_box),
         cost_of_box: parseFloat(formState.cost_of_box),
-        boxes_bonus_per_yield: parseFloat(formState.boxes_bonus_per_yield)
+        boxes_bonus_per_yield: parseFloat(formState.boxes_bonus_per_yield),
       });
-      
-      // Store the calculated forecast data
+  
       const calculatedData = forecastResponse.data;
       setCalculatedForecast(calculatedData);
-      
-      // 2. Fetch forecast line data for comparison
-      const token = localStorage.getItem('authToken');
-      if (!token) throw new Error('No token found');
-      
-      const forecastLineResponse = await axios.get('/api/forecast_line_data', {
+  
+      /* 2 ──────────────────────────────────
+         Fetch the historical / forecast line
+         data for chart comparison
+      ────────────────────────────────────── */
+      const token = localStorage.getItem("authToken");
+      if (!token) throw new Error("No token found");
+  
+      // “All Cities” means aggregate across every city
+      const isAllCities = formState.city === "ALL";
+  
+      const forecastLineResponse = await axios.get("/api/forecast_line_data", {
         headers: { Authorization: `Bearer ${token}` },
         params: {
           commodities: formState.variety,
-          cities: formState.city,
+          cities: isAllCities ? "" : formState.city,  // empty → back‑end ignores filter
           averageCommodities: false,
-          averageCities: false,
+          averageCities: isAllCities,                 // true when “ALL”
           startDate: formState.startDateRange,
-          endDate: formState.endDateRange
-        }
+          endDate: formState.endDateRange,
+        },
       });
-      
+  
       const lineData = forecastLineResponse.data;
       setForecastData(lineData);
-      
-      // Determine the actual revenue per box
-      const revenuePerBox = calculatedData.revenue_per_acre_after_costings / parseFloat(formState.yield_per_acre);
-      
-      // Update the chart with the fetched and calculated data
+  
+      /* 3 ──────────────────────────────────
+         Draw / refresh the chart
+      ────────────────────────────────────── */
+      const revenuePerBox =
+        calculatedData.revenue_per_acre_after_costings /
+        parseFloat(formState.yield_per_acre);
+  
       updateChart(lineData, revenuePerBox);
-      
-    } catch (error) {
-      console.error('Error calculating or fetching forecast data:', error);
-      setError('Failed to calculate or fetch data. Please try again.');
+    } catch (err) {
+      console.error("Error calculating or fetching forecast data:", err);
+      setError("Failed to calculate or fetch data. Please try again.");
     } finally {
       setLoading(false);
     }
   };
+  
   
   const updateChart = (chartData, revenuePerBox) => {
     if (!chartRef.current) {
@@ -260,7 +279,7 @@ const BreakEvenEstimator = () => {
       },
       // Revenue per box line
       {
-        label: 'Revenue Per Box (Break-Even)',
+        label: 'Cost Per Box (Break-Even)',
         data: revenueLineData,
         borderColor: '#888888',
         backgroundColor: '#888888',
@@ -507,16 +526,21 @@ const BreakEvenEstimator = () => {
                   {/* City Selection */}
                   <div className="form-group">
                     <label className="font-weight-bold">Market (City)</label>
-                    <select 
-                      className="form-control"
-                      name="city"
-                      value={formState.city}
-                      onChange={handleInputChange}
-                    >
-                      {citiesList.map(city => (
+                 {/* ❷  city <select> → include the option */}
+                  <select
+                    className="form-control"
+                    name="city"
+                    value={formState.city}
+                    onChange={handleInputChange}
+                  >
+                  <option value="ALL">All Cities (average)</option>
+                    {citiesList
+                      .filter(c => c !== "Select All")        
+                      .map(city => (
                         <option key={city} value={city}>{city}</option>
-                      ))}
-                    </select>
+                    ))}
+                  </select>
+
                   </div>
                   
                   {/* Planting and Harvest Dates */}
@@ -613,31 +637,8 @@ const BreakEvenEstimator = () => {
                     />
                   </div>
                   
-                  <h6 className="text-muted mb-3 mt-4">Forecast Range</h6>
-                  
-                  {/* Date Range for Analysis */}
-                  <div className="form-group">
-                    <label className="font-weight-bold">Start Date Range</label>
-                    <input
-                      type="date"
-                      className="form-control"
-                      name="startDateRange"
-                      value={formState.startDateRange}
-                      onChange={handleInputChange}
-                    />
-                  </div>
-                  
-                  <div className="form-group">
-                    <label className="font-weight-bold">End Date Range</label>
-                    <input
-                      type="date"
-                      className="form-control"
-                      name="endDateRange"
-                      value={formState.endDateRange}
-                      onChange={handleInputChange}
-                      min={formState.startDateRange}
-                    />
-                  </div>
+           
+             
                   
                   {/* Calculate Button */}
                   <button 
@@ -662,16 +663,7 @@ const BreakEvenEstimator = () => {
                   )}
                 </form>
                 
-                {/* Results Summary */}
-                {calculatedForecast && (
-                  <div className="mt-4 p-3 bg-light rounded">
-                    <h6 className="font-weight-bold">Forecast Results</h6>
-                    <p className="mb-1">Forecasted Price: <strong>${calculatedForecast.forecasted_price.toFixed(2)}</strong></p>
-                    <p className="mb-1">Revenue Per Acre: <strong>${calculatedForecast.revenue_per_acre.toFixed(2)}</strong></p>
-                    <p className="mb-1">After Costs: <strong>${calculatedForecast.revenue_per_acre_after_costings.toFixed(2)}</strong></p>
-                    <p className="mb-0">Season: <strong>{calculatedForecast.season}</strong></p>
-                  </div>
-                )}
+        
               </div>
             </div>
           </div>
