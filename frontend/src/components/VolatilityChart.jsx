@@ -52,21 +52,21 @@ const VolatilityChart = () => {
   
   // New date range filters
   const [dateRangeFilter, setDateRangeFilter] = useState({
-    startDate: new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0], // Jan 1 of current year
+    startDate: '2022-01-01', // Jan 1 of current year
     endDate: new Date().toISOString().split('T')[0] // Today
   });
   
   // Volatility Data States
   const [volatilityFilterState, setVolatilityFilterState] = useState({
-    commodity: 'Shishito', // Only ONE commodity at a time
-    cities: ['Baltimore'], // Default to one city
+    commodity: 'Poblano', // Only ONE commodity at a time
+    cities: [...citiesList],
     timeFrame: '1m', // Default time frame: 1 month
     ...dateRangeFilter
   });
 
   const [appliedVolatilityFilters, setAppliedVolatilityFilters] = useState({
-    commodity: 'Shishito', 
-    cities: ['Baltimore'],
+    commodity: 'Poblano', 
+    cities: [...citiesList],
     timeFrame: '1m',
     startDate: "2022-01-01",
     endDate: "2025-12-31"
@@ -777,7 +777,7 @@ useEffect(() => {
       console.error('Error fetching price range data:', error);
     }
   };
-  
+
 
   const handleDownloadChart = () => {
     if (volatilityChart) {
