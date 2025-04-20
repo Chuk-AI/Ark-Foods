@@ -4347,147 +4347,149 @@ def get_month_day_range(month, year):
 @app.route("/api/harvest_planning", methods=["POST"])
 def harvest_planning():
     try:
-        # Parse the payload from the request
         payload = request.json
-        
         if not payload or "varieties" not in payload:
             return jsonify({"error": "Missing varieties data"}), 400
-        
-        varieties = payload["varieties"]
-        result = []
-        
-        for variety in varieties:
-            # Validate required fields
-            required_fields = ["name", "plantingDate", "harvestingDate", "growingDays"]
-            if not all(field in variety for field in required_fields):
-                return jsonify({"error": f"Missing required fields for variety {variety.get('name', 'unknown')}"})
-            
-            # Parse dates
-            try:
-                planting_date = datetime.fromisoformat(variety["plantingDate"].replace('Z', '+00:00'))
-                harvesting_date = datetime.fromisoformat(variety["harvestingDate"].replace('Z', '+00:00'))
-            except ValueError:
-                return jsonify({"error": f"Invalid date format for variety {variety['name']}"}), 400
-            
-            # Calculate harvesting period
-            growing_days = int(variety["growingDays"])
-            calculated_harvest_date = planting_date + timedelta(days=growing_days)
-            
-            # Get the commodity name for the forecast data
-            commodity = variety["name"]
-            
-            # Get market location (city) or use default
-            city = variety.get("market", "National")
-            
-            # Calculate selling season based on harvesting date
-            harvest_month = harvesting_date.month
-            if 3 <= harvest_month <= 5:
-                harvest_season = "Spring"
-            elif 6 <= harvest_month <= 8:
-                harvest_season = "Summer"
-            elif 9 <= harvest_month <= 11:
-                harvest_season = "Autumn"
-            else:
-                harvest_season = "Winter"
-            
-            harvest_year = harvesting_date.year
-            
-            # Get forecast data for this variety
-            # We'll check one full year from the harvest date to find the best selling time
-            forecast_years = 1
-            
-            # Call the forecast_line_data endpoint
-            forecast_url = f"/api/forecast_line_data?commodities={commodity}&cities={city}&averageCommodities=false&forecastYears={forecast_years}"
-            
-            app.logger.debug(f"Calling forecast data API for {commodity} in {city}")
-            
-            # In a real environment, you might use requests library for this
-            # For internal API calls within the same Flask app, you can use:
-            with app.test_client() as client:
-                forecast_response = client.get(forecast_url)
-                forecast_data = forecast_response.get_json()
-                
-            # Debug logging
-            app.logger.debug(f"Forecast API response status: {forecast_response.status_code}")
-            if "error" in forecast_data:
-                app.logger.error(f"Forecast API error: {forecast_data['error']}")
-            
-            # Find the highest price period
-            highest_price = 0
-            best_selling_season = None
-            best_selling_year = None
-            
-            if "datasets" in forecast_data and forecast_data["datasets"]:
-                # Get the dataset for this commodity-city
-                dataset = next((d for d in forecast_data["datasets"] if d["label"].startswith(f"{commodity} - {city}")), None)
-                
-                # Debug logging
-                app.logger.debug(f"Number of datasets: {len(forecast_data['datasets'])}")
-                app.logger.debug(f"Dataset labels: {[d.get('label') for d in forecast_data['datasets']]}")
-                app.logger.debug(f"Looking for dataset with label starting with '{commodity} - {city}'")
-                app.logger.debug(f"Dataset found: {dataset is not None}")
-                
-                if dataset and "data" in dataset:
-                    prices = dataset["data"]
-                    labels = forecast_data.get("labels", [])
-                    
-                    app.logger.debug(f"Price data: {prices}")
-                    app.logger.debug(f"Labels: {labels}")
-                    
-                    for i, price in enumerate(prices):
-                        if i < len(labels) and price > highest_price:
-                            highest_price = price
-                            season_label = labels[i]
-                            parts = season_label.split()
-                            best_selling_season = parts[0] if parts else None
-                            best_selling_year = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else None
-                    
-                    app.logger.debug(f"Highest price found: {highest_price} in {best_selling_season} {best_selling_year}")
-            
-            # Calculate the approximate best selling date (middle of the season)
-            best_selling_date = None
-            if best_selling_season and best_selling_year:
-                # More accurate calculation of best selling date based on season
-                if best_selling_season == "Winter":
-                    best_selling_date = datetime(best_selling_year, 1, 15)
-                elif best_selling_season == "Spring":
-                    best_selling_date = datetime(best_selling_year, 4, 15)
-                elif best_selling_season == "Summer":
-                    best_selling_date = datetime(best_selling_year, 7, 15)
-                elif best_selling_season == "Autumn":
-                    best_selling_date = datetime(best_selling_year, 10, 15)
-                
-                # Make sure best selling date is after harvest date
-                if best_selling_date < harvesting_date:
-                    app.logger.warning(f"Best selling date {best_selling_date} is before harvest date {harvesting_date}, adjusting")
-                    # Move to the next occurrence of this season
-                    best_selling_date = datetime(best_selling_year + 1, best_selling_date.month, best_selling_date.day)
 
-            
-            # Add the variety data with best selling time to the result
-            variety_result = {
-                "name": variety["name"],
-                "plantingDate": planting_date.isoformat(),
-                "harvestingDate": harvesting_date.isoformat(),
-                "calculatedHarvestDate": calculated_harvest_date.isoformat(),
-                "growingDays": growing_days,
+        result = []
+        # ──────── shared forecast logic ──────── #
+        def compute_forecast(commodity, cities, avg_cities, forecast_years=1):
+            # 1) season setup
+            seasons = ["Winter", "Spring", "Summer", "Autumn"]
+            now = datetime.now()
+            current_year = now.year
+            month = now.month
+            current_season = (
+                "Spring" if 3 <= month <= 5 else
+                "Summer" if 6 <= month <= 8 else
+                "Autumn" if 9 <= month <= 11 else
+                "Winter"
+            )
+            # build labels
+            idx0 = seasons.index(current_season)
+            season_labels = [
+                f"{seasons[(idx0 + i) % 4]} {yr}"
+                for yr in range(current_year, current_year + forecast_years + 1)
+                for i in range(4)
+            ][ : 1 + 4 * forecast_years ]
+
+            # 2) pull your PriceData rows
+            filters = [
+                PriceData.commodity == commodity,
+                PriceData.year >= current_year - 5,
+                PriceData.source == "ProduceIQ",
+            ]
+            if not avg_cities:
+                filters.append(PriceData.city_name.in_(cities))
+
+            rows = (
+                db.session.query(
+                    PriceData.season,
+                    PriceData.year,
+                    PriceData.price
+                )
+                .filter(*filters)
+                .all()
+            )
+
+            # 3) aggregate into season_stats
+            data = defaultdict(lambda: defaultdict(list))
+            for season, year, price in rows:
+                data[season][year].append(price)
+
+            season_stats = {}
+            for season in seasons:
+                yearly_avgs = [
+                    sum(prs) / len(prs)
+                    for yr, prs in data[season].items()
+                    if prs
+                ]
+                overall_avg = sum(yearly_avgs) / len(yearly_avgs) if yearly_avgs else 0
+                # simple trend = +2% per year (or compute via regression if you like)
+                trend = 0.02
+                season_stats[season] = {"avg": overall_avg, "trend": trend}
+
+            # 4) build a single series of prices
+            prices = []
+            for label in season_labels:
+                season, yr_s = label.split()
+                yr = int(yr_s)
+                yrs_out = yr - current_year
+                st = season_stats.get(season)
+                if st and st["avg"] > 0:
+                    prices.append(round(st["avg"] * (1 + st["trend"] * yrs_out), 2))
+                else:
+                    prices.append(0)
+
+            return {"labels": season_labels, "data": prices}
+
+        # ──────── main loop ──────── #
+        for variety in payload["varieties"]:
+            # validate
+            for f in ("name", "plantingDate", "harvestingDate", "growingDays"):
+                if f not in variety:
+                    return jsonify({"error": f"Missing field {f}"}), 400
+
+            # parse dates & calculate harvest date
+            plant = datetime.fromisoformat(variety["plantingDate"].replace("Z","+00:00"))
+            harvest = datetime.fromisoformat(variety["harvestingDate"].replace("Z","+00:00"))
+            grow_days = int(variety["growingDays"])
+            calc_harvest = plant + timedelta(days=grow_days)
+
+            commodity = variety["name"]
+            market = variety.get("market","").strip()
+            # handle “Select All” as avg_cities=True
+            if market.lower() in ("select all","all","national",""):
+                avg_cities = True
+                cities = []
+            else:
+                avg_cities = False
+                cities = [market]
+
+            # get one‐year forecast
+            fc = compute_forecast(commodity, cities, avg_cities, forecast_years=1)
+
+            # find max price & which label it is
+            highest_price = 0
+            best_season = best_year = None
+            for i, price in enumerate(fc["data"]):
+                if price > highest_price:
+                    highest_price = price
+                    season, yr_s = fc["labels"][i].split()
+                    best_season, best_year = season, int(yr_s)
+
+            # pick a midpoint date for that season
+            best_date = None
+            if best_season and best_year:
+                month_map = {"Winter":1, "Spring":4, "Summer":7, "Autumn":10}
+                d = month_map[best_season]
+                best_date = datetime(best_year, d, 15)
+                # ensure it's after harvest
+                if best_date < harvest:
+                    best_date = datetime(best_year+1, d, 15)
+
+            result.append({
+                "name": commodity,
+                "plantingDate": plant.isoformat(),
+                "harvestingDate": harvest.isoformat(),
+                "calculatedHarvestDate": calc_harvest.isoformat(),
+                "growingDays": grow_days,
                 "bestSellingTime": {
-                    "season": best_selling_season,
-                    "year": best_selling_year,
+                    "season": best_season,
+                    "year": best_year,
                     "price": highest_price,
-                    "date": best_selling_date.isoformat() if best_selling_date else None
+                    "date": best_date.isoformat() if best_date else None
                 }
-            }
-            
-            result.append(variety_result)
-        
-        return jsonify({
-            "varieties": result
-        })
-        
+            })
+
+        return jsonify({"varieties": result})
+
     except Exception as e:
-        app.logger.error(f"Error in harvest planning: {str(e)}")
+        app.logger.exception("Error in harvest_planning")
         return jsonify({"error": str(e)}), 500
+
+
+
 
 
 

@@ -55,7 +55,7 @@ const DEFAULT_COMMODITIES = [
 
 // List of common markets
 const DEFAULT_MARKETS = [
-  "Baltimore", "Boston", "Chicago", "Columbia", "Miami", "New York", "Philadelphia", "Los Angeles"
+  "Select All","Baltimore", "Boston", "Chicago", "Columbia", "Miami", "New York", "Philadelphia", "Los Angeles"
 ];
 
 // Styled components for Gantt chart
@@ -191,7 +191,7 @@ const HarvestPlanningChart = () => {
       plantingDate: '', 
       harvestingDate: '', 
       growingDays: '', 
-      market: 'National' // Default market
+      market: 'Miami' // Default market
     }
   ]);
   const [planningData, setPlanningData] = useState([]);
@@ -208,7 +208,7 @@ const HarvestPlanningChart = () => {
         plantingDate: '', 
         harvestingDate: '', 
         growingDays: '', 
-        market: 'National' // Default market
+        market: 'Miami' // Default market
       }
     ]);
   };
@@ -294,7 +294,7 @@ const HarvestPlanningChart = () => {
           plantingDate: v.plantingDate,
           harvestingDate: v.harvestingDate,
           growingDays: v.growingDays,
-          market: v.market || 'National'
+          market: v.market || 'Miami'
         }))
       });
       
@@ -533,7 +533,7 @@ const HarvestPlanningChart = () => {
                     <TableCell>
                       <FormControl fullWidth size="small">
                         <Select
-                          value={variety.market || 'National'}
+                          value={variety.market || 'Miami'}
                           onChange={(e) => handleInputChange(variety.id, 'market', e.target.value)}
                         >
                           {marketsList.map((market, index) => (
