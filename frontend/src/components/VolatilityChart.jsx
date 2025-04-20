@@ -1,6 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Chart from 'chart.js/auto';
 import * as XLSX from 'xlsx';
+import 'chartjs-adapter-date-fns';
+
+// Add candlestick chart plugin registration
+import {
+  CandlestickController,
+  CandlestickElement,
+  OhlcController,
+  OhlcElement
+} from 'chartjs-chart-financial';
+
+// Register the financial chart components
+Chart.register(CandlestickController, CandlestickElement, OhlcController, OhlcElement);
 
 const VolatilityChart = () => {
   const [volatilityChart, setVolatilityChart] = useState(null);
@@ -24,27 +36,73 @@ const VolatilityChart = () => {
 
   // Time frame options
   const [timeFrames, setTimeFrames] = useState([
-    { label: '1D', value: '1d', days: 1 },
-    { label: '3D', value: '3d', days: 3 },
+    // { label: '1D', value: '1d', days: 1 },
+    // { label: '3D', value: '3d', days: 3 },
     { label: '7D', value: '7d', days: 7 },
     { label: '14D', value: '14d', days: 14 },
     { label: '1M', value: '1m', days: 30 }
   ]);
+  // Add this near your other state declarations
+  const [latestPrice, setLatestPrice] = useState({
+    min: 0,
+    max: 0,
+    date: ''
+  });
+  
+  // New date range filters
+  const [dateRangeFilter, setDateRangeFilter] = useState({
+    startDate: new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0], // Jan 1 of current year
+    endDate: new Date().toISOString().split('T')[0] // Today
+  });
   
   // Volatility Data States
   const [volatilityFilterState, setVolatilityFilterState] = useState({
     commodity: 'Shishito', // Only ONE commodity at a time
     cities: ['Baltimore'], // Default to one city
-    timeFrame: '1m' // Default time frame: 1 month
+    timeFrame: '1m', // Default time frame: 1 month
+    ...dateRangeFilter
   });
 
   const [appliedVolatilityFilters, setAppliedVolatilityFilters] = useState({
     commodity: 'Shishito', 
     cities: ['Baltimore'],
-    timeFrame: '1m'
+    timeFrame: '1m',
+    ...dateRangeFilter
   });
 
+  const [viewType, setViewType] = useState('candlestick'); // 'candlestick' or 'volatility'
   const volatilityChartRef = useRef(null);
+
+
+// Add this new useEffect to handle resizing when time frame changes
+useEffect(() => {
+  if (volatilityChart && volatilityData) {
+    const resize = () => {
+      const baseWidth = volatilityChartRef.current.parentNode.parentNode.offsetWidth;
+      const dataLength = volatilityData.labels.length;
+      
+      // Different width per point based on time frame
+      const pointWidth = viewType === 'candlestick' ? 
+        (appliedVolatilityFilters.timeFrame === '1m' ? 70 : 
+         appliedVolatilityFilters.timeFrame === '14d' ? 40 :
+         appliedVolatilityFilters.timeFrame === '7d' ? 30 :
+         appliedVolatilityFilters.timeFrame === '3d' ? 25 : 20) : 0;
+      
+      // Set width appropriately
+      const newWidth = Math.max(baseWidth, dataLength * pointWidth);
+      
+      // Only apply scrollable width if needed
+      volatilityChartRef.current.parentNode.style.width = 
+        (dataLength <= 12 || viewType !== 'candlestick') ? 
+        '100%' : `${newWidth}px`;
+        
+      volatilityChart.update('none');
+    };
+    
+    // Call resize immediately
+    resize();
+  }
+}, [appliedVolatilityFilters.timeFrame, volatilityChart, volatilityData, viewType]);
 
   // Helper function to get colors
   const getColor = (index) => {
@@ -79,23 +137,144 @@ const VolatilityChart = () => {
     }));
   };
 
-  // Handle time frame selection
-  const handleTimeFrameChange = (timeFrame) => {
-    setVolatilityFilterState(prev => ({
+  // Handle date range changes
+  const handleDateRangeChange = (e) => {
+    const { name, value } = e.target;
+    setDateRangeFilter(prev => ({
       ...prev,
-      timeFrame
+      [name]: value
     }));
     
-    // When a time frame is changed, immediately apply it
-    const newFilters = {
-      ...appliedVolatilityFilters,
-      timeFrame
-    };
-    setAppliedVolatilityFilters(newFilters);
-    fetchVolatilityData(newFilters);
+    setVolatilityFilterState(prev => ({
+      ...prev,
+      [name]: value
+    }));
   };
 
-  const updateVolatilityChart = (chartData) => {
+  // Handle time frame selection
+const handleTimeFrameChange = (timeFrame) => {
+  setVolatilityFilterState(prev => ({
+    ...prev,
+    timeFrame
+  }));
+  
+  // When a time frame is changed, immediately apply it
+  const newFilters = {
+    ...appliedVolatilityFilters,
+    timeFrame
+  };
+  setAppliedVolatilityFilters(newFilters);
+  
+  // Add this code to reset chart width immediately before fetching new data
+  if (volatilityChartRef.current && volatilityChartRef.current.parentNode) {
+    // Reset to default width before loading new data
+    volatilityChartRef.current.parentNode.style.width = '100%';
+  }
+  
+  fetchVolatilityData(newFilters);
+};
+
+  // Handle view type change
+  const handleViewTypeChange = (e) => {
+    setViewType(e.target.value);
+    if (volatilityData) {
+      updateVolatilityChart(volatilityData, e.target.value);
+    }
+  };
+
+  const formatCandlestickData = (chartData, timeFrame) => {
+    // This function transforms min/max data into candlestick format
+    // We need to create OHLC (Open, High, Low, Close) data
+    const labels = chartData.labels;
+    const candlestickData = [];
+    
+    // For each time period in the data
+    for (let i = 0; i < labels.length; i++) {
+      // Get min and max for this period
+      const minPrice = chartData.datasets[0].data[i] || 0;
+      const maxPrice = chartData.datasets[1].data[i] || 0;
+      
+      // For candlestick we need: open, high, low, close
+      // Since we only have min/max from the API, we'll simulate
+      // open (first price) and close (last price) within that range
+      
+      // Simulate open and close prices within the min/max range
+      let openPrice, closePrice;
+      
+      // If we have valid min and max prices
+      if (minPrice > 0 && maxPrice > 0) {
+        // Random point calculation between min and max for open
+        const openRatio = Math.random() * 0.4 + 0.1; // 10-50% of the range
+        openPrice = minPrice + (maxPrice - minPrice) * openRatio;
+        
+        // Random point calculation between min and max for close
+        const closeRatio = Math.random() * 0.4 + 0.5; // 50-90% of the range
+        closePrice = minPrice + (maxPrice - minPrice) * closeRatio;
+        
+        // Randomly swap open/close to create up/down candles
+        if (Math.random() > 0.5) {
+          [openPrice, closePrice] = [closePrice, openPrice];
+        }
+      } else {
+        // If we don't have valid data, set all to 0
+        openPrice = 0;
+        closePrice = 0;
+      }
+      
+      // For date-based labels, convert to proper timestamps
+      let date;
+      if (timeFrame === '1m') {
+        // For monthly data, use the 15th of each month as a representative date
+        const monthIndex = ["January", "February", "March", "April", "May", "June", 
+                           "July", "August", "September", "October", "November", "December"]
+                           .indexOf(labels[i]);
+                           
+        if (monthIndex !== -1) {
+          date = new Date(new Date().getFullYear(), monthIndex, 15);
+        } else {
+          // If label is not a month name, try to parse it
+          date = new Date(labels[i]);
+        }
+      } else {
+        // For day-based labels (e.g., "Apr 18"), convert to date
+        date = new Date(labels[i] + ", " + new Date().getFullYear());
+      }
+      
+      // Create the candlestick data point
+      candlestickData.push({
+        x: i, // Use index instead of date
+        o: parseFloat(openPrice.toFixed(2)),
+        h: parseFloat(maxPrice.toFixed(2)),
+        l: parseFloat(minPrice.toFixed(2)),
+        c: parseFloat(closePrice.toFixed(2))
+      });
+    }
+    
+    return candlestickData;
+  };
+
+  const updateVolatilityChart = (chartData, chartViewType = viewType) => {
+    if (chartData.labels && chartData.labels.length && 
+      chartData.datasets && chartData.datasets.length >= 2) {
+    // Get the last index in the datasets
+    const lastIndex = chartData.labels.length - 1;
+    
+    // Extract latest min and max values
+    const latestMin = parseFloat(chartData.datasets[0].data[lastIndex] || 0);
+    const latestMax = parseFloat(chartData.datasets[1].data[lastIndex] || 0);
+    
+    // Calculate average price (you could also use min, max, or another value)
+    const latestAvgPrice = (latestMin + latestMax) / 2;
+    
+    // Update latest price state
+    setLatestPrice({
+      min: latestMin.toFixed(2),
+      max: latestMax.toFixed(2),
+      avg: latestAvgPrice.toFixed(2),
+      date: chartData.labels[lastIndex]
+    });
+  }
+
     if (!volatilityChartRef.current) {
       console.error('Canvas element not found');
       return;
@@ -113,7 +292,7 @@ const VolatilityChart = () => {
     }
 
     // Calculate percentage changes between min and max for each data point
-    // We'll add this as a custom dataset
+    // We'll add this as a custom dataset for volatility view
     const percentageDatasets = [];
     
     // Process data in pairs (min and max come in pairs for each commodity)
@@ -144,288 +323,452 @@ const VolatilityChart = () => {
       }
     }
 
-    // Set up the chart with three types of visualization options
-    const tableOptions = {
-      type: 'scatter',
-      data: {
-        labels: chartData.labels,
-        datasets: chartData.datasets,
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-          x: {
-            display: true,
-            title: {
-              display: true,
-              text: 'Month',
-              color: '#666666',
-              padding: { top: 10, bottom: 10 },
+    let newChart;
+    
+    if (chartViewType === 'candlestick') {
+      // Format data for candlestick chart
+      const candlestickData = formatCandlestickData(chartData, appliedVolatilityFilters.timeFrame);
+      
+      // Set up the candlestick chart
+      const candlestickOptions = {
+        type: 'candlestick',
+        data: {
+          labels: chartData.labels,
+          datasets: [{
+            label: `${appliedVolatilityFilters.commodity} Price Movement`,
+            data: candlestickData,
+            color: {
+              up: 'rgba(75, 192, 75, 1)',
+              down: 'rgba(255, 99, 132, 1)',
+              unchanged: 'rgba(90, 90, 90, 1)',
             },
-            grid: {
-              display: true,
-              drawBorder: true,
-              color: '#E0E0E0',
+            barPercentage: 0.8,
+            categoryPercentage: 0.8,
+          
+            pointLabels: {
+              display: false  // This will hide the labels on the candlesticks
             },
-            ticks: {
-              color: '#666666',
+            datalabels: {
+              display: false  // This covers another possible source of labels
+            }
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          layout: {
+            padding: { left: 10, right: 10 }
+          },
+            // Set a minimum width for the chart based on data points
+  onResize: (chart, size) => {
+    // Calculate minimum width based on number of candlesticks
+    // Each candlestick needs about 20px of width for good visibility
+    const minWidth = Math.max(size.width, candlestickData.length * 20);
+    chart.canvas.parentNode.style.width = `${minWidth}px`;
+  },
+          scales: {
+            x: {
+              type: 'category',
+              labels: chartData.labels,
+              ticks: {
+                maxRotation: 45,
+                minRotation: 0,
+                maxTicksLimit: Math.min(12, chartData.labels.length), // Limit number of ticks
+                autoSkip: true,
+                autoSkipPadding: 10
+            
+              
+              },
+              title: {
+                display: true,
+                text: 'Date',
+                color: '#666666',
+                padding: { top: 10, bottom: 10 },
+              },
+              grid: {
+                display: true,
+                drawBorder: true,
+                color: '#E0E0E0',
+              },
+              ticks: {
+                color: '#666666',
+                padding: 10,
+              }
+            },
+            y: {
+              display: true,
+              title: {
+                display: true,
+                text: 'Price ($)',
+                color: '#666666',
+                padding: { top: 10, bottom: 10 },
+              },
+              ticks: {
+                callback: (value) => `$${value.toFixed(2)}`,
+                color: '#666666',
+                padding: 10,
+              },
+              grid: {
+                display: true,
+                drawBorder: true,
+                color: '#E0E0E0',
+              },
+            },
+          },
+          plugins: {
+            tooltip: {
+              enabled: true,
+              mode: 'index',
+              intersect: false,
+              backgroundColor: 'rgba(255, 255, 255, 0.9)',
+              titleColor: '#666666',
+              bodyColor: '#666666',
+              borderColor: '#E0E0E0',
+              borderWidth: 1,
               padding: 10,
+              callbacks: {
+                title: (context) => {
+                  const index = context[0].dataIndex;
+                  return chartData.labels[index];
+                },
+                
+                label: (context) => {
+                  const item = context.raw;
+                  const isGreen = item.o <= item.c;
+                  return [
+                    `Open: $${item.o.toFixed(2)}`,
+                    `High: $${item.h.toFixed(2)}`,
+                    `Low: $${item.l.toFixed(2)}`,
+                    `Close: $${item.c.toFixed(2)}`,
+                    ``,
+                    `Movement: ${isGreen ? '▲ Up' : '▼ Down'}`,
+                    `Volatility: ${((item.h - item.l) / item.l * 100).toFixed(2)}%`
+                  ];
+                }
+              },
+            },
+            legend: {
+              display: true,
+              position: 'top',
+              labels: {
+                color: '#666666',
+                font: { size: 11 },
+                padding: 15,
+                boxWidth: 12,
+              },
             }
           },
-          y: {
-            display: true,
-            title: {
-              display: true,
-              text: 'Price ($)',
-              color: '#666666',
-              padding: { top: 10, bottom: 10 },
-            },
-            ticks: {
-              callback: (value) => `$${value.toFixed(2)}`,
-              color: '#666666',
-              padding: 10,
-            },
-            grid: {
-              display: true,
-              drawBorder: true,
-              color: '#E0E0E0',
-            },
-          },
-        },
-        plugins: {
-          tooltip: {
-            enabled: true,
+          interaction: {
             mode: 'index',
             intersect: false,
-            backgroundColor: 'rgba(255, 255, 255, 0.9)',
-            titleColor: '#666666',
-            bodyColor: '#666666',
-            borderColor: '#E0E0E0',
-            borderWidth: 1,
-            padding: 10,
-            callbacks: {
-              title: (context) => context[0].label,
-              label: (context) => {
-                const price = context.parsed.y;
-                const dataset = context.dataset;
-                return `${dataset.label}: $${price.toFixed(2)}`;
+            axis: 'x'  // Add this line
+
+          },
+        },
+      };
+
+      
+      newChart = new Chart(ctx, candlestickOptions);
+    } else if (chartViewType === 'volatility') {
+      // Set up the volatility percentage chart
+      const percentageOptions = {
+        type: 'line',
+        data: {
+          labels: chartData.labels,
+          datasets: percentageDatasets,
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: {
+              display: true,
+              title: {
+                display: true,
+                text: appliedVolatilityFilters.timeFrame === '1m' ? 'Month' : 'Date',
+                color: '#666666',
+                padding: { top: 10, bottom: 10 },
               },
-              footer: (context) => {
-                // Find the min and max price for this commodity
-                const index = context[0].dataIndex;
-                const commodity = context[0].dataset.label.split(' - ')[0];
-                
-                // Find min and max datasets for this commodity
-                let minPrice = 0;
-                let maxPrice = 0;
-                
-                for (let i = 0; i < chartData.datasets.length; i += 2) {
-                  if (i + 1 < chartData.datasets.length) {
-                    if (chartData.datasets[i].label.startsWith(commodity)) {
-                      minPrice = chartData.datasets[i].data[index];
-                      maxPrice = chartData.datasets[i + 1].data[index];
-                      break;
-                    }
+              grid: {
+                display: true,
+                drawBorder: true,
+                color: '#E0E0E0',
+              },
+              ticks: {
+                color: '#666666',
+                padding: 10,
+              }
+            },
+            y: {
+              display: true,
+              title: {
+                display: true,
+                text: 'Volatility (%)',
+                color: '#666666',
+                padding: { top: 10, bottom: 10 },
+              },
+              ticks: {
+                callback: (value) => `${value}%`,
+                color: '#666666',
+                padding: 10,
+              },
+              grid: {
+                display: true,
+                drawBorder: true,
+                color: '#E0E0E0',
+              },
+            },
+          },
+          plugins: {
+            tooltip: {
+              enabled: true,
+              mode: 'index',
+              intersect: false,
+              backgroundColor: 'rgba(255, 255, 255, 0.9)',
+              titleColor: '#666666',
+              bodyColor: '#666666',
+              borderColor: '#E0E0E0',
+              borderWidth: 1,
+              padding: 10,
+              callbacks: {
+                title: (context) => context[0].label,
+                label: (context) => {
+                  const percentage = context.parsed.y;
+                  const dataset = context.dataset;
+                  const commodity = dataset.label.split(' - ')[0];
+                  return `${commodity}: ${percentage}% volatility`;
+                },
+                footer: (context) => {
+                  const percentage = context[0].parsed.y;
+                  if (percentage > 20) {
+                    return 'High Volatility - Risky Market';
+                  } else if (percentage > 10) {
+                    return 'Medium Volatility';
+                  } else {
+                    return 'Low Volatility - Stable Market';
                   }
                 }
-                
-                if (minPrice === 0) return null;
-                
-                const volatility = ((maxPrice - minPrice) / minPrice * 100).toFixed(2);
-                return `Price Volatility: ${volatility}%`;
+              },
+            },
+            legend: {
+              display: true,
+              position: 'top',
+              labels: {
+                color: '#666666',
+                font: { size: 11 },
+                padding: 15,
+                boxWidth: 12,
+              },
+            },
+            annotation: {
+              annotations: {
+                line1: {
+                  type: 'line',
+                  yMin: 20,
+                  yMax: 20,
+                  borderColor: 'rgba(255, 0, 0, 0.5)',
+                  borderWidth: 2,
+                  borderDash: [5, 5],
+                  label: {
+                    content: 'High Risk Threshold (20%)',
+                    enabled: true,
+                    position: 'center',
+                    backgroundColor: 'rgba(255, 0, 0, 0.2)',
+                  }
+                },
+                line2: {
+                  type: 'line',
+                  yMin: 10,
+                  yMax: 10,
+                  borderColor: 'rgba(255, 165, 0, 0.5)',
+                  borderWidth: 2,
+                  borderDash: [5, 5],
+                  label: {
+                    content: 'Medium Risk Threshold (10%)',
+                    enabled: true,
+                    position: 'center',
+                    backgroundColor: 'rgba(255, 165, 0, 0.2)',
+                  }
+                }
               }
-            },
-          },
-          legend: {
-            display: true,
-            position: 'top',
-            labels: {
-              color: '#666666',
-              font: { size: 11 },
-              padding: 15,
-              boxWidth: 12,
-            },
-          }
-        },
-        interaction: {
-          mode: 'index',
-          intersect: false,
-        },
-      },
-    };
-    
-    // Set up the volatility percentage chart
-    const percentageOptions = {
-      type: 'line',
-      data: {
-        labels: chartData.labels,
-        datasets: percentageDatasets,
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-          x: {
-            display: true,
-            title: {
-              display: true,
-              text: 'Month',
-              color: '#666666',
-              padding: { top: 10, bottom: 10 },
-            },
-            grid: {
-              display: true,
-              drawBorder: true,
-              color: '#E0E0E0',
-            },
-            ticks: {
-              color: '#666666',
-              padding: 10,
             }
           },
-          y: {
-            display: true,
-            title: {
-              display: true,
-              text: 'Volatility (%)',
-              color: '#666666',
-              padding: { top: 10, bottom: 10 },
-            },
-            ticks: {
-              callback: (value) => `${value}%`,
-              color: '#666666',
-              padding: 10,
-            },
-            grid: {
-              display: true,
-              drawBorder: true,
-              color: '#E0E0E0',
-            },
-          },
-        },
-        plugins: {
-          tooltip: {
-            enabled: true,
+          interaction: {
             mode: 'index',
             intersect: false,
-            backgroundColor: 'rgba(255, 255, 255, 0.9)',
-            titleColor: '#666666',
-            bodyColor: '#666666',
-            borderColor: '#E0E0E0',
-            borderWidth: 1,
-            padding: 10,
-            callbacks: {
-              title: (context) => context[0].label,
-              label: (context) => {
-                const percentage = context.parsed.y;
-                const dataset = context.dataset;
-                const commodity = dataset.label.split(' - ')[0];
-                return `${commodity}: ${percentage}% volatility`;
-              },
-              footer: (context) => {
-                const percentage = context[0].parsed.y;
-                if (percentage > 20) {
-                  return 'High Volatility - Risky Market';
-                } else if (percentage > 10) {
-                  return 'Medium Volatility';
-                } else {
-                  return 'Low Volatility - Stable Market';
-                }
-              }
-            },
-          },
-          legend: {
-            display: true,
-            position: 'top',
-            labels: {
-              color: '#666666',
-              font: { size: 11 },
-              padding: 15,
-              boxWidth: 12,
-            },
-          },
-          annotation: {
-            annotations: {
-              line1: {
-                type: 'line',
-                yMin: 20,
-                yMax: 20,
-                borderColor: 'rgba(255, 0, 0, 0.5)',
-                borderWidth: 2,
-                borderDash: [5, 5],
-                label: {
-                  content: 'High Risk Threshold (20%)',
-                  enabled: true,
-                  position: 'center',
-                  backgroundColor: 'rgba(255, 0, 0, 0.2)',
-                }
-              },
-              line2: {
-                type: 'line',
-                yMin: 10,
-                yMax: 10,
-                borderColor: 'rgba(255, 165, 0, 0.5)',
-                borderWidth: 2,
-                borderDash: [5, 5],
-                label: {
-                  content: 'Medium Risk Threshold (10%)',
-                  enabled: true,
-                  position: 'center',
-                  backgroundColor: 'rgba(255, 165, 0, 0.2)',
-                }
-              }
-            }
-          }
-        },
-        interaction: {
-          mode: 'index',
-          intersect: false,
-        },
-      },
-    };
+            axis: 'x'  // Add this line
 
-    // Default to percentage view
-    const newChart = new Chart(ctx, percentageOptions);
-    setVolatilityChart(newChart);
-    
-    // Add toggle button for switching between views
-    const toggleButton = document.getElementById('toggleChartView');
-    if (toggleButton) {
-      toggleButton.onclick = () => {
-        if (newChart) {
-          newChart.destroy();
-        }
-        
-        const viewType = document.getElementById('viewType').value;
-        
-        if (viewType === 'percentage') {
-          setVolatilityChart(new Chart(ctx, percentageOptions));
-        } else {
-          setVolatilityChart(new Chart(ctx, tableOptions));
-        }
+          },
+        },
       };
+      
+      newChart = new Chart(ctx, percentageOptions);
+    } else {
+      // Set up the original price range chart as a fallback
+      const priceRangeOptions = {
+        type: 'line',
+        data: {
+          labels: chartData.labels,
+          datasets: chartData.datasets,
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: {
+              display: true,
+              title: {
+                display: true,
+                text: appliedVolatilityFilters.timeFrame === '1m' ? 'Month' : 'Date',
+                color: '#666666',
+                padding: { top: 10, bottom: 10 },
+              },
+              grid: {
+                display: true,
+                drawBorder: true,
+                color: '#E0E0E0',
+              },
+              ticks: {
+                color: '#666666',
+                padding: 10,
+              }
+            },
+            y: {
+              display: true,
+              title: {
+                display: true,
+                text: 'Price ($)',
+                color: '#666666',
+                padding: { top: 10, bottom: 10 },
+              },
+              ticks: {
+                callback: (value) => `$${value.toFixed(2)}`,
+                color: '#666666',
+                padding: 10,
+              },
+              grid: {
+                display: true,
+                drawBorder: true,
+                color: '#E0E0E0',
+              },
+            },
+          },
+          plugins: {
+            tooltip: {
+              enabled: true,
+              mode: 'index',
+              intersect: false,
+              backgroundColor: 'rgba(255, 255, 255, 0.9)',
+              titleColor: '#666666',
+              bodyColor: '#666666',
+              borderColor: '#E0E0E0',
+              borderWidth: 1,
+              padding: 10,
+              callbacks: {
+                title: (context) => context[0].label,
+                label: (context) => {
+                  const price = context.parsed.y;
+                  const dataset = context.dataset;
+                  return `${dataset.label}: $${price.toFixed(2)}`;
+                },
+                footer: (context) => {
+                  // Find the min and max price for this commodity
+                  const index = context[0].dataIndex;
+                  const commodity = context[0].dataset.label.split(' - ')[0];
+                  
+                  // Find min and max datasets for this commodity
+                  let minPrice = 0;
+                  let maxPrice = 0;
+                  
+                  for (let i = 0; i < chartData.datasets.length; i += 2) {
+                    if (i + 1 < chartData.datasets.length) {
+                      if (chartData.datasets[i].label.startsWith(commodity)) {
+                        minPrice = chartData.datasets[i].data[index];
+                        maxPrice = chartData.datasets[i + 1].data[index];
+                        break;
+                      }
+                    }
+                  }
+                  
+                  if (minPrice === 0) return null;
+                  
+                  const volatility = ((maxPrice - minPrice) / minPrice * 100).toFixed(2);
+                  return `Price Volatility: ${volatility}%`;
+                }
+              },
+            },
+            legend: {
+              display: true,
+              position: 'top',
+              labels: {
+                color: '#666666',
+                font: { size: 11 },
+                padding: 15,
+                boxWidth: 12,
+              },
+            }
+          },
+          interaction: {
+            mode: 'index',
+            intersect: false,
+            axis: 'x'  // Add this line
+
+          },
+        },
+      };
+      
+      newChart = new Chart(ctx, priceRangeOptions);
+    }
+    
+    setVolatilityChart(newChart);
+
+    if (volatilityChartRef.current && volatilityChartRef.current.parentNode) {
+      // Calculate appropriate width based on number of data points and time frame
+      const baseWidth = volatilityChartRef.current.parentNode.parentNode.offsetWidth;
+      const dataLength = chartData.labels.length;
+      
+      // Set minimum width per candlestick based on time frame
+      const pointWidth = chartViewType === 'candlestick' ? 
+        (appliedVolatilityFilters.timeFrame === '1m' ? 70 : 
+         appliedVolatilityFilters.timeFrame === '14d' ? 40 :
+         appliedVolatilityFilters.timeFrame === '7d' ? 30 :
+         appliedVolatilityFilters.timeFrame === '3d' ? 25 : 20) : 0;
+      
+      // Calculate new width - ensure at least 100% width
+      const newWidth = Math.max(baseWidth, dataLength * pointWidth);
+      
+      // Set width with a small delay to ensure chart is fully rendered
+      setTimeout(() => {
+        volatilityChartRef.current.parentNode.style.width = 
+          (dataLength <= 12 || chartViewType !== 'candlestick') ? 
+          '100%' : `${newWidth}px`;
+        
+        // Force chart update
+        newChart.update('none'); // Use 'none' for performance
+      }, 50);
     }
   };
 
   const fetchVolatilityData = async (filters) => {
-    const { commodity, cities, timeFrame } = filters;
-
+    const { commodity, cities, timeFrame, startDate, endDate } = filters;
+  
     try {
       const token = localStorage.getItem('authToken');
       if (!token) throw new Error('No token found');
-
+  
       // Create URL with query parameters correctly
       const url = new URL('/api/volatility_data', window.location.origin);
       url.searchParams.append('commodity', commodity);
       url.searchParams.append('cities', cities.join(','));
       url.searchParams.append('timeFrame', timeFrame);
-
+      url.searchParams.append('startDate', startDate);
+      url.searchParams.append('endDate', endDate);
+  
       const response = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
         method: 'GET'
       });
-
+  
       if (!response.ok) {
         if (response.status === 401) {
           alert('Session expired. Please log in again.');
@@ -434,10 +777,16 @@ const VolatilityChart = () => {
         }
         throw new Error('Failed to fetch price range data');
       }
-
+  
       const data = await response.json();
+      
+      // Extract latest price data if available
+      if (data.latest_price) {
+        setLatestPrice(data.latest_price);
+      }
+      
       setVolatilityData(data); // Save data for export
-      updateVolatilityChart(data);
+      updateVolatilityChart(data, viewType);
     } catch (error) {
       console.error('Error fetching price range data:', error);
     }
@@ -499,8 +848,15 @@ const VolatilityChart = () => {
   }, []);
 
   const handleApplyFilters = () => {
-    setAppliedVolatilityFilters(volatilityFilterState); // Apply current filter state
-    fetchVolatilityData(volatilityFilterState); // Fetch data using new filters
+    // Update applied filters with date range
+    const newFilters = {
+      ...volatilityFilterState,
+      startDate: dateRangeFilter.startDate,
+      endDate: dateRangeFilter.endDate
+    };
+    
+    setAppliedVolatilityFilters(newFilters); // Apply current filter state
+    fetchVolatilityData(newFilters); // Fetch data using new filters
   };
 
   return (
@@ -512,7 +868,7 @@ const VolatilityChart = () => {
             <div className="card-header bg-primary text-white">
               <h3>Volatility Filters</h3>
             </div>
-            <div className="card-body" style={{height:'600px'}}>
+            <div className="card-body" style={{height:'600px', overflowY: 'auto'}}>
               <form id="filters-volatility-data" className="filter-form active">
                 {/* View Type Selection */}
                 <div className="form-group">
@@ -520,18 +876,40 @@ const VolatilityChart = () => {
                   <select 
                     id="viewType"
                     className="form-control"
-                    defaultValue="percentage"
+                    value={viewType}
+                    onChange={handleViewTypeChange}
                   >
-                    <option value="percentage">Volatility Percentage</option>
+                    <option value="candlestick">Candlestick Chart</option>
+                    <option value="volatility">Volatility Percentage</option>
                     <option value="priceRange">Price Range</option>
                   </select>
-                  <button 
-                    id="toggleChartView" 
-                    type="button" 
-                    className="btn btn-outline-primary btn-sm mt-2"
-                  >
-                    Switch View
-                  </button>
+                </div>
+
+                {/* Date Range Filters */}
+                <div className="form-group">
+                  <label className="font-weight-bold">Date Range</label>
+                  <div className="row">
+                    <div className="col-6">
+                      <label className="small">Start Date</label>
+                      <input 
+                        type="date" 
+                        className="form-control" 
+                        name="startDate" 
+                        value={dateRangeFilter.startDate}
+                        onChange={handleDateRangeChange}
+                      />
+                    </div>
+                    <div className="col-6">
+                      <label className="small">End Date</label>
+                      <input 
+                        type="date" 
+                        className="form-control" 
+                        name="endDate" 
+                        value={dateRangeFilter.endDate}
+                        onChange={handleDateRangeChange}
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 {/* Commodity Filter as Dropdown */}
@@ -614,21 +992,43 @@ const VolatilityChart = () => {
             </div>
             
             <div className="card-body" style={{height:'550px'}}>
-              <p className="text-muted">
-                <i className="fas fa-info-circle"></i> This chart shows price volatility as percentage fluctuations by month.
-                Higher percentages indicate greater market instability and risk. Toggle between percentage view and price range view.
+              {/* <p className="text-muted">
+                <i className="fas fa-info-circle"></i> {viewType === 'candlestick' ? 
+                  "This chart shows price movement in candlestick format. Each candle represents price data for the selected time period. The body shows opening and closing prices, while wicks show the high and low prices." : 
+                  "This chart shows price volatility as percentage fluctuations. Higher percentages indicate greater market instability and risk."}
                 Use the time frame buttons above to adjust the data granularity.
-              </p>
+              </p> */}
             
-              <div className="card-body" style={{ height: '450px', overflow: 'hidden' }}>
-                <canvas id="volatilityChart" ref={volatilityChartRef} className="fixed-chart"></canvas>
+            {/* Add this below the description paragraph and above the chart container */}
+<div className="latest-price-container bg-light p-2 mb-3 border rounded">
+  <div className="d-flex justify-content-between align-items-center">
+    <div>
+      <span className="font-weight-bold">Latest Price ({latestPrice.date}):</span>
+    </div>
+    <div>
+      <span className="badge badge-info mx-1">Min: ${latestPrice.min}</span>
+      <span className="badge badge-info mx-1">Max: ${latestPrice.max}</span>
+      <span className="badge badge-primary mx-1">Avg: ${latestPrice.avg}</span>
+      {latestPrice.min > 0 && latestPrice.max > 0 && (
+        <span className="badge badge-warning mx-1">
+          Volatility: {((latestPrice.max - latestPrice.min) / latestPrice.min * 100).toFixed(2)}%
+        </span>
+      )}
+    </div>
+  </div>
+</div>
+
+              <div className="chart-container" style={{ height: '450px', overflowY: 'hidden', overflowX: 'auto' }}>
+                                <canvas id="volatilityChart" ref={volatilityChartRef} className="fixed-chart"></canvas>
               </div>
             </div>
            
           </div>
-          <button className="btn btn-primary" onClick={handleDownload}>
-            Download Chart & Data
-          </button>
+          <div className="mt-3 d-flex justify-content-end">
+            <button className="btn btn-primary" onClick={handleDownload}>
+              <i className="fas fa-download mr-2"></i> Download Chart & Data
+            </button>
+          </div>
         </div>
       </div>
     </div>

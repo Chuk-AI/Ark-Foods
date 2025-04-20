@@ -3906,12 +3906,25 @@ def get_volatility_data():
         cities = request.args.get("cities", "").split(",")
         time_frame = request.args.get("timeFrame", "1m")  # Time frame parameter
         
+        # Parse date range parameters
+        start_date_str = request.args.get("startDate", "")
+        end_date_str = request.args.get("endDate", "")
+        
         # Check if commodity or cities are missing or empty
         if not commodity or not cities or cities[0] == '':
             return jsonify({"error": "Missing commodity or cities"}), 400
             
-        # Always use current year
-        current_year = datetime.now().year
+        # Parse start and end dates
+        if start_date_str and end_date_str:
+            try:
+                start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
+                end_date = datetime.strptime(end_date_str, "%Y-%m-%d")
+            except ValueError:
+                return jsonify({"error": "Invalid date format. Use YYYY-MM-DD"}), 400
+        else:
+            # Default to current year if dates aren't provided
+            end_date = datetime.now()
+            start_date = datetime(end_date.year, 1, 1)  # January 1st of current year
             
         # Convert time frame to number of days
         days_to_fetch = 30  # Default to 1m
@@ -3931,22 +3944,80 @@ def get_volatility_data():
             "datasets": []
         }
         
-        # Adjust labels based on time frame
-        if days_to_fetch <= 14:
-            # For shorter timeframes, use day-based labels
+        # Calculate the number of intervals based on date range and time frame
+        # This determines how many candlesticks we'll have
+        date_delta = (end_date - start_date).days + 1
+        
+        # For short time frames with few intervals, we'll show detailed labels
+        if time_frame in ['1d', '3d', '7d']:
+            # Generate daily labels based on date range
+            if date_delta <= 90:  # If less than 3 months, show daily dates
+                current_date = start_date
+                labels = []
+                while current_date <= end_date:
+                    labels.append(current_date.strftime("%b %d"))  # Format like "Apr 18"
+                    current_date += timedelta(days=1)
+                result["labels"] = labels
+            else:
+                # If more than 90 days, group into the time frame intervals
+                # Calculate how many intervals are required to cover the date range
+                num_intervals = max(1, date_delta // days_to_fetch)
+                current_date = start_date
+                labels = []
+                
+                for i in range(num_intervals):
+                    interval_end = min(current_date + timedelta(days=days_to_fetch - 1), end_date)
+                    label = f"{current_date.strftime('%b %d')} - {interval_end.strftime('%b %d')}"
+                    labels.append(label)
+                    current_date += timedelta(days=days_to_fetch)
+                    if current_date > end_date:
+                        break
+                        
+                result["labels"] = labels
+
+        elif time_frame == '14d':
+            # For 14-day intervals, create bi-weekly labels
+            # Calculate how many 14-day periods fit in the date range
+            num_intervals = max(1, date_delta // 14)
+            current_date = start_date
             labels = []
-            today = datetime.now()
-            for i in range(days_to_fetch):
-                day = today - timedelta(days=days_to_fetch - i - 1)
-                labels.append(day.strftime("%b %d"))  # Format like "Apr 18"
+            
+            for i in range(num_intervals):
+                interval_end = min(current_date + timedelta(days=13), end_date)  # 14 days including start date
+                label = f"{current_date.strftime('%b %d')} - {interval_end.strftime('%b %d')}"
+                labels.append(label)
+                current_date += timedelta(days=14)
+                if current_date > end_date:
+                    break
+                    
             result["labels"] = labels
-        else:
-            # For monthly view, use month names
-            result["labels"] = ["January", "February", "March", "April", "May", "June", 
-                     "July", "August", "September", "October", "November", "December"]
+                
+        elif time_frame == '1m':
+            # For monthly view, group by months
+            months_data = {}
+            current_date = start_date
+            labels = []
+            
+            # Generate month labels
+            while current_date <= end_date:
+                month_key = current_date.strftime("%Y-%m")
+                month_label = current_date.strftime("%B %Y")
+                
+                if month_key not in months_data:
+                    months_data[month_key] = {"label": month_label}
+                    labels.append(month_label)
+                    
+                current_date += timedelta(days=1)
+                # If we've moved to a new month, update current_date to first day of that month
+                if current_date.day == 1:
+                    pass  # Already at the first day of a month
+                
+            result["labels"] = labels
         
         # Fetch price range data (min/max) for the selected commodity, across cities
-        price_range_data = calculate_price_range_for_timeframe(commodity, cities, current_year, days_to_fetch)
+        price_range_data = calculate_price_range_for_timeframe(
+            commodity, cities, start_date, end_date, time_frame, days_to_fetch
+        )
             
         # Colors for the dataset
         colors = ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40"]
@@ -3982,114 +4053,170 @@ def get_volatility_data():
         result["datasets"].append(min_dataset)
         result["datasets"].append(max_dataset)
         
+        # Get the latest price data
+        latest_price_data = get_latest_price(commodity, cities)
+        
+        # Add it to the result dictionary
+        result["latest_price"] = latest_price_data
+        
         return jsonify(result)
         
     except Exception as e:
         app.logger.error(f"Error in price range data: {str(e)}")
         return jsonify({"error": str(e)}), 500
-
-
-def calculate_price_range_for_timeframe(commodity, cities, current_year, days_to_fetch):
+    
+def calculate_price_range_for_timeframe(commodity, cities, start_date, end_date, time_frame, days_to_fetch):
     """
     Calculate price ranges (min and max) for the selected commodity,
-    aggregated across all selected cities, for the specified timeframe.
+    aggregated across all selected cities, for the specified date range and time frame.
     """
     try:
         from collections import defaultdict
-        from datetime import datetime, timedelta
         
         result = {
             "min": [],
             "max": []
         }
         
-        # If we're looking at a timeframe of 30 days or more (monthly view)
-        if days_to_fetch >= 30:
-            # Precompute month ranges for the current year
-            month_ranges = {}
-            for month in range(1, 13):
-                first_day, last_day = get_month_day_range(month, current_year)
-                month_ranges[month] = (first_day, last_day)
+        # Convert dates to days of year for filtering
+        start_year = start_date.year
+        end_year = end_date.year
+        
+        start_day_of_year = start_date.timetuple().tm_yday
+        end_day_of_year = end_date.timetuple().tm_yday
+        
+        # Query conditions to filter by date range
+        query_conditions = [
+            PriceData.commodity == commodity,
+            PriceData.city_name.in_(cities),
+            PriceData.source == "ProduceIQ"
+        ]
+        
+        # Handle date range query differently depending on if it spans multiple years
+        if start_year == end_year:
+            # Single year query
+            query_conditions.extend([
+                PriceData.year == start_year,
+                PriceData.day >= start_day_of_year,
+                PriceData.day <= end_day_of_year
+            ])
             
-            # Single query: Fetch all rows for the given commodity, cities, current year
             all_data = db.session.query(
-                PriceData.city_name,
                 PriceData.day,
-                PriceData.price
-            ).filter(
-                PriceData.commodity == commodity,
-                PriceData.city_name.in_(cities),
-                PriceData.year == current_year,
-                PriceData.source == "ProduceIQ"
-            ).all()
+                PriceData.price,
+                PriceData.year
+            ).filter(*query_conditions).all()
+        else:
+            # Multi-year query (need to handle each year separately)
+            # First year: from start_day to end of year
+            first_year_conditions = query_conditions.copy()
+            first_year_conditions.extend([
+                PriceData.year == start_year,
+                PriceData.day >= start_day_of_year
+            ])
             
-            # Group the data by month
+            # Last year: from beginning of year to end_day
+            last_year_conditions = query_conditions.copy()
+            last_year_conditions.extend([
+                PriceData.year == end_year,
+                PriceData.day <= end_day_of_year
+            ])
+            
+            # Middle years (if any): entire years
+            middle_years = list(range(start_year + 1, end_year))
+            middle_year_data = []
+            
+            if middle_years:
+                middle_year_conditions = query_conditions.copy()
+                middle_year_conditions.append(PriceData.year.in_(middle_years))
+                middle_year_data = db.session.query(
+                    PriceData.day,
+                    PriceData.price,
+                    PriceData.year
+                ).filter(*middle_year_conditions).all()
+            
+            # Query for first and last year data
+            first_year_data = db.session.query(
+                PriceData.day,
+                PriceData.price,
+                PriceData.year
+            ).filter(*first_year_conditions).all()
+            
+            last_year_data = db.session.query(
+                PriceData.day,
+                PriceData.price,
+                PriceData.year
+            ).filter(*last_year_conditions).all()
+            
+            # Combine all the data
+            all_data = first_year_data + middle_year_data + last_year_data
+        
+        # Process based on time frame
+        if time_frame == '1m':
+            # Group by month across the date range
             data_by_month = defaultdict(list)
-            for row in all_data:
-                # Determine month from day of year
-                for month, (first_day, last_day) in month_ranges.items():
-                    if first_day <= row.day <= last_day:
-                        data_by_month[month].append(row.price)
-                        break
             
-            # For each month, calculate min and max across all cities
-            for month in range(1, 13):
-                month_prices = data_by_month.get(month, [])
-                
-                if month_prices:
-                    # Calculate min and max price for this month
-                    min_price = min(month_prices)
-                    max_price = max(month_prices)
-                    
-                    result["min"].append(round(min_price, 2))
-                    result["max"].append(round(max_price, 2))
+            for row in all_data:
+                # Create a date object for this data point
+                row_date = datetime(row.year, 1, 1) + timedelta(days=row.day - 1)
+                month_key = row_date.strftime("%Y-%m")  # Format: "2023-04"
+                data_by_month[month_key].append(row.price)
+            
+            # Sort months chronologically
+            sorted_months = sorted(data_by_month.keys())
+            
+            # Calculate min and max for each month
+            for month in sorted_months:
+                prices = data_by_month[month]
+                if prices:
+                    result["min"].append(round(min(prices), 2))
+                    result["max"].append(round(max(prices), 2))
                 else:
                     result["min"].append(0)
                     result["max"].append(0)
-        
-        # If we're looking at a shorter timeframe (days)
+                    
         else:
-            # Get the current date and calculate the date range we need
-            today = datetime.now()
-            start_date = today - timedelta(days=days_to_fetch)
-            
-            # Get start and end days of the year
-            start_day_of_year = start_date.timetuple().tm_yday
-            end_day_of_year = today.timetuple().tm_yday
-            
-            # Query data for the specific day range
-            query_filter = [
-                PriceData.commodity == commodity,
-                PriceData.city_name.in_(cities),
-                PriceData.year == current_year,
-                PriceData.source == "ProduceIQ"
-            ]
-            
-            # Add day range filter
-            query_filter.append(PriceData.day >= start_day_of_year)
-            query_filter.append(PriceData.day <= end_day_of_year)
-            
-            # Fetch the data
-            daily_data = db.session.query(
-                PriceData.day,
-                PriceData.price
-            ).filter(*query_filter).all()
-            
-            # Group the data by day
-            prices_by_day = defaultdict(list)
-            for row in daily_data:
-                prices_by_day[row.day].append(row.price)
-            
-            # Process each day in the range
-            for i in range(days_to_fetch):
-                day = start_date + timedelta(days=i)
-                day_of_year = day.timetuple().tm_yday
+            # For other time frames, group by the specified interval
+            # Convert all data to actual dates for easier grouping
+            date_price_data = []
+            for row in all_data:
+                row_date = datetime(row.year, 1, 1) + timedelta(days=row.day - 1)
+                date_price_data.append((row_date, row.price))
                 
-                day_prices = prices_by_day.get(day_of_year, [])
+            # Sort by date
+            date_price_data.sort(key=lambda x: x[0])
+            
+            # If no data, return empty arrays
+            if not date_price_data:
+                return result
                 
-                if day_prices:
-                    result["min"].append(round(min(day_prices), 2))
-                    result["max"].append(round(max(day_prices), 2))
+            # Group data into intervals based on time_frame
+            interval_data = defaultdict(list)
+            
+            current_interval_start = start_date
+            interval_index = 0
+            
+            for date, price in date_price_data:
+                # Check if this data point belongs to current interval or we need to move to next interval
+                while date > current_interval_start + timedelta(days=days_to_fetch - 1):
+                    # Move to next interval
+                    current_interval_start += timedelta(days=days_to_fetch)
+                    interval_index += 1
+                    
+                    # If we've moved past the end date, break
+                    if current_interval_start > end_date:
+                        break
+                        
+                # If date is within current interval, add the price
+                if current_interval_start <= date <= current_interval_start + timedelta(days=days_to_fetch - 1):
+                    interval_data[interval_index].append(price)
+            
+            # Calculate min and max for each interval
+            for i in range(len(interval_data)):
+                prices = interval_data.get(i, [])
+                if prices:
+                    result["min"].append(round(min(prices), 2))
+                    result["max"].append(round(max(prices), 2))
                 else:
                     result["min"].append(0)
                     result["max"].append(0)
@@ -4100,10 +4227,87 @@ def calculate_price_range_for_timeframe(commodity, cities, current_year, days_to
         app.logger.error(f"Error calculating price ranges: {str(e)}")
         return {"min": [], "max": []}
 
+# Helper function to get the first and last day of a month
+def get_month_day_range(month, year):
+    """
+    Returns the first and last day of the month as days of the year.
+    """
+    # First day of the month
+    first_day = datetime(year, month, 1)
+    first_day_of_year = first_day.timetuple().tm_yday
+    
+    # Last day of the month (first day of next month - 1 day)
+    if month == 12:
+        last_day = datetime(year + 1, 1, 1) - timedelta(days=1)
+    else:
+        last_day = datetime(year, month + 1, 1) - timedelta(days=1)
+        
+    last_day_of_year = last_day.timetuple().tm_yday
+    
+    return first_day_of_year, last_day_of_year
 
-from datetime import datetime, timedelta
-from flask import request, jsonify
-import requests
+def get_latest_price(commodity, cities):
+    """
+    Get the most recent price data for the specified commodity and cities.
+    """
+    try:
+        # Query to get the most recent data for this commodity and these cities
+        most_recent_data = db.session.query(
+            PriceData.commodity,
+            PriceData.city_name,
+            PriceData.price,
+            PriceData.year,
+            PriceData.day,
+            func.max(PriceData.year * 1000 + PriceData.day).label('date_value')  # Compute a sortable date value
+        ).filter(
+            PriceData.commodity == commodity,
+            PriceData.city_name.in_(cities),
+            PriceData.source == "ProduceIQ"
+        ).group_by(
+            PriceData.city_name
+        ).order_by(
+            desc('date_value')
+        ).all()
+        
+        # If no data found
+        if not most_recent_data:
+            return {
+                "min": 0,
+                "max": 0,
+                "avg": 0,
+                "date": None
+            }
+        
+        # Get the most recent date across all cities
+        most_recent_entry = max(most_recent_data, key=lambda x: x.date_value)
+        most_recent_date = datetime(most_recent_entry.year, 1, 1) + timedelta(days=most_recent_entry.day - 1)
+        
+        # Extract all prices
+        prices = [entry.price for entry in most_recent_data]
+        
+        # Calculate min, max, and average
+        min_price = min(prices) if prices else 0
+        max_price = max(prices) if prices else 0
+        avg_price = sum(prices) / len(prices) if prices else 0
+        
+        # Format the result
+        result = {
+            "min": round(min_price, 2),
+            "max": round(max_price, 2),
+            "avg": round(avg_price, 2),
+            "date": most_recent_date.strftime("%b %d, %Y")
+        }
+        
+        return result
+        
+    except Exception as e:
+        app.logger.error(f"Error getting latest price: {str(e)}")
+        return {
+            "min": 0,
+            "max": 0,
+            "avg": 0,
+            "date": None
+        }
 
 
 @app.route("/api/harvest_planning", methods=["POST"])
