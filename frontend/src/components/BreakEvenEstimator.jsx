@@ -39,7 +39,7 @@ const BreakEvenEstimator = () => {
   const [formState, setFormState] = useState({
     variety: 'Shishito',
     start_date: '2024-04-09',
-    forecast_date: new Date(new Date().setMonth(new Date().getMonth() + 3)).toISOString().split('T')[0],
+    // forecast_date: new Date(new Date().setMonth(new Date().getMonth() + 3)).toISOString().split('T')[0],
     yield_per_acre: 2000,
     cost_per_acre: 10,
     harvest_cost_per_box: 10,
@@ -136,12 +136,17 @@ const BreakEvenEstimator = () => {
       const token = localStorage.getItem('authToken');
       if (!token) throw new Error('No token found');
       
+
+      const forecast_date = moment(formState.start_date)
+                        .add(1, 'year')
+                        .format('YYYY-MM-DD');
+
       // Prepare data for saving
       const saveData = {
         variety: formState.variety,
         city: formState.city,
         start_date: formState.start_date,
-        forecast_date: formState.forecast_date,
+        forecast_date, 
         yield_per_acre: parseFloat(formState.yield_per_acre),
         cost_per_acre: parseFloat(formState.cost_per_acre),
         harvest_cost_per_box: parseFloat(formState.harvest_cost_per_box),
@@ -183,10 +188,17 @@ const BreakEvenEstimator = () => {
       /* 1 ──────────────────────────────────
          Run the revenue‑calculator endpoint
       ────────────────────────────────────── */
+
+      // derive forecast_date exactly 1 year after the start_date
+      const forecast_date = moment(formState.start_date)
+      .add(1, 'year')
+      .format('YYYY-MM-DD');
+
+
       const forecastResponse = await axios.post("/api/calculate_forecast", {
         variety: formState.variety,
         start_date: formState.start_date,
-        forecast_date: formState.forecast_date,
+        forecast_date,
         yield_per_acre: parseFloat(formState.yield_per_acre),
         cost_per_acre: parseFloat(formState.cost_per_acre),
         harvest_cost_per_box: parseFloat(formState.harvest_cost_per_box),
@@ -555,16 +567,7 @@ const BreakEvenEstimator = () => {
                     />
                   </div>
                   
-                  <div className="form-group">
-                    <label className="font-weight-bold">Forecast Date</label>
-                    <input
-                      type="date"
-                      className="form-control"
-                      name="forecast_date"
-                      value={formState.forecast_date}
-                      onChange={handleInputChange}
-                    />
-                  </div>
+      
                   
                   <h6 className="text-muted mb-3 mt-4">Yield Information</h6>
                   
