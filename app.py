@@ -83,6 +83,7 @@ from fetch_shipping_point_data import fetch_shipping_point_data  # Replace with 
 from flask_caching import Cache
 import hashlib
 from flask import request, make_response
+from collections import defaultdict
 
 
 
@@ -3897,7 +3898,6 @@ def get_forecast_line_data():
 
 
 
-
 @app.route("/api/volatility_data", methods=["GET"])
 def get_volatility_data():
     try:
@@ -4014,7 +4014,7 @@ def get_volatility_data():
                 
             result["labels"] = labels
         
-        # Fetch price range data (min/max) for the selected commodity, across cities
+        # Fetch price range data (min/max/open/close) for the selected commodity, across cities
         price_range_data = calculate_price_range_for_timeframe(
             commodity, cities, start_date, end_date, time_frame, days_to_fetch
         )
@@ -4049,9 +4049,32 @@ def get_volatility_data():
             "type": "line"
         }
         
+        # Create datasets for opening and closing prices (needed for candlestick)
+        open_dataset = {
+            "label": f"{commodity} - Open Price",
+            "data": price_range_data.get("open", [0] * len(result["labels"])),
+            "hidden": True,  # Hide from regular charts
+            "borderColor": "transparent",
+            "backgroundColor": "transparent",
+            "pointRadius": 0,
+            "fill": 'false'
+        }
+        
+        close_dataset = {
+            "label": f"{commodity} - Close Price",
+            "data": price_range_data.get("close", [0] * len(result["labels"])),
+            "hidden": True,  # Hide from regular charts
+            "borderColor": "transparent",
+            "backgroundColor": "transparent",
+            "pointRadius": 0,
+            "fill": 'false'
+        }
+        
         # Add datasets to result
         result["datasets"].append(min_dataset)
         result["datasets"].append(max_dataset)
+        result["datasets"].append(open_dataset)
+        result["datasets"].append(close_dataset)
         
         # Get the latest price data
         latest_price_data = get_latest_price(commodity, cities)
@@ -4064,10 +4087,11 @@ def get_volatility_data():
     except Exception as e:
         app.logger.error(f"Error in price range data: {str(e)}")
         return jsonify({"error": str(e)}), 500
-    
+
+
 def calculate_price_range_for_timeframe(commodity, cities, start_date, end_date, time_frame, days_to_fetch):
     """
-    Calculate price ranges (min and max) for the selected commodity,
+    Calculate price ranges (min, max, open, close) for the selected commodity,
     aggregated across all selected cities, for the specified date range and time frame.
     """
     try:
@@ -4075,7 +4099,9 @@ def calculate_price_range_for_timeframe(commodity, cities, start_date, end_date,
         
         result = {
             "min": [],
-            "max": []
+            "max": [],
+            "open": [],  # First price in the period
+            "close": []  # Last price in the period
         }
         
         # Convert dates to days of year for filtering
@@ -4155,26 +4181,38 @@ def calculate_price_range_for_timeframe(commodity, cities, start_date, end_date,
         if time_frame == '1m':
             # Group by month across the date range
             data_by_month = defaultdict(list)
+            data_by_month_with_dates = defaultdict(list)  # Store with dates for sorting
             
             for row in all_data:
                 # Create a date object for this data point
                 row_date = datetime(row.year, 1, 1) + timedelta(days=row.day - 1)
                 month_key = row_date.strftime("%Y-%m")  # Format: "2023-04"
                 data_by_month[month_key].append(row.price)
+                data_by_month_with_dates[month_key].append((row_date, row.price))
             
             # Sort months chronologically
             sorted_months = sorted(data_by_month.keys())
             
-            # Calculate min and max for each month
+            # Calculate min, max, open, and close for each month
             for month in sorted_months:
                 prices = data_by_month[month]
+                date_price_pairs = data_by_month_with_dates[month]
+                
                 if prices:
+                    # Sort by date to determine open (first) and close (last)
+                    date_price_pairs.sort(key=lambda x: x[0])
+                    open_price = date_price_pairs[0][1]  # First price in month
+                    close_price = date_price_pairs[-1][1]  # Last price in month
+                    
                     result["min"].append(round(min(prices), 2))
                     result["max"].append(round(max(prices), 2))
+                    result["open"].append(round(open_price, 2))
+                    result["close"].append(round(close_price, 2))
                 else:
                     result["min"].append(0)
                     result["max"].append(0)
-                    
+                    result["open"].append(0)
+                    result["close"].append(0)
         else:
             # For other time frames, group by the specified interval
             # Convert all data to actual dates for easier grouping
@@ -4196,6 +4234,9 @@ def calculate_price_range_for_timeframe(commodity, cities, start_date, end_date,
             current_interval_start = start_date
             interval_index = 0
             
+            # Store data by interval with date info for sorting
+            interval_data_with_dates = defaultdict(list)
+            
             for date, price in date_price_data:
                 # Check if this data point belongs to current interval or we need to move to next interval
                 while date > current_interval_start + timedelta(days=days_to_fetch - 1):
@@ -4210,22 +4251,79 @@ def calculate_price_range_for_timeframe(commodity, cities, start_date, end_date,
                 # If date is within current interval, add the price
                 if current_interval_start <= date <= current_interval_start + timedelta(days=days_to_fetch - 1):
                     interval_data[interval_index].append(price)
+                    interval_data_with_dates[interval_index].append((date, price))
             
-            # Calculate min and max for each interval
+            # Calculate min, max, open, and close for each interval
             for i in range(len(interval_data)):
                 prices = interval_data.get(i, [])
+                date_price_pairs = interval_data_with_dates.get(i, [])
+                
                 if prices:
+                    # Sort by date to determine open (first) and close (last)
+                    date_price_pairs.sort(key=lambda x: x[0])
+                    open_price = date_price_pairs[0][1]  # First price in interval
+                    close_price = date_price_pairs[-1][1]  # Last price in interval
+                    
                     result["min"].append(round(min(prices), 2))
                     result["max"].append(round(max(prices), 2))
+                    result["open"].append(round(open_price, 2))
+                    result["close"].append(round(close_price, 2))
                 else:
                     result["min"].append(0)
                     result["max"].append(0)
+                    result["open"].append(0)
+                    result["close"].append(0)
         
         return result
 
     except Exception as e:
         app.logger.error(f"Error calculating price ranges: {str(e)}")
-        return {"min": [], "max": []}
+        return {"min": [], "max": [], "open": [], "close": []}
+
+
+def get_latest_price(commodity, cities):
+    """
+    Get the absolute most recent price for the specified commodity and cities.
+    """
+    try:
+        # Simple query to get the latest price
+        latest_price_query = db.session.query(
+            PriceData.price,
+            PriceData.year, 
+            PriceData.day
+        ).filter(
+            PriceData.commodity == commodity,
+            PriceData.city_name.in_(cities),
+            PriceData.source == "ProduceIQ"
+        ).order_by(
+            PriceData.year.desc(),
+            PriceData.day.desc()
+        ).first()
+        
+        if not latest_price_query:
+            return {
+                "price": 0,
+                "date": None
+            }
+        
+        # Calculate the date
+        latest_date = datetime(latest_price_query.year, 1, 1) + timedelta(days=latest_price_query.day - 1)
+        
+        # Format the result
+        result = {
+            "price": round(latest_price_query.price, 2),
+            "date": latest_date.strftime("%b %d, %Y")
+        }
+        
+        return result
+        
+    except Exception as e:
+        app.logger.error(f"Error getting latest price: {str(e)}")
+        return {
+            "price": 0,
+            "date": None
+        }
+
 
 # Helper function to get the first and last day of a month
 def get_month_day_range(month, year):
@@ -4245,70 +4343,6 @@ def get_month_day_range(month, year):
     last_day_of_year = last_day.timetuple().tm_yday
     
     return first_day_of_year, last_day_of_year
-
-def get_latest_price(commodity, cities):
-    """
-    Get the most recent price data for the specified commodity and cities.
-    """
-    try:
-        # Query to get the most recent data for this commodity and these cities
-        most_recent_data = db.session.query(
-            PriceData.commodity,
-            PriceData.city_name,
-            PriceData.price,
-            PriceData.year,
-            PriceData.day,
-            func.max(PriceData.year * 1000 + PriceData.day).label('date_value')  # Compute a sortable date value
-        ).filter(
-            PriceData.commodity == commodity,
-            PriceData.city_name.in_(cities),
-            PriceData.source == "ProduceIQ"
-        ).group_by(
-            PriceData.city_name
-        ).order_by(
-            desc('date_value')
-        ).all()
-        
-        # If no data found
-        if not most_recent_data:
-            return {
-                "min": 0,
-                "max": 0,
-                "avg": 0,
-                "date": None
-            }
-        
-        # Get the most recent date across all cities
-        most_recent_entry = max(most_recent_data, key=lambda x: x.date_value)
-        most_recent_date = datetime(most_recent_entry.year, 1, 1) + timedelta(days=most_recent_entry.day - 1)
-        
-        # Extract all prices
-        prices = [entry.price for entry in most_recent_data]
-        
-        # Calculate min, max, and average
-        min_price = min(prices) if prices else 0
-        max_price = max(prices) if prices else 0
-        avg_price = sum(prices) / len(prices) if prices else 0
-        
-        # Format the result
-        result = {
-            "min": round(min_price, 2),
-            "max": round(max_price, 2),
-            "avg": round(avg_price, 2),
-            "date": most_recent_date.strftime("%b %d, %Y")
-        }
-        
-        return result
-        
-    except Exception as e:
-        app.logger.error(f"Error getting latest price: {str(e)}")
-        return {
-            "min": 0,
-            "max": 0,
-            "avg": 0,
-            "date": None
-        }
-
 
 @app.route("/api/harvest_planning", methods=["POST"])
 def harvest_planning():

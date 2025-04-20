@@ -300,3 +300,11 @@
     margin-bottom: 8px;
     line-height: 1.5;
   }
+
+
+  .volatility-container{
+    overflow-x: auto;
+    /* here’s the magic: */
+    transition: width 0.4s ease-in-out;
+  
+  }

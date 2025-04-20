@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Chart from 'chart.js/auto';
 import * as XLSX from 'xlsx';
 import 'chartjs-adapter-date-fns';
+import '../styles/harvestPlanning.css';
 
 // Add candlestick chart plugin registration
 import {
@@ -36,18 +37,18 @@ const VolatilityChart = () => {
 
   // Time frame options
   const [timeFrames, setTimeFrames] = useState([
-    // { label: '1D', value: '1d', days: 1 },
-    // { label: '3D', value: '3d', days: 3 },
+    { label: '1D', value: '1d', days: 1 },
+    { label: '3D', value: '3d', days: 3 },
     { label: '7D', value: '7d', days: 7 },
     { label: '14D', value: '14d', days: 14 },
     { label: '1M', value: '1m', days: 30 }
   ]);
   // Add this near your other state declarations
   const [latestPrice, setLatestPrice] = useState({
-    min: 0,
-    max: 0,
+    price: 0,
     date: ''
   });
+  
   
   // New date range filters
   const [dateRangeFilter, setDateRangeFilter] = useState({
@@ -67,7 +68,8 @@ const VolatilityChart = () => {
     commodity: 'Shishito', 
     cities: ['Baltimore'],
     timeFrame: '1m',
-    ...dateRangeFilter
+    startDate: "2022-01-01",
+    endDate: "2025-12-31"
   });
 
   const [viewType, setViewType] = useState('candlestick'); // 'candlestick' or 'volatility'
@@ -152,27 +154,34 @@ useEffect(() => {
   };
 
   // Handle time frame selection
-const handleTimeFrameChange = (timeFrame) => {
-  setVolatilityFilterState(prev => ({
-    ...prev,
-    timeFrame
-  }));
-  
-  // When a time frame is changed, immediately apply it
-  const newFilters = {
-    ...appliedVolatilityFilters,
-    timeFrame
+  const handleTimeFrameChange = (timeFrame) => {
+    setVolatilityFilterState(prev => ({
+      ...prev,
+      timeFrame
+    }));
+    
+    // When a time frame is changed, immediately apply it
+    const newFilters = {
+      ...appliedVolatilityFilters,
+      timeFrame
+    };
+    setAppliedVolatilityFilters(newFilters);
+    
+    // Reset chart width before fetching new data
+    if (volatilityChartRef.current && volatilityChartRef.current.parentNode) {
+      // Destroy the old chart completely
+      if (volatilityChart) {
+        volatilityChart.destroy();
+        setVolatilityChart(null);
+      }
+      
+      // Reset container width immediately
+      volatilityChartRef.current.parentNode.style.transition = "none";
+      volatilityChartRef.current.parentNode.style.width = "100%";
+    }
+    
+    fetchVolatilityData(newFilters);
   };
-  setAppliedVolatilityFilters(newFilters);
-  
-  // Add this code to reset chart width immediately before fetching new data
-  if (volatilityChartRef.current && volatilityChartRef.current.parentNode) {
-    // Reset to default width before loading new data
-    volatilityChartRef.current.parentNode.style.width = '100%';
-  }
-  
-  fetchVolatilityData(newFilters);
-};
 
   // Handle view type change
   const handleViewTypeChange = (e) => {
@@ -183,96 +192,47 @@ const handleTimeFrameChange = (timeFrame) => {
   };
 
   const formatCandlestickData = (chartData, timeFrame) => {
-    // This function transforms min/max data into candlestick format
-    // We need to create OHLC (Open, High, Low, Close) data
     const labels = chartData.labels;
     const candlestickData = [];
     
-    // For each time period in the data
+    // Check if we have all required datasets
+    if (!chartData.datasets || chartData.datasets.length < 4) {
+      console.error('Not enough datasets for candlestick chart');
+      return [];
+    }
+    
+    // Extract all datasets
+    const minDataset = chartData.datasets[0].data;
+    const maxDataset = chartData.datasets[1].data;
+    const openDataset = chartData.datasets[2].data;
+    const closeDataset = chartData.datasets[3].data;
+    
     for (let i = 0; i < labels.length; i++) {
-      // Get min and max for this period
-      const minPrice = chartData.datasets[0].data[i] || 0;
-      const maxPrice = chartData.datasets[1].data[i] || 0;
+      // Get all prices for this period
+      const minPrice = parseFloat(minDataset[i]) || 0;
+      const maxPrice = parseFloat(maxDataset[i]) || 0;
+      const openPrice = parseFloat(openDataset[i]) || 0;
+      const closePrice = parseFloat(closeDataset[i]) || 0;
       
-      // For candlestick we need: open, high, low, close
-      // Since we only have min/max from the API, we'll simulate
-      // open (first price) and close (last price) within that range
-      
-      // Simulate open and close prices within the min/max range
-      let openPrice, closePrice;
-      
-      // If we have valid min and max prices
-      if (minPrice > 0 && maxPrice > 0) {
-        // Random point calculation between min and max for open
-        const openRatio = Math.random() * 0.4 + 0.1; // 10-50% of the range
-        openPrice = minPrice + (maxPrice - minPrice) * openRatio;
-        
-        // Random point calculation between min and max for close
-        const closeRatio = Math.random() * 0.4 + 0.5; // 50-90% of the range
-        closePrice = minPrice + (maxPrice - minPrice) * closeRatio;
-        
-        // Randomly swap open/close to create up/down candles
-        if (Math.random() > 0.5) {
-          [openPrice, closePrice] = [closePrice, openPrice];
-        }
-      } else {
-        // If we don't have valid data, set all to 0
-        openPrice = 0;
-        closePrice = 0;
+      // Only create valid candlestick data if we have all values
+      if (minPrice > 0 && maxPrice > 0 && openPrice > 0 && closePrice > 0) {
+        // Create the candlestick data point
+        candlestickData.push({
+          x: i,
+          o: openPrice,
+          h: maxPrice,
+          l: minPrice, 
+          c: closePrice
+        });
       }
-      
-      // For date-based labels, convert to proper timestamps
-      let date;
-      if (timeFrame === '1m') {
-        // For monthly data, use the 15th of each month as a representative date
-        const monthIndex = ["January", "February", "March", "April", "May", "June", 
-                           "July", "August", "September", "October", "November", "December"]
-                           .indexOf(labels[i]);
-                           
-        if (monthIndex !== -1) {
-          date = new Date(new Date().getFullYear(), monthIndex, 15);
-        } else {
-          // If label is not a month name, try to parse it
-          date = new Date(labels[i]);
-        }
-      } else {
-        // For day-based labels (e.g., "Apr 18"), convert to date
-        date = new Date(labels[i] + ", " + new Date().getFullYear());
-      }
-      
-      // Create the candlestick data point
-      candlestickData.push({
-        x: i, // Use index instead of date
-        o: parseFloat(openPrice.toFixed(2)),
-        h: parseFloat(maxPrice.toFixed(2)),
-        l: parseFloat(minPrice.toFixed(2)),
-        c: parseFloat(closePrice.toFixed(2))
-      });
     }
     
     return candlestickData;
   };
-
   const updateVolatilityChart = (chartData, chartViewType = viewType) => {
     if (chartData.labels && chartData.labels.length && 
       chartData.datasets && chartData.datasets.length >= 2) {
     // Get the last index in the datasets
-    const lastIndex = chartData.labels.length - 1;
-    
-    // Extract latest min and max values
-    const latestMin = parseFloat(chartData.datasets[0].data[lastIndex] || 0);
-    const latestMax = parseFloat(chartData.datasets[1].data[lastIndex] || 0);
-    
-    // Calculate average price (you could also use min, max, or another value)
-    const latestAvgPrice = (latestMin + latestMax) / 2;
-    
-    // Update latest price state
-    setLatestPrice({
-      min: latestMin.toFixed(2),
-      max: latestMax.toFixed(2),
-      avg: latestAvgPrice.toFixed(2),
-      date: chartData.labels[lastIndex]
-    });
   }
 
     if (!volatilityChartRef.current) {
@@ -282,16 +242,10 @@ const handleTimeFrameChange = (timeFrame) => {
 
     const ctx = volatilityChartRef.current.getContext('2d');
 
+    // 2) Destroy old chart if it exists
     if (volatilityChart) {
       volatilityChart.destroy();
     }
-
-    if (!chartData.labels || !chartData.labels.length || !chartData.datasets || !chartData.datasets.length) {
-      alert('No price range data available for the selected criteria.');
-      return;
-    }
-
-    // Calculate percentage changes between min and max for each data point
     // We'll add this as a custom dataset for volatility view
     const percentageDatasets = [];
     
@@ -318,7 +272,14 @@ const handleTimeFrameChange = (timeFrame) => {
           borderWidth: 2,
           pointRadius: 3,
           fill: true,
-          type: 'line'
+          type: 'line',
+          // Add this to disable point labels
+          pointLabels: {
+            display: false
+          },
+          datalabels: {
+            display: false
+          }
         });
       }
     }
@@ -360,12 +321,12 @@ const handleTimeFrameChange = (timeFrame) => {
             padding: { left: 10, right: 10 }
           },
             // Set a minimum width for the chart based on data points
-  onResize: (chart, size) => {
-    // Calculate minimum width based on number of candlesticks
-    // Each candlestick needs about 20px of width for good visibility
-    const minWidth = Math.max(size.width, candlestickData.length * 20);
-    chart.canvas.parentNode.style.width = `${minWidth}px`;
-  },
+          onResize: (chart, size) => {
+            // Calculate minimum width based on number of candlesticks
+            // Each candlestick needs about 20px of width for good visibility
+            const minWidth = Math.max(size.width, candlestickData.length * 20);
+            chart.canvas.parentNode.style.width = `${minWidth}px`;
+          },
           scales: {
             x: {
               type: 'category',
@@ -376,8 +337,6 @@ const handleTimeFrameChange = (timeFrame) => {
                 maxTicksLimit: Math.min(12, chartData.labels.length), // Limit number of ticks
                 autoSkip: true,
                 autoSkipPadding: 10
-            
-              
               },
               title: {
                 display: true,
@@ -456,13 +415,16 @@ const handleTimeFrameChange = (timeFrame) => {
                 padding: 15,
                 boxWidth: 12,
               },
+            },
+            // Disable any data labels at the plugin level
+            datalabels: {
+              display: false
             }
           },
           interaction: {
             mode: 'index',
             intersect: false,
             axis: 'x'  // Add this line
-
           },
         },
       };
@@ -475,7 +437,16 @@ const handleTimeFrameChange = (timeFrame) => {
         type: 'line',
         data: {
           labels: chartData.labels,
-          datasets: percentageDatasets,
+          datasets: percentageDatasets.map(dataset => ({
+            ...dataset,
+            // Add this to each dataset to disable point labels
+            pointLabels: {
+              display: false
+            },
+            datalabels: {
+              display: false
+            }
+          })),
         },
         options: {
           responsive: true,
@@ -560,6 +531,10 @@ const handleTimeFrameChange = (timeFrame) => {
                 boxWidth: 12,
               },
             },
+            // Disable data labels at plugin level
+            datalabels: {
+              display: false
+            },
             annotation: {
               annotations: {
                 line1: {
@@ -596,8 +571,7 @@ const handleTimeFrameChange = (timeFrame) => {
           interaction: {
             mode: 'index',
             intersect: false,
-            axis: 'x'  // Add this line
-
+            axis: 'x'
           },
         },
       };
@@ -609,7 +583,16 @@ const handleTimeFrameChange = (timeFrame) => {
         type: 'line',
         data: {
           labels: chartData.labels,
-          datasets: chartData.datasets,
+          datasets: chartData.datasets.map(dataset => ({
+            ...dataset,
+            // Add this to each dataset to disable point labels
+            pointLabels: {
+              display: false
+            },
+            datalabels: {
+              display: false
+            }
+          })),
         },
         options: {
           responsive: true,
@@ -706,13 +689,16 @@ const handleTimeFrameChange = (timeFrame) => {
                 padding: 15,
                 boxWidth: 12,
               },
+            },
+            // Disable data labels at plugin level
+            datalabels: {
+              display: false
             }
           },
           interaction: {
             mode: 'index',
             intersect: false,
-            axis: 'x'  // Add this line
-
+            axis: 'x'
           },
         },
       };
@@ -791,6 +777,7 @@ const handleTimeFrameChange = (timeFrame) => {
       console.error('Error fetching price range data:', error);
     }
   };
+  
 
   const handleDownloadChart = () => {
     if (volatilityChart) {
@@ -1000,25 +987,24 @@ const handleTimeFrameChange = (timeFrame) => {
               </p> */}
             
             {/* Add this below the description paragraph and above the chart container */}
-<div className="latest-price-container bg-light p-2 mb-3 border rounded">
+            <div className="latest-price-container bg-light p-3 mb-4 border rounded shadow-sm">
   <div className="d-flex justify-content-between align-items-center">
+  
     <div>
-      <span className="font-weight-bold">Latest Price ({latestPrice.date}):</span>
-    </div>
-    <div>
-      <span className="badge badge-info mx-1">Min: ${latestPrice.min}</span>
-      <span className="badge badge-info mx-1">Max: ${latestPrice.max}</span>
-      <span className="badge badge-primary mx-1">Avg: ${latestPrice.avg}</span>
-      {latestPrice.min > 0 && latestPrice.max > 0 && (
-        <span className="badge badge-warning mx-1">
-          Volatility: {((latestPrice.max - latestPrice.min) / latestPrice.min * 100).toFixed(2)}%
-        </span>
-      )}
+      <span className="badge badge-success" style={{ 
+        fontSize: '16px', 
+        padding: '8px 12px', 
+        backgroundColor: 'gray', 
+        color: 'white', 
+        fontWeight: 'bold' 
+      }}>
+        ${latestPrice.price} {latestPrice.date && <span className="text-white ml-1">({latestPrice.date})</span>}
+      </span>
     </div>
   </div>
 </div>
 
-              <div className="chart-container" style={{ height: '450px', overflowY: 'hidden', overflowX: 'auto' }}>
+              <div className="volatility-container" style={{ height: '450px', overflowY: 'hidden', overflowX: 'auto' }}>
                                 <canvas id="volatilityChart" ref={volatilityChartRef} className="fixed-chart"></canvas>
               </div>
             </div>
