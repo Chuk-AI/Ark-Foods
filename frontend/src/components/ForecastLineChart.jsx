@@ -410,7 +410,7 @@ const ForecastLineChart = () => {
                 </div>
 
                 {/* Forecast Years Selector */}
-                <div className="form-group">
+                {/* <div className="form-group">
                   <label className="font-weight-bold">Forecast Years</label>
                   <select 
                     className="form-control" 
@@ -418,11 +418,9 @@ const ForecastLineChart = () => {
                     onChange={handleForecastYearsChange}
                   >
                     <option value="1">1 Year</option>
-                    {/* <option value="2">2 Years</option>
-                    <option value="3">3 Years</option>
-                    <option value="5">5 Years</option> */}
+                 
                   </select>
-                </div>
+                </div> */}
 
                 {/* Apply Filters Button */}
                 <button type="button" className="btn btn-primary btn-block" onClick={handleApplyForecastFilters}>
