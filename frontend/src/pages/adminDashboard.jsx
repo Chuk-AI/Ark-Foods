@@ -544,6 +544,7 @@ function AdminDashboard() {
     setError(null);
   
     try {
+      
       const response = await axios.get('/api/price_averages', {
         params: {
           start_date: startDate,

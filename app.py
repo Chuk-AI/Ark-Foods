@@ -3703,7 +3703,7 @@ def get_seasonal_prices():
                 PriceData.day
                 >= start_date.timetuple().tm_yday,  # Ensure data is after the start date
                 PriceData.source.in_(
-                    ["USDA", "Historical"]
+                    ["ProduceIQ"]
                 ),  # Data can be from USDA or Historical sources
             )
             .all()
