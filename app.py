@@ -3383,7 +3383,103 @@ def get_cities():
 
 
 # Forecast Calculator
-def calculate_forecasted_price(variety, start_date, forecast_date):
+# def calculate_forecasted_price(variety, start_date, forecast_date):
+#     # Step 1: Determine the season of the forecast date
+#     season = determine_season_for_dashboard(forecast_date)
+
+#     # Step 2: Convert start date to year and day of the year
+#     start_year = start_date.year
+#     start_day = start_date.timetuple().tm_yday
+
+#     # Step 3: Query the PriceData for the given variety and season, starting from the start_date
+#     historical_data = (
+#         db.session.query(PriceData.price)
+#         .filter(
+#             PriceData.commodity == variety,          # Match the commodity (variety)
+#             PriceData.season == season,                # Match the season
+#             PriceData.year >= start_year,              # Consider data from the start year onward
+#             PriceData.day >= start_day,                # Ensure data is after the start date in the year
+#             PriceData.source == "ProduceIQ",
+#         )
+#         .all()
+#     )
+
+#     # Step 4: Calculate the average price from the historical data
+#     if historical_data:
+#         total_price = sum(entry.price for entry in historical_data)
+#         average_price = total_price / len(historical_data)
+#     else:
+#         average_price = 0.0
+
+#     return average_price
+
+
+
+
+# @app.route("/api/calculate_forecast", methods=["POST"])
+# def calculate_forecast():
+#     data = request.json
+
+#     # Required form fields
+#     variety = data.get("variety")
+#     start_date_str = data.get("start_date")
+#     forecast_date_str = data.get("forecast_date")
+#     yield_per_acre = data.get("yield_per_acre")
+
+#     # NEW cost fields
+#     cost_per_acre = data.get("cost_per_acre", 0)
+#     harvest_cost_per_box = data.get("harvest_cost_per_box", 0)
+#     cost_of_box = data.get("cost_of_box", 0)
+#     boxes_bonus_per_yield = data.get("boxes_bonus_per_yield", 0)
+
+#     # Validate the main required fields
+#     if not all([variety, start_date_str, forecast_date_str, yield_per_acre]):
+#         return jsonify({"error": "All form fields are required"}), 400
+
+#     try:
+#         # Convert to correct data types
+#         start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
+#         forecast_date = datetime.strptime(forecast_date_str, "%Y-%m-%d")
+#         yield_per_acre = float(yield_per_acre)
+
+#         # Convert the cost fields to float; default to 0 if missing
+#         cost_per_acre = float(cost_per_acre) if cost_per_acre else 0
+#         harvest_cost_per_box = float(harvest_cost_per_box) if harvest_cost_per_box else 0
+#         cost_of_box = float(cost_of_box) if cost_of_box else 0
+#         boxes_bonus_per_yield = float(boxes_bonus_per_yield) if boxes_bonus_per_yield else 0
+
+#     except ValueError:
+#         return jsonify({"error": "Invalid date or numeric format."}), 400
+
+#     # 1) Calculate the forecasted price (already have your helper function):
+#     forecasted_price = calculate_forecasted_price(variety, start_date, forecast_date)
+#     revenue_per_acre = forecasted_price * yield_per_acre
+
+#     # 2) Determine the season
+#     season = determine_season_for_dashboard(forecast_date)
+
+#     # 3) Calculate total costs:
+#     # cost_per_acre + (harvest_cost_per_box * yield_per_acre) + (cost_of_box * yield_per_acre) + (boxes_bonus_per_yield)
+#     total_costs = cost_per_acre  + (harvest_cost_per_box * yield_per_acre)  + (cost_of_box * yield_per_acre)  + (boxes_bonus_per_yield)
+
+#     # 4) Subtract total costs from revenue
+#     revenue_after_costs = revenue_per_acre - total_costs
+
+
+#         # Add the debug print here:
+#     print("DEBUG: forecasted_price =", forecasted_price,
+#           " revenue_per_acre_after_costings =", revenue_after_costs)
+
+
+#     return jsonify({
+#         "forecasted_price": round(forecasted_price, 2),
+#         "revenue_per_acre": round(revenue_per_acre, 2),
+#         "revenue_per_acre_after_costings": round(revenue_after_costs, 2),
+#         "season": season,
+#     })
+
+
+def calculate_forecasted_price(variety, start_date, forecast_date, city=None):
     # Step 1: Determine the season of the forecast date
     season = determine_season_for_dashboard(forecast_date)
 
@@ -3391,18 +3487,24 @@ def calculate_forecasted_price(variety, start_date, forecast_date):
     start_year = start_date.year
     start_day = start_date.timetuple().tm_yday
 
-    # Step 3: Query the PriceData for the given variety and season, starting from the start_date
-    historical_data = (
+    # Step 3: Start building the query
+    query = (
         db.session.query(PriceData.price)
         .filter(
             PriceData.commodity == variety,          # Match the commodity (variety)
-            PriceData.season == season,                # Match the season
-            PriceData.year >= start_year,              # Consider data from the start year onward
-            PriceData.day >= start_day,                # Ensure data is after the start date in the year
-            PriceData.source.in_(["USDA", "Historical"])  # Data can be from USDA or Historical sources
+            PriceData.season == season,              # Match the season
+            PriceData.year >= start_year,            # Consider data from the start year onward
+            PriceData.day >= start_day,              # Ensure data is after the start date in the year
+            PriceData.source == "ProduceIQ",
         )
-        .all()
     )
+    
+    # Add city filter if provided
+    if city and city != "All cities":
+        query = query.filter(PriceData.city_name == city)
+    
+    # Execute the query
+    historical_data = query.all()
 
     # Step 4: Calculate the average price from the historical data
     if historical_data:
@@ -3415,7 +3517,6 @@ def calculate_forecasted_price(variety, start_date, forecast_date):
 
 
 
-
 @app.route("/api/calculate_forecast", methods=["POST"])
 def calculate_forecast():
     data = request.json
@@ -3425,6 +3526,9 @@ def calculate_forecast():
     start_date_str = data.get("start_date")
     forecast_date_str = data.get("forecast_date")
     yield_per_acre = data.get("yield_per_acre")
+    
+    # Get the city parameter (optional)
+    city = data.get("city", "All cities")
 
     # NEW cost fields
     cost_per_acre = data.get("cost_per_acre", 0)
@@ -3451,9 +3555,11 @@ def calculate_forecast():
     except ValueError:
         return jsonify({"error": "Invalid date or numeric format."}), 400
 
-    # 1) Calculate the forecasted price (already have your helper function):
-    forecasted_price = calculate_forecasted_price(variety, start_date, forecast_date)
+    # 1) Calculate the forecasted price (now with city parameter):
+    forecasted_price = calculate_forecasted_price(variety, start_date, forecast_date, city)
     revenue_per_acre = forecasted_price * yield_per_acre
+
+    # Rest of function remains the same...
 
     # 2) Determine the season
     season = determine_season_for_dashboard(forecast_date)
@@ -3461,7 +3567,6 @@ def calculate_forecast():
     # 3) Calculate total costs:
     # cost_per_acre + (harvest_cost_per_box * yield_per_acre) + (cost_of_box * yield_per_acre) + (boxes_bonus_per_yield)
     total_costs = cost_per_acre  + (harvest_cost_per_box * yield_per_acre)  + (cost_of_box * yield_per_acre)  + (boxes_bonus_per_yield)
-
     # 4) Subtract total costs from revenue
     revenue_after_costs = revenue_per_acre - total_costs
 
@@ -3477,9 +3582,6 @@ def calculate_forecast():
         "revenue_per_acre_after_costings": round(revenue_after_costs, 2),
         "season": season,
     })
-
-
-
 
 
 # Endpoint to get price averages with normalized commodity names
@@ -4088,11 +4190,10 @@ def get_volatility_data():
         app.logger.error(f"Error in price range data: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-
 def calculate_price_range_for_timeframe(commodity, cities, start_date, end_date, time_frame, days_to_fetch):
     """
     Calculate price ranges (min, max, open, close) for the selected commodity,
-    aggregated across all selected cities, for the specified date range and time frame.
+    aggregated across all selected cities, using the same averaging approach as historical_data.
     """
     try:
         from collections import defaultdict
@@ -4130,8 +4231,10 @@ def calculate_price_range_for_timeframe(commodity, cities, start_date, end_date,
             all_data = db.session.query(
                 PriceData.day,
                 PriceData.price,
-                PriceData.year
+                PriceData.year,
+                PriceData.city_name
             ).filter(*query_conditions).all()
+            
         else:
             # Multi-year query (need to handle each year separately)
             # First year: from start_day to end of year
@@ -4158,37 +4261,87 @@ def calculate_price_range_for_timeframe(commodity, cities, start_date, end_date,
                 middle_year_data = db.session.query(
                     PriceData.day,
                     PriceData.price,
-                    PriceData.year
+                    PriceData.year,
+                    PriceData.city_name
                 ).filter(*middle_year_conditions).all()
             
             # Query for first and last year data
             first_year_data = db.session.query(
                 PriceData.day,
                 PriceData.price,
-                PriceData.year
+                PriceData.year,
+                PriceData.city_name
             ).filter(*first_year_conditions).all()
             
             last_year_data = db.session.query(
                 PriceData.day,
                 PriceData.price,
-                PriceData.year
+                PriceData.year,
+                PriceData.city_name
             ).filter(*last_year_conditions).all()
             
             # Combine all the data
             all_data = first_year_data + middle_year_data + last_year_data
         
+        # First, average data by day and city (just like in historical_data)
+        daily_city_data = {}
+        
+        for row in all_data:
+            # Create a date object for this data point
+            row_date = datetime(row.year, 1, 1) + timedelta(days=row.day - 1)
+            date_key = row_date.strftime("%Y-%m-%d")
+            city_key = row.city_name
+            
+            # Create compound key for date+city
+            compound_key = f"{date_key}_{city_key}"
+            
+            # Initialize the structure for this date+city if it doesn't exist
+            if compound_key not in daily_city_data:
+                daily_city_data[compound_key] = {
+                    "sum": 0, 
+                    "count": 0, 
+                    "date": row_date,
+                    "city": city_key
+                }
+            
+            # Sum up prices and count entries for this date+city
+            daily_city_data[compound_key]["sum"] += row.price
+            daily_city_data[compound_key]["count"] += 1
+        
+        # Then average across cities for each day
+        daily_avg_data = {}
+        
+        for key, data in daily_city_data.items():
+            date_str = data["date"].strftime("%Y-%m-%d")
+            
+            if date_str not in daily_avg_data:
+                daily_avg_data[date_str] = {"sum": 0, "count": 0, "date": data["date"]}
+            
+            # Add the city average to the daily total
+            city_avg = data["sum"] / data["count"]
+            daily_avg_data[date_str]["sum"] += city_avg
+            daily_avg_data[date_str]["count"] += 1
+        
+        # Convert daily averages to date-price pairs
+        daily_data = []
+        for date_str, data in daily_avg_data.items():
+            if data["count"] > 0:  # Ensure we have data for this day
+                avg_price = data["sum"] / data["count"]
+                daily_data.append((data["date"], avg_price))
+        
+        # Sort by date
+        daily_data.sort(key=lambda x: x[0])
+        
         # Process based on time frame
         if time_frame == '1m':
-            # Group by month across the date range
+            # Group by month
             data_by_month = defaultdict(list)
-            data_by_month_with_dates = defaultdict(list)  # Store with dates for sorting
+            data_by_month_with_dates = defaultdict(list)
             
-            for row in all_data:
-                # Create a date object for this data point
-                row_date = datetime(row.year, 1, 1) + timedelta(days=row.day - 1)
-                month_key = row_date.strftime("%Y-%m")  # Format: "2023-04"
-                data_by_month[month_key].append(row.price)
-                data_by_month_with_dates[month_key].append((row_date, row.price))
+            for date, price in daily_data:
+                month_key = date.strftime("%Y-%m")
+                data_by_month[month_key].append(price)
+                data_by_month_with_dates[month_key].append((date, price))
             
             # Sort months chronologically
             sorted_months = sorted(data_by_month.keys())
@@ -4216,18 +4369,7 @@ def calculate_price_range_for_timeframe(commodity, cities, start_date, end_date,
         else:
             # For other time frames, group by the specified interval
             # Convert all data to actual dates for easier grouping
-            date_price_data = []
-            for row in all_data:
-                row_date = datetime(row.year, 1, 1) + timedelta(days=row.day - 1)
-                date_price_data.append((row_date, row.price))
-                
-            # Sort by date
-            date_price_data.sort(key=lambda x: x[0])
             
-            # If no data, return empty arrays
-            if not date_price_data:
-                return result
-                
             # Group data into intervals based on time_frame
             interval_data = defaultdict(list)
             
@@ -4237,7 +4379,7 @@ def calculate_price_range_for_timeframe(commodity, cities, start_date, end_date,
             # Store data by interval with date info for sorting
             interval_data_with_dates = defaultdict(list)
             
-            for date, price in date_price_data:
+            for date, price in daily_data:
                 # Check if this data point belongs to current interval or we need to move to next interval
                 while date > current_interval_start + timedelta(days=days_to_fetch - 1):
                     # Move to next interval
@@ -4279,7 +4421,6 @@ def calculate_price_range_for_timeframe(commodity, cities, start_date, end_date,
     except Exception as e:
         app.logger.error(f"Error calculating price ranges: {str(e)}")
         return {"min": [], "max": [], "open": [], "close": []}
-
 
 def get_latest_price(commodity, cities):
     """
@@ -4518,17 +4659,10 @@ def save_break_even_estimation():
         start_date_range_str = data.get("start_date_range")
         end_date_range_str = data.get("end_date_range")
         
-        # Extract calculated results
-        forecasted_price = data.get("forecasted_price")
-        revenue_per_acre = data.get("revenue_per_acre")
-        revenue_after_costs = data.get("revenue_after_costs")
-        season = data.get("season")
-        
         # Validate required fields
         if not all([
             variety, city, start_date_str, forecast_date_str, yield_per_acre, 
-            start_date_range_str, end_date_range_str, forecasted_price, 
-            revenue_per_acre, revenue_after_costs, season
+            start_date_range_str, end_date_range_str
         ]):
             return jsonify({"error": "Missing required fields"}), 400
         
@@ -4544,9 +4678,19 @@ def save_break_even_estimation():
         harvest_cost_per_box = float(harvest_cost_per_box)
         cost_of_box = float(cost_of_box)
         boxes_bonus_per_yield = float(boxes_bonus_per_yield)
-        forecasted_price = float(forecasted_price)
-        revenue_per_acre = float(revenue_per_acre)
-        revenue_after_costs = float(revenue_after_costs)
+        
+        # Calculate forecasted price using the same function as the forecast component
+        forecasted_price = calculate_forecasted_price(variety, start_date, forecast_date, city)
+        revenue_per_acre = forecasted_price * yield_per_acre
+        
+        # Calculate total costs
+        total_costs = cost_per_acre + (harvest_cost_per_box * yield_per_acre) + (cost_of_box * yield_per_acre) + boxes_bonus_per_yield
+        
+        # Calculate revenue after costs
+        revenue_after_costs = revenue_per_acre - total_costs
+        
+        # Determine season
+        season = determine_season_for_dashboard(forecast_date)
         
         # Calculate revenue per box
         revenue_per_box = revenue_after_costs / yield_per_acre if yield_per_acre > 0 else 0
@@ -4584,6 +4728,7 @@ def save_break_even_estimation():
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": f"Failed to save estimation: {str(e)}"}), 500
+    
 
 @app.route("/api/break_even", methods=["GET"])
 def get_break_even_estimations():
@@ -4696,19 +4841,32 @@ def update_break_even_estimation(estimation_id):
         
         # Recalculate derived fields if any inputs changed
         if any(key in data for key in [
-            "variety", "start_date", "forecast_date", "yield_per_acre", 
+            "variety", "city", "start_date", "forecast_date", "yield_per_acre", 
             "cost_per_acre", "harvest_cost_per_box", "cost_of_box", "boxes_bonus_per_yield"
         ]):
-            # This would typically call your calculate_forecast function
-            # For simplicity, assuming the new values are provided
-            if "forecasted_price" in data:
-                estimation.forecasted_price = float(data["forecasted_price"])
-            if "revenue_per_acre" in data:
-                estimation.revenue_per_acre = float(data["revenue_per_acre"])
-            if "revenue_after_costs" in data:
-                estimation.revenue_after_costs = float(data["revenue_after_costs"])
-            if "season" in data:
-                estimation.season = data["season"]
+            # Recalculate using the same function as the forecast component
+            forecasted_price = calculate_forecasted_price(
+                estimation.variety, 
+                estimation.start_date, 
+                estimation.forecast_date, 
+                estimation.city
+            )
+            
+            # Update the estimation fields
+            estimation.forecasted_price = forecasted_price
+            estimation.revenue_per_acre = forecasted_price * estimation.yield_per_acre
+            
+            # Recalculate total costs
+            total_costs = estimation.cost_per_acre + \
+                         (estimation.harvest_cost_per_box * estimation.yield_per_acre) + \
+                         (estimation.cost_of_box * estimation.yield_per_acre) + \
+                         estimation.boxes_bonus_per_yield
+            
+            # Update revenue after costs
+            estimation.revenue_after_costs = estimation.revenue_per_acre - total_costs
+            
+            # Update season
+            estimation.season = determine_season_for_dashboard(estimation.forecast_date)
             
             # Recalculate revenue per box
             if estimation.yield_per_acre > 0:
@@ -4727,9 +4885,112 @@ def update_break_even_estimation(estimation_id):
         return jsonify({"error": f"Failed to update estimation: {str(e)}"}), 500
 
 
-
-
-
+@app.route("/api/break_even_chart_data", methods=["GET"])
+def get_break_even_chart_data():
+    """
+    Generate chart data specifically for break-even analysis using calculate_forecasted_price
+    Accepts parameters as sent by the frontend
+    """
+    try:
+        # Extract parameters from the request
+        variety = request.args.get("variety")
+        city = request.args.get("city")
+        start_date_str = request.args.get("start_date")
+        forecast_date_str = request.args.get("forecast_date")
+        is_all_cities = request.args.get("is_all_cities") == "true"
+        
+        # Validate required parameters
+        if not variety or not start_date_str:
+            return jsonify({"error": "Missing required parameters"}), 400
+            
+        # Parse dates
+        start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
+        
+        # If forecast date is provided, use it; otherwise default to start_date + 1 year
+        if forecast_date_str:
+            forecast_date = datetime.strptime(forecast_date_str, "%Y-%m-%d")
+        else:
+            forecast_date = start_date + timedelta(days=365)
+        
+        # Handle "All Cities" case
+        if is_all_cities or city == "All Cities":
+            city = "All cities"
+        
+        # Initialize result structure
+        result = {
+            "labels": [],
+            "datasets": []
+        }
+        
+        # Define seasons and determine start season
+        seasons = ["Winter", "Spring", "Summer", "Autumn"]
+        
+        month = start_date.month
+        start_season = (
+            "Spring" if 3 <= month <= 5 else
+            "Summer" if 6 <= month <= 8 else
+            "Autumn" if 9 <= month <= 11 else
+            "Winter"
+        )
+        
+        start_season_index = seasons.index(start_season)
+        start_year = start_date.year
+        
+        # Generate labels for 1 year (4 seasons)
+        labels = []
+        for i in range(4):
+            season_index = (start_season_index + i) % 4
+            year = start_year + ((start_season_index + i) // 4)
+            labels.append(f"{seasons[season_index]} {year}")
+        
+        result["labels"] = labels
+        
+        # Calculate prices for each season
+        prices = []
+        for label in labels:
+            season, year = label.split()
+            year = int(year)
+            
+            # Calculate the middle date of this season
+            if season == "Spring":
+                month = 4  # April
+            elif season == "Summer":
+                month = 7  # July
+            elif season == "Autumn":
+                month = 10  # October
+            else:  # Winter
+                month = 1  # January
+                
+            # Middle of the month
+            day = 15
+            
+            # Create forecast date for this season
+            season_date = datetime(year, month, day)
+            
+            # Use the calculate_forecasted_price function
+            price = calculate_forecasted_price(variety, start_date, season_date, city)
+            prices.append(round(price, 2))
+        
+        # Add dataset for the variety
+        result["datasets"] = [{
+            "label": f"{variety} Forecast Price",
+            "data": prices,
+            "borderColor": "#FF6384",
+            "backgroundColor": "#FF6384",
+            "borderWidth": 2,
+            "pointRadius": 3,
+            "pointHoverRadius": 5,
+            "tension": 0.1,
+            "fill": 'false',
+            "borderDash": [5, 5]
+        }]
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        app.logger.error(f"Break-even chart data error: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+    
 
 @app.route('/api/commodities', methods=['GET'])
 # @jwt_required()

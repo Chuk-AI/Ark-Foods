@@ -179,76 +179,85 @@ const BreakEvenEstimator = () => {
     }
   };
   
-  // Calculate forecast and fetch forecast line data
-  const handleCalculate = async () => {
-    setLoading(true);
-    setError(null);
-  
-    try {
-      /* 1 ──────────────────────────────────
-         Run the revenue‑calculator endpoint
-      ────────────────────────────────────── */
+  // Calculate the true cost per box (break-even point)
+const costPerBox = (
+  parseFloat(formState.cost_per_acre) + 
+  (parseFloat(formState.harvest_cost_per_box) * parseFloat(formState.yield_per_acre)) +
+  (parseFloat(formState.cost_of_box) * parseFloat(formState.yield_per_acre)) +
+  parseFloat(formState.boxes_bonus_per_yield)
+) / parseFloat(formState.yield_per_acre);
 
-      // derive forecast_date exactly 1 year after the start_date
-      const forecast_date = moment(formState.start_date)
+  // Calculate forecast and fetch forecast line data
+// Calculate forecast and fetch break-even chart data
+const handleCalculate = async () => {
+  setLoading(true);
+  setError(null);
+
+  try {
+    /* 1 ──────────────────────────────────
+       Run the revenue‑calculator endpoint
+    ────────────────────────────────────── */
+
+    // derive forecast_date exactly 1 year after the start_date
+    const forecast_date = moment(formState.start_date)
       .add(1, 'year')
       .format('YYYY-MM-DD');
 
+    // Add city parameter to the forecast calculation
+    const forecastResponse = await axios.post("/api/calculate_forecast", {
+      variety: formState.variety,
+      city: formState.city, // Include city parameter
+      start_date: formState.start_date,
+      forecast_date,
+      yield_per_acre: parseFloat(formState.yield_per_acre),
+      cost_per_acre: parseFloat(formState.cost_per_acre),
+      harvest_cost_per_box: parseFloat(formState.harvest_cost_per_box),
+      cost_of_box: parseFloat(formState.cost_of_box),
+      boxes_bonus_per_yield: parseFloat(formState.boxes_bonus_per_yield),
+    });
 
-      const forecastResponse = await axios.post("/api/calculate_forecast", {
-        variety: formState.variety,
-        start_date: formState.start_date,
-        forecast_date,
-        yield_per_acre: parseFloat(formState.yield_per_acre),
-        cost_per_acre: parseFloat(formState.cost_per_acre),
-        harvest_cost_per_box: parseFloat(formState.harvest_cost_per_box),
-        cost_of_box: parseFloat(formState.cost_of_box),
-        boxes_bonus_per_yield: parseFloat(formState.boxes_bonus_per_yield),
-      });
-  
-      const calculatedData = forecastResponse.data;
-      setCalculatedForecast(calculatedData);
-  
-      /* 2 ──────────────────────────────────
-         Fetch the historical / forecast line
-         data for chart comparison
-      ────────────────────────────────────── */
-      const token = localStorage.getItem("authToken");
-      if (!token) throw new Error("No token found");
-  
-      // “All Cities” means aggregate across every city
-      const isAllCities = formState.city === "ALL";
-  
-      const forecastLineResponse = await axios.get("/api/forecast_line_data", {
-        headers: { Authorization: `Bearer ${token}` },
-        params: {
-          commodities: formState.variety,
-          cities: isAllCities ? "" : formState.city,  // empty → back‑end ignores filter
-          averageCommodities: false,
-          averageCities: isAllCities,                 // true when “ALL”
-          startDate: formState.startDateRange,
-          endDate: formState.endDateRange,
-        },
-      });
-  
-      const lineData = forecastLineResponse.data;
-      setForecastData(lineData);
-  
-      /* 3 ──────────────────────────────────
-         Draw / refresh the chart
-      ────────────────────────────────────── */
-      const revenuePerBox =
-        calculatedData.revenue_per_acre_after_costings /
-        parseFloat(formState.yield_per_acre);
-  
-      updateChart(lineData, revenuePerBox);
-    } catch (err) {
-      console.error("Error calculating or fetching forecast data:", err);
-      setError("Failed to calculate or fetch data. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
+    const calculatedData = forecastResponse.data;
+    setCalculatedForecast(calculatedData);
+
+    /* 2 ──────────────────────────────────
+       Fetch the chart data
+    ────────────────────────────────────── */
+    const token = localStorage.getItem("authToken");
+    if (!token) throw new Error("No token found");
+
+    // Check if using "All Cities"
+    const isAllCities = formState.city === "All Cities";
+
+    // Get chart data using the endpoint
+    const forecastLineResponse = await axios.get("/api/break_even_chart_data", {
+      headers: { Authorization: `Bearer ${token}` },
+      params: {
+        variety: formState.variety,        // Changed from 'commodities' to match backend
+        city: formState.city,              // Changed from 'cities' to match backend
+        start_date: formState.start_date,  // Changed from 'startDate' to match backend
+        forecast_date: forecast_date,      // Changed to match backend expectations
+       is_all_cities: formState.city === "All Cities"
+      },
+    });
+
+    const lineData = forecastLineResponse.data;
+    setForecastData(lineData);
+
+    /* 3 ──────────────────────────────────
+       Draw / refresh the chart
+    ────────────────────────────────────── */
+    const revenuePerBox =
+      calculatedData.revenue_per_acre_after_costings /
+      parseFloat(formState.yield_per_acre);
+
+    updateChart(lineData, revenuePerBox);
+  } catch (err) {
+    console.error("Error calculating or fetching forecast data:", err);
+    setError("Failed to calculate or fetch data. Please try again.");
+  } finally {
+    setLoading(false);
+  }
+};
   
   
   const updateChart = (chartData, revenuePerBox) => {
@@ -272,7 +281,7 @@ const BreakEvenEstimator = () => {
     const forecastDataset = chartData.datasets[0];
     
     // Create the revenue per box line dataset
-    const revenueLineData = Array(chartData.labels.length).fill(revenuePerBox);
+    const costLineData = Array(chartData.labels.length).fill(costPerBox);
     
     // Create datasets
     const datasets = [
@@ -292,7 +301,7 @@ const BreakEvenEstimator = () => {
       // Revenue per box line
       {
         label: 'Cost Per Box (Break-Even)',
-        data: revenueLineData,
+        data: costLineData,
         borderColor: '#888888',
         backgroundColor: '#888888',
         borderWidth: 2,
@@ -308,14 +317,14 @@ const BreakEvenEstimator = () => {
         backgroundColor: (context) => {
           if (context.index === undefined) return 'transparent';
           const forecastPrice = forecastDataset.data[context.index];
-          return forecastPrice >= revenuePerBox 
+          return forecastPrice >= costPerBox 
             ? 'rgba(75, 192, 75, 0.6)' // Green when above break-even
             : 'rgba(255, 99, 132, 0.6)'; // Red when below break-even
         },
         borderWidth: 0,
         pointRadius: 0,
         fill: {
-          target: {value: revenuePerBox},
+          target: {value: costPerBox},
           below: 'rgba(255, 99, 132, 0.6)', // Red below break-even
           above: 'rgba(75, 192, 75, 0.6)' // Green above break-even
         }
@@ -393,12 +402,14 @@ const BreakEvenEstimator = () => {
               footer: (context) => {
                 const forecastValue = context[0].raw;
                 const difference = forecastValue - revenuePerBox;
-                
-                if (difference >= 0) {
-                  return `Profit: $${difference.toFixed(2)} above break-even`;
-                } else {
-                  return `Loss: $${Math.abs(difference).toFixed(2)} below break-even`;
-                }
+              
+                // // Return profit or loss text without any colors
+                // if (difference >= 0) {
+                //   return `Profit: $${difference.toFixed(2)} above break-even`;
+                // } else {
+                //   return `Loss: $${Math.abs(difference).toFixed(2)} below break-even`;
+                // }
+              
               }
             }
           },
@@ -414,6 +425,7 @@ const BreakEvenEstimator = () => {
               filter: (legendItem) => {
                 // Only show main datasets in legend
                 return legendItem.text !== 'Background Range';
+                
               }
             }
           },
@@ -442,18 +454,26 @@ const BreakEvenEstimator = () => {
   // ... rest of the component remains the same (download functions, return statement, etc.)
   const handleDownloadData = () => {
     if (forecastData && calculatedForecast) {
-      const revenuePerBox = calculatedForecast.revenue_per_acre_after_costings / parseFloat(formState.yield_per_acre);
+      // const revenuePerBox = calculatedForecast.revenue_per_acre_after_costings / parseFloat(formState.yield_per_acre);
       
+      // Calculate the true cost per box (break-even point)
+const costPerBox = (
+  parseFloat(formState.cost_per_acre) + 
+  (parseFloat(formState.harvest_cost_per_box) * parseFloat(formState.yield_per_acre)) +
+  (parseFloat(formState.cost_of_box) * parseFloat(formState.yield_per_acre)) +
+  parseFloat(formState.boxes_bonus_per_yield)
+) / parseFloat(formState.yield_per_acre);
+
       const worksheet = XLSX.utils.json_to_sheet(
         forecastData.labels.map((label, index) => {
           const forecastPrice = forecastData.datasets[0].data[index];
-          const difference = forecastPrice - revenuePerBox;
-          const profitable = forecastPrice >= revenuePerBox;
+          const difference = forecastPrice - costPerBox;
+          const profitable = forecastPrice >= costPerBox;
           
           return {
             Season: label,
             'Forecast Price': forecastPrice,
-            'Revenue Per Box': revenuePerBox.toFixed(2),
+            'Cost Per Box': costPerBox.toFixed(2),
             'Difference': difference.toFixed(2),
             'Profitable': profitable ? 'Yes' : 'No'
           };
@@ -545,7 +565,7 @@ const BreakEvenEstimator = () => {
                     value={formState.city}
                     onChange={handleInputChange}
                   >
-                  <option value="ALL">All Cities (average)</option>
+                  <option value="All Cities">All Cities (average)</option>
                     {citiesList
                       .filter(c => c !== "Select All")        
                       .map(city => (

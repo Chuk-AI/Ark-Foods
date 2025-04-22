@@ -44,6 +44,9 @@ function AdminDashboard() {
     fetchUser();
   }, []);
 
+
+
+
   // Commodity selection + single forecast data
   const [variety, setVariety] = useState('Shishito');
   const [forecastData, setForecastData] = useState(null);
@@ -94,6 +97,8 @@ function AdminDashboard() {
   const [priceData, setPriceData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [forecastCity, setForecastCity] = useState('All cities');
+
 
   // Chart instance
   const [chart, setChart] = useState(null);
@@ -115,8 +120,12 @@ function AdminDashboard() {
     if (savedForm) {
       const parsed = JSON.parse(savedForm);
       setVariety(parsed.variety || 'Shishito');
+      setForecastCity(parsed.forecastCity || 'All cities');  // Add this line
       setFormData((prev) => ({ ...prev, ...parsed }));
     }
+
+
+
 
     const savedSummary = localStorage.getItem('mySummary');
   if (savedSummary) {
@@ -137,7 +146,16 @@ function AdminDashboard() {
   }
 
   
+  
   }, []);
+
+
+      // Update the useEffect that saves to localStorage
+useEffect(() => {
+  const toSave = { ...formData, variety, forecastCity };  // Add forecastCity
+  localStorage.setItem('myYieldForm', JSON.stringify(toSave));
+}, [formData, variety, forecastCity]);  // Add forecastCity to dependencies
+
 
   // --- 2) Whenever table changes, save to localStorage
   useEffect(() => {
@@ -410,6 +428,8 @@ function AdminDashboard() {
         }
         const payload = {
           variety: row.variety,
+          city: forecastCity,  // Add this line
+
           start_date: formData.startDate,
           forecast_date: formData.forecastDate,
           yield_per_acre: row.yieldPerAcre || 0,
@@ -451,6 +471,8 @@ function AdminDashboard() {
       // 1) Immediately fetch forecast for the single variety
       const payload = {
         variety,
+        city: forecastCity,  // Add this line
+
         start_date: formData.startDate,
         forecast_date: formData.forecastDate,
         yield_per_acre: formData.yieldPerAcre,
@@ -607,6 +629,26 @@ function AdminDashboard() {
                       <option value="Serrano">Serrano</option>
                     </select>
                   </div>
+                  {/* Add this after the variety dropdown */}
+<div className="form-group mb-3">
+  <label>Select City:</label>
+  <select 
+    className="form-control"
+    value={forecastCity}
+    onChange={(e) => setForecastCity(e.target.value)}
+  >
+    <option value="All cities">All Cities</option>
+    <option value="Baltimore">Baltimore</option>
+    <option value="Boston">Boston</option>
+    <option value="Chicago">Chicago</option>
+    <option value="Columbia">Columbia</option>
+    <option value="Los Angeles">Los Angeles</option>
+    <option value="Miami">Miami</option>
+    <option value="New York">New York</option>
+    <option value="Philadelphia">Philadelphia</option>
+  </select>
+</div>
+
                   <div className="form-group mb-3">
                     <label>Enter Start Date:</label>
                     <input
