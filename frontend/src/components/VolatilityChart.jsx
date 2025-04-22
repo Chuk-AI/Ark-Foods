@@ -867,7 +867,7 @@ useEffect(() => {
                     onChange={handleViewTypeChange}
                   >
                     <option value="candlestick">Candlestick Chart</option>
-                    <option value="volatility">Volatility Percentage</option>
+                    {/* <option value="volatility">Volatility Percentage</option> */}
                     <option value="priceRange">Price Range</option>
                   </select>
                 </div>
