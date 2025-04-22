@@ -197,14 +197,20 @@ useEffect(() => {
   }
 
   // Chart
-  async function updateChart() {
+  async function updateChart(selectedVariety, selectedCity, startDate, forecastDate) {
+
     if (!variety) return;
     try {
       const token = localStorage.getItem('authToken');
       if (!token) throw new Error('No token found');
       const response = await axios.get('/api/seasonal_prices', {
         headers: { Authorization: `Bearer ${token}` },
-        params: { variety },
+        params: { 
+          variety: selectedVariety,
+          city: selectedCity,
+          start_date: startDate,
+          forecast_date: forecastDate
+        },
       });
       const data = response.data;
       const canvas = document.getElementById('seasonPriceChart');
@@ -258,10 +264,77 @@ useEffect(() => {
     }
   }
 
-  useEffect(() => {
-    updateChart();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [variety]);
+  // useEffect(() => {
+  //   updateChart();
+  //   // eslint-disable-next-line react-hooks/exhaustive-deps
+  // }, [variety]);
+
+  async function updateChart(selectedVariety, selectedCity, startDate, forecastDate) {
+    if (!selectedVariety) return;
+    try {
+      const token = localStorage.getItem('authToken');
+      if (!token) throw new Error('No token found');
+      
+      const response = await axios.get('/api/seasonal_prices', {
+        headers: { Authorization: `Bearer ${token}` },
+        params: { 
+          variety: selectedVariety,
+          city: selectedCity,
+          start_date: startDate,
+          forecast_date: forecastDate
+        },
+      });
+      
+      const data = response.data;
+      const canvas = document.getElementById('seasonPriceChart');
+      if (!canvas) return;
+  
+      const ctx = canvas.getContext('2d');
+      if (chart) chart.destroy();
+  
+      const newChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: ['Spring', 'Summer', 'Autumn', 'Winter'],
+          datasets: [
+            {
+              label: `Forecasted Price for ${selectedVariety} - ${selectedCity}`,
+              data: [data.Spring, data.Summer, data.Autumn, data.Winter],
+              backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0'],
+              borderColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0'],
+              borderWidth: 0.3,
+              barPercentage: 0.4,
+              categoryPercentage: 1,
+            },
+          ],
+        },
+        plugins: [ChartDataLabels],
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: false },
+            datalabels: {
+              color: 'black',
+              anchor: 'end',
+              align: 'top',
+              formatter: (value) => `$${value}`,
+            },
+          },
+          scales: {
+            x: { ticks: { color: 'black' } },
+            y: {
+              ticks: { color: 'black' },
+              title: { display: true, text: 'Price ($)', color: 'black' },
+            },
+          },
+        },
+      });
+      setChart(newChart);
+    } catch (error) {
+      console.error('Error fetching chart data:', error);
+    }
+  }
+
 
   // Helper to recalc a single row’s derived fields
   function computeRowTotals(row) {
@@ -462,98 +535,101 @@ useEffect(() => {
   
 
   // Single yield form submission => fetch forecast for top card
-  async function handleSubmit(e) {
-    e.preventDefault();
-    try {
-      const token = localStorage.getItem('authToken');
-      if (!token) throw new Error('No token found');
-  
-      // 1) Immediately fetch forecast for the single variety
-      const payload = {
-        variety,
-        city: forecastCity,  // Add this line
+// Single yield form submission => fetch forecast for top card
+async function handleSubmit(e) {
+  e.preventDefault();
+  try {
+    const token = localStorage.getItem('authToken');
+    if (!token) throw new Error('No token found');
 
-        start_date: formData.startDate,
-        forecast_date: formData.forecastDate,
-        yield_per_acre: formData.yieldPerAcre,
-        cost_per_acre: formData.costPerAcre,
-        harvest_cost_per_box: formData.harvestCostPerBox,
-        cost_of_box: formData.costOfBox,
-        boxes_bonus_per_yield: formData.boxesBonusPerYield,
+    // 1) Immediately fetch forecast for the single variety
+    const payload = {
+      variety,
+      city: forecastCity,  // Use the city filter
+      start_date: formData.startDate,
+      forecast_date: formData.forecastDate,
+      yield_per_acre: formData.yieldPerAcre,
+      cost_per_acre: formData.costPerAcre,
+      harvest_cost_per_box: formData.harvestCostPerBox,
+      cost_of_box: formData.costOfBox,
+      boxes_bonus_per_yield: formData.boxesBonusPerYield,
+    };
+    const resp = await axios.post('/api/calculate_forecast', payload, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    // 2) Update the top Forecast card
+    setForecastData(resp.data);
+    setCustomPrice('');
+    setCustomRevenue('');
+    setCustomRevenueAfterCosts('');
+    
+    // 3) Update the seasonal chart with current filters 
+    await updateChart(variety, forecastCity, formData.startDate, formData.forecastDate);
+    
+    // 4) See if the table already has a row for this variety
+    const existingRow = revenueTableData.find((r) => r.variety === variety);
+    if (!existingRow) {
+      // 4a) No existing row => create a brand-new row
+      const newRow = {
+        id: Date.now(),
+        variety,
+        acreCount: '1',
+        yieldPerAcre: formData.yieldPerAcre,
+        costPerAcre: formData.costPerAcre,
+        harvestCostPerBox: formData.harvestCostPerBox,
+        costOfBox: formData.costOfBox,
+        boxesBonusPerYield: formData.boxesBonusPerYield,
+
+        // use the single-forecast data
+        forecastedPrice: resp.data.forecasted_price.toFixed(2),
+        revenuePerAcre: resp.data.revenue_per_acre.toFixed(2),
+        revenuePerAcreAfterCostings: resp.data.revenue_per_acre_after_costings.toFixed(2),
+
+        // start custom columns empty
+        customForecastedPrice: '',
+        customRevenuePerAcre: '0',
+        customRevenuePerAcreAfterCostings: '0',
+
+        // totals
+        totalRevenue: '0',
+        totalRevenueAfter: '0',
+        totalCustomRevenue: '0',
+        totalCustomRevenueAfter: '0',
       };
-      const resp = await axios.post('/api/calculate_forecast', payload, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-  
-      // 2) Update the top Forecast card
-      setForecastData(resp.data);
-      setCustomPrice('');
-      setCustomRevenue('');
-      setCustomRevenueAfterCosts('');
-  
-      // 3) See if the table already has a row for this variety
-      const existingRow = revenueTableData.find((r) => r.variety === variety);
-      if (!existingRow) {
-        // 3a) No existing row => create a brand-new row
-        const newRow = {
-          id: Date.now(),
-          variety,
-          acreCount: '1',
-          yieldPerAcre: formData.yieldPerAcre,
-          costPerAcre: formData.costPerAcre,
-          harvestCostPerBox: formData.harvestCostPerBox,
-          costOfBox: formData.costOfBox,
-          boxesBonusPerYield: formData.boxesBonusPerYield,
-  
-          // use the single-forecast data
-          forecastedPrice: resp.data.forecasted_price.toFixed(2),
-          revenuePerAcre: resp.data.revenue_per_acre.toFixed(2),
-          revenuePerAcreAfterCostings: resp.data.revenue_per_acre_after_costings.toFixed(2),
-  
-          // start custom columns empty
-          customForecastedPrice: '',
-          customRevenuePerAcre: '0',
-          customRevenuePerAcreAfterCostings: '0',
-  
-          // totals
-          totalRevenue: '0',
-          totalRevenueAfter: '0',
-          totalCustomRevenue: '0',
-          totalCustomRevenueAfter: '0',
-        };
-        // Add it to the table
-        const newTable = [...revenueTableData, newRow];
-        recalcTable(newTable);
-  
-      } else {
-        // 3b) If the variety row already exists => update that row’s forecast
-        existingRow.yieldPerAcre = formData.yieldPerAcre;
-        existingRow.costPerAcre = formData.costPerAcre;
-        existingRow.harvestCostPerBox = formData.harvestCostPerBox;
-        existingRow.costOfBox = formData.costOfBox;
-        existingRow.boxesBonusPerYield = formData.boxesBonusPerYield;
-  
-        existingRow.forecastedPrice = resp.data.forecasted_price.toFixed(2);
-        existingRow.revenuePerAcre = resp.data.revenue_per_acre.toFixed(2);
-        existingRow.revenuePerAcreAfterCostings =
-          resp.data.revenue_per_acre_after_costings.toFixed(2);
-  
-        // Then set state so React re-renders
-        const updated = revenueTableData.map((r) => 
-          (r.id === existingRow.id ? existingRow : r)
-        );
-        recalcTable(updated);
-      }
-  
-      // 4) Re-calc *all* rows with the new date filters
-      //    so that every variety is updated, not just the single one:
-      await handleCalculateAllRows();
-  
-    } catch (error) {
-      console.error('Error calculating forecast:', error);
-      alert('Unable to calculate forecast.');
+      // Add it to the table
+      const newTable = [...revenueTableData, newRow];
+      recalcTable(newTable);
+
+    } else {
+      // 4b) If the variety row already exists => update that row's forecast
+      existingRow.yieldPerAcre = formData.yieldPerAcre;
+      existingRow.costPerAcre = formData.costPerAcre;
+      existingRow.harvestCostPerBox = formData.harvestCostPerBox;
+      existingRow.costOfBox = formData.costOfBox;
+      existingRow.boxesBonusPerYield = formData.boxesBonusPerYield;
+
+      existingRow.forecastedPrice = resp.data.forecasted_price.toFixed(2);
+      existingRow.revenuePerAcre = resp.data.revenue_per_acre.toFixed(2);
+      existingRow.revenuePerAcreAfterCostings =
+        resp.data.revenue_per_acre_after_costings.toFixed(2);
+
+      // Then set state so React re-renders
+      const updated = revenueTableData.map((r) => 
+        (r.id === existingRow.id ? existingRow : r)
+      );
+      recalcTable(updated);
     }
+
+    // 5) Re-calc *all* rows with the new date filters
+    //    so that every variety is updated, not just the single one:
+    await handleCalculateAllRows();
+
+  } catch (error) {
+    console.error('Error calculating forecast:', error);
+    alert('Unable to calculate forecast.');
   }
+}
   
   const handleGenerate = async () => {
     // Validate dates before sending

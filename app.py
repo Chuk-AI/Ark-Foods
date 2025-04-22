@@ -3779,50 +3779,77 @@ def get_price_averages():
 
 # API FOR Forecast visual
 @app.route("/api/seasonal_prices", methods=["GET"])
-# @jwt_required()
 def get_seasonal_prices():
     variety = request.args.get("variety")
-
-    # Check if variety is missing
+    city = request.args.get("city", "All cities")
+    start_date_str = request.args.get("start_date")
+    forecast_date_str = request.args.get("forecast_date")  # Added forecast date parameter
+    
+    # Check if required parameters are missing
     if not variety:
         return jsonify({"error": "Missing variety"}), 400
+        
+    # Parse dates if provided
+    start_date = None
+    forecast_date = None
+    start_year = None
+    start_day = None
+    
+    if start_date_str:
+        try:
+            start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
+            start_year = start_date.year
+            start_day = start_date.timetuple().tm_yday
+        except ValueError:
+            return jsonify({"error": "Invalid start date format"}), 400
+            
+    if forecast_date_str:
+        try:
+            forecast_date = datetime.strptime(forecast_date_str, "%Y-%m-%d")
+        except ValueError:
+            return jsonify({"error": "Invalid forecast date format"}), 400
 
-    # Initialize seasonal_prices dictionary to store prices for each season
+    # Initialize seasonal_prices dictionary
     seasonal_prices = {"Spring": 0, "Summer": 0, "Autumn": 0, "Winter": 0}
-
-    # Define the start date as January 1st, 2018
-    start_date = datetime(2018, 1, 1)
-
+    
     # Loop through each season and calculate the average price
     for season in seasonal_prices.keys():
-        # Query data for the given variety and season, starting from the start_date
-        historical_data = (
+        # Create a query similar to calculate_forecasted_price
+        query = (
             db.session.query(PriceData.price)
             .filter(
                 PriceData.commodity == variety,  # Match the commodity (variety)
-                PriceData.season == season,  # Match the season
-                PriceData.year >= start_date.year,  # Consider data from 2018 onward
-                PriceData.day
-                >= start_date.timetuple().tm_yday,  # Ensure data is after the start date
-                PriceData.source.in_(
-                    ["ProduceIQ"]
-                ),  # Data can be from USDA or Historical sources
+                PriceData.season == season,      # Match the season
+                PriceData.source == "ProduceIQ",
             )
-            .all()
         )
+        
+        # Add date filters if start date is provided
+        if start_date:
+            query = query.filter(
+                PriceData.year >= start_year,     # Consider data from the start year onward
+                PriceData.day >= start_day,       # Ensure data is after the start date in the year
+            )
+        
+        # Add city filter if provided and not "All cities"
+        if city and city != "All cities":
+            query = query.filter(PriceData.city_name == city)
+            
+        # Execute the query
+        historical_data = query.all()
 
         # Calculate the average price from the historical data
         if historical_data:
             total_price = sum([entry.price for entry in historical_data])
             average_price = total_price / len(historical_data)
-            seasonal_prices[season] = round(
-                average_price, 2
-            )  # Store the average price for this season
+            seasonal_prices[season] = round(average_price, 2)
         else:
             seasonal_prices[season] = 0.0
+            
+        # Log for debugging
+        print(f"Season {season} for {variety}, City: {city}, Start: {start_date_str}, Forecast: {forecast_date_str} - Found {len(historical_data)} records, Avg: {seasonal_prices[season]}")
 
     return jsonify(seasonal_prices)
-
 
 
 
