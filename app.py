@@ -5414,16 +5414,36 @@ def get_monthly_average_prices():
     Retrieve detailed monthly average prices for a given commodity
     """
     try:
-        # Extract query parameters
+        # Extract query parameters with explicit type conversion
         commodity = request.args.get('commodity')
-        start_month = int(request.args.get('start_month', 1))  # Default January
-        end_month = int(request.args.get('end_month', 12))    # Default December
-        start_year = int(request.args.get('start_year'))
-        end_year = int(request.args.get('end_year'))
+        
+        # Handle type conversion explicitly with fallbacks
+        try:
+            start_month = int(request.args.get('start_month', 1))  # Default January
+        except (TypeError, ValueError):
+            start_month = 1
+            
+        try:
+            end_month = int(request.args.get('end_month', 12))    # Default December
+        except (TypeError, ValueError):
+            end_month = 12
+            
+        try:
+            start_year = int(request.args.get('start_year'))
+        except (TypeError, ValueError):
+            return jsonify({"error": "Invalid start_year parameter"}), 400
+            
+        try:
+            end_year = int(request.args.get('end_year'))
+        except (TypeError, ValueError):
+            return jsonify({"error": "Invalid end_year parameter"}), 400
         
         # Validate required parameters
-        if not commodity or not start_year or not end_year:
-            return jsonify({"error": "Commodity, start year, and end year are required"}), 400
+        if not commodity:
+            return jsonify({"error": "Commodity is required"}), 400
+        
+        # Log the parameters to help with debugging
+        app.logger.debug(f"Processing request for commodity={commodity}, months={start_month}-{end_month}, years={start_year}-{end_year}")
         
         # Prepare months list based on selected range
         months_to_analyze = list(range(start_month, end_month + 1))
@@ -5432,7 +5452,6 @@ def get_monthly_average_prices():
         monthly_analysis = []
         
         # Month mapping to day ranges for each month
-        # This should match your database's day values (days of the year)
         for month in months_to_analyze:
             # Query for this specific month across years
             month_data = []
@@ -5459,7 +5478,7 @@ def get_monthly_average_prices():
                 # Add debug logging to trace the actual values being used
                 app.logger.debug(f"Querying for {calendar.month_name[month]} {year}: days {month_start_day}-{month_end_day}")
                 
-                # Use SQLite-compatible query (no :: casting operator)
+                # Use SQLite-compatible query
                 query = """
                 WITH month_data AS (
                     SELECT 
@@ -5479,7 +5498,9 @@ def get_monthly_average_prices():
                 FROM month_data
                 """
                 
-                result = db.session.execute(query, (commodity, year, month_start_day, month_end_day)).fetchone()
+                # Ensure all parameters are the correct type for SQLite
+                params = (str(commodity), int(year), int(month_start_day), int(month_end_day))
+                result = db.session.execute(query, params).fetchone()
                 
                 # Only add if we have valid data
                 if result and result.avg_price is not None:
@@ -5488,7 +5509,7 @@ def get_monthly_average_prices():
                         'avg_price': float(result.avg_price),
                         'min_price': float(result.min_price),
                         'max_price': float(result.max_price),
-                        'record_count': result.record_count  # Add record count for debugging
+                        'record_count': result.record_count
                     })
                     app.logger.debug(f"Found {result.record_count} records for {calendar.month_name[month]} {year}")
             
@@ -5530,8 +5551,6 @@ def get_monthly_average_prices():
         return jsonify({"error": str(e)}), 500
 
 
-
-        
 # TEST ROUTE
 @app.route("/api/trigger_usda_fetch", methods=["GET"])
 def trigger_usda_fetch():
