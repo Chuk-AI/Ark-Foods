@@ -9,7 +9,8 @@ const MonthlyAveragePrices = () => {
     startMonth: 1,  // January
     endMonth: 9,    // September
     startYear: 2019,
-    endYear: 2022
+    endYear: 2022,
+    source: 'ProduceIQ'  // Default source
   });
 
   // State for chart and data
@@ -34,13 +35,18 @@ const MonthlyAveragePrices = () => {
     'September', 'October', 'November', 'December'
   ];
 
+  // Source options
+  const sources = [
+    'All', 'ProduceIQ', 'USDA'
+  ];
+
   // Handle input changes
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormState(prev => ({
       ...prev,
-      [name]: name === 'commodity' 
-        ? value  // Keep commodity as a string
+      [name]: ['commodity', 'source'].includes(name)
+        ? value  // Keep strings as strings
         : parseInt(value)  // Convert other inputs to integers
     }));
   };
@@ -71,7 +77,8 @@ const MonthlyAveragePrices = () => {
           start_month: formState.startMonth,
           end_month: formState.endMonth,
           start_year: formState.startYear,
-          end_year: formState.endYear
+          end_year: formState.endYear,
+          source: formState.source
         }
       });
       
@@ -142,6 +149,11 @@ const MonthlyAveragePrices = () => {
     console.log('Chart labels:', labels);
     console.log('Chart values:', values);
 
+    // Source-specific text for title
+    const sourceText = formState.source === 'All' 
+      ? 'All Sources' 
+      : `Source: ${formState.source}`;
+
     // Create chart options
     const chartOptions = {
       responsive: true,
@@ -150,7 +162,7 @@ const MonthlyAveragePrices = () => {
         legend: { display: true },
         title: {
           display: true,
-          text: `Monthly Average Prices for ${formState.commodity} (${formState.startYear}-${formState.endYear})`,
+          text: `Monthly Average Prices for ${formState.commodity} (${formState.startYear}-${formState.endYear}) - ${sourceText}`,
           font: { size: 16 }
         },
         tooltip: {
@@ -270,6 +282,23 @@ const MonthlyAveragePrices = () => {
                   {commodities.map(commodity => (
                     <option key={commodity} value={commodity}>
                       {commodity}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Data Source Selection */}
+              <div className="form-group mb-3">
+                <label>Data Source</label>
+                <select
+                  name="source"
+                  value={formState.source}
+                  onChange={handleInputChange}
+                  className="form-control"
+                >
+                  {sources.map(source => (
+                    <option key={source} value={source}>
+                      {source === 'All' ? 'All Sources' : source}
                     </option>
                   ))}
                 </select>

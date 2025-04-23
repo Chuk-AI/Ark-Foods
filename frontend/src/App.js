@@ -15,8 +15,8 @@ import DynamicAnalytics from './pages/dynamicAnalytics';
 import Alerts from './pages/Alerts';
 // Axios Defaults
 
-// axios.defaults.baseURL = 'http://localhost:5500/'; // local backend
-axios.defaults.baseURL = 'https://arkfoods.klicksai.com'; // or your custom domain
+axios.defaults.baseURL = 'http://localhost:5500/'; // local backend
+// axios.defaults.baseURL = 'https://arkfoods.klicksai.com'; // or your custom domain
 
 
 
