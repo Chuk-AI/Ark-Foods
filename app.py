@@ -5405,6 +5405,120 @@ def mark_all_read():
 
 
 
+import calendar
+
+
+@app.route("/api/monthly-average-prices", methods=["GET"])
+def get_monthly_average_prices():
+    """
+    Retrieve detailed monthly average prices for a given commodity
+    """
+    try:
+        # Extract query parameters
+        commodity = request.args.get('commodity')
+        start_month = int(request.args.get('start_month', 1))  # Default January
+        end_month = int(request.args.get('end_month', 12))    # Default December
+        start_year = int(request.args.get('start_year'))
+        end_year = int(request.args.get('end_year'))
+        
+        # Validate required parameters
+        if not commodity or not start_year or not end_year:
+            return jsonify({"error": "Commodity, start year, and end year are required"}), 400
+        
+        # Prepare months list based on selected range
+        months_to_analyze = list(range(start_month, end_month + 1))
+        
+        # Prepare results
+        monthly_analysis = []
+        
+        # For SQLite: Properly calculate day ranges for each month
+        for month in months_to_analyze:
+            # Query for this specific month across years
+            month_data = []
+            
+            # For each year in the range
+            for year in range(start_year, end_year + 1):
+                # Determine if it's a leap year
+                is_leap_year = (year % 4 == 0 and year % 100 != 0) or (year % 400 == 0)
+                
+                # Define days in each month for the current year
+                days_in_month = [31, 29 if is_leap_year else 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+                
+                # Calculate cumulative days at the beginning of each month
+                cumulative_days = [0]  # Start with 0
+                running_sum = 0
+                for days in days_in_month:
+                    running_sum += days
+                    cumulative_days.append(running_sum)
+                
+                # Calculate day range for the specified month (1-indexed)
+                month_start_day = cumulative_days[month-1] + 1
+                month_end_day = cumulative_days[month]
+                
+                # Query for this month/year combination
+                year_month_data = (
+                    db.session.query(
+                        func.avg(PriceData.price).label('avg_price'),
+                        func.min(PriceData.price).label('min_price'),
+                        func.max(PriceData.price).label('max_price')
+                    )
+                    .filter(
+                        PriceData.commodity == commodity,
+                        PriceData.year == year,
+                        PriceData.day >= month_start_day,
+                        PriceData.day <= month_end_day
+                    )
+                    .first()
+                )
+                
+                # Only add if we have valid data
+                if year_month_data and year_month_data.avg_price is not None:
+                    month_data.append({
+                        'year': year,
+                        'avg_price': round(float(year_month_data.avg_price), 2),
+                        'min_price': round(float(year_month_data.min_price), 2),
+                        'max_price': round(float(year_month_data.max_price), 2)
+                    })
+            
+            # Process the data for this month
+            if month_data:
+                # Calculate overall statistics for this month across years
+                all_prices = [entry['avg_price'] for entry in month_data]
+                all_min_prices = [entry['min_price'] for entry in month_data]
+                all_max_prices = [entry['max_price'] for entry in month_data]
+                
+                monthly_analysis.append({
+                    'month': calendar.month_name[month],
+                    'avg_price': round(sum(all_prices) / len(all_prices), 2),
+                    'min_price': round(min(all_min_prices), 2),
+                    'max_price': round(max(all_max_prices), 2),
+                    'years_data': month_data
+                })
+            else:
+                # If no data for this month, add a default entry
+                monthly_analysis.append({
+                    'month': calendar.month_name[month],
+                    'avg_price': 0,
+                    'min_price': 0,
+                    'max_price': 0,
+                    'years_data': []
+                })
+        
+        return jsonify({
+            "monthly_prices": monthly_analysis,
+            "commodity": commodity,
+            "start_month": start_month,
+            "end_month": end_month,
+            "start_year": start_year,
+            "end_year": end_year
+        }), 200
+    
+    except Exception as e:
+        app.logger.error(f"Error in monthly average prices: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+
+
 # TEST ROUTE
 @app.route("/api/trigger_usda_fetch", methods=["GET"])
 def trigger_usda_fetch():
@@ -5438,6 +5552,7 @@ def upload_historical():
                 logging.info(f"Processing file: {csv_file}")
 
                 # Open the CSV file and insert data into the PriceData table
+
                 with open(file_path, newline="", encoding="utf-8") as csvfile:
                     reader = csv.DictReader(csvfile)
 
