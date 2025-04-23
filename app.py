@@ -5405,8 +5405,7 @@ def mark_all_read():
 
 
 
-import calendar
-
+import calendar 
 
 @app.route("/api/monthly-average-prices", methods=["GET"])
 def get_monthly_average_prices():
@@ -5414,36 +5413,16 @@ def get_monthly_average_prices():
     Retrieve detailed monthly average prices for a given commodity
     """
     try:
-        # Extract query parameters with explicit type conversion
+        # Extract query parameters
         commodity = request.args.get('commodity')
-        
-        # Handle type conversion explicitly with fallbacks
-        try:
-            start_month = int(request.args.get('start_month', 1))  # Default January
-        except (TypeError, ValueError):
-            start_month = 1
-            
-        try:
-            end_month = int(request.args.get('end_month', 12))    # Default December
-        except (TypeError, ValueError):
-            end_month = 12
-            
-        try:
-            start_year = int(request.args.get('start_year'))
-        except (TypeError, ValueError):
-            return jsonify({"error": "Invalid start_year parameter"}), 400
-            
-        try:
-            end_year = int(request.args.get('end_year'))
-        except (TypeError, ValueError):
-            return jsonify({"error": "Invalid end_year parameter"}), 400
+        start_month = int(request.args.get('start_month', 1))  # Default January
+        end_month = int(request.args.get('end_month', 12))    # Default December
+        start_year = int(request.args.get('start_year'))
+        end_year = int(request.args.get('end_year'))
         
         # Validate required parameters
-        if not commodity:
-            return jsonify({"error": "Commodity is required"}), 400
-        
-        # Log the parameters to help with debugging
-        app.logger.debug(f"Processing request for commodity={commodity}, months={start_month}-{end_month}, years={start_year}-{end_year}")
+        if not commodity or not start_year or not end_year:
+            return jsonify({"error": "Commodity, start year, and end year are required"}), 400
         
         # Prepare months list based on selected range
         months_to_analyze = list(range(start_month, end_month + 1))
@@ -5451,81 +5430,46 @@ def get_monthly_average_prices():
         # Prepare results
         monthly_analysis = []
         
-        # Month mapping to day ranges for each month
+        # Analyze each month in the selected range
         for month in months_to_analyze:
-            # Query for this specific month across years
-            month_data = []
-            
-            # For each year in the range
-            for year in range(start_year, end_year + 1):
-                # Determine if it's a leap year
-                is_leap_year = (year % 4 == 0 and year % 100 != 0) or (year % 400 == 0)
-                
-                # Define days in each month for the current year
-                days_in_month = [31, 29 if is_leap_year else 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-                
-                # Calculate cumulative days at the beginning of each month
-                cumulative_days = [0]  # Start with 0
-                running_sum = 0
-                for days in days_in_month:
-                    running_sum += days
-                    cumulative_days.append(running_sum)
-                
-                # Calculate day range for the specified month (1-indexed)
-                month_start_day = cumulative_days[month-1] + 1
-                month_end_day = cumulative_days[month]
-                
-                # Add debug logging to trace the actual values being used
-                app.logger.debug(f"Querying for {calendar.month_name[month]} {year}: days {month_start_day}-{month_end_day}")
-                
-                # Use SQLite-compatible query
-                query = """
-                WITH month_data AS (
-                    SELECT 
-                        price,
-                        year
-                    FROM price_data
-                    WHERE 
-                        commodity = ?
-                        AND year = ?
-                        AND day BETWEEN ? AND ?
+            # Query to get detailed statistics for this specific month across years
+            month_data = (
+                db.session.query(
+                    func.avg(PriceData.price).label('avg_price'),
+                    func.min(PriceData.price).label('min_price'),
+                    func.max(PriceData.price).label('max_price'),
+                    PriceData.year
                 )
-                SELECT 
-                    ROUND(AVG(price), 2) as avg_price,
-                    MIN(price) as min_price,
-                    MAX(price) as max_price,
-                    COUNT(*) as record_count
-                FROM month_data
-                """
-                
-                # Ensure all parameters are the correct type for SQLite
-                params = (str(commodity), int(year), int(month_start_day), int(month_end_day))
-                result = db.session.execute(query, params).fetchone()
-                
-                # Only add if we have valid data
-                if result and result.avg_price is not None:
-                    month_data.append({
-                        'year': year,
-                        'avg_price': float(result.avg_price),
-                        'min_price': float(result.min_price),
-                        'max_price': float(result.max_price),
-                        'record_count': result.record_count
-                    })
-                    app.logger.debug(f"Found {result.record_count} records for {calendar.month_name[month]} {year}")
+                .filter(
+                    PriceData.commodity == commodity,
+                    PriceData.source == 'ProduceIQ',
+                    func.strftime('%m', func.date(
+                        PriceData.year * 10000 + month * 100 + 1, 
+                        'unixepoch'
+                    )) == f"{month:02d}",
+                    PriceData.year >= start_year,
+                    PriceData.year <= end_year
+                )
+                .group_by(PriceData.year)
+                .all()
+            )
             
             # Process the data for this month
             if month_data:
-                # Calculate overall statistics for this month across years
-                all_prices = [entry['avg_price'] for entry in month_data]
-                all_min_prices = [entry['min_price'] for entry in month_data]
-                all_max_prices = [entry['max_price'] for entry in month_data]
+                # Calculate overall statistics for this month
+                prices = [float(entry[0]) for entry in month_data if entry[0] is not None]
                 
                 monthly_analysis.append({
                     'month': calendar.month_name[month],
-                    'avg_price': round(sum(all_prices) / len(all_prices), 2),
-                    'min_price': round(min(all_min_prices), 2),
-                    'max_price': round(max(all_max_prices), 2),
-                    'years_data': month_data
+                    'avg_price': round(sum(prices) / len(prices), 2) if prices else 0,
+                    'min_price': round(min(float(entry[1]) for entry in month_data if entry[1] is not None), 2) if month_data else 0,
+                    'max_price': round(max(float(entry[2]) for entry in month_data if entry[2] is not None), 2) if month_data else 0,
+                    'years_data': [
+                        {
+                            'year': entry[3],
+                            'avg_price': round(float(entry[0]), 2) if entry[0] is not None else 0
+                        } for entry in month_data
+                    ]
                 })
             else:
                 # If no data for this month, add a default entry
@@ -5540,8 +5484,6 @@ def get_monthly_average_prices():
         return jsonify({
             "monthly_prices": monthly_analysis,
             "commodity": commodity,
-            "start_month": start_month,
-            "end_month": end_month,
             "start_year": start_year,
             "end_year": end_year
         }), 200
@@ -5549,6 +5491,8 @@ def get_monthly_average_prices():
     except Exception as e:
         app.logger.error(f"Error in monthly average prices: {str(e)}")
         return jsonify({"error": str(e)}), 500
+    
+
 
 
 # TEST ROUTE
@@ -5584,7 +5528,6 @@ def upload_historical():
                 logging.info(f"Processing file: {csv_file}")
 
                 # Open the CSV file and insert data into the PriceData table
-
                 with open(file_path, newline="", encoding="utf-8") as csvfile:
                     reader = csv.DictReader(csvfile)
 
