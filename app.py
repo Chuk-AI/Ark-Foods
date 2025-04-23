@@ -5459,7 +5459,7 @@ def get_monthly_average_prices():
                 # Add debug logging to trace the actual values being used
                 app.logger.debug(f"Querying for {calendar.month_name[month]} {year}: days {month_start_day}-{month_end_day}")
                 
-                # Use raw SQL query to ensure consistency with direct SQL queries
+                # Use SQLite-compatible query (no :: casting operator)
                 query = """
                 WITH month_data AS (
                     SELECT 
@@ -5467,24 +5467,19 @@ def get_monthly_average_prices():
                         year
                     FROM price_data
                     WHERE 
-                        commodity = :commodity
-                        AND year = :year
-                        AND day BETWEEN :start_day AND :end_day
+                        commodity = ?
+                        AND year = ?
+                        AND day BETWEEN ? AND ?
                 )
                 SELECT 
-                    ROUND(AVG(price)::numeric, 2) as avg_price,
+                    ROUND(AVG(price), 2) as avg_price,
                     MIN(price) as min_price,
                     MAX(price) as max_price,
                     COUNT(*) as record_count
                 FROM month_data
                 """
                 
-                result = db.session.execute(query, {
-                    'commodity': commodity,
-                    'year': year,
-                    'start_day': month_start_day,
-                    'end_day': month_end_day
-                }).fetchone()
+                result = db.session.execute(query, (commodity, year, month_start_day, month_end_day)).fetchone()
                 
                 # Only add if we have valid data
                 if result and result.avg_price is not None:
@@ -5534,6 +5529,9 @@ def get_monthly_average_prices():
         app.logger.error(f"Error in monthly average prices: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
+
+
+        
 # TEST ROUTE
 @app.route("/api/trigger_usda_fetch", methods=["GET"])
 def trigger_usda_fetch():
