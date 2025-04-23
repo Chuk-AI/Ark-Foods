@@ -5430,46 +5430,68 @@ def get_monthly_average_prices():
         # Prepare results
         monthly_analysis = []
         
-        # Analyze each month in the selected range
+        # For SQLite: Properly calculate day ranges for each month
         for month in months_to_analyze:
-            # Query to get detailed statistics for this specific month across years
-            month_data = (
-                db.session.query(
-                    func.avg(PriceData.price).label('avg_price'),
-                    func.min(PriceData.price).label('min_price'),
-                    func.max(PriceData.price).label('max_price'),
-                    PriceData.year
+            # Query for this specific month across years
+            month_data = []
+            
+            # For each year in the range
+            for year in range(start_year, end_year + 1):
+                # Determine if it's a leap year
+                is_leap_year = (year % 4 == 0 and year % 100 != 0) or (year % 400 == 0)
+                
+                # Define days in each month for the current year
+                days_in_month = [31, 29 if is_leap_year else 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+                
+                # Calculate cumulative days at the beginning of each month
+                cumulative_days = [0]  # Start with 0
+                running_sum = 0
+                for days in days_in_month:
+                    running_sum += days
+                    cumulative_days.append(running_sum)
+                
+                # Calculate day range for the specified month (1-indexed)
+                month_start_day = cumulative_days[month-1] + 1
+                month_end_day = cumulative_days[month]
+                
+                # Query for this month/year combination
+                year_month_data = (
+                    db.session.query(
+                        func.avg(PriceData.price).label('avg_price'),
+                        func.min(PriceData.price).label('min_price'),
+                        func.max(PriceData.price).label('max_price')
+                    )
+                    .filter(
+                        PriceData.commodity == commodity,
+                        PriceData.year == year,
+                        PriceData.day >= month_start_day,
+                        PriceData.day <= month_end_day
+                    )
+                    .first()
                 )
-                .filter(
-                    PriceData.commodity == commodity,
-                    PriceData.source == 'ProduceIQ',
-                    func.strftime('%m', func.date(
-                        PriceData.year * 10000 + month * 100 + 1, 
-                        'unixepoch'
-                    )) == f"{month:02d}",
-                    PriceData.year >= start_year,
-                    PriceData.year <= end_year
-                )
-                .group_by(PriceData.year)
-                .all()
-            )
+                
+                # Only add if we have valid data
+                if year_month_data and year_month_data.avg_price is not None:
+                    month_data.append({
+                        'year': year,
+                        'avg_price': round(float(year_month_data.avg_price), 2),
+                        'min_price': round(float(year_month_data.min_price), 2),
+                        'max_price': round(float(year_month_data.max_price), 2)
+                    })
             
             # Process the data for this month
             if month_data:
-                # Calculate overall statistics for this month
-                prices = [float(entry[0]) for entry in month_data if entry[0] is not None]
+                # Calculate overall statistics for this month across years
+                all_prices = [entry['avg_price'] for entry in month_data]
+                all_min_prices = [entry['min_price'] for entry in month_data]
+                all_max_prices = [entry['max_price'] for entry in month_data]
                 
                 monthly_analysis.append({
                     'month': calendar.month_name[month],
-                    'avg_price': round(sum(prices) / len(prices), 2) if prices else 0,
-                    'min_price': round(min(float(entry[1]) for entry in month_data if entry[1] is not None), 2) if month_data else 0,
-                    'max_price': round(max(float(entry[2]) for entry in month_data if entry[2] is not None), 2) if month_data else 0,
-                    'years_data': [
-                        {
-                            'year': entry[3],
-                            'avg_price': round(float(entry[0]), 2) if entry[0] is not None else 0
-                        } for entry in month_data
-                    ]
+                    'avg_price': round(sum(all_prices) / len(all_prices), 2),
+                    'min_price': round(min(all_min_prices), 2),
+                    'max_price': round(max(all_max_prices), 2),
+                    'years_data': month_data
                 })
             else:
                 # If no data for this month, add a default entry
@@ -5484,6 +5506,8 @@ def get_monthly_average_prices():
         return jsonify({
             "monthly_prices": monthly_analysis,
             "commodity": commodity,
+            "start_month": start_month,
+            "end_month": end_month,
             "start_year": start_year,
             "end_year": end_year
         }), 200
@@ -5491,7 +5515,6 @@ def get_monthly_average_prices():
     except Exception as e:
         app.logger.error(f"Error in monthly average prices: {str(e)}")
         return jsonify({"error": str(e)}), 500
-    
 
 
 
