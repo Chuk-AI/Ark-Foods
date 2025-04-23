@@ -5466,7 +5466,8 @@ def get_monthly_average_prices():
                         PriceData.commodity == commodity,
                         PriceData.year == year,
                         PriceData.day >= month_start_day,
-                        PriceData.day <= month_end_day
+                        PriceData.day <= month_end_day,
+                        PriceData.source == 'ProduceIQ'
                     )
                     .first()
                 )
