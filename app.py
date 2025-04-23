@@ -5431,7 +5431,8 @@ def get_monthly_average_prices():
         # Prepare results
         monthly_analysis = []
         
-        # For SQLite: Properly calculate day ranges for each month
+        # Month mapping to day ranges for each month
+        # This should match your database's day values (days of the year)
         for month in months_to_analyze:
             # Query for this specific month across years
             month_data = []
@@ -5455,30 +5456,46 @@ def get_monthly_average_prices():
                 month_start_day = cumulative_days[month-1] + 1
                 month_end_day = cumulative_days[month]
                 
-                # Query for this month/year combination
-                year_month_data = (
-                    db.session.query(
-                        func.avg(PriceData.price).label('avg_price'),
-                        func.min(PriceData.price).label('min_price'),
-                        func.max(PriceData.price).label('max_price')
-                    )
-                    .filter(
-                        PriceData.commodity == commodity,
-                        PriceData.year == year,
-                        PriceData.day >= month_start_day,
-                        PriceData.day <= month_end_day,
-                    )
-                    .first()
+                # Add debug logging to trace the actual values being used
+                app.logger.debug(f"Querying for {calendar.month_name[month]} {year}: days {month_start_day}-{month_end_day}")
+                
+                # Use raw SQL query to ensure consistency with direct SQL queries
+                query = """
+                WITH month_data AS (
+                    SELECT 
+                        price,
+                        year
+                    FROM price_data
+                    WHERE 
+                        commodity = :commodity
+                        AND year = :year
+                        AND day BETWEEN :start_day AND :end_day
                 )
+                SELECT 
+                    ROUND(AVG(price)::numeric, 2) as avg_price,
+                    MIN(price) as min_price,
+                    MAX(price) as max_price,
+                    COUNT(*) as record_count
+                FROM month_data
+                """
+                
+                result = db.session.execute(query, {
+                    'commodity': commodity,
+                    'year': year,
+                    'start_day': month_start_day,
+                    'end_day': month_end_day
+                }).fetchone()
                 
                 # Only add if we have valid data
-                if year_month_data and year_month_data.avg_price is not None:
+                if result and result.avg_price is not None:
                     month_data.append({
                         'year': year,
-                        'avg_price': round(float(year_month_data.avg_price), 2),
-                        'min_price': round(float(year_month_data.min_price), 2),
-                        'max_price': round(float(year_month_data.max_price), 2)
+                        'avg_price': float(result.avg_price),
+                        'min_price': float(result.min_price),
+                        'max_price': float(result.max_price),
+                        'record_count': result.record_count  # Add record count for debugging
                     })
+                    app.logger.debug(f"Found {result.record_count} records for {calendar.month_name[month]} {year}")
             
             # Process the data for this month
             if month_data:
@@ -5516,8 +5533,6 @@ def get_monthly_average_prices():
     except Exception as e:
         app.logger.error(f"Error in monthly average prices: {str(e)}")
         return jsonify({"error": str(e)}), 500
-
-
 
 # TEST ROUTE
 @app.route("/api/trigger_usda_fetch", methods=["GET"])
