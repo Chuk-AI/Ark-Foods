@@ -5420,7 +5420,6 @@ def get_monthly_average_prices():
         end_month = int(request.args.get('end_month', 12))    # Default December
         start_year = int(request.args.get('start_year'))
         end_year = int(request.args.get('end_year'))
-        source = request.args.get('source', 'ProduceIQ')  # Default to ProduceIQ if not specified
         
         # Validate required parameters
         if not commodity or not start_year or not end_year:
@@ -5456,27 +5455,21 @@ def get_monthly_average_prices():
                 month_start_day = cumulative_days[month-1] + 1
                 month_end_day = cumulative_days[month]
                 
-                # Build the base query
-                query = db.session.query(
-                    func.avg(PriceData.price).label('avg_price'),
-                    func.min(PriceData.price).label('min_price'),
-                    func.max(PriceData.price).label('max_price')
-                ).filter(
-                    PriceData.commodity == commodity,
-                    PriceData.year == year,
-                    PriceData.day >= month_start_day,
-                    PriceData.day <= month_end_day
+                # Query for this month/year combination
+                year_month_data = (
+                    db.session.query(
+                        func.avg(PriceData.price).label('avg_price'),
+                        func.min(PriceData.price).label('min_price'),
+                        func.max(PriceData.price).label('max_price')
+                    )
+                    .filter(
+                        PriceData.commodity == commodity,
+                        PriceData.year == year,
+                        PriceData.day >= month_start_day,
+                        PriceData.day <= month_end_day,
+                    )
+                    .first()
                 )
-                
-                # Add source filter based on selection
-                if source == 'All':
-                    # No source filter if 'All' is selected
-                    pass
-                else:
-                    query = query.filter(PriceData.source == source)
-                
-                # Execute the query
-                year_month_data = query.first()
                 
                 # Only add if we have valid data
                 if year_month_data and year_month_data.avg_price is not None:
@@ -5514,7 +5507,6 @@ def get_monthly_average_prices():
         return jsonify({
             "monthly_prices": monthly_analysis,
             "commodity": commodity,
-            "source": source,
             "start_month": start_month,
             "end_month": end_month,
             "start_year": start_year,
@@ -5524,6 +5516,8 @@ def get_monthly_average_prices():
     except Exception as e:
         app.logger.error(f"Error in monthly average prices: {str(e)}")
         return jsonify({"error": str(e)}), 500
+
+
 
 # TEST ROUTE
 @app.route("/api/trigger_usda_fetch", methods=["GET"])
