@@ -371,7 +371,8 @@ class BreakEvenEstimation(db.Model):
     revenue_after_costs = db.Column(db.Float, nullable=True)
     revenue_per_box = db.Column(db.Float, nullable=True)
     season = db.Column(db.String(20), nullable=True)
-    
+    source = db.Column(db.String(50), default="ProduceIQ")  # Add this line
+
     # Timestamps
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -3479,7 +3480,7 @@ def get_cities():
 #     })
 
 
-def calculate_forecasted_price(variety, start_date, forecast_date, city=None):
+def calculate_forecasted_price(variety, start_date, forecast_date, city=None, source="ProduceIQ"):
     # Step 1: Determine the season of the forecast date
     season = determine_season_for_dashboard(forecast_date)
 
@@ -3491,13 +3492,18 @@ def calculate_forecasted_price(variety, start_date, forecast_date, city=None):
     query = (
         db.session.query(PriceData.price)
         .filter(
-            PriceData.commodity == variety,          # Match the commodity (variety)
-            PriceData.season == season,              # Match the season
-            PriceData.year >= start_year,            # Consider data from the start year onward
-            PriceData.day >= start_day,              # Ensure data is after the start date in the year
-            PriceData.source == "ProduceIQ",
+            PriceData.commodity == variety,
+            PriceData.season == season,
+            PriceData.year >= start_year,
+            PriceData.day >= start_day
         )
     )
+    
+    # Add source filter
+    if source == "ProduceIQ,USDA" or source == "USDA,ProduceIQ":
+        query = query.filter(PriceData.source.in_(["ProduceIQ", "USDA"]))
+    else:
+        query = query.filter(PriceData.source == source)
     
     # Add city filter if provided
     if city and city != "All cities":
@@ -3516,7 +3522,6 @@ def calculate_forecasted_price(variety, start_date, forecast_date, city=None):
     return average_price
 
 
-
 @app.route("/api/calculate_forecast", methods=["POST"])
 def calculate_forecast():
     data = request.json
@@ -3526,7 +3531,6 @@ def calculate_forecast():
     start_date_str = data.get("start_date")
     forecast_date_str = data.get("forecast_date")
     yield_per_acre = data.get("yield_per_acre")
-    
     # Get the city parameter (optional)
     city = data.get("city", "All cities")
 
@@ -3856,10 +3860,12 @@ def get_seasonal_prices():
 @app.route("/api/forecast_line_data", methods=["GET"])
 def get_forecast_line_data():
     """
-    Build season‑by‑season price forecasts.
+    Build season‑by‑season price forecasts without applying trend factors.
+    Ensures that forecasts for the same season are consistent across years.
 
     • If averageCities=true   → ignore the city filter and aggregate across every city
-    • Otherwise               → forecast for each (commodity, city) pair exactly as before
+    • Otherwise               → forecast for each (commodity, city) pair exactly as before
+    • Supports filtering by data source: "ProduceIQ", "USDA", or both
     """
     try:
         from collections import defaultdict
@@ -3869,6 +3875,7 @@ def get_forecast_line_data():
         cities_raw  = [c.strip() for c in request.args.get("cities", "").split(",") if c.strip()]
         avg_cities  = request.args.get("averageCities", "false").lower() == "true"
         forecast_years = int(request.args.get("forecastYears", "1"))
+        data_source = request.args.get("source", "ProduceIQ")  # Default to ProduceIQ if not specified
 
         if not commodities:
             return jsonify({"error": "Missing commodities"}), 400
@@ -3890,7 +3897,7 @@ def get_forecast_line_data():
             "Winter"
         )
 
-        # Build season labels: current season + forecast_years * 4
+        # Build season labels: current season + forecast_years * 4
         season_labels = []
         idx0 = seasons.index(current_season)
         for yr in range(current_year, current_year + forecast_years + 1):
@@ -3904,8 +3911,16 @@ def get_forecast_line_data():
         filters = [
             PriceData.commodity.in_(commodities),
             PriceData.year >= current_year - 5,
-            PriceData.source == "ProduceIQ",
         ]
+        
+        # Handle source filtering
+        if data_source == "ProduceIQ,USDA" or data_source == "USDA,ProduceIQ":
+            # Include both sources
+            filters.append(PriceData.source.in_(["ProduceIQ", "USDA"]))
+        else:
+            # Use specified source
+            filters.append(PriceData.source == data_source)
+            
         if not avg_cities:
             filters.append(PriceData.city_name.in_(cities))
 
@@ -3916,12 +3931,13 @@ def get_forecast_line_data():
                 PriceData.year,
                 PriceData.season,
                 PriceData.price,
+                PriceData.source,  # Also fetch the source for potential filtering
             )
             .filter(*filters)
             .all()
         )
 
-        # If we’re averaging across cities, remember which cities actually came back
+        # If we're averaging across cities, remember which cities actually came back
         if avg_cities:
             all_cities_in_db = sorted({r.city_name for r in rows})
 
@@ -3931,32 +3947,19 @@ def get_forecast_line_data():
             key = f"{r.commodity}_{r.city_name}"
             data[key][r.season][r.year].append(r.price)
 
-        # ────────── 4. Seasonal averages & trend factors ──────────
-        season_stats = {}     # season_stats[key][season] = {avg_price, trend}
+        # ────────── 4. Seasonal averages (without trend factors) ──────────
+        season_stats = {}     # season_stats[key][season] = {avg_price}
         seasons_list = seasons  # alias for clarity
         for key, season_dict in data.items():
             season_stats[key] = {}
             for season in seasons_list:
-                yearly_avgs, years_list = [], []
+                yearly_avgs = []
                 for yr, prices in season_dict[season].items():
                     if prices:
                         yearly_avgs.append(sum(prices) / len(prices))
-                        years_list.append(yr)
 
                 overall_avg = sum(yearly_avgs) / len(yearly_avgs) if yearly_avgs else 0
-                # default trend = +2 %/yr
-                trend = 0.02
-                n = len(yearly_avgs)
-                if n >= 2:
-                    sx, sy = sum(years_list), sum(yearly_avgs)
-                    sxx = sum(x * x for x in years_list)
-                    sxy = sum(x * y for x, y in zip(years_list, yearly_avgs))
-                    denom = n * sxx - sx * sx
-                    if denom:
-                        slope = (n * sxy - sx * sy) / denom
-                        trend = slope / (sy / n) if sy else 0.02
-
-                season_stats[key][season] = {"avg": overall_avg, "trend": trend}
+                season_stats[key][season] = {"avg": overall_avg}
 
         # ────────── 5. Build datasets ──────────
         COLORS = ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40"]
@@ -3968,21 +3971,23 @@ def get_forecast_line_data():
                 prices = []
                 for label in season_labels:
                     season, yr = label.split()
-                    yr = int(yr)
-                    yrs_out = yr - current_year
-
+                    
+                    # Calculate average price for this season across all cities
+                    # WITHOUT applying any trend factor
                     total, cnt = 0, 0
                     for city in all_cities_in_db:
                         key = f"{commodity}_{city}"
                         st = season_stats.get(key, {}).get(season)
                         if st and st["avg"] > 0:
-                            total += st["avg"] * (1 + st["trend"] * yrs_out)
+                            total += st["avg"]  # Just use the average price
                             cnt += 1
                     prices.append(round(total / cnt, 2) if cnt else 0)
 
+                # Include the data source in the label
+                source_label = "ProduceIQ & USDA" if "," in data_source else data_source
                 result["datasets"].append(
                     {
-                        "label": f"{commodity} – Avg Across Cities",
+                        "label": f"{commodity} – Avg Across Cities ({source_label})",
                         "data": prices,
                         "borderColor": COLORS[ds_idx % len(COLORS)],
                         "backgroundColor": COLORS[ds_idx % len(COLORS)],
@@ -3991,24 +3996,27 @@ def get_forecast_line_data():
                 )
                 ds_idx += 1
         else:
-            # one dataset per (commodity, city)
+            # one dataset per (commodity, city)
             for commodity in commodities:
                 for city in cities:
                     key = f"{commodity}_{city}"
                     prices = []
+                    
+                    # For each season label, get the corresponding seasonal average
+                    # WITHOUT applying any trend factor
                     for label in season_labels:
                         season, yr = label.split()
-                        yr = int(yr)
-                        yrs_out = yr - current_year
                         st = season_stats.get(key, {}).get(season)
                         if st and st["avg"] > 0:
-                            prices.append(round(st["avg"] * (1 + st["trend"] * yrs_out), 2))
+                            prices.append(round(st["avg"], 2))  # Just use the average
                         else:
                             prices.append(0)
 
+                    # Include the data source in the label
+                    source_label = "ProduceIQ & USDA" if "," in data_source else data_source
                     result["datasets"].append(
                         {
-                            "label": f"{commodity} – {city} Forecast",
+                            "label": f"{commodity} – {city} ({source_label})",
                             "data": prices,
                             "borderColor": COLORS[ds_idx % len(COLORS)],
                             "backgroundColor": COLORS[ds_idx % len(COLORS)],
@@ -4022,10 +4030,7 @@ def get_forecast_line_data():
     except Exception as exc:
         app.logger.error(f"forecast_line_data error: {exc}")
         return jsonify({"error": str(exc)}), 500
-
-
-
-
+    
 
 @app.route("/api/volatility_data", methods=["GET"])
 def get_volatility_data():
@@ -4034,6 +4039,7 @@ def get_volatility_data():
         commodity = request.args.get("commodity", "")  # Single string for commodity
         cities = request.args.get("cities", "").split(",")
         time_frame = request.args.get("timeFrame", "1m")  # Time frame parameter
+        data_source = request.args.get("source", "ProduceIQ")  # Data source parameter
         
         # Parse date range parameters
         start_date_str = request.args.get("startDate", "")
@@ -4145,16 +4151,19 @@ def get_volatility_data():
         
         # Fetch price range data (min/max/open/close) for the selected commodity, across cities
         price_range_data = calculate_price_range_for_timeframe(
-            commodity, cities, start_date, end_date, time_frame, days_to_fetch
+            commodity, cities, start_date, end_date, time_frame, days_to_fetch, data_source
         )
             
         # Colors for the dataset
         colors = ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40"]
         color_index = 0
         
+        # Include source in the label
+        source_label = "ProduceIQ & USDA" if "," in data_source else data_source
+        
         # Create dataset for this commodity's minimum prices
         min_dataset = {
-            "label": f"{commodity} - Min Price",
+            "label": f"{commodity} - Min Price ({source_label})",
             "data": price_range_data.get("min", [0] * len(result["labels"])),
             "borderColor": colors[color_index % len(colors)],
             "backgroundColor": "transparent",
@@ -4167,7 +4176,7 @@ def get_volatility_data():
         
         # Create dataset for this commodity's maximum prices
         max_dataset = {
-            "label": f"{commodity} - Max Price",
+            "label": f"{commodity} - Max Price ({source_label})",
             "data": price_range_data.get("max", [0] * len(result["labels"])),
             "borderColor": colors[color_index % len(colors)],
             "backgroundColor": colors[color_index % len(colors)] + "33",  # Add transparency
@@ -4180,7 +4189,7 @@ def get_volatility_data():
         
         # Create datasets for opening and closing prices (needed for candlestick)
         open_dataset = {
-            "label": f"{commodity} - Open Price",
+            "label": f"{commodity} - Open Price ({source_label})",
             "data": price_range_data.get("open", [0] * len(result["labels"])),
             "hidden": True,  # Hide from regular charts
             "borderColor": "transparent",
@@ -4190,7 +4199,7 @@ def get_volatility_data():
         }
         
         close_dataset = {
-            "label": f"{commodity} - Close Price",
+            "label": f"{commodity} - Close Price ({source_label})",
             "data": price_range_data.get("close", [0] * len(result["labels"])),
             "hidden": True,  # Hide from regular charts
             "borderColor": "transparent",
@@ -4206,7 +4215,7 @@ def get_volatility_data():
         result["datasets"].append(close_dataset)
         
         # Get the latest price data
-        latest_price_data = get_latest_price(commodity, cities)
+        latest_price_data = get_latest_price(commodity, cities, data_source)
         
         # Add it to the result dictionary
         result["latest_price"] = latest_price_data
@@ -4217,7 +4226,7 @@ def get_volatility_data():
         app.logger.error(f"Error in price range data: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-def calculate_price_range_for_timeframe(commodity, cities, start_date, end_date, time_frame, days_to_fetch):
+def calculate_price_range_for_timeframe(commodity, cities, start_date, end_date, time_frame, days_to_fetch, data_source="ProduceIQ"):
     """
     Calculate price ranges (min, max, open, close) for the selected commodity,
     aggregated across all selected cities, using the same averaging approach as historical_data.
@@ -4239,11 +4248,19 @@ def calculate_price_range_for_timeframe(commodity, cities, start_date, end_date,
         start_day_of_year = start_date.timetuple().tm_yday
         end_day_of_year = end_date.timetuple().tm_yday
         
+        # Handle source filtering
+        if data_source == "ProduceIQ,USDA" or data_source == "USDA,ProduceIQ":
+            # Include both sources
+            source_filter = PriceData.source.in_(["ProduceIQ", "USDA"])
+        else:
+            # Use specified source
+            source_filter = PriceData.source == data_source
+        
         # Query conditions to filter by date range
         query_conditions = [
             PriceData.commodity == commodity,
             PriceData.city_name.in_(cities),
-            PriceData.source == "ProduceIQ"
+            source_filter
         ]
         
         # Handle date range query differently depending on if it spans multiple years
@@ -4449,11 +4466,19 @@ def calculate_price_range_for_timeframe(commodity, cities, start_date, end_date,
         app.logger.error(f"Error calculating price ranges: {str(e)}")
         return {"min": [], "max": [], "open": [], "close": []}
 
-def get_latest_price(commodity, cities):
+def get_latest_price(commodity, cities, data_source="ProduceIQ"):
     """
     Get the absolute most recent price for the specified commodity and cities.
     """
     try:
+        # Handle source filtering
+        if data_source == "ProduceIQ,USDA" or data_source == "USDA,ProduceIQ":
+            # Include both sources
+            source_filter = PriceData.source.in_(["ProduceIQ", "USDA"])
+        else:
+            # Use specified source
+            source_filter = PriceData.source == data_source
+            
         # Simple query to get the latest price
         latest_price_query = db.session.query(
             PriceData.price,
@@ -4462,7 +4487,7 @@ def get_latest_price(commodity, cities):
         ).filter(
             PriceData.commodity == commodity,
             PriceData.city_name.in_(cities),
-            PriceData.source == "ProduceIQ"
+            source_filter
         ).order_by(
             PriceData.year.desc(),
             PriceData.day.desc()
@@ -4512,6 +4537,8 @@ def get_month_day_range(month, year):
     
     return first_day_of_year, last_day_of_year
 
+
+
 @app.route("/api/harvest_planning", methods=["POST"])
 def harvest_planning():
     try:
@@ -4520,77 +4547,16 @@ def harvest_planning():
             return jsonify({"error": "Missing varieties data"}), 400
 
         result = []
-        # ──────── shared forecast logic ──────── #
-        def compute_forecast(commodity, cities, avg_cities, forecast_years=1):
-            # 1) season setup
-            seasons = ["Winter", "Spring", "Summer", "Autumn"]
-            now = datetime.now()
-            current_year = now.year
-            month = now.month
-            current_season = (
-                "Spring" if 3 <= month <= 5 else
-                "Summer" if 6 <= month <= 8 else
-                "Autumn" if 9 <= month <= 11 else
-                "Winter"
-            )
-            # build labels
-            idx0 = seasons.index(current_season)
-            season_labels = [
-                f"{seasons[(idx0 + i) % 4]} {yr}"
-                for yr in range(current_year, current_year + forecast_years + 1)
-                for i in range(4)
-            ][ : 1 + 4 * forecast_years ]
-
-            # 2) pull your PriceData rows
-            filters = [
-                PriceData.commodity == commodity,
-                PriceData.year >= current_year - 5,
-                PriceData.source == "ProduceIQ",
-            ]
-            if not avg_cities:
-                filters.append(PriceData.city_name.in_(cities))
-
-            rows = (
-                db.session.query(
-                    PriceData.season,
-                    PriceData.year,
-                    PriceData.price
-                )
-                .filter(*filters)
-                .all()
-            )
-
-            # 3) aggregate into season_stats
-            data = defaultdict(lambda: defaultdict(list))
-            for season, year, price in rows:
-                data[season][year].append(price)
-
-            season_stats = {}
-            for season in seasons:
-                yearly_avgs = [
-                    sum(prs) / len(prs)
-                    for yr, prs in data[season].items()
-                    if prs
-                ]
-                overall_avg = sum(yearly_avgs) / len(yearly_avgs) if yearly_avgs else 0
-                # simple trend = +2% per year (or compute via regression if you like)
-                trend = 0.02
-                season_stats[season] = {"avg": overall_avg, "trend": trend}
-
-            # 4) build a single series of prices
-            prices = []
-            for label in season_labels:
-                season, yr_s = label.split()
-                yr = int(yr_s)
-                yrs_out = yr - current_year
-                st = season_stats.get(season)
-                if st and st["avg"] > 0:
-                    prices.append(round(st["avg"] * (1 + st["trend"] * yrs_out), 2))
-                else:
-                    prices.append(0)
-
-            return {"labels": season_labels, "data": prices}
-
+        
+        # Current date for reference
+        now = datetime.now()
+        current_year = now.year
+        
+        # Seasons definition
+        seasons = ["Winter", "Spring", "Summer", "Autumn"]
+        # Season to month mapping (mid-month)
+        season_month_map = {"Winter": 1, "Spring": 4, "Summer": 7, "Autumn": 10}
+        
         # ──────── main loop ──────── #
         for variety in payload["varieties"]:
             # validate
@@ -4598,7 +4564,7 @@ def harvest_planning():
                 if f not in variety:
                     return jsonify({"error": f"Missing field {f}"}), 400
 
-            # parse dates & calculate harvest date
+            # Parse dates & calculate harvest date
             plant = datetime.fromisoformat(variety["plantingDate"].replace("Z","+00:00"))
             harvest = datetime.fromisoformat(variety["harvestingDate"].replace("Z","+00:00"))
             grow_days = int(variety["growingDays"])
@@ -4606,42 +4572,99 @@ def harvest_planning():
 
             commodity = variety["name"]
             market = variety.get("market","").strip()
-            # handle “Select All” as avg_cities=True
+            source = variety.get("source", "ProduceIQ")
+            
+            # Handle "Select All" as All Cities
             if market.lower() in ("select all","all","national",""):
-                avg_cities = True
-                cities = []
+                city = "All cities"
             else:
-                avg_cities = False
-                cities = [market]
+                city = market
 
-            # get one‐year forecast
-            fc = compute_forecast(commodity, cities, avg_cities, forecast_years=1)
-
-            # find max price & which label it is
+            # Generate seasons to analyze - use a fixed 2-year window from now
+            seasons_to_check = []
+            
+            # Start with the current season
+            current_month = now.month
+            current_season = (
+                "Spring" if 3 <= current_month <= 5 else
+                "Summer" if 6 <= current_month <= 8 else
+                "Autumn" if 9 <= current_month <= 11 else
+                "Winter"
+            )
+            current_season_idx = seasons.index(current_season)
+            
+            # Generate 8 seasons (2 years) starting from current season
+            for offset in range(8):
+                check_season_idx = (current_season_idx + offset) % 4
+                check_season = seasons[check_season_idx]
+                check_year = current_year + (current_season_idx + offset) // 4
+                
+                # Create the date for this season
+                check_month = season_month_map[check_season]
+                check_date = datetime(check_year, check_month, 15)
+                
+                seasons_to_check.append((check_season, check_year, check_date))
+            
+            # Create a reference date that's fixed (doesn't depend on planting date)
+            # Use a date 5 years before now to capture consistent historical data
+            reference_date = datetime(now.year - 5, 1, 1)  # January 1, five years ago
+            
+            # Calculate price for each valid future season
+            season_prices = []
+            for season_info in seasons_to_check:
+                season, year, season_date = season_info
+                
+                # Skip seasons before harvesting
+                if season_date < harvest:
+                    continue
+                
+                # Use calculate_forecasted_price with fixed reference date
+                price = calculate_forecasted_price(commodity, reference_date, season_date, city, source)
+                
+                # Only include non-zero prices
+                if price > 0:
+                    season_prices.append((f"{season} {year}", round(price, 2), season_date))
+            
+            # Find season with highest price
+            best_season = None
+            best_year = None
             highest_price = 0
-            best_season = best_year = None
-            for i, price in enumerate(fc["data"]):
-                if price > highest_price:
-                    highest_price = price
-                    season, yr_s = fc["labels"][i].split()
-                    best_season, best_year = season, int(yr_s)
-
-            # pick a midpoint date for that season
             best_date = None
-            if best_season and best_year:
-                month_map = {"Winter":1, "Spring":4, "Summer":7, "Autumn":10}
-                d = month_map[best_season]
-                best_date = datetime(best_year, d, 15)
-                # ensure it's after harvest
-                if best_date < harvest:
-                    best_date = datetime(best_year+1, d, 15)
-
+            
+            if season_prices:
+                # Sort by price (descending)
+                sorted_prices = sorted(season_prices, key=lambda x: x[1], reverse=True)
+                
+                # Take the highest price 
+                best_data = sorted_prices[0]
+                best_label = best_data[0]
+                highest_price = best_data[1]
+                best_date = best_data[2]
+                
+                best_season, best_year_str = best_label.split()
+                best_year = int(best_year_str)
+                
+                # Find the earliest season with a good price (within 10% of max)
+                price_threshold = highest_price * 0.9  # 90% of the highest price
+                
+                # Sort by date (ascending)
+                for label, price, date in sorted(season_prices, key=lambda x: x[2]):
+                    if price >= price_threshold:
+                        # Found a close enough price that's earlier
+                        season, year_str = label.split()
+                        best_season = season
+                        best_year = int(year_str)
+                        highest_price = price
+                        best_date = date
+                        break
+            
             result.append({
                 "name": commodity,
                 "plantingDate": plant.isoformat(),
                 "harvestingDate": harvest.isoformat(),
                 "calculatedHarvestDate": calc_harvest.isoformat(),
                 "growingDays": grow_days,
+                "source": source,
                 "bestSellingTime": {
                     "season": best_season,
                     "year": best_year,
@@ -4655,12 +4678,10 @@ def harvest_planning():
     except Exception as e:
         app.logger.exception("Error in harvest_planning")
         return jsonify({"error": str(e)}), 500
+    
 
 
-
-
-
-
+    
 # Existing calculate_forecast helper functions can be reused
 from sqlalchemy import desc
 
@@ -4685,6 +4706,8 @@ def save_break_even_estimation():
         boxes_bonus_per_yield = data.get("boxes_bonus_per_yield", 0)
         start_date_range_str = data.get("start_date_range")
         end_date_range_str = data.get("end_date_range")
+        source = data.get("source", "ProduceIQ")
+
         
         # Validate required fields
         if not all([
@@ -4707,7 +4730,7 @@ def save_break_even_estimation():
         boxes_bonus_per_yield = float(boxes_bonus_per_yield)
         
         # Calculate forecasted price using the same function as the forecast component
-        forecasted_price = calculate_forecasted_price(variety, start_date, forecast_date, city)
+        forecasted_price = calculate_forecasted_price(variety, start_date, forecast_date, city, source)
         revenue_per_acre = forecasted_price * yield_per_acre
         
         # Calculate total costs
@@ -4739,7 +4762,9 @@ def save_break_even_estimation():
             revenue_per_acre=revenue_per_acre,
             revenue_after_costs=revenue_after_costs,
             revenue_per_box=revenue_per_box,
-            season=season
+            season=season,
+            source=source  # Add this line (requires DB model update)
+
         )
         
         db.session.add(estimation)
@@ -4926,6 +4951,8 @@ def get_break_even_chart_data():
         current_date_str = request.args.get("current_date", datetime.now().strftime("%Y-%m-%d"))
         forecast_date_str = request.args.get("forecast_date")
         is_all_cities = request.args.get("is_all_cities") == "true"
+        data_source = request.args.get("source", "ProduceIQ")  # Add this line
+
         
         # Validate required parameters
         if not variety or not start_date_str:
@@ -4998,12 +5025,13 @@ def get_break_even_chart_data():
             
             # Use the calculate_forecasted_price function with historical data
             # start_date is the historical starting point, season_date is the future date to predict
-            price = calculate_forecasted_price(variety, start_date, season_date, city)
+            price = calculate_forecasted_price(variety, start_date, season_date, city, data_source)
             prices.append(round(price, 2))
         
         # Add dataset for the variety
+        source_label = "ProduceIQ & USDA" if "," in data_source else data_source
         result["datasets"] = [{
-            "label": f"{variety} Forecast Price",
+            "label": f"{variety} Forecast Price ({source_label})",
             "data": prices,
             "borderColor": "#FF6384",
             "backgroundColor": "#FF6384",
@@ -5415,7 +5443,7 @@ import calendar
 @app.route("/api/monthly-average-prices", methods=["GET"])
 def get_monthly_average_prices():
     """
-    Retrieve detailed monthly average prices for a given commodity
+    Retrieve detailed monthly average prices for a given commodity with data source filtering
     """
     try:
         # Extract query parameters
@@ -5424,6 +5452,7 @@ def get_monthly_average_prices():
         end_month = int(request.args.get('end_month', 12))    # Default December
         start_year = int(request.args.get('start_year'))
         end_year = int(request.args.get('end_year'))
+        data_source = request.args.get('source', 'ProduceIQ')  # Default to ProduceIQ
         
         # Validate required parameters
         if not commodity or not start_year or not end_year:
@@ -5459,22 +5488,27 @@ def get_monthly_average_prices():
                 month_start_day = cumulative_days[month-1] + 1
                 month_end_day = cumulative_days[month]
                 
-                # Query for this month/year combination
-                year_month_data = (
-                    db.session.query(
-                        func.avg(PriceData.price).label('avg_price'),
-                        func.min(PriceData.price).label('min_price'),
-                        func.max(PriceData.price).label('max_price')
-                    )
-                    .filter(
-                        PriceData.commodity == commodity,
-                        PriceData.year == year,
-                        PriceData.day >= month_start_day,
-                        PriceData.day <= month_end_day,
-                        PriceData.price > 0
-                    )
-                    .first()
+                # Create base query with filters
+                query = db.session.query(
+                    func.avg(PriceData.price).label('avg_price'),
+                    func.min(PriceData.price).label('min_price'),
+                    func.max(PriceData.price).label('max_price')
+                ).filter(
+                    PriceData.commodity == commodity,
+                    PriceData.year == year,
+                    PriceData.day >= month_start_day,
+                    PriceData.day <= month_end_day,
+                    PriceData.price > 0
                 )
+                
+                # Add source filter
+                if data_source == "ProduceIQ,USDA" or data_source == "USDA,ProduceIQ":
+                    query = query.filter(PriceData.source.in_(["ProduceIQ", "USDA"]))
+                else:
+                    query = query.filter(PriceData.source == data_source)
+                
+                # Execute the query
+                year_month_data = query.first()
                 
                 # Only add if we have valid data
                 if year_month_data and year_month_data.avg_price is not None:
@@ -5515,13 +5549,13 @@ def get_monthly_average_prices():
             "start_month": start_month,
             "end_month": end_month,
             "start_year": start_year,
-            "end_year": end_year
+            "end_year": end_year,
+            "source": data_source
         }), 200
     
     except Exception as e:
         app.logger.error(f"Error in monthly average prices: {str(e)}")
         return jsonify({"error": str(e)}), 500
-
 
 
 # TEST ROUTE

@@ -45,6 +45,8 @@ const BreakEvenEstimator = () => {
     harvest_cost_per_box: 10,
     cost_of_box: 1,
     boxes_bonus_per_yield: 10,
+    source: 'ProduceIQ',  // Add this line
+
     // Date range for forecast comparison
     startDateRange: new Date().toISOString().split('T')[0],
     endDateRange: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
@@ -155,6 +157,8 @@ const BreakEvenEstimator = () => {
         boxes_bonus_per_yield: parseFloat(formState.boxes_bonus_per_yield),
         start_date_range: formState.startDateRange,
         end_date_range: formState.endDateRange,
+        source: formState.source,  // Add this line
+
         // Include calculated results
         forecasted_price: calculatedForecast.forecasted_price,
         revenue_per_acre: calculatedForecast.revenue_per_acre,
@@ -216,6 +220,8 @@ const handleCalculate = async () => {
       harvest_cost_per_box: parseFloat(formState.harvest_cost_per_box),
       cost_of_box: parseFloat(formState.cost_of_box),
       boxes_bonus_per_yield: parseFloat(formState.boxes_bonus_per_yield),
+      source: formState.source  // Add this line
+
     });
 
     const calculatedData = forecastResponse.data;
@@ -239,7 +245,9 @@ const handleCalculate = async () => {
         start_date: formState.start_date, // Historical start date
         current_date: currentDate, // Add current date as reference point
         forecast_date: forecast_date,
-        is_all_cities: formState.city === "All Cities"
+        is_all_cities: formState.city === "All Cities",
+        source: formState.source  // Add this line
+
       },
     });
 
@@ -662,7 +670,20 @@ const costPerBox = (
                       step="0.01"
                     />
                   </div>
-                  
+                  {/* Data Source Selection */}
+<div className="form-group">
+  <label className="font-weight-bold">Data Source</label>
+  <select
+    className="form-control"
+    name="source"
+    value={formState.source}
+    onChange={handleInputChange}
+  >
+    <option value="ProduceIQ">ProduceIQ</option>
+    <option value="USDA">USDA</option>
+    <option value="ProduceIQ,USDA">Both Sources</option>
+  </select>
+</div>
            
              
                   

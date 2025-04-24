@@ -293,10 +293,10 @@ export default function DynamicAnalytics() {
                 {chartOptions.find(c => c.id === activeChart)?.name}
               </h2>
               <div className="chart-actions">
-                <button className="btn btn-outline-primary" style={{ padding: '8px 15px', fontSize: '14px' }}>
+                {/* <button className="btn btn-outline-primary" style={{ padding: '8px 15px', fontSize: '14px' }}>
                   <i className="fas fa-question-circle" style={{ marginRight: '8px' }}></i>
                   Help
-                </button>
+                </button> */}
               </div>
             </div>
             

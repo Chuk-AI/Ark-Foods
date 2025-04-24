@@ -61,6 +61,7 @@ const VolatilityChart = () => {
     commodity: 'Poblano', // Only ONE commodity at a time
     cities: [...citiesList],
     timeFrame: '1m', // Default time frame: 1 month
+    source: 'ProduceIQ', // Add this line
     ...dateRangeFilter
   });
 
@@ -68,6 +69,7 @@ const VolatilityChart = () => {
     commodity: 'Poblano', 
     cities: [...citiesList],
     timeFrame: '1m',
+    source: 'ProduceIQ', // Add this line
     startDate: "2022-01-01",
     endDate: "2025-12-31"
   });
@@ -736,7 +738,7 @@ useEffect(() => {
   };
 
   const fetchVolatilityData = async (filters) => {
-    const { commodity, cities, timeFrame, startDate, endDate } = filters;
+    const { commodity, cities, timeFrame, startDate, endDate, source } = filters;
   
     try {
       const token = localStorage.getItem('authToken');
@@ -749,6 +751,8 @@ useEffect(() => {
       url.searchParams.append('timeFrame', timeFrame);
       url.searchParams.append('startDate', startDate);
       url.searchParams.append('endDate', endDate);
+      url.searchParams.append('source', source); // Add this line
+
   
       const response = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
@@ -915,6 +919,9 @@ useEffect(() => {
                   </select>
                 </div>
 
+
+
+
                 {/* City Filter with Checkboxes */}
                 <div className="form-group">
                   <label className="font-weight-bold">City</label>
@@ -941,6 +948,23 @@ useEffect(() => {
                     ))}
                   </div>
                 </div>
+                
+                                {/* Data Source Selector */}
+<div className="form-group">
+  <label className="font-weight-bold">Data Source</label>
+  <select 
+    className="form-control" 
+    value={volatilityFilterState.source}
+    onChange={(e) => setVolatilityFilterState(prev => ({
+      ...prev,
+      source: e.target.value
+    }))}
+  >
+    <option value="ProduceIQ">ProduceIQ</option>
+    <option value="USDA">USDA</option>
+    <option value="ProduceIQ,USDA">Both Sources</option>
+  </select>
+</div>
 
                 {/* Apply Filters Button */}
                 <button type="button" className="btn btn-primary btn-block" onClick={handleApplyFilters}>

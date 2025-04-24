@@ -9,7 +9,9 @@ const MonthlyAveragePrices = () => {
     startMonth: 1,  // January
     endMonth: 9,    // September
     startYear: 2019,
-    endYear: 2022
+    endYear: 2022,
+    source: 'ProduceIQ'  // Default data source
+
   });
 
   // State for chart and data
@@ -71,7 +73,9 @@ const MonthlyAveragePrices = () => {
           start_month: formState.startMonth,
           end_month: formState.endMonth,
           start_year: formState.startYear,
-          end_year: formState.endYear
+          end_year: formState.endYear,
+          source: formState.source  // Add source parameter
+
         }
       });
       
@@ -150,7 +154,7 @@ const MonthlyAveragePrices = () => {
         legend: { display: true },
         title: {
           display: true,
-          text: `Monthly Average Prices for ${formState.commodity} (${formState.startYear}-${formState.endYear})`,
+          text: `Monthly Average Prices for ${formState.commodity} (${formState.startYear}-${formState.endYear}, ${formState.source})`,
           font: { size: 16 }
         },
         tooltip: {
@@ -334,6 +338,21 @@ const MonthlyAveragePrices = () => {
                   max={new Date().getFullYear()}
                 />
               </div>
+
+              {/* Data Source Selection */}
+<div className="form-group mb-3">
+  <label>Data Source</label>
+  <select
+    name="source"
+    value={formState.source}
+    onChange={handleInputChange}
+    className="form-control"
+  >
+    <option value="ProduceIQ">ProduceIQ</option>
+    <option value="USDA">USDA</option>
+    <option value="ProduceIQ,USDA">Both Sources</option>
+  </select>
+</div>
 
               {/* Calculate Button */}
               <button

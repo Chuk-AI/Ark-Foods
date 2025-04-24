@@ -32,8 +32,10 @@ const ForecastLineChart = () => {
   const [forecastFilterState, setForecastFilterState] = useState({
     commodities: ['Shishito'], // Default to one or more items
     cities: ['Baltimore'], // Default to one or more cities
-    averageCities: false, // Changed from averageCommodities to averageCities
+    averageCities: true, // Changed from averageCommodities to averageCities
     forecastYears: 1, // Default to 1 year of forecasting
+    source: "ProduceIQ", // Default data source
+
   });
 
   const [appliedForecastFilters, setAppliedForecastFilters] = useState({
@@ -41,6 +43,8 @@ const ForecastLineChart = () => {
     cities: ['Baltimore'],
     averageCities: false, // Changed from averageCommodities to averageCities
     forecastYears: 1,
+    source: "ProduceIQ", // Default data source
+
   });
 
   const forecastChartRef = useRef(null);
@@ -267,7 +271,9 @@ const ForecastLineChart = () => {
           commodities: commodities.join(','),
           cities: cities.join(','),
           averageCities: averageCities, // Changed from averageCommodities to averageCities
-          forecastYears: forecastYears
+          forecastYears: forecastYears,
+          source: filters.source // Add this line
+
         },
       });
 
@@ -395,6 +401,9 @@ const ForecastLineChart = () => {
                   </div>
                 </div>
 
+
+
+
                 {/* Average Cities Checkbox (replaced Average Commodities) */}
                 <div className="form-group form-check">
                   <input
@@ -408,6 +417,25 @@ const ForecastLineChart = () => {
                     Average over Cities
                   </label>
                 </div>
+
+                                {/* Data Source Selector */}
+
+{/* Data Source Selector Dropdown */}
+<div className="form-group">
+  <label className="font-weight-bold">Data Source</label>
+  <select 
+    className="form-control" 
+    value={forecastFilterState.source}
+    onChange={(e) => setForecastFilterState(prev => ({
+      ...prev,
+      source: e.target.value
+    }))}
+  >
+    <option value="ProduceIQ">ProduceIQ</option>
+    <option value="USDA">USDA</option>
+    <option value="ProduceIQ,USDA">Both Sources</option>
+  </select>
+</div>
 
                 {/* Forecast Years Selector */}
                 {/* <div className="form-group">
