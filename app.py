@@ -4916,13 +4916,14 @@ def update_break_even_estimation(estimation_id):
 def get_break_even_chart_data():
     """
     Generate chart data specifically for break-even analysis using calculate_forecasted_price
-    Accepts parameters as sent by the frontend
+    Uses historical data from start_date to current_date, then forecasts future seasons
     """
     try:
         # Extract parameters from the request
         variety = request.args.get("variety")
         city = request.args.get("city")
         start_date_str = request.args.get("start_date")
+        current_date_str = request.args.get("current_date", datetime.now().strftime("%Y-%m-%d"))
         forecast_date_str = request.args.get("forecast_date")
         is_all_cities = request.args.get("is_all_cities") == "true"
         
@@ -4932,12 +4933,13 @@ def get_break_even_chart_data():
             
         # Parse dates
         start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
+        current_date = datetime.strptime(current_date_str, "%Y-%m-%d")
         
-        # If forecast date is provided, use it; otherwise default to start_date + 1 year
+        # If forecast date is provided, use it; otherwise default to current_date + 1 year
         if forecast_date_str:
             forecast_date = datetime.strptime(forecast_date_str, "%Y-%m-%d")
         else:
-            forecast_date = start_date + timedelta(days=365)
+            forecast_date = current_date + timedelta(days=365)
         
         # Handle "All Cities" case
         if is_all_cities or city == "All Cities":
@@ -4949,25 +4951,25 @@ def get_break_even_chart_data():
             "datasets": []
         }
         
-        # Define seasons and determine start season
+        # Define seasons and determine current season
         seasons = ["Winter", "Spring", "Summer", "Autumn"]
         
-        month = start_date.month
-        start_season = (
+        month = current_date.month
+        current_season = (
             "Spring" if 3 <= month <= 5 else
             "Summer" if 6 <= month <= 8 else
             "Autumn" if 9 <= month <= 11 else
             "Winter"
         )
         
-        start_season_index = seasons.index(start_season)
-        start_year = start_date.year
+        current_season_index = seasons.index(current_season)
+        current_year = current_date.year
         
-        # Generate labels for 1 year (4 seasons)
+        # Generate labels for 1 year forward (4 seasons) starting from current season
         labels = []
         for i in range(4):
-            season_index = (start_season_index + i) % 4
-            year = start_year + ((start_season_index + i) // 4)
+            season_index = (current_season_index + i) % 4
+            year = current_year + ((current_season_index + i) // 4)
             labels.append(f"{seasons[season_index]} {year}")
         
         result["labels"] = labels
@@ -4994,7 +4996,8 @@ def get_break_even_chart_data():
             # Create forecast date for this season
             season_date = datetime(year, month, day)
             
-            # Use the calculate_forecasted_price function
+            # Use the calculate_forecasted_price function with historical data
+            # start_date is the historical starting point, season_date is the future date to predict
             price = calculate_forecasted_price(variety, start_date, season_date, city)
             prices.append(round(price, 2))
         
@@ -5017,7 +5020,9 @@ def get_break_even_chart_data():
     except Exception as e:
         app.logger.error(f"Break-even chart data error: {str(e)}")
         return jsonify({"error": str(e)}), 500
-    
+
+
+
 
 @app.route('/api/commodities', methods=['GET'])
 # @jwt_required()

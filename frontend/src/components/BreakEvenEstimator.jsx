@@ -136,17 +136,18 @@ const BreakEvenEstimator = () => {
       const token = localStorage.getItem('authToken');
       if (!token) throw new Error('No token found');
       
-
-      const forecast_date = moment(formState.start_date)
-                        .add(1, 'year')
-                        .format('YYYY-MM-DD');
-
+      // Use current date as reference for forecast date
+      const currentDate = new Date().toISOString().split('T')[0];
+      const forecast_date = moment(currentDate)
+        .add(1, 'year')
+        .format('YYYY-MM-DD');
+  
       // Prepare data for saving
       const saveData = {
         variety: formState.variety,
         city: formState.city,
         start_date: formState.start_date,
-        forecast_date, 
+        forecast_date,
         yield_per_acre: parseFloat(formState.yield_per_acre),
         cost_per_acre: parseFloat(formState.cost_per_acre),
         harvest_cost_per_box: parseFloat(formState.harvest_cost_per_box),
@@ -198,17 +199,18 @@ const handleCalculate = async () => {
        Run the revenue‑calculator endpoint
     ────────────────────────────────────── */
 
-    // derive forecast_date exactly 1 year after the start_date
-    const forecast_date = moment(formState.start_date)
+    // Use current date to generate forecast_date (1 year into the future)
+    const currentDate = new Date().toISOString().split('T')[0];
+    const forecast_date = moment(currentDate)
       .add(1, 'year')
       .format('YYYY-MM-DD');
 
     // Add city parameter to the forecast calculation
     const forecastResponse = await axios.post("/api/calculate_forecast", {
       variety: formState.variety,
-      city: formState.city, // Include city parameter
-      start_date: formState.start_date,
-      forecast_date,
+      city: formState.city,
+      start_date: formState.start_date, // Keep original start_date for historical analysis
+      forecast_date, // But use current date + 1 year for forecast
       yield_per_acre: parseFloat(formState.yield_per_acre),
       cost_per_acre: parseFloat(formState.cost_per_acre),
       harvest_cost_per_box: parseFloat(formState.harvest_cost_per_box),
@@ -228,15 +230,16 @@ const handleCalculate = async () => {
     // Check if using "All Cities"
     const isAllCities = formState.city === "All Cities";
 
-    // Get chart data using the endpoint
+    // Get chart data using the endpoint with current date as reference point
     const forecastLineResponse = await axios.get("/api/break_even_chart_data", {
       headers: { Authorization: `Bearer ${token}` },
       params: {
-        variety: formState.variety,        // Changed from 'commodities' to match backend
-        city: formState.city,              // Changed from 'cities' to match backend
-        start_date: formState.start_date,  // Changed from 'startDate' to match backend
-        forecast_date: forecast_date,      // Changed to match backend expectations
-       is_all_cities: formState.city === "All Cities"
+        variety: formState.variety,
+        city: formState.city,
+        start_date: formState.start_date, // Historical start date
+        current_date: currentDate, // Add current date as reference point
+        forecast_date: forecast_date,
+        is_all_cities: formState.city === "All Cities"
       },
     });
 
