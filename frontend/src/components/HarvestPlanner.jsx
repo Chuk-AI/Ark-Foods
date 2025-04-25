@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { format, parse, addDays, getQuarter, startOfQuarter, endOfQuarter } from 'date-fns';
+import { format, parse, addDays, addMonths, getQuarter, startOfQuarter, endOfQuarter } from 'date-fns';
 import { 
   Box, 
   Button, 
@@ -57,6 +57,13 @@ const DEFAULT_COMMODITIES = [
 // List of common markets
 const DEFAULT_MARKETS = [
   "Select All","Baltimore", "Boston", "Chicago", "Columbia", "Miami", "New York", "Philadelphia", "Los Angeles"
+];
+
+// Harvest and Selling periods
+const PERIOD_OPTIONS = [
+  { value: 1, label: "1 Month" },
+  { value: 2, label: "2 Months" },
+  { value: 3, label: "3 Months" },
 ];
 
 // Styled components for Gantt chart
@@ -125,6 +132,11 @@ const QuarterCell2 = styled(Box)(({ theme }) => ({
   borderRight: `1px solid ${theme.palette.divider}`,
 }));
 
+
+
+// Z-index values for the styled components
+// These are already correct in your code, but here for reference:
+
 const GrowingBar = styled(Box)(({ theme }) => ({
   position: 'absolute',
   height: 30,
@@ -141,7 +153,7 @@ const GrowingBar = styled(Box)(({ theme }) => ({
   whiteSpace: 'nowrap',
   textOverflow: 'ellipsis',
   backgroundColor: theme.palette.primary.main,
-  zIndex: 1,
+  zIndex: 1, // Growing has lowest z-index
 }));
 
 const HarvestBar = styled(Box)(({ theme }) => ({
@@ -160,7 +172,7 @@ const HarvestBar = styled(Box)(({ theme }) => ({
   whiteSpace: 'nowrap',
   textOverflow: 'ellipsis',
   backgroundColor: theme.palette.success.main,
-  zIndex: 2,
+  zIndex: 3, // Harvest has higher z-index than selling
 }));
 
 const SellingBar = styled(Box)(({ theme }) => ({
@@ -179,13 +191,14 @@ const SellingBar = styled(Box)(({ theme }) => ({
   whiteSpace: 'nowrap',
   textOverflow: 'ellipsis',
   backgroundColor: theme.palette.warning.main,
-  zIndex: 3,
+  zIndex: 2, // Selling has middle z-index
 }));
+
+
 
 const HarvestPlanningChart = () => {
   const theme = useTheme();
 
-  
   const [commoditiesList, setCommoditiesList] = useState(DEFAULT_COMMODITIES);
   const [marketsList, setMarketsList] = useState(DEFAULT_MARKETS);
   const [varieties, setVarieties] = useState([
@@ -193,11 +206,11 @@ const HarvestPlanningChart = () => {
       id: 1, 
       name: '', 
       plantingDate: '', 
-      harvestingDate: '', 
+      harvestPeriod: 1, // Default 1 month
+      sellingPeriod: 1, // Default 1 month
       growingDays: '', 
       market: 'Miami', // Default market
       source: 'ProduceIQ' // Default source
-
     }
   ]);
   const [planningData, setPlanningData] = useState([]);
@@ -212,11 +225,11 @@ const HarvestPlanningChart = () => {
         id: varieties.length + 1, 
         name: '', 
         plantingDate: '', 
-        harvestingDate: '', 
+        harvestPeriod: 1, // Default 1 month
+        sellingPeriod: 1, // Default 1 month
         growingDays: '', 
         market: 'Miami', // Default market
         source: 'ProduceIQ'  // Default source
-
       }
     ]);
   };
@@ -239,25 +252,7 @@ const HarvestPlanningChart = () => {
   const handleInputChange = (id, field, value) => {
     const updatedVarieties = varieties.map(variety => {
       if (variety.id === id) {
-        const updatedVariety = { ...variety, [field]: value };
-        
-        // Auto-calculate growing days or harvest date based on input
-        if (field === 'plantingDate' || field === 'harvestingDate') {
-          if (updatedVariety.plantingDate && updatedVariety.harvestingDate) {
-            const plantDate = new Date(updatedVariety.plantingDate);
-            const harvestDate = new Date(updatedVariety.harvestingDate);
-            const daysDiff = Math.round((harvestDate - plantDate) / (1000 * 60 * 60 * 24));
-            updatedVariety.growingDays = daysDiff > 0 ? daysDiff : '';
-          }
-        } else if (field === 'growingDays') {
-          if (updatedVariety.plantingDate && updatedVariety.growingDays) {
-            const plantDate = new Date(updatedVariety.plantingDate);
-            const calculatedHarvestDate = addDays(plantDate, parseInt(updatedVariety.growingDays));
-            updatedVariety.harvestingDate = format(calculatedHarvestDate, 'yyyy-MM-dd');
-          }
-        }
-        
-        return updatedVariety;
+        return { ...variety, [field]: value };
       }
       return variety;
     });
@@ -269,7 +264,7 @@ const HarvestPlanningChart = () => {
   const submitPlanningData = async () => {
     // Validate input data
     const invalidEntries = varieties.filter(
-      v => !v.name || !v.plantingDate || !v.harvestingDate || !v.growingDays
+      v => !v.name || !v.plantingDate || !v.growingDays || !v.harvestPeriod || !v.sellingPeriod
     );
     
     if (invalidEntries.length > 0) {
@@ -281,11 +276,14 @@ const HarvestPlanningChart = () => {
       if (invalidEntries.some(v => !v.plantingDate)) {
         missingFields.push("planting date");
       }
-      if (invalidEntries.some(v => !v.harvestingDate)) {
-        missingFields.push("harvesting date");
-      }
       if (invalidEntries.some(v => !v.growingDays)) {
         missingFields.push("growing days");
+      }
+      if (invalidEntries.some(v => !v.harvestPeriod)) {
+        missingFields.push("harvest period");
+      }
+      if (invalidEntries.some(v => !v.sellingPeriod)) {
+        missingFields.push("selling period");
       }
       
       setError(`Please fill in all required fields (${missingFields.join(', ')}) for all varieties.`);
@@ -300,11 +298,11 @@ const HarvestPlanningChart = () => {
         varieties: varieties.map(v => ({
           name: v.name,
           plantingDate: v.plantingDate,
-          harvestingDate: v.harvestingDate,
+          harvestPeriod: v.harvestPeriod,
+          sellingPeriod: v.sellingPeriod,
           growingDays: v.growingDays,
           market: v.market || 'Miami',
-          source: v.source || 'ProduceIQ'  // Include source in API request
-
+          source: v.source || 'ProduceIQ'
         }))
       });
       
@@ -326,21 +324,20 @@ const HarvestPlanningChart = () => {
     
     planningData.forEach(variety => {
       const plantingDate = new Date(variety.plantingDate);
-      const harvestingDate = new Date(variety.harvestingDate);
-      const sellingDate = variety.bestSellingTime.date ? new Date(variety.bestSellingTime.date) : null;
+      const harvestStartDate = new Date(variety.harvestStartDate);
+      const harvestEndDate = new Date(variety.harvestEndDate);
+      const sellingEndDate = new Date(variety.sellingEndDate);
+      const bestSellingDate = variety.bestSellingTime.date ? new Date(variety.bestSellingTime.date) : null;
       
       // Set earliest date (first planting date)
       if (!earliestDate || plantingDate < earliestDate) {
         earliestDate = new Date(plantingDate);
       }
       
-      // Set latest date (last selling date or harvest date if no selling date)
-      if (sellingDate) {
-        if (!latestDate || sellingDate > latestDate) {
-          latestDate = new Date(sellingDate);
-        }
-      } else if (!latestDate || harvestingDate > latestDate) {
-        latestDate = new Date(harvestingDate);
+      // Set latest date (selling end or best selling date, whichever is later)
+      const latestDateForVariety = bestSellingDate && bestSellingDate > sellingEndDate ? bestSellingDate : sellingEndDate;
+      if (!latestDate || latestDateForVariety > latestDate) {
+        latestDate = new Date(latestDateForVariety);
       }
     });
     
@@ -385,29 +382,6 @@ const HarvestPlanningChart = () => {
     return labels;
   };
   
-  // Function to convert season and year to a quarter index in our dynamic timeline
-  const getQuarterIndexForSeason = (season, year, timeline) => {
-    if (!timeline || !season || !year) return 0;
-    
-    // Map seasons to quarters
-    let quarterNum;
-    switch(season) {
-      case 'Winter': quarterNum = 1; break; // Q1 (Jan-Mar)
-      case 'Spring': quarterNum = 2; break; // Q2 (Apr-Jun)
-      case 'Summer': quarterNum = 3; break; // Q3 (Jul-Sep)
-      case 'Autumn': quarterNum = 4; break; // Q4 (Oct-Dec)
-      default: quarterNum = 1;
-    }
-    
-    const startQuarter = getQuarter(timeline.start);
-    const startYear = timeline.start.getFullYear();
-    
-    // Calculate quarters between timeline start and season
-    const quarterDiff = (year - startYear) * 4 + (quarterNum - startQuarter);
-    
-    return Math.max(0, quarterDiff);
-  };
-
   // Helper function to get quarter index for a date
   const getQuarterIndexForDate = (date, timeline) => {
     if (!timeline || !date) return 0;
@@ -424,48 +398,100 @@ const HarvestPlanningChart = () => {
     return Math.max(0, quarterDiff);
   };
 
-  // Helper function to determine activity in quarter
- // Helper function to determine activity in quarter
-const getActivityInQuarter = (quarterLabel, plantingDate, harvestingDate, sellingDate) => {
-  // Create dates representing the first and last day of the quarter
-  const quarterDate = new Date(quarterLabel.year, (quarterLabel.quarter - 1) * 3, 1);
-  const quarterEndDate = new Date(quarterDate);
-  quarterEndDate.setMonth(quarterEndDate.getMonth() + 3);
-  quarterEndDate.setDate(0); // Last day of the last month in quarter
-  
-  // Check exact day for planting to ensure it's always shown
-  const isPlantingDay = plantingDate.getFullYear() === quarterLabel.year && 
-                        Math.floor(plantingDate.getMonth() / 3) + 1 === quarterLabel.quarter;
-  
-  // Enhanced check for activities spanning quarters
-  const isPlanting = isPlantingDay || 
-                    (plantingDate >= quarterDate && plantingDate <= quarterEndDate);
-  const isHarvesting = harvestingDate >= quarterDate && harvestingDate <= quarterEndDate;
-  const isSelling = sellingDate && sellingDate >= quarterDate && sellingDate <= quarterEndDate;
-  
-  // Improved growing detection - check if any part of growing period occurs in this quarter
-  const isGrowing = (plantingDate < quarterEndDate && harvestingDate > quarterDate) && 
-                   !isHarvesting && !isPlanting;
-  
-  // Calculate months of activity in this quarter (0-3)
-  const activeDuration = Math.min(3, Math.max(0, Math.min(3, 
-    Math.ceil((Math.min(harvestingDate, quarterEndDate) - 
-              Math.max(plantingDate, quarterDate)) / 
-              (1000 * 60 * 60 * 24 * 30))
-  )));
-  
-  return {
-    isPlanting,
-    isGrowing,
-    isHarvesting,
-    isSelling,
-    activeDuration
+
+  const getMonthsOfActivityInQuarter = (quarterLabel, plantingDate, harvestStartDate, harvestEndDate, sellingStartDate, sellingEndDate, bestSellingDate) => {
+    // Create dates for the first and last day of the quarter
+    const quarterStartDate = new Date(quarterLabel.year, (quarterLabel.quarter - 1) * 3, 1);
+    const quarterEndDate = new Date(quarterLabel.year, (quarterLabel.quarter - 1) * 3 + 3, 0);
+    
+    // Check for best selling date in this quarter
+    const bestSellingInQuarter = bestSellingDate && 
+                                bestSellingDate >= quarterStartDate && 
+                                bestSellingDate <= quarterEndDate ? 1 : 0;
+      
+    // Calculate the start and end of each activity in this quarter
+    const plantingInQuarter = plantingDate >= quarterStartDate && plantingDate <= quarterEndDate;
+    
+    // For growing, harvesting, selling - calculate overlap with quarter
+    const growingStart = Math.max(plantingDate.getTime(), quarterStartDate.getTime());
+    const growingEnd = Math.min(harvestStartDate.getTime(), quarterEndDate.getTime());
+    const growingMonths = growingStart <= growingEnd ? 
+      Math.ceil((growingEnd - growingStart) / (1000 * 60 * 60 * 24 * 30)) : 0;
+    
+    const harvestingStart = Math.max(harvestStartDate.getTime(), quarterStartDate.getTime());
+    const harvestingEnd = Math.min(harvestEndDate.getTime(), quarterEndDate.getTime());
+    const harvestingMonths = harvestingStart <= harvestingEnd ? 
+      Math.ceil((harvestingEnd - harvestingStart) / (1000 * 60 * 60 * 24 * 30)) : 0;
+    
+    const sellingStart = Math.max(sellingStartDate.getTime(), quarterStartDate.getTime());
+    const sellingEnd = Math.min(sellingEndDate.getTime(), quarterEndDate.getTime());
+    const sellingMonths = sellingStart <= sellingEnd ? 
+      Math.ceil((sellingEnd - sellingStart) / (1000 * 60 * 60 * 24 * 30)) : 0;
+    
+    // Ensure we don't exceed 3 months total
+    const totalMonths = Math.min(plantingInQuarter ? 1 : 0 + growingMonths + harvestingMonths + sellingMonths, 3);
+    
+    return {
+      planting: plantingInQuarter ? 1 : 0,
+      growing: growingMonths,
+      harvesting: harvestingMonths,
+      bestSelling: bestSellingInQuarter,
+      selling: sellingMonths,
+      total: totalMonths
+    };
   };
-};
+
+
+  // Helper function to determine activity in quarter
+  const getActivityInQuarter = (quarterLabel, plantingDate, harvestStartDate, harvestEndDate, sellingStartDate, sellingEndDate) => {
+    // Create dates representing the first and last day of the quarter
+    const quarterDate = new Date(quarterLabel.year, (quarterLabel.quarter - 1) * 3, 1);
+    const quarterEndDate = new Date(quarterDate);
+    quarterEndDate.setMonth(quarterEndDate.getMonth() + 3);
+    quarterEndDate.setDate(0); // Last day of the last month in quarter
+    
+    // Check exact day for planting to ensure it's always shown
+    const isPlantingDay = plantingDate.getFullYear() === quarterLabel.year && 
+                          Math.floor(plantingDate.getMonth() / 3) + 1 === quarterLabel.quarter;
+    
+    // Check for activities spanning quarters
+    const isPlanting = isPlantingDay || 
+                      (plantingDate >= quarterDate && plantingDate <= quarterEndDate);
+    
+    // Check if any part of the harvest period occurs in this quarter
+    const isHarvesting = !(harvestEndDate < quarterDate || harvestStartDate > quarterEndDate);
+    
+    // Check if any part of the selling period occurs in this quarter
+    const isSelling = sellingStartDate && sellingEndDate && 
+                     !(sellingEndDate < quarterDate || sellingStartDate > quarterEndDate);
+    
+    // Improved growing detection - check if any part of growing period occurs in this quarter
+    const isGrowing = (plantingDate < quarterEndDate && harvestStartDate > quarterDate);
+
+    
+    // Calculate months of activity in this quarter (0-3)
+    const activeDuration = Math.min(3, Math.max(0, Math.min(3, 
+      Math.ceil((Math.min(harvestStartDate, quarterEndDate) - 
+                Math.max(plantingDate, quarterDate)) / 
+                (1000 * 60 * 60 * 24 * 30))
+    )));
+    
+    return {
+      isPlanting,
+      isGrowing,
+      isHarvesting,
+      isSelling,
+      activeDuration
+    };
+  };
   
   const timeline = calculateTimeline();
   const quarterLabels = generateQuarterLabels(timeline);
   
+
+
+
+
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
       <Typography variant="h4" component="h2" gutterBottom color="primary">
@@ -490,10 +516,10 @@ const getActivityInQuarter = (quarterLabel, plantingDate, harvestingDate, sellin
                   <TableCell>Variety Name</TableCell>
                   <TableCell>Planting Date</TableCell>
                   <TableCell>Growing Days</TableCell>
-                  <TableCell>Harvesting Date</TableCell>
+                  <TableCell>Harvest Period</TableCell>
+                  <TableCell>Selling Period</TableCell>
                   <TableCell>Market Location</TableCell>
                   <TableCell>Data Source</TableCell>
-
                   <TableCell>Actions</TableCell>
                 </TableRow>
               </TableHead>
@@ -542,16 +568,32 @@ const getActivityInQuarter = (quarterLabel, plantingDate, harvestingDate, sellin
                       />
                     </TableCell>
                     <TableCell>
-                      <TextField
-                        type="date"
-                        size="small"
-                        value={variety.harvestingDate}
-                        onChange={(e) => handleInputChange(variety.id, 'harvestingDate', e.target.value)}
-                        InputProps={{
-                          startAdornment: <CalendarIcon sx={{ mr: 1, color: 'text.secondary' }} />
-                        }}
-                        fullWidth
-                      />
+                      <FormControl fullWidth size="small">
+                        <Select
+                          value={variety.harvestPeriod}
+                          onChange={(e) => handleInputChange(variety.id, 'harvestPeriod', e.target.value)}
+                        >
+                          {PERIOD_OPTIONS.map((option) => (
+                            <MenuItem key={option.value} value={option.value}>
+                              {option.label}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </TableCell>
+                    <TableCell>
+                      <FormControl fullWidth size="small">
+                        <Select
+                          value={variety.sellingPeriod}
+                          onChange={(e) => handleInputChange(variety.id, 'sellingPeriod', e.target.value)}
+                        >
+                          {PERIOD_OPTIONS.map((option) => (
+                            <MenuItem key={option.value} value={option.value}>
+                              {option.label}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
                     </TableCell>
                     <TableCell>
                       <FormControl fullWidth size="small">
@@ -568,17 +610,17 @@ const getActivityInQuarter = (quarterLabel, plantingDate, harvestingDate, sellin
                       </FormControl>
                     </TableCell>
                     <TableCell>
-    <FormControl fullWidth size="small">
-      <Select
-        value={variety.source || 'ProduceIQ'}
-        onChange={(e) => handleInputChange(variety.id, 'source', e.target.value)}
-      >
-        <MenuItem value="ProduceIQ">ProduceIQ</MenuItem>
-        <MenuItem value="USDA">USDA</MenuItem>
-        <MenuItem value="ProduceIQ,USDA">Both Sources</MenuItem>
-      </Select>
-    </FormControl>
-  </TableCell>
+                      <FormControl fullWidth size="small">
+                        <Select
+                          value={variety.source || 'ProduceIQ'}
+                          onChange={(e) => handleInputChange(variety.id, 'source', e.target.value)}
+                        >
+                          <MenuItem value="ProduceIQ">ProduceIQ</MenuItem>
+                          <MenuItem value="USDA">USDA</MenuItem>
+                          <MenuItem value="ProduceIQ,USDA">Both Sources</MenuItem>
+                        </Select>
+                      </FormControl>
+                    </TableCell>
                     <TableCell>
                       <Tooltip title="Remove variety">
                         <span>
@@ -593,7 +635,6 @@ const getActivityInQuarter = (quarterLabel, plantingDate, harvestingDate, sellin
                         </span>
                       </Tooltip>
                     </TableCell>
-
                   </TableRow>
                 ))}
               </TableBody>
@@ -640,28 +681,89 @@ const getActivityInQuarter = (quarterLabel, plantingDate, harvestingDate, sellin
             </Typography>
             
             <GanttContainer>
-              <TimelineHeader>
-                <VarietyLabelHeader>Variety</VarietyLabelHeader>
-                <QuartersContainer>
-                  {/* Generate quarter headers dynamically */}
-                  {quarterLabels.map((quarter, index) => (
-                    <QuarterCell key={index}>
-                      {quarter.label}
-                      <QuarterDots>
-                      <DotIcon fontSize="small" sx={{ mr: 0.5, color: '#bdbdbd' }} />
-                      <DotIcon fontSize="small" sx={{ mr: 0.5, color: '#bdbdbd' }} />
-                      <DotIcon fontSize="small" sx={{ color: '#bdbdbd' }} />
-                    </QuarterDots>
-                    </QuarterCell>
-                  ))}
-                </QuartersContainer>
-              </TimelineHeader>
+            <TimelineHeader>
+  <VarietyLabelHeader>Variety</VarietyLabelHeader>
+  <QuartersContainer>
+    {quarterLabels.map((quarter, index) => {
+      // For each variety, calculate activity months
+      const activityMonths = planningData.map(variety => {
+        const plantingDate = new Date(variety.plantingDate);
+        const harvestStartDate = new Date(variety.harvestStartDate);
+        const harvestEndDate = new Date(variety.harvestEndDate);
+        const sellingStartDate = new Date(variety.sellingStartDate);
+        const sellingEndDate = new Date(variety.sellingEndDate);
+        const bestSellingDate = variety.bestSellingTime.date ? new Date(variety.bestSellingTime.date) : null;
+
+        
+        return getMonthsOfActivityInQuarter(
+          quarter,
+          plantingDate,
+          harvestStartDate,
+          harvestEndDate,
+          sellingStartDate,
+          sellingEndDate,
+          bestSellingDate
+
+        );
+      });
+      
+      // Get activity for first variety
+      const activityData = activityMonths[0] || { planting: 0, growing: 0, harvesting: 0, selling: 0 };
+      
+      // Prioritize coloring based on importance and time allocation
+      const dotColors = [];
+
+      // First attempt to assign colors based on months of each activity
+      if (activityData.bestSelling > 0) dotColors.push(theme.palette.error.main);
+
+      if (activityData.planting > 0) dotColors.push(theme.palette.info.main);
+      if (activityData.growing > 0) {
+        // Add dots for growing based on duration (max 3)
+        for (let i = 0; i < Math.min(activityData.growing, 3 - dotColors.length); i++) {
+          dotColors.push(theme.palette.primary.main);
+        }
+      }
+      if (activityData.harvesting > 0) {
+        // Add dots for harvesting based on duration
+        for (let i = 0; i < Math.min(activityData.harvesting, 3 - dotColors.length); i++) {
+          dotColors.push(theme.palette.success.main);
+        }
+      }
+      if (activityData.selling > 0) {
+        // Add dots for selling based on duration
+        for (let i = 0; i < Math.min(activityData.selling, 3 - dotColors.length); i++) {
+          dotColors.push(theme.palette.warning.main);
+        }
+      }
+
+      // Fill in any remaining dots with gray
+      while (dotColors.length < 3) {
+        dotColors.push('#bdbdbd');
+      }
+
+      return (
+        <QuarterCell key={index}>
+          {quarter.label}
+          <QuarterDots>
+            <DotIcon fontSize="small" sx={{ mr: 0.5, color: dotColors[0] }} />
+            <DotIcon fontSize="small" sx={{ mr: 0.5, color: dotColors[1] }} />
+            <DotIcon fontSize="small" sx={{ color: dotColors[2] }} />
+          </QuarterDots>
+        </QuarterCell>
+      );
+    })}
+  </QuartersContainer>
+</TimelineHeader>
+
               
               {/* Gantt chart rows */}
               {planningData.map((variety, index) => {
                 const plantingDate = new Date(variety.plantingDate);
-                const harvestingDate = new Date(variety.harvestingDate);
-                const sellingDate = variety.bestSellingTime.date ? new Date(variety.bestSellingTime.date) : null;
+                const harvestStartDate = new Date(variety.harvestStartDate);
+                const harvestEndDate = new Date(variety.harvestEndDate);
+                const sellingStartDate = new Date(variety.sellingStartDate);
+                const sellingEndDate = new Date(variety.sellingEndDate);
+                const bestSellingDate = variety.bestSellingTime.date ? new Date(variety.bestSellingTime.date) : null;
                 
                 return (
                   <GanttRow key={index}>
@@ -669,73 +771,154 @@ const getActivityInQuarter = (quarterLabel, plantingDate, harvestingDate, sellin
                     <QuartersContainer>
                       {quarterLabels.map((quarter, quarterIndex) => {
                         // Determine activities in this quarter
-                        const activity = getActivityInQuarter(quarter, plantingDate, harvestingDate, sellingDate);
-                        
-                        // Get quarter for harvest and selling
-                        const harvestQuarter = getQuarterIndexForDate(harvestingDate, timeline);
-                        const sellingQuarter = sellingDate ? getQuarterIndexForDate(sellingDate, timeline) : -1;
+                        const activity = getActivityInQuarter(
+                          quarter, 
+                          plantingDate, 
+                          harvestStartDate, 
+                          harvestEndDate,
+                          sellingStartDate,
+                          sellingEndDate
+                        );
+
+                        const activitiesCount = [
+                          activity.isPlanting, 
+                          activity.isGrowing, 
+                          activity.isHarvesting, 
+                          activity.isSelling
+                        ].filter(Boolean).length;
+                      
                         
                         return (
                           <QuarterCell2 key={quarterIndex}>
-                            {/* Show growing bar if activity in this quarter */}
-
+                            {/* Show planting marker */}
                             {activity.isPlanting && (
-                    <Tooltip title={`Planting: ${format(plantingDate, 'MMM dd, yyyy')}`}>
-                      <Box sx={{
-                        position: 'absolute',
-                        height: 30,
-                        top: 10,
-                        left: '5%',
-                        width: '90%',
-                        borderRadius: '5px',
-                        backgroundColor: theme.palette.info.main,
-                        zIndex: 4,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: theme.palette.common.white,
-                        fontSize: '0.75rem'
-                      }}>
-                        Planting
-                      </Box>
-                    </Tooltip>
-                  )}
-
-
-                            {activity.isGrowing && (
-                            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', height: '100%' }}>
-                              <Tooltip title={`Growing: ${format(plantingDate, 'MMM dd, yyyy')} - ${format(harvestingDate, 'MMM dd, yyyy')}`}>
-                                <GrowingBar>Growing</GrowingBar>
-                              </Tooltip>
-                              <Box sx={{ mt: 2, display: 'flex' }}>
-                                {/* Show dots indicating months active (1-3) */}
-                                {[...Array(3)].map((_, i) => (
-                                  <DotIcon 
-                                    key={i}
-                                    fontSize="small" 
-                                    sx={{ 
-                                      mr: i < 2 ? 0.5 : 0,
-                                      color: i < activity.activeDuration ? '#2196f3' : '#bdbdbd',
-                                    }}
-                                  />
-                                ))}
+                            <Tooltip title={`Planting: ${format(plantingDate, 'MMM dd, yyyy')}`}>
+                              <Box sx={{
+                                position: 'absolute',
+                                height: 30,
+                                top: 10,
+                                left: activitiesCount > 1 ? '2%' : '5%',
+                                width: activitiesCount > 1 ? '45%' : '90%',
+                                // borderRadius: '5px',
+                                backgroundColor: theme.palette.info.main,
+                                zIndex: 4,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                color: theme.palette.common.white,
+                                fontSize: activitiesCount > 1 ? '0.7rem' : '0.75rem'
+                              }}>
+                                {activitiesCount > 1 ? 'Plant' : 'Planting'}
                               </Box>
-                            </Box>
+                            </Tooltip>
                           )}
+
+                            {/* Show growing bar */}
+                            {activity.isGrowing && (
+                              <Box sx={{ 
+                                display: 'flex', 
+                                flexDirection: 'column', 
+                                alignItems: activitiesCount > 1 ? 'flex-start' : 'center', 
+                                width: '100%', 
+                                height: '100%' 
+                              }}>
+                                <Tooltip title={`Growing: ${format(plantingDate, 'MMM dd, yyyy')} - ${format(harvestStartDate, 'MMM dd, yyyy')}`}>
+                                  <Box sx={{
+                                    position: 'absolute',
+                                    height: 30,
+                                    top: 10,
+                                    left: activitiesCount > 1 ? '2%' : '5%',
+                                    width: activitiesCount > 1 ? '45%' : '90%',
+                                    // borderRadius: theme.shape.borderRadius,
+                                    backgroundColor: theme.palette.primary.main,
+                                    zIndex: 1,
+                                    display: 'flex',
+                                    alignItems: 'center', 
+                                    justifyContent: 'center',
+                                    color: theme.palette.common.white,
+                                    fontSize: activitiesCount > 1 ? '0.7rem' : '0.75rem',
+                                    overflow: 'hidden'
+                                  }}>
+                                    {activitiesCount > 1 ? 'Grow' : 'Growing'}
+                                  </Box>
+                                </Tooltip>
+                              </Box>
+                            )}
                             
                             {/* Show harvesting indicator */}
-                            {quarterIndex === harvestQuarter && (
-                              <Tooltip title={`Harvesting: ${format(harvestingDate, 'MMM dd, yyyy')}`}>
-                                <HarvestBar>Harvest</HarvestBar>
-                              </Tooltip>
-                            )}
+{activity.isHarvesting && (
+  <Tooltip title={`Harvesting: ${format(harvestStartDate, 'MMM dd, yyyy')} - ${format(harvestEndDate, 'MMM dd, yyyy')}`}>
+    <Box sx={{
+      position: 'absolute',
+      height: 30,
+      top: 10,
+      // Adjust position based on which activities are present
+      left: activity.isSelling ? '2%' : (activitiesCount > 1 ? '50%' : '5%'),
+      width: activity.isSelling ? '45%' : (activitiesCount > 1 ? '45%' : '90%'),
+      // borderRadius: theme.shape.borderRadius,
+      backgroundColor: theme.palette.success.main,
+      zIndex: 3,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      color: theme.palette.common.white,
+      fontSize: activitiesCount > 1 ? '0.7rem' : '0.75rem',
+      overflow: 'hidden'
+    }}>
+      {activitiesCount > 1 ? 'Harvest' : 'Harvesting'}
+    </Box>
+  </Tooltip>
+)}
+
+{activity.isSelling && (
+  <Tooltip title={`Selling Period: ${format(sellingStartDate, 'MMM dd, yyyy')} - ${format(sellingEndDate, 'MMM dd, yyyy')}`}>
+    <Box sx={{
+      position: 'absolute',
+      height: 30,
+      top: 10,
+      // Adjust position based on which activities are present
+      left: activity.isHarvesting ? '50%' : (activitiesCount > 1 ? '50%' : '5%'),
+      width: activity.isHarvesting ? '45%' : (activitiesCount > 1 ? '45%' : '90%'),
+      // borderRadius: theme.shape.borderRadius,
+      backgroundColor: theme.palette.warning.main,
+      zIndex: 2,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      color: theme.palette.common.white,
+      fontSize: activitiesCount > 1 ? '0.7rem' : '0.75rem',
+      overflow: 'hidden'
+    }}>
+      {activitiesCount > 1 ? 'Sell' : 'Selling'}
+    </Box>
+  </Tooltip>
+)}
                             
-                            {/* Show selling time */}
-                            {quarterIndex === sellingQuarter && sellingQuarter >= harvestQuarter && (
-                              <Tooltip title={`Best Selling Time: ${variety.bestSellingTime.season} ${variety.bestSellingTime.year} (~${format(sellingDate, 'MMM dd')}) - Est. Price: $${variety.bestSellingTime.price}`}>
-                                <SellingBar>Best Selling</SellingBar>
-                              </Tooltip>
-                            )}
+                            {/* Show best selling time if applicable */}
+{bestSellingDate && 
+  bestSellingDate.getFullYear() === quarter.year && 
+  Math.floor(bestSellingDate.getMonth() / 3) + 1 === quarter.quarter && (
+    <Tooltip title={`Best Price Point: ${variety.bestSellingTime.season} ${variety.bestSellingTime.year} (${format(bestSellingDate, 'MMM dd')}) - $${variety.bestSellingTime.price}`}>
+      <Box sx={{
+        position: 'absolute',
+        height: 30,
+        top: 10,
+        // Better positioning logic based on which specific activities are present
+        left: activity.isSelling ? '50%' : '5%',  // If selling is in same quarter, position on right
+        width: activity.isSelling ? '45%' : (activitiesCount > 0 ? '45%' : '90%'),
+        // borderRadius: '5px',
+        backgroundColor: theme.palette.error.main,
+        zIndex: 5,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: theme.palette.common.white,
+        fontSize: '0.7rem'
+      }}>
+        {activity.isSelling ? 'Best $' : 'Best Price'}
+      </Box>
+    </Tooltip>
+)}
                           </QuarterCell2>
                         );
                       })}
@@ -755,10 +938,12 @@ const getActivityInQuarter = (quarterLabel, plantingDate, harvestingDate, sellin
                   <TableRow>
                     <TableCell>Variety</TableCell>
                     <TableCell>Planting Date</TableCell>
-                    <TableCell>Harvesting Date</TableCell>
+                    <TableCell>Harvest Period</TableCell>
+                    <TableCell>Selling Period</TableCell>
                     <TableCell>Data Source</TableCell>
                     <TableCell>Best Selling Time</TableCell>
-                    <TableCell>Estimated Price</TableCell>
+                    <TableCell>Best Price</TableCell>
+                    <TableCell>Expected Price</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -766,60 +951,107 @@ const getActivityInQuarter = (quarterLabel, plantingDate, harvestingDate, sellin
                     <TableRow key={index}>
                       <TableCell>{variety.name}</TableCell>
                       <TableCell>{format(new Date(variety.plantingDate), 'MMM dd, yyyy')}</TableCell>
-                      <TableCell>{format(new Date(variety.harvestingDate), 'MMM dd, yyyy')}</TableCell>
+                      <TableCell>
+                        {format(new Date(variety.harvestStartDate), 'MMM dd, yyyy')} - {format(new Date(variety.harvestEndDate), 'MMM dd, yyyy')}
+                      </TableCell>
+                      <TableCell>
+                        {format(new Date(variety.sellingStartDate), 'MMM dd, yyyy')} - {format(new Date(variety.sellingEndDate), 'MMM dd, yyyy')}
+                      </TableCell>
                       <TableCell>{variety.source}</TableCell>
-
                       <TableCell>
                         {variety.bestSellingTime.season} {variety.bestSellingTime.year}
                         {variety.bestSellingTime.date && ` (~${format(new Date(variety.bestSellingTime.date), 'MMM dd')})`}
                       </TableCell>
                       <TableCell sx={{ fontWeight: 'bold' }}>${variety.bestSellingTime.price}</TableCell>
-                    </TableRow>
+                      <TableCell sx={{ fontWeight: 'bold' }}>${variety.expectedSellingPrice}</TableCell>
+                      </TableRow>
                   ))}
                 </TableBody>
               </Table>
             </TableContainer>
             
-            {/* <Box sx={{ mb: 2 }}>
-              <Typography variant="h6" gutterBottom>
-                Planning Insights
-              </Typography>
-              
-              <Paper sx={{ p: 2 }}>
-                {planningData.map((variety, index) => {
-                  const plantingDate = new Date(variety.plantingDate);
-                  const bestSellingDate = variety.bestSellingTime.date ? new Date(variety.bestSellingTime.date) : null;
-                  
-                  let recommendation = '';
-                  if (bestSellingDate) {
-                    const optimalPlantingDate = addDays(bestSellingDate, -parseInt(variety.growingDays));
-                    const daysDiff = Math.round((optimalPlantingDate - plantingDate) / (1000 * 60 * 60 * 24));
-                    
-                    if (Math.abs(daysDiff) <= 7) {
-                      recommendation = `Your planting date is optimal for the best market price.`;
-                    } else if (daysDiff > 0) {
-                      recommendation = `Consider planting about ${daysDiff} days later (around ${format(optimalPlantingDate, 'MMM dd')}) to hit the peak market price.`;
-                    } else {
-                      recommendation = `Consider planting about ${Math.abs(daysDiff)} days earlier (around ${format(optimalPlantingDate, 'MMM dd')}) to hit the peak market price.`;
-                    }
+            {/* <Typography variant="h6" sx={{ mt: 4, mb: 2 }}>
+              Recommendations
+            </Typography>
+            
+            <Paper sx={{ p: 3, mb: 4 }}>
+              {planningData.map((variety, index) => {
+                const bestSellingDate = variety.bestSellingTime.date ? new Date(variety.bestSellingTime.date) : null;
+                const sellingStartDate = new Date(variety.sellingStartDate);
+                const sellingEndDate = new Date(variety.sellingEndDate);
+                let recommendation = '';
+                
+                if (bestSellingDate) {
+                  // Check if best selling date overlaps with selling period
+                  if (bestSellingDate >= sellingStartDate && bestSellingDate <= sellingEndDate) {
+                    recommendation = `Your selling period includes the best price point on ${format(bestSellingDate, 'MMM dd, yyyy')} ($${variety.bestSellingTime.price}).`;
+                  } else if (bestSellingDate < sellingStartDate) {
+                    const daysDiff = Math.round((sellingStartDate - bestSellingDate) / (1000 * 60 * 60 * 24));
+                    recommendation = `Consider selling ${daysDiff} days earlier to catch the best price point ($${variety.bestSellingTime.price}) on ${format(bestSellingDate, 'MMM dd, yyyy')}.`;
+                  } else {
+                    const daysDiff = Math.round((bestSellingDate - sellingEndDate) / (1000 * 60 * 60 * 24));
+                    recommendation = `Consider selling ${daysDiff} days later to catch the best price point ($${variety.bestSellingTime.price}) on ${format(bestSellingDate, 'MMM dd, yyyy')}.`;
                   }
-                  
-                  return recommendation ? (
-                    <Box key={index} sx={{ display: 'flex', alignItems: 'flex-start', mb: 2 }}>
-                      <InfoIcon color="info" sx={{ mr: 2, mt: 0.5 }} />
-                      <Box>
-                        <Typography variant="subtitle1" component="span" sx={{ fontWeight: 'bold' }}>
-                          {variety.name}:
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          {recommendation}
-                        </Typography>
-                      </Box>
-                    </Box>
-                  ) : null;
-                })}
-              </Paper>
-            </Box> */}
+                }
+                
+                return (
+                  <Box key={index} sx={{ mb: 2 }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 0.5 }}>
+                      {variety.name}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {recommendation}
+                    </Typography>
+                    {index < planningData.length - 1 && <Divider sx={{ my: 2 }} />}
+                  </Box>
+                );
+              })}
+            </Paper> */}
+            
+            <Typography variant="h6" sx={{ mt: 4, mb: 2 }}>
+              Price Comparison
+            </Typography>
+            
+            <TableContainer component={Paper} sx={{ mb: 4 }}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Variety</TableCell>
+                    <TableCell>Expected Selling Price</TableCell>
+                    <TableCell>Best Possible Price</TableCell>
+                    <TableCell>Price Difference</TableCell>
+                    <TableCell>Potential Revenue Increase</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {planningData.map((variety, index) => {
+                    const priceDifference = variety.bestSellingTime.price - variety.expectedSellingPrice;
+                    // Assuming 100 units for simplicity in calculating potential revenue
+                    const potentialIncrease = priceDifference * 100;
+                    
+                    return (
+                      <TableRow key={index}>
+                        <TableCell>{variety.name}</TableCell>
+                        <TableCell>${variety.expectedSellingPrice.toFixed(2)}</TableCell>
+                        <TableCell>${variety.bestSellingTime.price.toFixed(2)}</TableCell>
+                        <TableCell sx={{ 
+                          color: priceDifference > 0 ? 'green' : priceDifference < 0 ? 'red' : 'inherit',
+                          fontWeight: Math.abs(priceDifference) > 1 ? 'bold' : 'normal'
+                        }}>
+                          {priceDifference > 0 ? '+' : ''}{priceDifference.toFixed(2)}
+                        </TableCell>
+                        <TableCell sx={{ 
+                          color: potentialIncrease > 0 ? 'green' : potentialIncrease < 0 ? 'red' : 'inherit',
+                          fontWeight: Math.abs(potentialIncrease) > 100 ? 'bold' : 'normal'
+                        }}>
+                          {potentialIncrease > 0 ? '+' : ''}${potentialIncrease.toFixed(2)} per 100 units
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </TableContainer>
           </CardContent>
         </Card>
       )}

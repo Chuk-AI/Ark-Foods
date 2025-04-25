@@ -159,32 +159,16 @@ function SalesDashboard() {
     averageRegions: false,
   });
 
-  // Handlers for Shipping Point Price
-  const handleShippingCommodityChange = (e) => {
-    setShippingPointFilterState((prev) => ({
-      ...prev,
-      commodities: Array.from(e.target.selectedOptions, (opt) => opt.value),
-    }));
-  };
-
-  const handleShippingRegionChange = (e) => {
-    setShippingPointFilterState((prev) => ({
-      ...prev,
-      regions: Array.from(e.target.selectedOptions, (opt) => opt.value),
-    }));
-  };
 
   const handleShippingSourceChange = (e) => {
     setShippingPointFilterState((prev) => ({ ...prev, source: e.target.value }));
   };
 
-  const handleShippingStartDateChange = (e) => {
-    setShippingPointFilterState((prev) => ({ ...prev, startDate: e.target.value }));
-  };
 
-  const handleShippingEndDateChange = (e) => {
-    setShippingPointFilterState((prev) => ({ ...prev, endDate: e.target.value }));
-  };
+  const handleSeasonalSourceChange = (e) =>
+      setSeasonalFilterState((p) => ({ ...p, source: e.target.value }));
+ 
+
 
   const handleAverageShippingCommoditiesChange = (e) => {
     setShippingPointFilterState((prev) => ({
@@ -203,6 +187,7 @@ function SalesDashboard() {
   const [seasonalFilterState, setSeasonalFilterState] = useState({
     commodities: ['Anaheim'], // Default commodity
     cities: ['New York'], // Default city
+    source: 'USDA',    
     startDate: '2024-01-01', // Default start date
     endDate: new Date().toISOString().split('T')[0], // Current date as end date
   });
@@ -657,6 +642,8 @@ const handleApplyMostRecentFilters = () => {
     params.append('cities', filters.cities.join(','));
     params.append('start_date', filters.startDate);
     params.append('end_date', filters.endDate);
+    params.append('source',    filters.source);   // <- add this
+
 
     try {
       const response = await fetch(`/api/sales_seasonal_prices?${params.toString()}`);
@@ -684,8 +671,59 @@ const handleApplyMostRecentFilters = () => {
             },
           ],
         },
-        options: { responsive: true },
+        options: {
+          responsive: true,
+          scales: {
+            x: {
+              ticks: {
+                font: {
+                  size: 16 // Adjust font size here
+                }
+              },
+              title: {
+                display: true,
+                text: 'Seasons', // X-axis title
+                font: {
+                  size: 18 // Title font size
+                }
+              }
+            },
+            y: {
+              ticks: {
+                font: {
+                  size: 16 // Adjust font size here
+                }
+              },
+              title: {
+                display: true,
+                text: 'Price', // Y-axis title
+                font: {
+                  size: 18 // Title font size
+                }
+              }
+            }
+          },
+          plugins: {
+                 datalabels: {
+                   display: true,            // show numbers
+                   color: '#000',            // label colour
+                   font: {
+                     size: 18,               //  <<—  increase this value
+                   },
+                   formatter: v => v.toFixed(0), // optional formatting
+                 },
+            legend: {
+              labels: {
+                color: 'black', // Color of the legend labels
+                font: {
+                  size: 15 // Legend font size
+                }
+              }
+            }
+          
+          }}
       });
+      
 
       seasonalChartRef.current.chart = newChart;
     } catch (error) {
@@ -1280,6 +1318,19 @@ const handleApplyMostRecentFilters = () => {
                 />
               </div>
 
+              <div className="form-group">
+    <label className="font-weight-bold">Source</label>
+    <select
+      className="form-control"
+      value={seasonalFilterState.source}
+      onChange={handleSeasonalSourceChange}
+    >
+      {['USDA', 'ProduceIQ', 'Both'].map((s) => (
+        <option key={s} value={s}>{s}</option>
+      ))}
+    </select>
+  </div>
+
               <button type="button" className="btn btn-primary btn-block" onClick={handleApplySeasonalFilters}>
                 Apply Filters
               </button>
@@ -1682,13 +1733,14 @@ const handleApplyMostRecentFilters = () => {
                       </div>
                       <div className="card-body ">
                         <canvas id="historicalChart" ref={historicalChartRef} width="400" height="400"></canvas>
-                        <button className="btn btn-primary mt-3" onClick={handleDownload}>
-                          Download Chart & Data
-                        </button>
+                   
                         
 
                       </div>
                     </div>
+                    <button className="btn btn-primary mt-3" onClick={handleDownload}>
+                          Download Chart & Data
+                        </button>
                   </div>
                 </div>
               </div>
@@ -1711,16 +1763,19 @@ const handleApplyMostRecentFilters = () => {
                       <canvas id="shippingPointPriceChart" ref={shippingPointPriceChartRef} width="400" height="400"></canvas>
 
                       {/* Download Buttons */}
-                      <button
+                    
+                
+                    </div>
+                
+                  </div>
+                  <button
                         className="btn btn-primary mt-3"
                         onClick={handleDownloadShipping} // Trigger chart download
                       >
                         Download Chart and Data
                       </button>
-                
-                    </div>
-                  </div>
                 </div>
+                
               </div>
             </div>
 
