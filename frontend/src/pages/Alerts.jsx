@@ -90,11 +90,13 @@ const Alerts = () => {
       const response = await axios.get('/api/notifications', {
         headers: { Authorization: `Bearer ${token}` }
       });
+      console.log('raw notifications response:', response.data);
       setNotifications(response.data);
     } catch (error) {
       console.error('Error fetching notifications:', error);
     }
   };
+  
 
   // Handle creating a new alert setting
   const handleCreateAlert = async (e) => {

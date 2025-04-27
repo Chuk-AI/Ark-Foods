@@ -4973,183 +4973,192 @@ def should_cache_route():
 @app.route("/api/harvest_planning", methods=["POST"])
 def harvest_planning():
     try:
+        from collections import defaultdict
+        
         payload = request.json
         if not payload or "varieties" not in payload:
             return jsonify({"error": "Missing varieties data"}), 400
 
         result = []
-        
-        # Current date for reference
         now = datetime.now()
         current_year = now.year
         
-        # Seasons definition
         seasons = ["Winter", "Spring", "Summer", "Autumn"]
-        # Season to month mapping (mid-month)
         season_month_map = {"Winter": 1, "Spring": 4, "Summer": 7, "Autumn": 10}
         
-        # ──────── main loop ──────── #
+        # Process each variety separately to match forecast_line_data exactly
         for variety in payload["varieties"]:
-            # validate required fields
+            # Validate required fields
             required_fields = ["name", "plantingDate", "growingDays", "harvestPeriod", "sellingPeriod"]
             for f in required_fields:
                 if f not in variety:
                     return jsonify({"error": f"Missing field {f}"}), 400
 
-            # Parse dates & calculate harvest date
+            # Parse dates
             plant = datetime.fromisoformat(variety["plantingDate"].replace("Z","+00:00"))
             grow_days = int(variety["growingDays"])
             harvest_period = int(variety["harvestPeriod"])
             selling_period = int(variety["sellingPeriod"])
             
-            # Calculate harvest start date (end of growing period)
+            # Calculate dates
             harvest_start = plant + timedelta(days=grow_days)
-            
-            # Calculate harvest end date (harvest start + harvest period)
-            harvest_end = harvest_start + timedelta(days=harvest_period * 30)  # Approximate 30 days per month
-            
-            # Calculate selling start date (after harvest ends)
-            # FIXED: Selling should start after harvesting is complete
+            harvest_end = harvest_start + timedelta(days=harvest_period * 30)
             selling_start = harvest_end
-            
-            # Calculate selling end date (selling start + selling period)
-            selling_end = selling_start + timedelta(days=selling_period * 30)  # Approximate 30 days per month
+            selling_end = selling_start + timedelta(days=selling_period * 30)
 
             commodity = variety["name"]
             market = variety.get("market","").strip()
             source = variety.get("source", "ProduceIQ")
             
-            # Handle "Select All" as All Cities
+            # Handle market selection
             if market.lower() in ("select all","all","national",""):
-                city = "All cities"
+                cities = []  # Empty means average all cities
+                avg_cities = True
             else:
-                city = market
-
-            # Generate seasons to analyze - use a fixed 2-year window from now
-            seasons_to_check = []
+                cities = [market]
+                avg_cities = False
             
-            # Start with the current season
-            current_month = now.month
-            current_season = (
-                "Spring" if 3 <= current_month <= 5 else
-                "Summer" if 6 <= current_month <= 8 else
-                "Autumn" if 9 <= current_month <= 11 else
-                "Winter"
-            )
-            current_season_idx = seasons.index(current_season)
+            # Build filters exactly like forecast_line_data
+            filters = [
+                PriceData.commodity == commodity,
+                PriceData.year >= current_year - 5,
+            ]
             
-            # Generate 8 seasons (2 years) starting from current season
-            for offset in range(8):
-                check_season_idx = (current_season_idx + offset) % 4
-                check_season = seasons[check_season_idx]
-                check_year = current_year + (current_season_idx + offset) // 4
-                
-                # Create the date for this season
-                check_month = season_month_map[check_season]
-                check_date = datetime(check_year, check_month, 15)
-                
-                seasons_to_check.append((check_season, check_year, check_date))
+            # Handle source filtering exactly like forecast_line_data
+            if source == "ProduceIQ,USDA" or source == "USDA,ProduceIQ":
+                filters.append(PriceData.source.in_(["ProduceIQ", "USDA"]))
+            else:
+                filters.append(PriceData.source == source)
             
-            # Create a reference date that's fixed (doesn't depend on planting date)
-            # Use a date 5 years before now to capture consistent historical data
-            reference_date = datetime(now.year - 5, 1, 1)  # January 1, five years ago
+            # Only filter by city if not averaging all cities
+            if not avg_cities:
+                filters.append(PriceData.city_name.in_(cities))
             
-            # Calculate price for each valid future season
-            season_prices = []
-            
-            # First, find all available prices for any time after harvest start
-            for season_info in seasons_to_check:
-                season, year, season_date = season_info
-                
-                # Skip seasons before harvesting
-                if season_date < harvest_start:
-                    continue
-                
-                # Use the existing calculate_forecasted_price function
-                price = calculate_forecasted_price(
-                    commodity,            # variety
-                    reference_date,       # start_date
-                    season_date,          # forecast_date
-                    city,                 # city
-                    source                # source
+            # Get historical data
+            rows = (
+                db.session.query(
+                    PriceData.commodity,
+                    PriceData.city_name,
+                    PriceData.year,
+                    PriceData.season,
+                    PriceData.price,
+                    PriceData.source,
                 )
-                
-                # Only include non-zero prices
-                if price > 0:
-                    season_prices.append((f"{season} {year}", round(price, 2), season_date))
+                .filter(*filters)
+                .all()
+            )
             
-            # Find season with highest price (best selling time)
+            # Group data exactly like forecast_line_data
+            data = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+            for r in rows:
+                key = f"{r.commodity}_{r.city_name}"
+                data[key][r.season][r.year].append(r.price)
+            
+            # Calculate seasonal averages exactly like forecast_line_data
+            season_stats = {}
+            for key, season_dict in data.items():
+                season_stats[key] = {}
+                for season in seasons:
+                    yearly_avgs = []
+                    for yr, prices in season_dict[season].items():
+                        if prices:
+                            yearly_avgs.append(sum(prices) / len(prices))
+                    
+                    overall_avg = sum(yearly_avgs) / len(yearly_avgs) if yearly_avgs else 0
+                    season_stats[key][season] = {"avg": overall_avg}
+            
+            # Find best selling time
             best_season = None
             best_year = None
             highest_price = 0
             best_date = None
             
-            if season_prices:
-                # Sort by price (descending)
-                sorted_prices = sorted(season_prices, key=lambda x: x[1], reverse=True)
-                
-                # Take the highest price 
-                best_data = sorted_prices[0]
-                best_label = best_data[0]
-                highest_price = best_data[1]
-                best_date = best_data[2]
-                
-                best_season, best_year_str = best_label.split()
-                best_year = int(best_year_str)
+            # Check each season to find the highest price (only after harvest end)
+            for year in range(current_year, current_year + 3):
+                for season in seasons:
+                    month = season_month_map[season]
+                    season_date = datetime(year, month, 15)
+                    
+                    # Only consider seasons after harvest is complete
+                    if season_date <= harvest_end:
+                        continue
+                    
+                    # Calculate price exactly like forecast_line_data
+                    if avg_cities:
+                        # Average across all cities present in rows
+                        all_cities_in_db = sorted({r.city_name for r in rows})
+                        total, cnt = 0, 0
+                        for city in all_cities_in_db:
+                            key = f"{commodity}_{city}"
+                            st = season_stats.get(key, {}).get(season)
+                            if st and st["avg"] > 0:
+                                total += st["avg"]
+                                cnt += 1
+                        avg_price = total / cnt if cnt else 0
+                    else:
+                        # Specific city
+                        key = f"{commodity}_{cities[0]}"
+                        st = season_stats.get(key, {}).get(season)
+                        avg_price = st["avg"] if st and st["avg"] > 0 else 0
+                    
+                    if avg_price > highest_price:
+                        highest_price = avg_price
+                        best_season = season
+                        best_year = year
+                        best_date = season_date
             
-            # Calculate expected selling price based on actual selling period
-            expected_price = None  # Initialize as None to know if we found a valid price
+            # Calculate expected selling price exactly like forecast data
+            expected_price = 0
+            selling_seasons = set()
+            price_details = []
+            season_prices = []
             
-            # Create specific date points within the selling period to get prices
-            selling_period_dates = []
-            
-            # Add selling start date
-            selling_period_dates.append(selling_start)
-            
-            # Add selling middle date (if period > 1 month)
-            if selling_period > 1:
-                selling_middle = selling_start + timedelta(days=selling_period * 15)  # Half of period
-                selling_period_dates.append(selling_middle)
-            
-            # Add selling end date
-            selling_period_dates.append(selling_end)
-            
-            # Get prices for specific dates in the selling period
-            for check_date in selling_period_dates:
-                # Determine season for this date
-                check_month = check_date.month
-                check_season = (
-                    "Spring" if 3 <= check_month <= 5 else
-                    "Summer" if 6 <= check_month <= 8 else
-                    "Autumn" if 9 <= check_month <= 11 else
+            # Find all seasons in selling period
+            current_date = selling_start
+            while current_date <= selling_end:
+                month = current_date.month
+                season = (
+                    "Spring" if 3 <= month <= 5 else
+                    "Summer" if 6 <= month <= 8 else
+                    "Autumn" if 9 <= month <= 11 else
                     "Winter"
                 )
                 
-                # Get price for this specific date
-                price = calculate_forecasted_price(
-                    commodity,            # variety
-                    reference_date,       # start_date
-                    check_date,           # forecast_date
-                    city,                 # city
-                    source                # source
-                )
-                
-                if price > 0:
-                    if expected_price is None:
-                        expected_price = price
+                if season not in selling_seasons:
+                    selling_seasons.add(season)
+                    
+                    # Get price for this season using same logic as above
+                    if avg_cities:
+                        all_cities_in_db = sorted({r.city_name for r in rows})
+                        total, cnt = 0, 0
+                        for city in all_cities_in_db:
+                            key = f"{commodity}_{city}"
+                            st = season_stats.get(key, {}).get(season)
+                            if st and st["avg"] > 0:
+                                total += st["avg"]
+                                cnt += 1
+                        avg_price = total / cnt if cnt else 0
                     else:
-                        # If we already have a price, take average
-                        expected_price = (expected_price + price) / 2
+                        key = f"{commodity}_{cities[0]}"
+                        st = season_stats.get(key, {}).get(season)
+                        avg_price = st["avg"] if st and st["avg"] > 0 else 0
+                    
+                    if avg_price > 0:
+                        season_prices.append(avg_price)
+                        price_details.append(f"{season}: ${avg_price:.2f}")
+                
+                current_date = current_date + timedelta(days=30)
             
-            # If we still don't have a price, use the closest season price
-            if expected_price is None and season_prices:
-                # Find closest date in our season_prices list to the selling period
-                closest_season = min(season_prices, key=lambda x: abs((x[2] - selling_start).total_seconds()))
-                expected_price = closest_season[1]
-            
-            # Default to 0 if we couldn't find any prices
-            if expected_price is None:
+            # Calculate final expected price
+            if season_prices:
+                expected_price = sum(season_prices) / len(season_prices)
+                if len(selling_seasons) == 1:
+                    price_description = f"Price for {list(selling_seasons)[0]}: ${expected_price:.2f}"
+                else:
+                    price_description = f"Average of {', '.join(price_details)}"
+            else:
                 expected_price = 0
+                price_description = "No price data available"
             
             result.append({
                 "name": commodity,
@@ -5165,10 +5174,11 @@ def harvest_planning():
                 "bestSellingTime": {
                     "season": best_season,
                     "year": best_year,
-                    "price": highest_price,
+                    "price": round(highest_price, 2),
                     "date": best_date.isoformat() if best_date else None
                 },
-                "expectedSellingPrice": round(expected_price, 2)
+                "expectedSellingPrice": round(expected_price, 2),
+                "priceDescription": price_description
             })
 
         return jsonify({"varieties": result})
@@ -5176,8 +5186,6 @@ def harvest_planning():
     except Exception as e:
         app.logger.exception("Error in harvest_planning")
         return jsonify({"error": str(e)}), 500
-    
-
 
 
 @app.route('/api/alert-entries-fresh', methods=['GET'])
@@ -5444,7 +5452,7 @@ def get_unread_count():
         # Count unread notifications for this user
         count = Notification.query.filter_by(
             user_id=current_user_id,
-            read=False
+            read='false'
         ).count()
         
         return jsonify({"count": count})

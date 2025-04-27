@@ -1,44 +1,67 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { format, parse, addDays, addMonths, getQuarter, startOfQuarter, endOfQuarter } from 'date-fns';
-import { 
-  Box, 
-  Button, 
-  Card, 
-  CardContent, 
-  Container,
-  Divider,
-  FormControl,
-  Grid,
-  IconButton,
-  InputLabel,
-  MenuItem,
-  Paper,
-  Select,
-  Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TextField,
-  Typography,
-  Alert,
-  AlertTitle,
-  Tooltip,
-  CircularProgress,
-  useTheme
+import {
+  Typography, Card, CardContent, Paper, Table, TableBody, TableCell,
+  TableContainer, TableHead, TableRow, Box, Grid, Chip, Avatar,
+  List, ListItem, ListItemIcon, ListItemText, Divider, styled, useTheme,
+  Container, FormControl, Select, MenuItem, TextField, Button, IconButton,
+  Tooltip, Stack, CircularProgress, Alert
 } from '@mui/material';
-import { 
-  Add as AddIcon, 
-  Delete as DeleteIcon,
-  Info as InfoIcon,
+import {
   CalendarToday as CalendarIcon,
-  FiberManualRecord as DotIcon
+  TrendingUp as TrendingUpIcon,
+  AttachMoney as AttachMoneyIcon,
+  LocalFlorist as LocalFloristIcon,
+  DateRange as DateRangeIcon,
+  ArrowUpward as ArrowUpwardIcon,
+  ArrowDownward as ArrowDownwardIcon,
+  AccountBalance as AccountBalanceIcon,
+  Store as StoreIcon,
+  DataUsage as DataUsageIcon,
+  Delete as DeleteIcon,
+  Add as AddIcon,
+  FiberManualRecord as DotIcon,
+  Warning as WarningIcon,
+  Info as InfoIcon,
+  CheckCircle as CheckCircleIcon
 } from '@mui/icons-material';
-import { styled } from '@mui/material/styles';
+
 import '../styles/harvestPlanning.css';
+
+
+
+const format = (date, pattern) => {
+  const d = new Date(date);
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  
+  if (pattern === 'MMM dd, yyyy') {
+    return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+  } else if (pattern === 'MMM dd') {
+    return `${months[d.getMonth()]} ${d.getDate()}`;
+  }
+  return d.toLocaleDateString();
+};
+
+const getQuarter = (date) => {
+  const month = date.getMonth();
+  return Math.floor(month / 3) + 1;
+};
+
+const startOfQuarter = (date) => {
+  const d = new Date(date);
+  const quarter = getQuarter(d);
+  d.setMonth((quarter - 1) * 3);
+  d.setDate(1);
+  return d;
+};
+
+const endOfQuarter = (date) => {
+  const d = new Date(date);
+  const quarter = getQuarter(d);
+  d.setMonth(quarter * 3, 0);
+  return d;
+};
+
 
 // List of supported pepper varieties
 const DEFAULT_COMMODITIES = [
@@ -131,6 +154,7 @@ const QuarterCell2 = styled(Box)(({ theme }) => ({
   height: '100%',
   borderRight: `1px solid ${theme.palette.divider}`,
 }));
+
 
 
 
@@ -927,48 +951,217 @@ const HarvestPlanningChart = () => {
                 );
               })}
             </GanttContainer>
-            
-            <Typography variant="h6" sx={{ mt: 4, mb: 2 }}>
-              Summary
-            </Typography>
-            
-            <TableContainer component={Paper} sx={{ mb: 4 }}>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Variety</TableCell>
-                    <TableCell>Planting Date</TableCell>
-                    <TableCell>Harvest Period</TableCell>
-                    <TableCell>Selling Period</TableCell>
-                    <TableCell>Data Source</TableCell>
-                    <TableCell>Best Selling Time</TableCell>
-                    <TableCell>Best Price</TableCell>
-                    <TableCell>Expected Price</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {planningData.map((variety, index) => (
-                    <TableRow key={index}>
-                      <TableCell>{variety.name}</TableCell>
-                      <TableCell>{format(new Date(variety.plantingDate), 'MMM dd, yyyy')}</TableCell>
-                      <TableCell>
-                        {format(new Date(variety.harvestStartDate), 'MMM dd, yyyy')} - {format(new Date(variety.harvestEndDate), 'MMM dd, yyyy')}
-                      </TableCell>
-                      <TableCell>
-                        {format(new Date(variety.sellingStartDate), 'MMM dd, yyyy')} - {format(new Date(variety.sellingEndDate), 'MMM dd, yyyy')}
-                      </TableCell>
-                      <TableCell>{variety.source}</TableCell>
-                      <TableCell>
+     
+
+
+            {planningData.length > 0 && timeline && (
+  <Card sx={{ mt: 4 }}>
+    <CardContent>
+      <Typography variant="h6" component="h3" gutterBottom sx={{ color: 'primary.main', mb: 3 }}>
+        Planning Summary & Price Analysis
+      </Typography>
+      
+      <Grid container spacing={3}>
+        {planningData.map((variety, index) => {
+          const priceDifference = variety.bestSellingTime.price - variety.expectedSellingPrice;
+          const potentialIncrease = priceDifference * 100; // Per 100 units
+          
+          return (
+            <Grid item xs={12} key={index}>
+              <Paper 
+                elevation={2} 
+                sx={{ 
+                  p: 3, 
+                  borderLeft: 6, 
+                  borderColor: priceDifference > 0 ? 'success.main' : 'primary.main',
+                  '&:hover': { 
+                    boxShadow: 6,
+                    transform: 'translateY(-2px)',
+                    transition: 'all 0.3s ease-in-out'
+                  }
+                }}
+              >
+                {/* Header Section */}
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                  <Typography variant="h6" sx={{ color: 'primary.main', fontWeight: 'bold' }}>
+                    {variety.name}
+                  </Typography>
+                  <Chip 
+                    label={variety.source} 
+                    color="primary" 
+                    size="small" 
+                    variant="outlined"
+                  />
+                </Box>
+                
+                <Divider sx={{ mb: 2 }} />
+                
+                {/* Timeline Information */}
+                <Grid container spacing={2} sx={{ mb: 3 }}>
+                  <Grid item xs={12} md={3}>
+                    <Box sx={{ textAlign: 'center', p: 2, backgroundColor: 'grey.50', borderRadius: 1 }}>
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        Planting Date
+                      </Typography>
+                      <Typography variant="body1" fontWeight="medium">
+                        {format(new Date(variety.plantingDate), 'MMM dd, yyyy')}
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={12} md={3}>
+                    <Box sx={{ textAlign: 'center', p: 2, backgroundColor: 'grey.50', borderRadius: 1 }}>
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        Harvest Period
+                      </Typography>
+                      <Typography variant="body1" fontWeight="medium">
+                        {format(new Date(variety.harvestStartDate), 'MMM dd')} - {format(new Date(variety.harvestEndDate), 'MMM dd, yyyy')}
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={12} md={3}>
+                    <Box sx={{ textAlign: 'center', p: 2, backgroundColor: 'grey.50', borderRadius: 1 }}>
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        Selling Period
+                      </Typography>
+                      <Typography variant="body1" fontWeight="medium">
+                        {format(new Date(variety.sellingStartDate), 'MMM dd')} - {format(new Date(variety.sellingEndDate), 'MMM dd, yyyy')}
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={12} md={3}>
+                    <Box sx={{ textAlign: 'center', p: 2, backgroundColor: 'success.light', borderRadius: 1 }}>
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        Best Selling Time
+                      </Typography>
+                      <Typography variant="body1" fontWeight="medium">
                         {variety.bestSellingTime.season} {variety.bestSellingTime.year}
-                        {variety.bestSellingTime.date && ` (~${format(new Date(variety.bestSellingTime.date), 'MMM dd')})`}
-                      </TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>${variety.bestSellingTime.price}</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>${variety.expectedSellingPrice}</TableCell>
-                      </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                      </Typography>
+                      {variety.bestSellingTime.date && (
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          (~{format(new Date(variety.bestSellingTime.date), 'MMM dd')})
+                        </Typography>
+                      )}
+                    </Box>
+                  </Grid>
+                </Grid>
+                
+                {/* Price Analysis Section */}
+                <Box sx={{ backgroundColor: 'background.default', p: 2, borderRadius: 2 }}>
+                  <Grid container spacing={3} alignItems="center">
+                    <Grid item xs={12} md={4}>
+                      <Box sx={{ textAlign: 'center' }}>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          Expected Selling Price
+                        </Typography>
+                        <Typography variant="h5" sx={{ mt: 1 }}>
+                          ${variety.expectedSellingPrice.toFixed(2)}
+                        </Typography>
+                        {variety.priceDescription && (
+                          <Tooltip title={variety.priceDescription} arrow>
+                            <Typography 
+                              variant="caption" 
+                              sx={{ 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                justifyContent: 'center', 
+                                gap: 0.5,
+                                color: 'info.main',
+                                cursor: 'help',
+                                mt: 0.5
+                              }}
+                            >
+                              <InfoIcon fontSize="small" /> Price Details
+                            </Typography>
+                          </Tooltip>
+                        )}
+                      </Box>
+                    </Grid>
+                    
+                    <Grid item xs={12} md={4}>
+                      <Box sx={{ textAlign: 'center' }}>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          Best Possible Price
+                        </Typography>
+                        <Typography variant="h5" sx={{ mt: 1, color: 'success.main', fontWeight: 'bold' }}>
+                          ${variety.bestSellingTime.price.toFixed(2)}
+                        </Typography>
+                      </Box>
+                    </Grid>
+                    
+                    <Grid item xs={12} md={4}>
+                      <Box sx={{ textAlign: 'center' }}>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          Potential Revenue Increase
+                        </Typography>
+                        <Typography 
+                          variant="h5" 
+                          sx={{ 
+                            mt: 1,
+                            color: priceDifference > 0 ? 'success.main' : priceDifference < 0 ? 'error.main' : 'text.primary'
+                          }}
+                        >
+                          {priceDifference > 0 ? '+' : ''}{priceDifference.toFixed(2)}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          per unit ({potentialIncrease > 0 ? '+' : ''}${potentialIncrease.toFixed(2)} per 100 units)
+                        </Typography>
+                      </Box>
+                    </Grid>
+                  </Grid>
+                </Box>
+                
+                {/* Recommendation Section */}
+                {/* {priceDifference > 0 && (
+                  <Box sx={{ mt: 2, p: 2, backgroundColor: 'warning.light', borderRadius: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <InfoIcon sx={{ color: 'warning.main' }} />
+                      <Typography variant="body2">
+                        Consider adjusting your selling time to {variety.bestSellingTime.season} {variety.bestSellingTime.year} 
+                        to gain an additional ${priceDifference.toFixed(2)} per unit.
+                      </Typography>
+                    </Box>
+                  </Box>
+                )} */}
+                
+                {priceDifference <= 0 && (
+                  <Box sx={{ mt: 2, p: 2, backgroundColor: 'success.light', borderRadius: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <CheckCircleIcon sx={{ color: 'success.main' }} />
+                      <Typography variant="body2">
+                        Your current selling period is already optimal for maximizing revenue.
+                      </Typography>
+                    </Box>
+                  </Box>
+                )}
+              </Paper>
+            </Grid>
+          );
+        })}
+      </Grid>
+      
+      {/* Optional Summary Stats */}
+      <Paper sx={{ mt: 3, p: 2, backgroundColor: 'primary.light' }}>
+        <Grid container spacing={2} alignItems="center">
+          <Grid item xs={12} md={4}>
+            <Typography variant="subtitle1" color="primary.contrastText" textAlign="center">
+              Total Varieties: {planningData.length}
+            </Typography>
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <Typography variant="subtitle1" color="primary.contrastText" textAlign="center">
+              Average Potential Gain: ${(planningData.reduce((sum, v) => sum + (v.bestSellingTime.price - v.expectedSellingPrice), 0) / planningData.length).toFixed(2)} per unit
+            </Typography>
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <Typography variant="subtitle1" color="primary.contrastText" textAlign="center">
+              Total Potential Revenue: ${planningData.reduce((sum, v) => sum + ((v.bestSellingTime.price - v.expectedSellingPrice) * 100), 0).toFixed(2)} per 100 units
+            </Typography>
+          </Grid>
+        </Grid>
+      </Paper>
+    </CardContent>
+  </Card>
+)}
             
             {/* <Typography variant="h6" sx={{ mt: 4, mb: 2 }}>
               Recommendations
@@ -1008,50 +1201,7 @@ const HarvestPlanningChart = () => {
               })}
             </Paper> */}
             
-            <Typography variant="h6" sx={{ mt: 4, mb: 2 }}>
-              Price Comparison
-            </Typography>
-            
-            <TableContainer component={Paper} sx={{ mb: 4 }}>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Variety</TableCell>
-                    <TableCell>Expected Selling Price</TableCell>
-                    <TableCell>Best Possible Price</TableCell>
-                    <TableCell>Price Difference</TableCell>
-                    <TableCell>Potential Revenue Increase</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {planningData.map((variety, index) => {
-                    const priceDifference = variety.bestSellingTime.price - variety.expectedSellingPrice;
-                    // Assuming 100 units for simplicity in calculating potential revenue
-                    const potentialIncrease = priceDifference * 100;
-                    
-                    return (
-                      <TableRow key={index}>
-                        <TableCell>{variety.name}</TableCell>
-                        <TableCell>${variety.expectedSellingPrice.toFixed(2)}</TableCell>
-                        <TableCell>${variety.bestSellingTime.price.toFixed(2)}</TableCell>
-                        <TableCell sx={{ 
-                          color: priceDifference > 0 ? 'green' : priceDifference < 0 ? 'red' : 'inherit',
-                          fontWeight: Math.abs(priceDifference) > 1 ? 'bold' : 'normal'
-                        }}>
-                          {priceDifference > 0 ? '+' : ''}{priceDifference.toFixed(2)}
-                        </TableCell>
-                        <TableCell sx={{ 
-                          color: potentialIncrease > 0 ? 'green' : potentialIncrease < 0 ? 'red' : 'inherit',
-                          fontWeight: Math.abs(potentialIncrease) > 100 ? 'bold' : 'normal'
-                        }}>
-                          {potentialIncrease > 0 ? '+' : ''}${potentialIncrease.toFixed(2)} per 100 units
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </TableContainer>
+       
           </CardContent>
         </Card>
       )}
