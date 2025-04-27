@@ -35,7 +35,16 @@ const Alerts = () => {
 
   // Update unread count when notifications change
   useEffect(() => {
-    const count = notifications.filter(n => !n.read).length;
+    console.log('All notifications:', notifications);
+    
+    // Log detailed information about each notification
+    notifications.forEach(notif => {
+      console.log(`Notification ID: ${notif.id}, is_read status: ${notif.is_read}, Full notification:`, notif);
+    });
+  
+    const count = notifications.filter(n => !n.is_read).length;
+    console.log('Calculated unread count:', count);
+    
     setUnreadCount(count);
     
     // Update notification badge in header
@@ -90,10 +99,22 @@ const Alerts = () => {
       const response = await axios.get('/api/notifications', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      console.log('raw notifications response:', response.data);
+      
+      console.log('Raw notifications response:', response.data);
+      
+      // Additional logging to check data structure
+      response.data.forEach(notif => {
+        console.log('Individual notification:', {
+          id: notif.id,
+          is_read: notif.is_read,
+          full_notification: notif
+        });
+      });
+      
       setNotifications(response.data);
     } catch (error) {
       console.error('Error fetching notifications:', error);
+      console.error('Error details:', error.response?.data);
     }
   };
   

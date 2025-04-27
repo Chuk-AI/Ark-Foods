@@ -502,7 +502,7 @@ class Notification(db.Model):
     alert_setting_id = db.Column(db.Integer, db.ForeignKey('alert_settings.id'), nullable=True)
     title = db.Column(db.String(200), nullable=False)
     message = db.Column(db.Text, nullable=False)
-    read = db.Column(db.Boolean, default=False)
+    is_read = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     # Relationships
@@ -519,7 +519,7 @@ class Notification(db.Model):
             'user_id': self.user_id,
             'title': self.title,
             'message': self.message,
-            'read': self.read,
+            'is_read': self.is_read,
             'created_at': self.created_at.isoformat(),
             'alert_setting_id': self.alert_setting_id
         }
@@ -5452,7 +5452,7 @@ def get_unread_count():
         # Count unread notifications for this user
         count = Notification.query.filter_by(
             user_id=current_user_id,
-            read='false'
+            is_read=False
         ).count()
         
         return jsonify({"count": count})
@@ -5524,11 +5524,11 @@ def mark_all_read():
         # Update all unread notifications for this user only
         notifications = Notification.query.filter_by(
             user_id=current_user_id,
-            read=False
+            is_read=False
         ).all()
         
         for notification in notifications:
-            notification.read = True
+            notification.is_read = True
         
         db.session.commit()
         
@@ -5539,6 +5539,27 @@ def mark_all_read():
 
 
 
+@app.route('/api/current-user-id', methods=['GET'])
+@jwt_required()
+def get_current_user_id():
+    try:
+        # Get the JWT token from the request
+        jwt_header = request.headers.get('Authorization')
+        print(f"Received JWT Header: {jwt_header}")
+
+        # Extract the current user ID
+        current_user_id = get_jwt_identity()
+        
+        # Log the user ID
+        print(f"Extracted User ID: {current_user_id}")
+        
+        return jsonify({"user_id": current_user_id})
+    except Exception as e:
+        print(f"Error in current-user-id route: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+    
+
+    
 import calendar 
 
 @app.route("/api/monthly-average-prices", methods=["GET"])
