@@ -84,6 +84,7 @@ from flask_caching import Cache
 import hashlib
 from flask import request, make_response
 from collections import defaultdict
+import secrets
 
 
 
@@ -94,11 +95,19 @@ logging.basicConfig(
 )
 
 
+
 CSV_DIRECTORY = "data/"
 
 # Initialize Flask app
 app = Flask(__name__, static_folder= 'frontend/build', static_url_path="/")
-app.config['JWT_SECRET_KEY'] = 'your_secret_key'  # Replace with a strong secret key
+
+
+if 'JWT_SECRET_KEY' not in os.environ:
+    os.environ['JWT_SECRET_KEY'] = secrets.token_hex(32)
+
+
+
+app.config['JWT_SECRET_KEY'] = os.environ['JWT_SECRET_KEY']
 app.config['DEBUG'] = True
 app.config['CACHE_NO_CACHE_ROUTES'] = [
     '/api/delete-alert-by-id',
@@ -249,7 +258,7 @@ CORS(app, supports_credentials=True, origins=["http://localhost:3000", "http://1
 
 app.config['JWT_BLACKLIST_ENABLED'] = True
 app.config['JWT_BLACKLIST_TOKEN_CHECKS'] = ['access']
-app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1)
+app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=2)
 
 
 blacklist = set()
@@ -2247,10 +2256,10 @@ def login():
             # Create a JWT access token with an expiration time
         
             access_token = create_access_token(
-    identity=str(user.id),  # Use user.id or a unique string identifier
-    additional_claims={"username": user.username, "role": user.role},
-    expires_delta=timedelta(hours=5)
-)
+                    identity=str(user.id),  # Use user.id or a unique string identifier
+                    additional_claims={"username": user.username, "role": user.role},
+                    expires_delta=timedelta(hours=5)
+                )
 
             return jsonify({
                 "message": "Login successful!",
@@ -2280,7 +2289,7 @@ def logout():
 
 
 @app.route("/api/users", methods=["GET"])
-# @jwt_required()
+@jwt_required()
 def approve_users():
     try:
         current_user_id = get_jwt_identity()  # Fetch the identity (user ID)
@@ -5559,7 +5568,7 @@ def get_current_user_id():
         return jsonify({"error": str(e)}), 500
     
 
-    
+
 import calendar 
 
 @app.route("/api/monthly-average-prices", methods=["GET"])
