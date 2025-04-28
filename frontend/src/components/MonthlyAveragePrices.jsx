@@ -1,3 +1,4 @@
+// Fix for the data source selection issue
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import Chart from 'chart.js/auto';
@@ -11,7 +12,6 @@ const MonthlyAveragePrices = () => {
     startYear: 2019,
     endYear: 2022,
     source: 'ProduceIQ'  // Default data source
-
   });
 
   // State for chart and data
@@ -25,7 +25,7 @@ const MonthlyAveragePrices = () => {
 
   // Predefined lists
   const commodities = [
-    'Shishito', 'Anaheim', 'Cubanelle', 'Jalapeno', 
+    'Shishito', 'Anaheim', 'Cubanelles', 'Jalapeno', 
     'Poblano', 'Serrano', 'Habanero', 'Fresno'
   ];
 
@@ -39,12 +39,20 @@ const MonthlyAveragePrices = () => {
   // Handle input changes
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormState(prev => ({
-      ...prev,
-      [name]: name === 'commodity' 
-        ? value  // Keep commodity as a string
-        : parseInt(value)  // Convert other inputs to integers
-    }));
+    
+    // Special handling for source since it's a string
+    if (name === 'source') {
+      setFormState(prev => ({
+        ...prev,
+        [name]: value
+      }));
+    } else {
+      // For other fields, convert to integers if needed
+      setFormState(prev => ({
+        ...prev,
+        [name]: name === 'commodity' ? value : parseInt(value, 10)
+      }));
+    }
   };
 
   // Fetch monthly average prices
@@ -66,6 +74,15 @@ const MonthlyAveragePrices = () => {
         return;
       }
       
+      console.log('Sending request with params:', {
+        commodity: formState.commodity,
+        start_month: formState.startMonth,
+        end_month: formState.endMonth,
+        start_year: formState.startYear,
+        end_year: formState.endYear,
+        source: formState.source
+      });
+      
       // Make the API call
       const response = await axios.get('/api/monthly-average-prices', {
         params: {
@@ -74,8 +91,7 @@ const MonthlyAveragePrices = () => {
           end_month: formState.endMonth,
           start_year: formState.startYear,
           end_year: formState.endYear,
-          source: formState.source  // Add source parameter
-
+          source: formState.source  // Ensure source parameter is passed correctly
         }
       });
       
@@ -141,7 +157,10 @@ const MonthlyAveragePrices = () => {
 
     // Prepare chart data with explicit type conversion
     const labels = data.map(item => item.month);
-    const values = data.map(item => Number(item.avg_price));
+    const values = data.map(item => {
+      const value = Number(item.avg_price);
+      return isNaN(value) ? 0 : value; // Handle NaN values
+    });
     
     console.log('Chart labels:', labels);
     console.log('Chart values:', values);
@@ -165,10 +184,16 @@ const MonthlyAveragePrices = () => {
               const dataIndex = context.dataIndex;
               const monthData = data[dataIndex];
               
+              if (!monthData) return '';
+              
+              const avgPrice = Number(monthData.avg_price);
+              const minPrice = Number(monthData.min_price);
+              const maxPrice = Number(monthData.max_price);
+              
               const tooltipLines = [
-                `Avg Price: $${Number(monthData.avg_price).toFixed(2)}`,
-                `Min Price: $${Number(monthData.min_price).toFixed(2)}`,
-                `Max Price: $${Number(monthData.max_price).toFixed(2)}`,
+                `Avg Price: $${isNaN(avgPrice) ? '0.00' : avgPrice.toFixed(2)}`,
+                `Min Price: $${isNaN(minPrice) ? '0.00' : minPrice.toFixed(2)}`,
+                `Max Price: $${isNaN(maxPrice) ? '0.00' : maxPrice.toFixed(2)}`,
               ];
               
               // Add yearly breakdown if available
@@ -176,7 +201,8 @@ const MonthlyAveragePrices = () => {
                 tooltipLines.push('');
                 tooltipLines.push('Yearly Breakdown:');
                 monthData.years_data.forEach(yearData => {
-                  tooltipLines.push(`${yearData.year}: $${Number(yearData.avg_price).toFixed(2)}`);
+                  const yearAvg = Number(yearData.avg_price);
+                  tooltipLines.push(`${yearData.year}: $${isNaN(yearAvg) ? '0.00' : yearAvg.toFixed(2)}`);
                 });
               }
               
@@ -340,19 +366,19 @@ const MonthlyAveragePrices = () => {
               </div>
 
               {/* Data Source Selection */}
-<div className="form-group mb-3">
-  <label>Data Source</label>
-  <select
-    name="source"
-    value={formState.source}
-    onChange={handleInputChange}
-    className="form-control"
-  >
-    <option value="ProduceIQ">ProduceIQ</option>
-    <option value="USDA">USDA</option>
-    <option value="ProduceIQ,USDA">Both Sources</option>
-  </select>
-</div>
+              <div className="form-group mb-3">
+                <label>Data Source</label>
+                <select
+                  name="source"
+                  value={formState.source}
+                  onChange={handleInputChange}
+                  className="form-control"
+                >
+                  <option value="ProduceIQ">ProduceIQ</option>
+                  <option value="USDA">USDA</option>
+                  <option value="ProduceIQ,USDA">Both Sources</option>
+                </select>
+              </div>
 
               {/* Calculate Button */}
               <button

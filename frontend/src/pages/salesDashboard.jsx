@@ -187,7 +187,7 @@ function SalesDashboard() {
   const [seasonalFilterState, setSeasonalFilterState] = useState({
     commodities: ['Anaheim'], // Default commodity
     cities: ['New York'], // Default city
-    source: 'USDA',    
+    source: 'ProduceIQ',    
     startDate: '2024-01-01', // Default start date
     endDate: new Date().toISOString().split('T')[0], // Current date as end date
   });

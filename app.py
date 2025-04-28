@@ -109,6 +109,7 @@ if 'JWT_SECRET_KEY' not in os.environ:
 
 app.config['JWT_SECRET_KEY'] = os.environ['JWT_SECRET_KEY']
 app.config['DEBUG'] = True
+app.config['JWT_ALGORITHM'] = 'HS256'
 app.config['CACHE_NO_CACHE_ROUTES'] = [
     '/api/delete-alert-by-id',
     '/api/clear-alerts',
