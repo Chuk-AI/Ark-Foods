@@ -5572,10 +5572,130 @@ def get_current_user_id():
 
 import calendar 
 
+# @app.route("/api/monthly-average-prices", methods=["GET"])
+# def get_monthly_average_prices():
+#     """
+#     Retrieve detailed monthly average prices for a given commodity with data source filtering
+#     """
+#     try:
+#         # Extract query parameters
+#         commodity = request.args.get('commodity')
+#         start_month = int(request.args.get('start_month', 1))  # Default January
+#         end_month = int(request.args.get('end_month', 12))    # Default December
+#         start_year = int(request.args.get('start_year'))
+#         end_year = int(request.args.get('end_year'))
+#         data_source = request.args.get('source', 'ProduceIQ')  # Default to ProduceIQ
+        
+#         # Validate required parameters
+#         if not commodity or not start_year or not end_year:
+#             return jsonify({"error": "Commodity, start year, and end year are required"}), 400
+        
+#         # Prepare months list based on selected range
+#         months_to_analyze = list(range(start_month, end_month + 1))
+        
+#         # Prepare results
+#         monthly_analysis = []
+        
+#         # For SQLite: Properly calculate day ranges for each month
+#         for month in months_to_analyze:
+#             # Query for this specific month across years
+#             month_data = []
+            
+#             # For each year in the range
+#             for year in range(start_year, end_year + 1):
+#                 # Determine if it's a leap year
+#                 is_leap_year = (year % 4 == 0 and year % 100 != 0) or (year % 400 == 0)
+                
+#                 # Define days in each month for the current year
+#                 days_in_month = [31, 29 if is_leap_year else 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+                
+#                 # Calculate cumulative days at the beginning of each month
+#                 cumulative_days = [0]  # Start with 0
+#                 running_sum = 0
+#                 for days in days_in_month:
+#                     running_sum += days
+#                     cumulative_days.append(running_sum)
+                
+#                 # Calculate day range for the specified month (1-indexed)
+#                 month_start_day = cumulative_days[month-1] + 1
+#                 month_end_day = cumulative_days[month]
+                
+#                 # Create base query with filters
+#                 query = db.session.query(
+#                     func.avg(PriceData.price).label('avg_price'),
+#                     func.min(PriceData.price).label('min_price'),
+#                     func.max(PriceData.price).label('max_price')
+#                 ).filter(
+#                     PriceData.commodity == commodity,
+#                     PriceData.year == year,
+#                     PriceData.day >= month_start_day,
+#                     PriceData.day <= month_end_day,
+#                     PriceData.price > 0
+#                 )
+                
+#                 # Add source filter
+#                 if data_source == "ProduceIQ,USDA" or data_source == "USDA,ProduceIQ":
+#                     query = query.filter(PriceData.source.in_(["ProduceIQ", "USDA"]))
+#                 else:
+#                     query = query.filter(PriceData.source == data_source)
+                
+#                 # Execute the query
+#                 year_month_data = query.first()
+                
+#                 # Only add if we have valid data
+#                 if year_month_data and year_month_data.avg_price is not None:
+#                     month_data.append({
+#                         'year': year,
+#                         'avg_price': round(float(year_month_data.avg_price), 2),
+#                         'min_price': round(float(year_month_data.min_price), 2),
+#                         'max_price': round(float(year_month_data.max_price), 2)
+#                     })
+            
+#             # Process the data for this month
+#             if month_data:
+#                 # Calculate overall statistics for this month across years
+#                 all_prices = [entry['avg_price'] for entry in month_data]
+#                 all_min_prices = [entry['min_price'] for entry in month_data]
+#                 all_max_prices = [entry['max_price'] for entry in month_data]
+                
+#                 monthly_analysis.append({
+#                     'month': calendar.month_name[month],
+#                     'avg_price': round(sum(all_prices) / len(all_prices), 2),
+#                     'min_price': round(min(all_min_prices), 2),
+#                     'max_price': round(max(all_max_prices), 2),
+#                     'years_data': month_data
+#                 })
+#             else:
+#                 # If no data for this month, add a default entry
+#                 monthly_analysis.append({
+#                     'month': calendar.month_name[month],
+#                     'avg_price': 0,
+#                     'min_price': 0,
+#                     'max_price': 0,
+#                     'years_data': []
+#                 })
+        
+#         return jsonify({
+#             "monthly_prices": monthly_analysis,
+#             "commodity": commodity,
+#             "start_month": start_month,
+#             "end_month": end_month,
+#             "start_year": start_year,
+#             "end_year": end_year,
+#             "source": data_source
+#         }), 200
+    
+#     except Exception as e:
+#         app.logger.error(f"Error in monthly average prices: {str(e)}")
+#         return jsonify({"error": str(e)}), 500
+
+
+
 @app.route("/api/monthly-average-prices", methods=["GET"])
 def get_monthly_average_prices():
     """
     Retrieve detailed monthly average prices for a given commodity with data source filtering
+    Optimized version to reduce database load and query time
     """
     try:
         # Extract query parameters
@@ -5590,90 +5710,172 @@ def get_monthly_average_prices():
         if not commodity or not start_year or not end_year:
             return jsonify({"error": "Commodity, start year, and end year are required"}), 400
         
-        # Prepare months list based on selected range
-        months_to_analyze = list(range(start_month, end_month + 1))
+        # Create a single SQL query instead of multiple queries
+        # This uses Common Table Expressions (CTEs) to efficiently calculate everything in one go
         
-        # Prepare results
-        monthly_analysis = []
+        # Build the month ranges CTE
+        month_ranges_sql = """
+        WITH month_ranges AS (
+            SELECT
+                m.month_num,
+                m.month_name,
+                y.year,
+                -- Start day calculation
+                CASE
+                    WHEN m.month_num = 1 THEN 1
+                    WHEN m.month_num = 2 THEN 32
+                    WHEN m.month_num = 3 AND ((y.year % 4 = 0 AND y.year % 100 <> 0) OR (y.year % 400 = 0)) THEN 61
+                    WHEN m.month_num = 3 THEN 60
+                    WHEN m.month_num = 4 AND ((y.year % 4 = 0 AND y.year % 100 <> 0) OR (y.year % 400 = 0)) THEN 92
+                    WHEN m.month_num = 4 THEN 91
+                    WHEN m.month_num = 5 AND ((y.year % 4 = 0 AND y.year % 100 <> 0) OR (y.year % 400 = 0)) THEN 122
+                    WHEN m.month_num = 5 THEN 121
+                    WHEN m.month_num = 6 AND ((y.year % 4 = 0 AND y.year % 100 <> 0) OR (y.year % 400 = 0)) THEN 153
+                    WHEN m.month_num = 6 THEN 152
+                    WHEN m.month_num = 7 AND ((y.year % 4 = 0 AND y.year % 100 <> 0) OR (y.year % 400 = 0)) THEN 183
+                    WHEN m.month_num = 7 THEN 182
+                    WHEN m.month_num = 8 AND ((y.year % 4 = 0 AND y.year % 100 <> 0) OR (y.year % 400 = 0)) THEN 214
+                    WHEN m.month_num = 8 THEN 213
+                    WHEN m.month_num = 9 AND ((y.year % 4 = 0 AND y.year % 100 <> 0) OR (y.year % 400 = 0)) THEN 245
+                    WHEN m.month_num = 9 THEN 244
+                    WHEN m.month_num = 10 AND ((y.year % 4 = 0 AND y.year % 100 <> 0) OR (y.year % 400 = 0)) THEN 275
+                    WHEN m.month_num = 10 THEN 274
+                    WHEN m.month_num = 11 AND ((y.year % 4 = 0 AND y.year % 100 <> 0) OR (y.year % 400 = 0)) THEN 306
+                    WHEN m.month_num = 11 THEN 305
+                    WHEN m.month_num = 12 AND ((y.year % 4 = 0 AND y.year % 100 <> 0) OR (y.year % 400 = 0)) THEN 336
+                    WHEN m.month_num = 12 THEN 335
+                END AS start_day,
+                -- End day calculation
+                CASE
+                    WHEN m.month_num = 1 THEN 31
+                    WHEN m.month_num = 2 AND ((y.year % 4 = 0 AND y.year % 100 <> 0) OR (y.year % 400 = 0)) THEN 60
+                    WHEN m.month_num = 2 THEN 59
+                    WHEN m.month_num = 3 THEN 90
+                    WHEN m.month_num = 4 THEN 120
+                    WHEN m.month_num = 5 THEN 151
+                    WHEN m.month_num = 6 THEN 181
+                    WHEN m.month_num = 7 THEN 212
+                    WHEN m.month_num = 8 THEN 243
+                    WHEN m.month_num = 9 THEN 273
+                    WHEN m.month_num = 10 THEN 304
+                    WHEN m.month_num = 11 THEN 334
+                    WHEN m.month_num = 12 AND ((y.year % 4 = 0 AND y.year % 100 <> 0) OR (y.year % 400 = 0)) THEN 366
+                    WHEN m.month_num = 12 THEN 365
+                END AS end_day
+            FROM
+                (VALUES 
+                    (1, 'January'), (2, 'February'), (3, 'March'), (4, 'April'),
+                    (5, 'May'), (6, 'June'), (7, 'July'), (8, 'August'),
+                    (9, 'September'), (10, 'October'), (11, 'November'), (12, 'December')
+                ) AS m(month_num, month_name),
+                (SELECT GENERATE_SERIES(:start_year, :end_year) AS year) AS y
+            WHERE
+                m.month_num BETWEEN :start_month AND :end_month
+        ),
+        """
         
-        # For SQLite: Properly calculate day ranges for each month
-        for month in months_to_analyze:
-            # Query for this specific month across years
-            month_data = []
-            
-            # For each year in the range
-            for year in range(start_year, end_year + 1):
-                # Determine if it's a leap year
-                is_leap_year = (year % 4 == 0 and year % 100 != 0) or (year % 400 == 0)
-                
-                # Define days in each month for the current year
-                days_in_month = [31, 29 if is_leap_year else 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-                
-                # Calculate cumulative days at the beginning of each month
-                cumulative_days = [0]  # Start with 0
-                running_sum = 0
-                for days in days_in_month:
-                    running_sum += days
-                    cumulative_days.append(running_sum)
-                
-                # Calculate day range for the specified month (1-indexed)
-                month_start_day = cumulative_days[month-1] + 1
-                month_end_day = cumulative_days[month]
-                
-                # Create base query with filters
-                query = db.session.query(
-                    func.avg(PriceData.price).label('avg_price'),
-                    func.min(PriceData.price).label('min_price'),
-                    func.max(PriceData.price).label('max_price')
-                ).filter(
-                    PriceData.commodity == commodity,
-                    PriceData.year == year,
-                    PriceData.day >= month_start_day,
-                    PriceData.day <= month_end_day,
-                    PriceData.price > 0
+        # Build source filter
+        source_filter = ""
+        if data_source == "ProduceIQ,USDA" or data_source == "USDA,ProduceIQ":
+            source_filter = "AND pd.source IN ('ProduceIQ', 'USDA')"
+        else:
+            source_filter = f"AND pd.source = '{data_source}'"
+        
+        # Build monthly stats query
+        monthly_stats_sql = """
+        monthly_stats AS (
+            SELECT
+                mr.month_name,
+                mr.month_num,
+                mr.year,
+                ROUND(AVG(pd.price)::numeric, 2) AS avg_price,
+                ROUND(MIN(pd.price)::numeric, 2) AS min_price,
+                ROUND(MAX(pd.price)::numeric, 2) AS max_price,
+                COUNT(*) AS record_count
+            FROM
+                price_data pd
+            JOIN
+                month_ranges mr ON
+                    pd.year = mr.year AND
+                    pd.day BETWEEN mr.start_day AND mr.end_day
+            WHERE
+                pd.commodity = :commodity
+                AND pd.price > 0
+                """ + source_filter + """
+            GROUP BY
+                mr.month_name, mr.month_num, mr.year
+        ),
+        """
+        
+        # Build aggregated stats query
+        aggregated_stats_sql = """
+        aggregated_stats AS (
+            SELECT
+                month_name,
+                month_num,
+                ROUND(AVG(avg_price)::numeric, 2) AS avg_price,
+                ROUND(MIN(min_price)::numeric, 2) AS min_price,
+                ROUND(MAX(max_price)::numeric, 2) AS max_price,
+                SUM(record_count) AS total_records
+            FROM
+                monthly_stats
+            GROUP BY
+                month_name, month_num
+        )
+        """
+        
+        # Build final query with JSON aggregation
+        final_query = month_ranges_sql + monthly_stats_sql + aggregated_stats_sql + """
+        SELECT
+            a.month_name AS month,
+            a.avg_price,
+            a.min_price,
+            a.max_price,
+            a.total_records,
+            (
+                SELECT json_agg(
+                    json_build_object(
+                        'year', ms.year,
+                        'avg_price', ms.avg_price,
+                        'min_price', ms.min_price,
+                        'max_price', ms.max_price
+                    )
                 )
-                
-                # Add source filter
-                if data_source == "ProduceIQ,USDA" or data_source == "USDA,ProduceIQ":
-                    query = query.filter(PriceData.source.in_(["ProduceIQ", "USDA"]))
-                else:
-                    query = query.filter(PriceData.source == data_source)
-                
-                # Execute the query
-                year_month_data = query.first()
-                
-                # Only add if we have valid data
-                if year_month_data and year_month_data.avg_price is not None:
-                    month_data.append({
-                        'year': year,
-                        'avg_price': round(float(year_month_data.avg_price), 2),
-                        'min_price': round(float(year_month_data.min_price), 2),
-                        'max_price': round(float(year_month_data.max_price), 2)
-                    })
+                FROM monthly_stats ms
+                WHERE ms.month_name = a.month_name
+            ) AS years_data
+        FROM
+            aggregated_stats a
+        ORDER BY
+            a.month_num;
+        """
+        
+        # Execute the query with parameters
+        result = db.session.execute(
+            text(final_query),
+            {
+                'commodity': commodity,
+                'start_month': start_month,
+                'end_month': end_month,
+                'start_year': start_year,
+                'end_year': end_year
+            }
+        )
+        
+        # Process the results
+        monthly_analysis = []
+        for row in result:
+            # Extract the years_data JSON and ensure it's not None
+            years_data = row.years_data if row.years_data else []
             
-            # Process the data for this month
-            if month_data:
-                # Calculate overall statistics for this month across years
-                all_prices = [entry['avg_price'] for entry in month_data]
-                all_min_prices = [entry['min_price'] for entry in month_data]
-                all_max_prices = [entry['max_price'] for entry in month_data]
-                
-                monthly_analysis.append({
-                    'month': calendar.month_name[month],
-                    'avg_price': round(sum(all_prices) / len(all_prices), 2),
-                    'min_price': round(min(all_min_prices), 2),
-                    'max_price': round(max(all_max_prices), 2),
-                    'years_data': month_data
-                })
-            else:
-                # If no data for this month, add a default entry
-                monthly_analysis.append({
-                    'month': calendar.month_name[month],
-                    'avg_price': 0,
-                    'min_price': 0,
-                    'max_price': 0,
-                    'years_data': []
-                })
+            # Create monthly data entry
+            monthly_analysis.append({
+                'month': row.month,
+                'avg_price': float(row.avg_price) if row.avg_price is not None else 0,
+                'min_price': float(row.min_price) if row.min_price is not None else 0,
+                'max_price': float(row.max_price) if row.max_price is not None else 0,
+                'years_data': years_data
+            })
         
         return jsonify({
             "monthly_prices": monthly_analysis,
@@ -5688,8 +5890,8 @@ def get_monthly_average_prices():
     except Exception as e:
         app.logger.error(f"Error in monthly average prices: {str(e)}")
         return jsonify({"error": str(e)}), 500
-
-
+    
+    
 # TEST ROUTE
 @app.route("/api/trigger_usda_fetch", methods=["GET"])
 def trigger_usda_fetch():
