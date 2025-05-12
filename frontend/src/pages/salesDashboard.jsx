@@ -189,14 +189,14 @@ function SalesDashboard() {
     cities: ['New York'], // Default city
     source: 'ProduceIQ',    
     startDate: '2024-01-01', // Default start date
-    endDate: '2025-05-12', // Current date as end date
+    endDate: new Date().toISOString().split('T')[0], // Current date as end date
   });
 
   const [appliedSeasonalFilters, setAppliedSeasonalFilters] = useState({
     commodities: ['Anaheim'],
     cities: ['New York'],
     startDate: '2024-01-01',
-    endDate: '2025-05-12',
+    endDate: new Date().toISOString().split('T')[0],
   });
 
 
