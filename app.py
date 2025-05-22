@@ -6518,6 +6518,8 @@ def get_terminal_correlation():
 
 
 
+
+
 @app.route("/api/shipping_correlation", methods=["GET"])
 def get_shipping_correlation():
     try:
