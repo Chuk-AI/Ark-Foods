@@ -1,1312 +1,1319 @@
 {% extends "base.html" %} {% block title %}Sales Dashboard{% endblock %} {%
-    block head %}
-    <!-- Link sales-specific CSS -->
-    <link
-      rel="stylesheet"
-      href="{{ url_for('static', filename='css/sales_styles.css') }}"
-    />
-    {% endblock %}{% block content %}
-    <div class="container-fluid d-flex">
-      <!-- Left Sidebar -->
-      <div class="sidebar bg-light p-3" id="filters-sidebar">
-        <div id="sidebar-toggle">
-          <i class="arrow-icon">&larr;</i>
+block head %}
+<!-- Link sales-specific CSS -->
+<link
+  rel="stylesheet"
+  href="{{ url_for('static', filename='css/sales_styles.css') }}"
+/>
+{% endblock %}{% block content %}
+<div class="container-fluid d-flex">
+  <!-- Left Sidebar -->
+  <div class="sidebar bg-light p-3" id="filters-sidebar">
+    <div id="sidebar-toggle">
+      <i class="arrow-icon">&larr;</i>
+    </div>
+    <div id="filters-content">
+      <h2 class="text-primary" id="current-section-title">Best Sell Market</h2>
+
+      <!-- Filters for Best Sell Market -->
+      <form id="filters-best-sell-market" class="filter-form active">
+        <!-- Commodity Filter -->
+        <div class="form-group">
+          <label for="commodityFilterBestSell" class="font-weight-bold"
+            >Commodity</label
+          >
+          <select id="commodityFilterBestSell" class="form-control">
+            <option value="Anaheim">Anaheim</option>
+            <option value="Cubanelles">Cubanelles</option>
+            <option value="Fresno">Fresno</option>
+            <option value="Habanero">Habanero</option>
+            <option value="Hungarian Wax">Hungarian Wax</option>
+            <option value="Jalapeno">Jalapeno</option>
+            <option value="Long Hot">Long Hot</option>
+            <option value="Poblano">Poblano</option>
+            <option value="Serrano">Serrano</option>
+            <option value="Shishito">Shishito</option>
+          </select>
         </div>
-        <div id="filters-content">
-          <h2 class="text-primary" id="current-section-title">Best Sell Market</h2>
-    
-          <!-- Filters for Best Sell Market -->
-          <form id="filters-best-sell-market" class="filter-form active">
-            <!-- Commodity Filter -->
-            <div class="form-group">
-              <label for="commodityFilterBestSell" class="font-weight-bold"
-                >Commodity</label
-              >
-              <select id="commodityFilterBestSell" class="form-control">
-                <option value="Anaheim">Anaheim</option>
-                <option value="Cubanelles">Cubanelles</option>
-                <option value="Fresno">Fresno</option>
-                <option value="Habanero">Habanero</option>
-                <option value="Hungarian Wax">Hungarian Wax</option>
-                <option value="Jalapeno">Jalapeno</option>
-                <option value="Long Hot">Long Hot</option>
-                <option value="Poblano">Poblano</option>
-                <option value="Serrano">Serrano</option>
-                <option value="Shishito">Shishito</option>
-              </select>
-            </div>
-    
-            <!-- Source Filter -->
-            <div class="form-group">
-              <label for="sourceFilterBestSell" class="font-weight-bold"
-                >Source</label
-              >
-              <select id="sourceFilterBestSell" class="form-control">
-                <option value="USDA">USDA</option>
-                <option value="ProduceIQ">ProduceIQ</option>
-              </select>
-            </div>
-    
-            <!-- Last 7 Days Checkbox -->
-            <div class="form-group form-check">
-              <input
-                type="checkbox"
-                class="form-check-input"
-                id="last7DaysBestSell"
-              />
-              <label
-                class="form-check-label font-weight-bold"
-                for="last7DaysBestSell"
-                >Only Last 7 Days</label
-              >
-            </div>
-    
-            <!-- Apply Filters Button -->
-            <button type="button" class="btn btn-primary btn-block">
-              Apply Filters
-            </button>
-          </form>
-    
-          <!-- Filters for Map -->
-          <form id="filters-map" class="filter-form">
-            <!-- Commodity Filter -->
-            <div class="form-group">
-              <label for="commodityFilterMap" class="font-weight-bold"
-                >Commodity</label
-              >
-              <select id="commodityFilterMap" class="form-control">
-                <option value="Anaheim">Anaheim</option>
-                <option value="Cubanelles">Cubanelles</option>
-                <option value="Fresno">Fresno</option>
-                <option value="Habanero">Habanero</option>
-                <option value="Hungarian Wax">Hungarian Wax</option>
-                <option value="Jalapeno">Jalapeno</option>
-                <option value="Long Hot">Long Hot</option>
-                <option value="Poblano">Poblano</option>
-                <option value="Serrano">Serrano</option>
-                <option value="Shishito">Shishito</option>
-              </select>
-            </div>
-    
-            <!-- Apply Filters Button -->
-            <button type="button" class="btn btn-primary btn-block">
-              Apply Filters
-            </button>
-          </form>
-          <!-- Filters for Seasonal Trends -->
-          <form id="filters-seasonal-trends" class="filter-form">
-            <!-- Commodity Multi-Select Filter -->
-            <div class="form-group">
-              <label for="commodityFilterSeasonal" class="font-weight-bold"
-                >Commodity</label
-              >
-              <select id="commodityFilterSeasonal" class="form-control" multiple>
-                <!-- Options for commodities -->
-                <option value="Anaheim">Anaheim</option>
-                <option value="Cubanelles">Cubanelles</option>
-                <option value="Fresno">Fresno</option>
-                <option value="Habanero">Habanero</option>
-                <option value="Hungarian Wax">Hungarian Wax</option>
-                <option value="Jalapeno">Jalapeno</option>
-                <option value="Long Hot">Long Hot</option>
-                <option value="Poblano">Poblano</option>
-                <option value="Serrano">Serrano</option>
-                <option value="Shishito">Shishito</option>
-              </select>
-            </div>
-    
-            <!-- City Multi-Select Filter -->
-            <div class="form-group">
-              <label for="cityFilterSeasonal" class="font-weight-bold">City</label>
-              <select id="cityFilterSeasonal" class="form-control" multiple>
-                <!-- Options for cities -->
-                <option value="New York">New York</option>
-                <option value="Chicago">Chicago</option>
-                <option value="Los Angeles">Los Angeles</option>
-                <option value="Miami">Miami</option>
-                <option value="Philadelphia">Philadelphia</option>
-                <option value="Boston">Boston</option>
-                <option value="Baltimore">Baltimore</option>
-                <option value="Columbia">Columbia</option>
-              </select>
-            </div>
-    
-            <!-- Start Date Filter -->
-            <div class="form-group">
-              <label for="startDateFilterSeasonal" class="font-weight-bold"
-                >Start Date</label
-              >
-              <input
-                type="date"
-                id="startDateFilterSeasonal"
-                class="form-control"
-                placeholder="YYYY-MM-DD"
-              />
-            </div>
-    
-            <!-- End Date Filter -->
-            <div class="form-group">
-              <label for="endDateFilterSeasonal" class="font-weight-bold"
-                >End Date</label
-              >
-              <input
-                type="date"
-                id="endDateFilterSeasonal"
-                class="form-control"
-                placeholder="YYYY-MM-DD"
-              />
-            </div>
-    
-            <!-- Apply Filters Button -->
-            <button type="button" class="btn btn-primary btn-block">
-              Apply Filters
-            </button>
-          </form>
-    
-          <!-- Filters for Historical Data -->
-          <form id="filters-historical-data" class="filter-form">
-            <!-- Commodity Multi-Select Filter -->
-            <div class="form-group">
-              <label for="commodityFilterHistorical" class="font-weight-bold"
-                >Commodity</label
-              >
-              <select id="commodityFilterHistorical" class="form-control" multiple>
-                <option value="Anaheim">Anaheim</option>
-                <option value="Cubanelles">Cubanelles</option>
-                <option value="Fresno">Fresno</option>
-                <option value="Habanero">Habanero</option>
-                <option value="Hungarian Wax">Hungarian Wax</option>
-                <option value="Jalapeno">Jalapeno</option>
-                <option value="Long Hot">Long Hot</option>
-                <option value="Poblano">Poblano</option>
-                <option value="Serrano">Serrano</option>
-                <option value="Shishito">Shishito</option>
-              </select>
-            </div>
-    
-            <div class="form-group form-check">
-              <input
-                type="checkbox"
-                class="form-check-input"
-                id="averageCommodities"
-                checked
-              />
-              <label
-                class="form-check-label font-weight-bold"
-                for="averageCommodities"
-                >Average over Commodities</label
-              >
-            </div>
-    
-            <!-- City Multi-Select Filter -->
-            <div class="form-group">
-              <label for="cityFilterHistorical" class="font-weight-bold"
-                >City</label
-              >
-              <select id="cityFilterHistorical" class="form-control" multiple>
-                <option value="New York">New York</option>
-                <option value="Chicago">Chicago</option>
-                <option value="Los Angeles">Los Angeles</option>
-                <option value="Miami">Miami</option>
-                <option value="Philadelphia">Philadelphia</option>
-                <option value="Boston">Boston</option>
-                <option value="Baltimore">Baltimore</option>
-                <option value="Columbia">Columbia</option>
-              </select>
-            </div>
-    
-            <div class="form-group form-check">
-              <input
-                type="checkbox"
-                class="form-check-input"
-                id="averageCities"
-                checked
-              />
-              <label class="form-check-label font-weight-bold" for="averageCities"
-                >Average over Cities</label
-              >
-            </div>
-    
-            <!-- Source Filter -->
-            <div class="form-group">
-              <label for="sourceFilterHistorical" class="font-weight-bold"
-                >Source</label
-              >
-              <select id="sourceFilterHistorical" class="form-control">
-                <option value="USDA">USDA</option>
-                <option value="ProduceIQ">ProduceIQ</option>
-              </select>
-            </div>
-    
-            <!-- Start Date Filter -->
-            <div class="form-group">
-              <label for="startDateFilterHistorical" class="font-weight-bold"
-                >Start Date</label
-              >
-              <input
-                type="date"
-                id="startDateFilterHistorical"
-                class="form-control"
-                value="2024-11-01"
-                placeholder="YYYY-MM-DD"
-              />
-            </div>
-    
-            <!-- End Date Filter -->
-            <div class="form-group">
-              <label for="endDateFilterHistorical" class="font-weight-bold"
-                >End Date</label
-              >
-              <input
-                type="date"
-                id="endDateFilterHistorical"
-                class="form-control"
-                value="2024-11-21"
-                placeholder="YYYY-MM-DD"
-              />
-            </div>
-    
-            <!-- Apply Filters Button -->
-            <button type="button" class="btn btn-primary btn-block">
-              Apply Filters
-            </button>
-          </form>
+
+        <!-- Source Filter -->
+        <div class="form-group">
+          <label for="sourceFilterBestSell" class="font-weight-bold"
+            >Source</label
+          >
+          <select id="sourceFilterBestSell" class="form-control">
+            <option value="USDA">USDA</option>
+            <option value="ProduceIQ">ProduceIQ</option>
+          </select>
         </div>
-      </div>
-    
-      <!-- Main Content -->
-      <div class="main-content flex-grow-1">
-        <!-- Row 1: Best Sell Market Table and Market Graph -->
-        <div id="best-sell-market-section" class="section">
-          <div class="row mb-4">
-            <!-- Best Sell Market Table -->
-            <div class="col-lg-6 mb-4">
-              <div class="card resizable-block" id="best-sell-market-card">
-                <div
-                  class="card-header bg-primary text-white d-flex justify-content-between align-items-center"
-                >
-                  <h2>Best Sell Market</h2>
-                  <button
-                    class="btn btn-sm btn-outline-light toggle-size"
-                    data-block-title="Best Sell Market"
-                  >
-                    Minimize
-                  </button>
-                </div>
-                <div class="card-body p-0">
-                  <table
-                    class="table table-striped table-hover table-bordered"
-                    id="best-sell-market-table"
-                  >
-                    <thead class="thead-dark">
-                      <tr>
-                        <th>City</th>
-                        <th>Price</th>
-                        <th>Date</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <!-- Data dynamically populated -->
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+
+        <!-- Last 7 Days Checkbox -->
+        <div class="form-group form-check">
+          <input
+            type="checkbox"
+            class="form-check-input"
+            id="last7DaysBestSell"
+          />
+          <label
+            class="form-check-label font-weight-bold"
+            for="last7DaysBestSell"
+            >Only Last 7 Days</label
+          >
+        </div>
+
+        <!-- Apply Filters Button -->
+        <button type="button" class="btn btn-primary btn-block">
+          Apply Filters
+        </button>
+      </form>
+
+      <!-- Filters for Map -->
+      <form id="filters-map" class="filter-form">
+        <!-- Commodity Filter -->
+        <div class="form-group">
+          <label for="commodityFilterMap" class="font-weight-bold"
+            >Commodity</label
+          >
+          <select id="commodityFilterMap" class="form-control">
+            <option value="Anaheim">Anaheim</option>
+            <option value="Cubanelles">Cubanelles</option>
+            <option value="Fresno">Fresno</option>
+            <option value="Habanero">Habanero</option>
+            <option value="Hungarian Wax">Hungarian Wax</option>
+            <option value="Jalapeno">Jalapeno</option>
+            <option value="Long Hot">Long Hot</option>
+            <option value="Poblano">Poblano</option>
+            <option value="Serrano">Serrano</option>
+            <option value="Shishito">Shishito</option>
+          </select>
+        </div>
+
+        <!-- Apply Filters Button -->
+        <button type="button" class="btn btn-primary btn-block">
+          Apply Filters
+        </button>
+      </form>
+      <!-- Filters for Seasonal Trends -->
+      <form id="filters-seasonal-trends" class="filter-form">
+        <!-- Commodity Multi-Select Filter -->
+        <div class="form-group">
+          <label for="commodityFilterSeasonal" class="font-weight-bold"
+            >Commodity</label
+          >
+          <select id="commodityFilterSeasonal" class="form-control" multiple>
+            <!-- Options for commodities -->
+            <option value="Anaheim">Anaheim</option>
+            <option value="Cubanelles">Cubanelles</option>
+            <option value="Fresno">Fresno</option>
+            <option value="Habanero">Habanero</option>
+            <option value="Hungarian Wax">Hungarian Wax</option>
+            <option value="Jalapeno">Jalapeno</option>
+            <option value="Long Hot">Long Hot</option>
+            <option value="Poblano">Poblano</option>
+            <option value="Serrano">Serrano</option>
+            <option value="Shishito">Shishito</option>
+          </select>
+        </div>
+
+        <!-- City Multi-Select Filter -->
+        <div class="form-group">
+          <label for="cityFilterSeasonal" class="font-weight-bold">City</label>
+          <select id="cityFilterSeasonal" class="form-control" multiple>
+            <!-- Options for cities -->
+            <option value="New York">New York</option>
+            <option value="Chicago">Chicago</option>
+            <option value="Los Angeles">Los Angeles</option>
+            <option value="Miami">Miami</option>
+            <option value="Philadelphia">Philadelphia</option>
+            <option value="Boston">Boston</option>
+            <option value="Baltimore">Baltimore</option>
+            <option value="Columbia">Columbia</option>
+            <option value="Detroit">Detroit</option>
+            <option value="Atlanta">Atlanta</option>
+          </select>
+        </div>
+
+        <!-- Start Date Filter -->
+        <div class="form-group">
+          <label for="startDateFilterSeasonal" class="font-weight-bold"
+            >Start Date</label
+          >
+          <input
+            type="date"
+            id="startDateFilterSeasonal"
+            class="form-control"
+            placeholder="YYYY-MM-DD"
+          />
+        </div>
+
+        <!-- End Date Filter -->
+        <div class="form-group">
+          <label for="endDateFilterSeasonal" class="font-weight-bold"
+            >End Date</label
+          >
+          <input
+            type="date"
+            id="endDateFilterSeasonal"
+            class="form-control"
+            placeholder="YYYY-MM-DD"
+          />
+        </div>
+
+        <!-- Apply Filters Button -->
+        <button type="button" class="btn btn-primary btn-block">
+          Apply Filters
+        </button>
+      </form>
+
+      <!-- Filters for Historical Data -->
+      <form id="filters-historical-data" class="filter-form">
+        <!-- Commodity Multi-Select Filter -->
+        <div class="form-group">
+          <label for="commodityFilterHistorical" class="font-weight-bold"
+            >Commodity</label
+          >
+          <select id="commodityFilterHistorical" class="form-control" multiple>
+            <option value="Anaheim">Anaheim</option>
+            <option value="Cubanelles">Cubanelles</option>
+            <option value="Fresno">Fresno</option>
+            <option value="Habanero">Habanero</option>
+            <option value="Hungarian Wax">Hungarian Wax</option>
+            <option value="Jalapeno">Jalapeno</option>
+            <option value="Long Hot">Long Hot</option>
+            <option value="Poblano">Poblano</option>
+            <option value="Serrano">Serrano</option>
+            <option value="Shishito">Shishito</option>
+          </select>
+        </div>
+
+        <div class="form-group form-check">
+          <input
+            type="checkbox"
+            class="form-check-input"
+            id="averageCommodities"
+            checked
+          />
+          <label
+            class="form-check-label font-weight-bold"
+            for="averageCommodities"
+            >Average over Commodities</label
+          >
+        </div>
+
+        <!-- City Multi-Select Filter -->
+        <div class="form-group">
+          <label for="cityFilterHistorical" class="font-weight-bold"
+            >City</label
+          >
+          <select id="cityFilterHistorical" class="form-control" multiple>
+            <option value="New York">New York</option>
+            <option value="Chicago">Chicago</option>
+            <option value="Los Angeles">Los Angeles</option>
+            <option value="Miami">Miami</option>
+            <option value="Philadelphia">Philadelphia</option>
+            <option value="Boston">Boston</option>
+            <option value="Baltimore">Baltimore</option>
+            <option value="Columbia">Columbia</option>
+            <option value="Detroit">Detroit</option>
+            <option value="Atlanta">Atlanta</option>
+          </select>
+        </div>
+
+        <div class="form-group form-check">
+          <input
+            type="checkbox"
+            class="form-check-input"
+            id="averageCities"
+            checked
+          />
+          <label class="form-check-label font-weight-bold" for="averageCities"
+            >Average over Cities</label
+          >
+        </div>
+
+        <!-- Source Filter -->
+        <div class="form-group">
+          <label for="sourceFilterHistorical" class="font-weight-bold"
+            >Source</label
+          >
+          <select id="sourceFilterHistorical" class="form-control">
+            <option value="USDA">USDA</option>
+            <option value="ProduceIQ">ProduceIQ</option>
+          </select>
+        </div>
+
+        <!-- Start Date Filter -->
+        <div class="form-group">
+          <label for="startDateFilterHistorical" class="font-weight-bold"
+            >Start Date</label
+          >
+          <input
+            type="date"
+            id="startDateFilterHistorical"
+            class="form-control"
+            value="2024-11-01"
+            placeholder="YYYY-MM-DD"
+          />
+        </div>
+
+        <!-- End Date Filter -->
+        <div class="form-group">
+          <label for="endDateFilterHistorical" class="font-weight-bold"
+            >End Date</label
+          >
+          <input
+            type="date"
+            id="endDateFilterHistorical"
+            class="form-control"
+            value="2024-11-21"
+            placeholder="YYYY-MM-DD"
+          />
+        </div>
+
+        <!-- Apply Filters Button -->
+        <button type="button" class="btn btn-primary btn-block">
+          Apply Filters
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main-content flex-grow-1">
+    <!-- Row 1: Best Sell Market Table and Market Graph -->
+    <div id="best-sell-market-section" class="section">
+      <div class="row mb-4">
+        <!-- Best Sell Market Table -->
+        <div class="col-lg-6 mb-4">
+          <div class="card resizable-block" id="best-sell-market-card">
+            <div
+              class="card-header bg-primary text-white d-flex justify-content-between align-items-center"
+            >
+              <h2>Best Sell Market</h2>
+              <button
+                class="btn btn-sm btn-outline-light toggle-size"
+                data-block-title="Best Sell Market"
+              >
+                Minimize
+              </button>
             </div>
-    
-            <!-- Market Graph -->
-            <div class="col-lg-6 mb-4">
-              <div class="card resizable-block" id="market-graph-card">
-                <div
-                  class="card-header bg-primary text-white d-flex justify-content-between align-items-center"
-                >
-                  <h2>Market Graph</h2>
-                  <button
-                    class="btn btn-sm btn-outline-light toggle-size"
-                    data-block-title="Market Graph"
-                  >
-                    Minimize
-                  </button>
-                </div>
-                <div class="card-body">
-                  <canvas id="bestSellChart" width="400" height="400"></canvas>
-                </div>
-              </div>
+            <div class="card-body p-0">
+              <table
+                class="table table-striped table-hover table-bordered"
+                id="best-sell-market-table"
+              >
+                <thead class="thead-dark">
+                  <tr>
+                    <th>City</th>
+                    <th>Price</th>
+                    <th>Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <!-- Data dynamically populated -->
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
-    
-        <!-- Row 2: Most Recent Prices Table -->
-        <div id="most-recent-price-section" class="section">
-          <div class="row mb-4">
-            <div class="col-12 mb-4">
-              <div class="card resizable-block" id="most-recent-prices-card">
-                <div
-                  class="card-header bg-primary text-white d-flex justify-content-between align-items-center"
-                >
-                  <h2>Most Recent Prices</h2>
-                  <button
-                    class="btn btn-sm btn-outline-light toggle-size"
-                    data-block-title="Most Recent Prices"
-                  >
-                    Minimize
-                  </button>
-                </div>
-                <div class="card-body p-0">
-                  <table
-                    class="table table-striped table-hover table-bordered"
-                    id="most-recent-prices-table"
-                  >
-                    <thead class="thead-dark">
-                      <tr>
-                        <th>Commodity</th>
-                        <th>Baltimore</th>
-                        <th>Boston</th>
-                        <th>Chicago</th>
-                        <th>Columbia</th>
-                        <th>Miami</th>
-                        <th>New York</th>
-                        <th>Philadelphia</th>
-                        <th>Los Angeles</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <!-- Rows dynamically populated -->
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <!-- Row 3: Map and Seasonal Trends -->
-        <div id="map-section" class="section">
-          <div class="row mb-4">
-            <!-- Map Section -->
-            <div class="col-lg-12 mb-4">
-              <div class="card resizable-block" id="map-card">
-                <div
-                  class="card-header bg-primary text-white d-flex justify-content-between align-items-center"
-                >
-                  <h2>Map</h2>
-                  <button
-                    class="btn btn-sm btn-outline-light toggle-size"
-                    data-block-title="Map"
-                  >
-                    Minimize
-                  </button>
-                </div>
-                <div class="card-body p-0">
-                  <div id="commodityMap"></div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <!-- Seasonal Trends -->
-        <div id="seasonal-trends-section" class="section">
-          <div class="col-lg-12 mb-4">
-            <div class="card resizable-block" id="seasonal-trends-card">
-              <div
-                class="card-header bg-primary text-white d-flex justify-content-between align-items-center"
+
+        <!-- Market Graph -->
+        <div class="col-lg-6 mb-4">
+          <div class="card resizable-block" id="market-graph-card">
+            <div
+              class="card-header bg-primary text-white d-flex justify-content-between align-items-center"
+            >
+              <h2>Market Graph</h2>
+              <button
+                class="btn btn-sm btn-outline-light toggle-size"
+                data-block-title="Market Graph"
               >
-                <h2>Seasonal Trends</h2>
-                <button
-                  class="btn btn-sm btn-outline-light toggle-size"
-                  data-block-title="Seasonal Trends"
-                >
-                  Minimize
-                </button>
-              </div>
-              <div class="card-body">
-                <canvas id="seasonalChart" width="400" height="400"></canvas>
-              </div>
+                Minimize
+              </button>
+            </div>
+            <div class="card-body">
+              <canvas id="bestSellChart" width="400" height="400"></canvas>
             </div>
           </div>
         </div>
-        <!-- Row 4: Historical Data -->
-        <div id="historical-data-section" class="section">
-          <div class="row mb-4">
-            <div class="col-12 mb-4">
-              <div class="card resizable-block" id="historical-data-card">
-                <div
-                  class="card-header bg-primary text-white d-flex justify-content-between align-items-center"
-                >
-                  <h2>Historical Data</h2>
-                  <button
-                    class="btn btn-sm btn-outline-light toggle-size"
-                    data-block-title="Historical Data"
-                  >
-                    Minimize
-                  </button>
-                </div>
-                <div class="card-body">
-                  <canvas id="historicalChart" width="400" height="400"></canvas>
-                  <button class="btn btn-primary mt-3">
-                    Download Chart & Data
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-    
-        <!-- Row 5: Weather Dashboard -->
-        <div id="weather-dashboard-section" class="section">
-          <div class="row mb-4">
-            <div class="col-12 mb-4">
-              <div class="card resizable-block" id="weather-dashboard-card">
-                <div
-                  class="card-header bg-primary text-white d-flex justify-content-between align-items-center"
-                >
-                  <h2>Weather Dashboard</h2>
-                  <button
-                    class="btn btn-sm btn-outline-light toggle-size"
-                    data-block-title="Weather Dashboard"
-                  >
-                    Minimize
-                  </button>
-                </div>
-                <div class="card-body">{% include "weather_dashboard.html" %}</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    
-      <!-- Right Sidebar for Minimized Blocks -->
-      <div id="minimized-sidebar" class="collapsed">
-        <div id="right-sidebar-toggle">
-          <i class="arrow-icon">&rarr;</i>
-        </div>
-        <h3>Minimized Blocks</h3>
-        <ul id="minimized-list" class="list-unstyled"></ul>
       </div>
     </div>
-    
-    {% endblock %} {%block scripts%}
-    <!-- Include jQuery if not already included -->
-    <!-- Include jQuery -->
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    
-    <!-- Include Chart.js 4.4.0 -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    
-    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/min/moment.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment@1.1.0/dist/chartjs-adapter-moment.umd.min.js"></script>
-    
-    <!-- Include Luxon 3.3.0 -->
-    <script src="https://cdn.jsdelivr.net/npm/luxon@3.3.0/build/global/luxon.min.js"></script>
-    
-    <!-- Include Chart.js adapter for Luxon 1.3.1 -->
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1/dist/chartjs-adapter-luxon.umd.min.js"></script>
-    
-    <!-- Include other dependencies -->
-    <link
-      rel="stylesheet"
-      href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"
-    />
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
-    
-    <script>
-      // Update Section Title in Sidebar
-      function updateSidebarSectionTitle(sectionId) {
-        const sectionTitles = {
-          "best-sell-market-section": "Best Sell Market",
-          "map-section": "Map",
-          "seasonal-trends-section": "Seasonal Trends",
-          "historical-data-section": "Historical Data",
-          "weather-dashboard-section": "Weather Dashboard",
-          "most-recent-price-section": "Most Recent Price",
-        };
-    
-        const sectionTitle = sectionTitles[sectionId] || "Unknown Section";
-        $("#current-section-title").text(sectionTitle);
+
+    <!-- Row 2: Most Recent Prices Table -->
+    <div id="most-recent-price-section" class="section">
+      <div class="row mb-4">
+        <div class="col-12 mb-4">
+          <div class="card resizable-block" id="most-recent-prices-card">
+            <div
+              class="card-header bg-primary text-white d-flex justify-content-between align-items-center"
+            >
+              <h2>Most Recent Prices</h2>
+              <button
+                class="btn btn-sm btn-outline-light toggle-size"
+                data-block-title="Most Recent Prices"
+              >
+                Minimize
+              </button>
+            </div>
+            <div class="card-body p-0">
+              <table
+                class="table table-striped table-hover table-bordered"
+                id="most-recent-prices-table"
+              >
+                <thead class="thead-dark">
+                  <tr>
+                    <th>Commodity</th>
+                    <th>Baltimore</th>
+                    <th>Boston</th>
+                    <th>Chicago</th>
+                    <th>Columbia</th>
+                    <th>Miami</th>
+                    <th>New York</th>
+                    <th>Philadelphia</th>
+                    <th>Los Angeles</th>
+                    <th>Detroit</th>
+                    <th>Atlanta</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <!-- Rows dynamically populated -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Row 3: Map and Seasonal Trends -->
+    <div id="map-section" class="section">
+      <div class="row mb-4">
+        <!-- Map Section -->
+        <div class="col-lg-12 mb-4">
+          <div class="card resizable-block" id="map-card">
+            <div
+              class="card-header bg-primary text-white d-flex justify-content-between align-items-center"
+            >
+              <h2>Map</h2>
+              <button
+                class="btn btn-sm btn-outline-light toggle-size"
+                data-block-title="Map"
+              >
+                Minimize
+              </button>
+            </div>
+            <div class="card-body p-0">
+              <div id="commodityMap"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Seasonal Trends -->
+    <div id="seasonal-trends-section" class="section">
+      <div class="col-lg-12 mb-4">
+        <div class="card resizable-block" id="seasonal-trends-card">
+          <div
+            class="card-header bg-primary text-white d-flex justify-content-between align-items-center"
+          >
+            <h2>Seasonal Trends</h2>
+            <button
+              class="btn btn-sm btn-outline-light toggle-size"
+              data-block-title="Seasonal Trends"
+            >
+              Minimize
+            </button>
+          </div>
+          <div class="card-body">
+            <canvas id="seasonalChart" width="400" height="400"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Row 4: Historical Data -->
+    <div id="historical-data-section" class="section">
+      <div class="row mb-4">
+        <div class="col-12 mb-4">
+          <div class="card resizable-block" id="historical-data-card">
+            <div
+              class="card-header bg-primary text-white d-flex justify-content-between align-items-center"
+            >
+              <h2>Historical Data</h2>
+              <button
+                class="btn btn-sm btn-outline-light toggle-size"
+                data-block-title="Historical Data"
+              >
+                Minimize
+              </button>
+            </div>
+            <div class="card-body">
+              <canvas id="historicalChart" width="400" height="400"></canvas>
+              <button class="btn btn-primary mt-3">
+                Download Chart & Data
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Row 5: Weather Dashboard -->
+    <div id="weather-dashboard-section" class="section">
+      <div class="row mb-4">
+        <div class="col-12 mb-4">
+          <div class="card resizable-block" id="weather-dashboard-card">
+            <div
+              class="card-header bg-primary text-white d-flex justify-content-between align-items-center"
+            >
+              <h2>Weather Dashboard</h2>
+              <button
+                class="btn btn-sm btn-outline-light toggle-size"
+                data-block-title="Weather Dashboard"
+              >
+                Minimize
+              </button>
+            </div>
+            <div class="card-body">{% include "weather_dashboard.html" %}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Sidebar for Minimized Blocks -->
+  <div id="minimized-sidebar" class="collapsed">
+    <div id="right-sidebar-toggle">
+      <i class="arrow-icon">&rarr;</i>
+    </div>
+    <h3>Minimized Blocks</h3>
+    <ul id="minimized-list" class="list-unstyled"></ul>
+  </div>
+</div>
+
+{% endblock %} {%block scripts%}
+<!-- Include jQuery if not already included -->
+<!-- Include jQuery -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+<!-- Include Chart.js 4.4.0 -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/min/moment.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment@1.1.0/dist/chartjs-adapter-moment.umd.min.js"></script>
+
+<!-- Include Luxon 3.3.0 -->
+<script src="https://cdn.jsdelivr.net/npm/luxon@3.3.0/build/global/luxon.min.js"></script>
+
+<!-- Include Chart.js adapter for Luxon 1.3.1 -->
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1/dist/chartjs-adapter-luxon.umd.min.js"></script>
+
+<!-- Include other dependencies -->
+<link
+  rel="stylesheet"
+  href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"
+/>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+
+<script>
+  // Update Section Title in Sidebar
+  function updateSidebarSectionTitle(sectionId) {
+    const sectionTitles = {
+      "best-sell-market-section": "Best Sell Market",
+      "map-section": "Map",
+      "seasonal-trends-section": "Seasonal Trends",
+      "historical-data-section": "Historical Data",
+      "weather-dashboard-section": "Weather Dashboard",
+      "most-recent-price-section": "Most Recent Price",
+    };
+
+    const sectionTitle = sectionTitles[sectionId] || "Unknown Section";
+    $("#current-section-title").text(sectionTitle);
+  }
+
+  // Attach scroll event listener
+  $(window).on("scroll", function () {
+    const sections = $(".section");
+    let currentSectionId = "";
+
+    sections.each(function () {
+      const section = $(this);
+      const rect = section[0].getBoundingClientRect();
+      const windowHeight = $(window).height();
+
+      if (
+        rect.top <= windowHeight * 0.25 &&
+        rect.bottom >= windowHeight * 0.25
+      ) {
+        currentSectionId = section.attr("id");
+        return false; // Break the loop when the current section is found
       }
-    
-      // Attach scroll event listener
-      $(window).on("scroll", function () {
-        const sections = $(".section");
-        let currentSectionId = "";
-    
-        sections.each(function () {
-          const section = $(this);
-          const rect = section[0].getBoundingClientRect();
-          const windowHeight = $(window).height();
-    
-          if (
-            rect.top <= windowHeight * 0.25 &&
-            rect.bottom >= windowHeight * 0.25
-          ) {
-            currentSectionId = section.attr("id");
-            return false; // Break the loop when the current section is found
-          }
-        });
-    
-        updateSidebarSectionTitle(currentSectionId);
-      });
-    </script>
-    
-    <script>
-      // Document Ready Function
-      $(document).ready(function () {
-        // Sidebar Toggle Functionality (Left Sidebar)
-        $("#sidebar-toggle").click(function () {
-          const sidebar = $("#filters-sidebar");
-          sidebar.toggleClass("collapsed");
-    
-          // Rotate the arrow icon
-          const arrowIcon = $(this).find(".arrow-icon");
-          arrowIcon.toggleClass("rotated");
-    
-          if (sidebar.hasClass("collapsed")) {
-            arrowIcon.html("&rarr;"); // Update icon to right arrow
-            $(".main-content").css("margin-left", "70px");
-          } else {
-            arrowIcon.html("&larr;"); // Update icon to left arrow
-            $(".main-content").css("margin-left", "270px");
-          }
-        });
-    
-        // Right Sidebar Toggle Functionality and Minimize/Maximize Block Functionality
-        $("#right-sidebar-toggle").click(function () {
-          const sidebar = $("#minimized-sidebar");
-          sidebar.toggleClass("collapsed");
-    
-          // Rotate the arrow icon
-          const arrowIcon = $(this).find(".arrow-icon");
-          arrowIcon.toggleClass("rotated");
-    
-          if (sidebar.hasClass("collapsed")) {
-            arrowIcon.html("&larr;"); // Update icon to left arrow
-          } else {
-            arrowIcon.html("&rarr;"); // Update icon to right arrow
-          }
-        });
-    
-        // Minimize/Maximize Block Functionality
-        $(".toggle-size").click(function () {
-          const button = $(this);
-          const card = button.closest(".resizable-block");
-          const blockTitle = button.data("block-title");
-          const minimizedList = $("#minimized-list");
-          const sidebar = $("#minimized-sidebar");
-    
-          if (!card.hasClass("minimized")) {
-            // Minimize the block
-            card.addClass("minimized");
-            button.text("Maximize");
-    
-            // Hide the card completely
-            card.hide();
-    
-            // Add the block title to the minimized list if not already there
-            if (
-              minimizedList.find(`li[data-block-id="${card.attr("id")}"]`)
-                .length === 0
-            ) {
-              minimizedList.append(
-                `<li data-block-id="${card.attr("id")}">${blockTitle}</li>`
-              );
-            }
-    
-            // Show the sidebar if it's not already visible
-            if (sidebar.hasClass("collapsed")) {
-              sidebar.removeClass("collapsed");
-              $("#right-sidebar-toggle .arrow-icon").html("&rarr;");
-            }
-          } else {
-            // Maximize the block
-            card.removeClass("minimized");
-            button.text("Minimize");
-    
-            // Show the card
-            card.show();
-    
-            // Remove from minimized list
-            minimizedList.find(`li[data-block-id="${card.attr("id")}"]`).remove();
-    
-            // Optionally close the sidebar if no minimized blocks remain
-            if (minimizedList.children().length === 0) {
-              sidebar.addClass("collapsed");
-              $("#right-sidebar-toggle .arrow-icon").html("&larr;");
-            }
-          }
-        });
-    
-        // Restore block when clicking on minimized list item
-        $("#minimized-list").on("click", "li", function () {
-          const blockId = $(this).data("block-id");
-          const card = $(`#${blockId}`);
-          const button = card.find(".toggle-size");
-    
-          // Trigger click on the minimize/maximize button
-          button.trigger("click");
-        });
-    
-        // Dynamic Sidebar Content Based on Active Section
-        function updateSidebarBasedOnScroll() {
-          const sections = $(".section");
-          const sidebarForms = $(".filter-form");
-    
-          let currentSectionId = "";
-    
-          sections.each(function () {
-            const section = $(this);
-            const rect = section[0].getBoundingClientRect();
-            const windowHeight = $(window).height();
-    
-            if (
-              rect.top <= windowHeight * 0.25 &&
-              rect.bottom >= windowHeight * 0.25
-            ) {
-              currentSectionId = section.attr("id");
-              return false; // Break the loop when the current section is found
-            }
-          });
-    
-          // Hide all filter forms
-          sidebarForms.removeClass("active");
-    
-          // Show the filter form corresponding to the current section
-          if (currentSectionId === "best-sell-market-section") {
-            $("#filters-best-sell-market").addClass("active");
-          } else if (currentSectionId === "map-section") {
-            $("#filters-map").addClass("active");
-          } else if (currentSectionId === "historical-data-section") {
-            $("#filters-historical-data").addClass("active");
-          } else if (currentSectionId === "seasonal-trends-section") {
-            $("#filters-seasonal-trends").addClass("active");
-          } else {
-            // Hide all filters if no matching section is found
-            sidebarForms.removeClass("active");
-          }
+    });
+
+    updateSidebarSectionTitle(currentSectionId);
+  });
+</script>
+
+<script>
+  // Document Ready Function
+  $(document).ready(function () {
+    // Sidebar Toggle Functionality (Left Sidebar)
+    $("#sidebar-toggle").click(function () {
+      const sidebar = $("#filters-sidebar");
+      sidebar.toggleClass("collapsed");
+
+      // Rotate the arrow icon
+      const arrowIcon = $(this).find(".arrow-icon");
+      arrowIcon.toggleClass("rotated");
+
+      if (sidebar.hasClass("collapsed")) {
+        arrowIcon.html("&rarr;"); // Update icon to right arrow
+        $(".main-content").css("margin-left", "70px");
+      } else {
+        arrowIcon.html("&larr;"); // Update icon to left arrow
+        $(".main-content").css("margin-left", "270px");
+      }
+    });
+
+    // Right Sidebar Toggle Functionality and Minimize/Maximize Block Functionality
+    $("#right-sidebar-toggle").click(function () {
+      const sidebar = $("#minimized-sidebar");
+      sidebar.toggleClass("collapsed");
+
+      // Rotate the arrow icon
+      const arrowIcon = $(this).find(".arrow-icon");
+      arrowIcon.toggleClass("rotated");
+
+      if (sidebar.hasClass("collapsed")) {
+        arrowIcon.html("&larr;"); // Update icon to left arrow
+      } else {
+        arrowIcon.html("&rarr;"); // Update icon to right arrow
+      }
+    });
+
+    // Minimize/Maximize Block Functionality
+    $(".toggle-size").click(function () {
+      const button = $(this);
+      const card = button.closest(".resizable-block");
+      const blockTitle = button.data("block-title");
+      const minimizedList = $("#minimized-list");
+      const sidebar = $("#minimized-sidebar");
+
+      if (!card.hasClass("minimized")) {
+        // Minimize the block
+        card.addClass("minimized");
+        button.text("Maximize");
+
+        // Hide the card completely
+        card.hide();
+
+        // Add the block title to the minimized list if not already there
+        if (
+          minimizedList.find(`li[data-block-id="${card.attr("id")}"]`)
+            .length === 0
+        ) {
+          minimizedList.append(
+            `<li data-block-id="${card.attr("id")}">${blockTitle}</li>`,
+          );
         }
-    
-        // Attach the scroll event listener
-        $(window).on("scroll", updateSidebarBasedOnScroll);
-    
-        // Initial call to set the correct filter form on page load
-        updateSidebarBasedOnScroll();
+
+        // Show the sidebar if it's not already visible
+        if (sidebar.hasClass("collapsed")) {
+          sidebar.removeClass("collapsed");
+          $("#right-sidebar-toggle .arrow-icon").html("&rarr;");
+        }
+      } else {
+        // Maximize the block
+        card.removeClass("minimized");
+        button.text("Minimize");
+
+        // Show the card
+        card.show();
+
+        // Remove from minimized list
+        minimizedList.find(`li[data-block-id="${card.attr("id")}"]`).remove();
+
+        // Optionally close the sidebar if no minimized blocks remain
+        if (minimizedList.children().length === 0) {
+          sidebar.addClass("collapsed");
+          $("#right-sidebar-toggle .arrow-icon").html("&larr;");
+        }
+      }
+    });
+
+    // Restore block when clicking on minimized list item
+    $("#minimized-list").on("click", "li", function () {
+      const blockId = $(this).data("block-id");
+      const card = $(`#${blockId}`);
+      const button = card.find(".toggle-size");
+
+      // Trigger click on the minimize/maximize button
+      button.trigger("click");
+    });
+
+    // Dynamic Sidebar Content Based on Active Section
+    function updateSidebarBasedOnScroll() {
+      const sections = $(".section");
+      const sidebarForms = $(".filter-form");
+
+      let currentSectionId = "";
+
+      sections.each(function () {
+        const section = $(this);
+        const rect = section[0].getBoundingClientRect();
+        const windowHeight = $(window).height();
+
+        if (
+          rect.top <= windowHeight * 0.25 &&
+          rect.bottom >= windowHeight * 0.25
+        ) {
+          currentSectionId = section.attr("id");
+          return false; // Break the loop when the current section is found
+        }
       });
-    </script>
-    
-    <script>
-      /* ---- Best Sell Market ---- */
-    
-      // Fetch Best Sell Market Data and Update Table & Chart
-      function fetchBestSellMarket(commodity, source, last7Days) {
-        $.ajax({
-          url: "/api/best_sell_market",
-          type: "GET",
-          data: { commodity, source, last7Days: last7Days.toString() },
-          success: function (response) {
-            // Update Table
-            const tableBody = $("#best-sell-market-table tbody");
-            tableBody.empty();
-            response.best_market.forEach((item) => {
-              tableBody.append(`
+
+      // Hide all filter forms
+      sidebarForms.removeClass("active");
+
+      // Show the filter form corresponding to the current section
+      if (currentSectionId === "best-sell-market-section") {
+        $("#filters-best-sell-market").addClass("active");
+      } else if (currentSectionId === "map-section") {
+        $("#filters-map").addClass("active");
+      } else if (currentSectionId === "historical-data-section") {
+        $("#filters-historical-data").addClass("active");
+      } else if (currentSectionId === "seasonal-trends-section") {
+        $("#filters-seasonal-trends").addClass("active");
+      } else {
+        // Hide all filters if no matching section is found
+        sidebarForms.removeClass("active");
+      }
+    }
+
+    // Attach the scroll event listener
+    $(window).on("scroll", updateSidebarBasedOnScroll);
+
+    // Initial call to set the correct filter form on page load
+    updateSidebarBasedOnScroll();
+  });
+</script>
+
+<script>
+  /* ---- Best Sell Market ---- */
+
+  // Fetch Best Sell Market Data and Update Table & Chart
+  function fetchBestSellMarket(commodity, source, last7Days) {
+    $.ajax({
+      url: "/api/best_sell_market",
+      type: "GET",
+      data: { commodity, source, last7Days: last7Days.toString() },
+      success: function (response) {
+        // Update Table
+        const tableBody = $("#best-sell-market-table tbody");
+        tableBody.empty();
+        response.best_market.forEach((item) => {
+          tableBody.append(`
                 <tr>
                   <td>${item.city_name}</td>
                   <td>${item.price_range}</td>
                   <td>${item.date !== "-" ? item.date : "-"}</td>
                 </tr>
               `);
-            });
-    
-            // Update Chart
-            updateBestSellChart(response.best_market);
-          },
-          error: function (xhr, status, error) {
-            console.error("Error fetching Best Sell Market data:", error);
-          },
         });
-      }
-    
-      // Update Best Sell Market Chart
-      function updateBestSellChart(data) {
-        const cityNames = data.map((item) => item.city_name);
-        const maxPrices = data.map((item) =>
-          item.max_price === "-" ? 0 : parseFloat(item.max_price)
-        );
-    
-        const ctx = document.getElementById("bestSellChart").getContext("2d");
-        if (window.bestSellChart instanceof Chart) {
-          window.bestSellChart.destroy();
+
+        // Update Chart
+        updateBestSellChart(response.best_market);
+      },
+      error: function (xhr, status, error) {
+        console.error("Error fetching Best Sell Market data:", error);
+      },
+    });
+  }
+
+  // Update Best Sell Market Chart
+  function updateBestSellChart(data) {
+    const cityNames = data.map((item) => item.city_name);
+    const maxPrices = data.map((item) =>
+      item.max_price === "-" ? 0 : parseFloat(item.max_price),
+    );
+
+    const ctx = document.getElementById("bestSellChart").getContext("2d");
+    if (window.bestSellChart instanceof Chart) {
+      window.bestSellChart.destroy();
+    }
+
+    window.bestSellChart = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: cityNames,
+        datasets: [
+          {
+            label: "Max Price",
+            data: maxPrices,
+            backgroundColor: "rgba(54, 162, 235, 0.6)",
+            borderColor: "rgba(54, 162, 235, 1)",
+            borderWidth: 1,
+          },
+        ],
+      },
+      options: {
+        indexAxis: "y",
+        plugins: {
+          legend: { display: false },
+        },
+        scales: {
+          x: { title: { display: true, text: "Price" }, beginAtZero: true },
+          y: { title: { display: true, text: "City" } },
+        },
+      },
+    });
+  }
+</script>
+
+<script>
+  // Apply filters for Best Sell Market
+  $(document).ready(function () {
+    $("#filters-best-sell-market").on("click", "button", function () {
+      const commodity = $("#commodityFilterBestSell").val();
+      const source = $("#sourceFilterBestSell").val();
+      const last7Days = $("#last7DaysBestSell").is(":checked");
+
+      // Fetch and update the Best Sell Market data based on the selected filters
+      fetchBestSellMarket(commodity, source, last7Days);
+    });
+    fetchMostRecentPrices();
+    // Initial fetch with default filters
+    const defaultCommodity = $("#commodityFilterBestSell").val();
+    const defaultSource = $("#sourceFilterBestSell").val();
+    const defaultLast7Days = $("#last7DaysBestSell").is(":checked");
+    fetchBestSellMarket(defaultCommodity, defaultSource, defaultLast7Days);
+  });
+</script>
+
+<script>
+  /* ---- Most Recent Prices ---- */
+
+  // Fetch and Populate Most Recent Prices Table
+  function fetchMostRecentPrices() {
+    $.ajax({
+      url: "/api/most_recent_prices",
+      type: "GET",
+      success: function (response) {
+        updateMostRecentPricesTable(response.prices);
+      },
+      error: function (xhr, status, error) {
+        console.error("Error fetching most recent prices:", error);
+        alert("Failed to load most recent prices. Please try again.");
+      },
+    });
+  }
+
+  function updateMostRecentPricesTable(prices) {
+    const tableBody = $("#most-recent-prices-table tbody");
+    tableBody.empty();
+
+    const commodities = [
+      "Anaheim",
+      "Cubanelles",
+      "Fresno",
+      "Habanero",
+      "Hungarian Wax",
+      "Jalapeno",
+      "Long Hot",
+      "Poblano",
+      "Serrano",
+      "Shishito",
+    ];
+    const cities = [
+      "Baltimore",
+      "Boston",
+      "Chicago",
+      "Columbia",
+      "Miami",
+      "New York",
+      "Philadelphia",
+      "Los Angeles",
+      "Detroit",
+    ];
+
+    commodities.forEach((commodity) => {
+      let row = `<tr><td>${commodity}</td>`;
+      let maxPrice = -Infinity;
+      let maxCity = null;
+
+      // Find the highest price for this commodity
+      cities.forEach((city) => {
+        const price = parseFloat(prices[commodity]?.[city]);
+        if (!isNaN(price) && price > maxPrice) {
+          maxPrice = price;
+          maxCity = city;
         }
-    
-        window.bestSellChart = new Chart(ctx, {
+      });
+
+      // Populate the table row and highlight the max price
+      cities.forEach((city) => {
+        let price = prices[commodity]?.[city];
+        price =
+          price !== undefined && !isNaN(parseFloat(price))
+            ? `$${parseFloat(price).toFixed(2)}`
+            : "-";
+        const highlightClass = city === maxCity ? "highlight-max" : "";
+        row += `<td class="${highlightClass}">${price}</td>`;
+      });
+
+      row += "</tr>";
+      tableBody.append(row);
+    });
+  }
+</script>
+
+<script>
+  /* ---- Map ---- */
+
+  // Leaflet map initialization
+  let map = L.map("commodityMap").setView([37.8, -96], 4); // Centered on US
+
+  // Load tile layer for the map
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 18,
+  }).addTo(map);
+
+  // Sample city coordinates (replace these with actual city coordinates)
+  const cityLatLng = {
+    Baltimore: [39.2904, -76.6122],
+    Boston: [42.3601, -71.0589],
+    Chicago: [41.8781, -87.6298],
+    Columbia: [34.0007, -81.0348],
+    Miami: [25.7617, -80.1918],
+    "New York": [40.7128, -74.006],
+    Philadelphia: [39.9526, -75.1652],
+    "Los Angeles": [34.0522, -118.2437],
+  };
+
+  // Define custom icons
+  const defaultIcon = L.icon({
+    iconUrl:
+      "https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png",
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowUrl:
+      "https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png",
+    shadowSize: [41, 41],
+  });
+
+  const greenIcon = L.icon({
+    iconUrl:
+      "https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png",
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowUrl:
+      "https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png",
+    shadowSize: [41, 41],
+  });
+
+  // Function to update map based on selected commodity
+  function updateMap(commodity) {
+    $.ajax({
+      url: "/api/most_recent_prices",
+      type: "GET",
+      data: { commodity: commodity },
+      success: function (response) {
+        // Clear all map markers
+        map.eachLayer(
+          (layer) => layer instanceof L.Marker && map.removeLayer(layer),
+        );
+
+        // Ensure response.prices[commodity] exists
+        if (response.prices && response.prices[commodity]) {
+          let maxPrice = -Infinity;
+          let maxCity = null;
+
+          // Find the city with the highest price
+          for (const [city, price] of Object.entries(
+            response.prices[commodity],
+          )) {
+            if (parseFloat(price) > maxPrice) {
+              maxPrice = parseFloat(price);
+              maxCity = city;
+            }
+          }
+
+          // Add markers for each city
+          for (const [city, price] of Object.entries(
+            response.prices[commodity],
+          )) {
+            if (cityLatLng[city]) {
+              const markerIcon = city === maxCity ? greenIcon : defaultIcon;
+              L.marker(cityLatLng[city], { icon: markerIcon })
+                .addTo(map)
+                .bindPopup(`<b>${city}</b><br>Max Price: $${price}`);
+            }
+          }
+        }
+      },
+      error: (xhr, status, error) => console.log("AJAX error:", error),
+    });
+  }
+
+  // Fetch prices and update map when commodity is selected
+  $("#commodityFilterMap").on("change", function () {
+    updateMap($(this).val());
+  });
+
+  // Trigger map update when the tab becomes active
+  $("#most-recent-prices-tab").on("shown.bs.tab", () => {
+    map.invalidateSize();
+    updateMap($("#commodityFilterMap").val());
+  });
+</script>
+
+<script>
+  // Apply filters for Map
+  $(document).ready(function () {
+    $("#filters-map").on("click", "button", function () {
+      const commodity = $("#commodityFilterMap").val();
+
+      // Fetch and update the Map data based on the selected commodity
+      updateMap(commodity);
+    });
+
+    // Initial map update
+    const initialCommodity = $("#commodityFilterMap").val();
+    updateMap(initialCommodity);
+  });
+</script>
+
+<script>
+  /* ---- Seasonal Trends ---- */
+
+  function updateSeasonalChart(commodities, cities, startDate, endDate) {
+    const data = {};
+
+    if (commodities && commodities.length > 0) {
+      data.commodities = commodities.join(",");
+    }
+
+    if (cities && cities.length > 0) {
+      data.cities = cities.join(",");
+    }
+
+    if (startDate && endDate) {
+      data.start_date = startDate;
+      data.end_date = endDate;
+    }
+
+    $.ajax({
+      url: "/api/sales_seasonal_prices",
+      type: "GET",
+      data: data,
+      success: function (response) {
+        const ctx = document.getElementById("seasonalChart").getContext("2d");
+        if (window.seasonalChart instanceof Chart) {
+          window.seasonalChart.destroy();
+        }
+
+        window.seasonalChart = new Chart(ctx, {
           type: "bar",
           data: {
-            labels: cityNames,
+            labels: ["Spring", "Summer", "Autumn", "Winter"],
             datasets: [
               {
-                label: "Max Price",
-                data: maxPrices,
-                backgroundColor: "rgba(54, 162, 235, 0.6)",
-                borderColor: "rgba(54, 162, 235, 1)",
-                borderWidth: 1,
+                label: `Average Seasonal Prices`,
+                data: [
+                  response.Spring || 0,
+                  response.Summer || 0,
+                  response.Autumn || 0,
+                  response.Winter || 0,
+                ],
+                backgroundColor: ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0"],
               },
             ],
           },
-          options: {
-            indexAxis: "y",
-            plugins: {
-              legend: { display: false },
-            },
-            scales: {
-              x: { title: { display: true, text: "Price" }, beginAtZero: true },
-              y: { title: { display: true, text: "City" } },
-            },
-          },
+          options: { responsive: true },
         });
+      },
+      error: function (xhr, status, error) {
+        console.error("Error fetching seasonal data:", error);
+      },
+    });
+  }
+
+  // Apply filters for Seasonal Trends
+  $(document).ready(function () {
+    $("#filters-seasonal-trends").on("click", "button", function () {
+      const commodities = $("#commodityFilterSeasonal").val();
+      const cities = $("#cityFilterSeasonal").val();
+      const startDate = $("#startDateFilterSeasonal").val();
+      const endDate = $("#endDateFilterSeasonal").val();
+
+      // If only one date is provided, show an error
+      if ((startDate && !endDate) || (!startDate && endDate)) {
+        alert("Please provide both start date and end date.");
+        return;
       }
-    </script>
-    
-    <script>
-      // Apply filters for Best Sell Market
-      $(document).ready(function () {
-        $("#filters-best-sell-market").on("click", "button", function () {
-          const commodity = $("#commodityFilterBestSell").val();
-          const source = $("#sourceFilterBestSell").val();
-          const last7Days = $("#last7DaysBestSell").is(":checked");
-    
-          // Fetch and update the Best Sell Market data based on the selected filters
-          fetchBestSellMarket(commodity, source, last7Days);
-        });
-        fetchMostRecentPrices();
-        // Initial fetch with default filters
-        const defaultCommodity = $("#commodityFilterBestSell").val();
-        const defaultSource = $("#sourceFilterBestSell").val();
-        const defaultLast7Days = $("#last7DaysBestSell").is(":checked");
-        fetchBestSellMarket(defaultCommodity, defaultSource, defaultLast7Days);
-      });
-    </script>
-    
-    <script>
-      /* ---- Most Recent Prices ---- */
-    
-      // Fetch and Populate Most Recent Prices Table
-      function fetchMostRecentPrices() {
-        $.ajax({
-          url: "/api/most_recent_prices",
-          type: "GET",
-          success: function (response) {
-            updateMostRecentPricesTable(response.prices);
-          },
-          error: function (xhr, status, error) {
-            console.error("Error fetching most recent prices:", error);
-            alert("Failed to load most recent prices. Please try again.");
-          },
-        });
-      }
-    
-      function updateMostRecentPricesTable(prices) {
-        const tableBody = $("#most-recent-prices-table tbody");
-        tableBody.empty();
-    
-        const commodities = [
-          "Anaheim",
-          "Cubanelles",
-          "Fresno",
-          "Habanero",
-          "Hungarian Wax",
-          "Jalapeno",
-          "Long Hot",
-          "Poblano",
-          "Serrano",
-          "Shishito",
-        ];
-        const cities = [
-          "Baltimore",
-          "Boston",
-          "Chicago",
-          "Columbia",
-          "Miami",
-          "New York",
-          "Philadelphia",
-          "Los Angeles",
-        ];
-    
-        commodities.forEach((commodity) => {
-          let row = `<tr><td>${commodity}</td>`;
-          let maxPrice = -Infinity;
-          let maxCity = null;
-    
-          // Find the highest price for this commodity
-          cities.forEach((city) => {
-            const price = parseFloat(prices[commodity]?.[city]);
-            if (!isNaN(price) && price > maxPrice) {
-              maxPrice = price;
-              maxCity = city;
-            }
-          });
-    
-          // Populate the table row and highlight the max price
-          cities.forEach((city) => {
-            let price = prices[commodity]?.[city];
-            price =
-              price !== undefined && !isNaN(parseFloat(price))
-                ? `$${parseFloat(price).toFixed(2)}`
-                : "-";
-            const highlightClass = city === maxCity ? "highlight-max" : "";
-            row += `<td class="${highlightClass}">${price}</td>`;
-          });
-    
-          row += "</tr>";
-          tableBody.append(row);
-        });
-      }
-    </script>
-    
-    <script>
-      /* ---- Map ---- */
-    
-      // Leaflet map initialization
-      let map = L.map("commodityMap").setView([37.8, -96], 4); // Centered on US
-    
-      // Load tile layer for the map
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 18,
-      }).addTo(map);
-    
-      // Sample city coordinates (replace these with actual city coordinates)
-      const cityLatLng = {
-        Baltimore: [39.2904, -76.6122],
-        Boston: [42.3601, -71.0589],
-        Chicago: [41.8781, -87.6298],
-        Columbia: [34.0007, -81.0348],
-        Miami: [25.7617, -80.1918],
-        "New York": [40.7128, -74.006],
-        Philadelphia: [39.9526, -75.1652],
-        "Los Angeles": [34.0522, -118.2437],
-      };
-    
-      // Define custom icons
-      const defaultIcon = L.icon({
-        iconUrl:
-          "https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png",
-        iconSize: [25, 41],
-        iconAnchor: [12, 41],
-        popupAnchor: [1, -34],
-        shadowUrl:
-          "https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png",
-        shadowSize: [41, 41],
-      });
-    
-      const greenIcon = L.icon({
-        iconUrl:
-          "https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png",
-        iconSize: [25, 41],
-        iconAnchor: [12, 41],
-        popupAnchor: [1, -34],
-        shadowUrl:
-          "https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png",
-        shadowSize: [41, 41],
-      });
-    
-      // Function to update map based on selected commodity
-      function updateMap(commodity) {
-        $.ajax({
-          url: "/api/most_recent_prices",
-          type: "GET",
-          data: { commodity: commodity },
-          success: function (response) {
-            // Clear all map markers
-            map.eachLayer(
-              (layer) => layer instanceof L.Marker && map.removeLayer(layer)
-            );
-    
-            // Ensure response.prices[commodity] exists
-            if (response.prices && response.prices[commodity]) {
-              let maxPrice = -Infinity;
-              let maxCity = null;
-    
-              // Find the city with the highest price
-              for (const [city, price] of Object.entries(
-                response.prices[commodity]
-              )) {
-                if (parseFloat(price) > maxPrice) {
-                  maxPrice = parseFloat(price);
-                  maxCity = city;
-                }
-              }
-    
-              // Add markers for each city
-              for (const [city, price] of Object.entries(
-                response.prices[commodity]
-              )) {
-                if (cityLatLng[city]) {
-                  const markerIcon = city === maxCity ? greenIcon : defaultIcon;
-                  L.marker(cityLatLng[city], { icon: markerIcon })
-                    .addTo(map)
-                    .bindPopup(`<b>${city}</b><br>Max Price: $${price}`);
-                }
-              }
-            }
-          },
-          error: (xhr, status, error) => console.log("AJAX error:", error),
-        });
-      }
-    
-      // Fetch prices and update map when commodity is selected
-      $("#commodityFilterMap").on("change", function () {
-        updateMap($(this).val());
-      });
-    
-      // Trigger map update when the tab becomes active
-      $("#most-recent-prices-tab").on("shown.bs.tab", () => {
-        map.invalidateSize();
-        updateMap($("#commodityFilterMap").val());
-      });
-    </script>
-    
-    <script>
-      // Apply filters for Map
-      $(document).ready(function () {
-        $("#filters-map").on("click", "button", function () {
-          const commodity = $("#commodityFilterMap").val();
-    
-          // Fetch and update the Map data based on the selected commodity
-          updateMap(commodity);
-        });
-    
-        // Initial map update
-        const initialCommodity = $("#commodityFilterMap").val();
-        updateMap(initialCommodity);
-      });
-    </script>
-    
-    <script>
-      /* ---- Seasonal Trends ---- */
-    
-      function updateSeasonalChart(commodities, cities, startDate, endDate) {
-        const data = {};
-    
-        if (commodities && commodities.length > 0) {
-          data.commodities = commodities.join(",");
-        }
-    
-        if (cities && cities.length > 0) {
-          data.cities = cities.join(",");
-        }
-    
-        if (startDate && endDate) {
-          data.start_date = startDate;
-          data.end_date = endDate;
-        }
-    
-        $.ajax({
-          url: "/api/sales_seasonal_prices",
-          type: "GET",
-          data: data,
-          success: function (response) {
-            const ctx = document.getElementById("seasonalChart").getContext("2d");
-            if (window.seasonalChart instanceof Chart) {
-              window.seasonalChart.destroy();
-            }
-    
-            window.seasonalChart = new Chart(ctx, {
-              type: "bar",
-              data: {
-                labels: ["Spring", "Summer", "Autumn", "Winter"],
-                datasets: [
-                  {
-                    label: `Average Seasonal Prices`,
-                    data: [
-                      response.Spring || 0,
-                      response.Summer || 0,
-                      response.Autumn || 0,
-                      response.Winter || 0,
-                    ],
-                    backgroundColor: ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0"],
-                  },
-                ],
-              },
-              options: { responsive: true },
-            });
-          },
-          error: function (xhr, status, error) {
-            console.error("Error fetching seasonal data:", error);
-          },
-        });
-      }
-    
-      // Apply filters for Seasonal Trends
-      $(document).ready(function () {
-        $("#filters-seasonal-trends").on("click", "button", function () {
-          const commodities = $("#commodityFilterSeasonal").val();
-          const cities = $("#cityFilterSeasonal").val();
-          const startDate = $("#startDateFilterSeasonal").val();
-          const endDate = $("#endDateFilterSeasonal").val();
-    
-          // If only one date is provided, show an error
-          if ((startDate && !endDate) || (!startDate && endDate)) {
-            alert("Please provide both start date and end date.");
-            return;
-          }
-    
-          // Update the Seasonal Trends chart
-          updateSeasonalChart(commodities, cities, startDate, endDate);
-        });
-    
-        // Initial chart update with default values (whole time period)
-        const defaultCommodities = $("#commodityFilterSeasonal").val();
-        const defaultCities = $("#cityFilterSeasonal").val();
-    
-        updateSeasonalChart(defaultCommodities, defaultCities);
-      });
-    </script>
-    
-    <script>
-      /* ---- Historical Data ---- */
-      let historicalChartInstance;
-    
-      function fetchHistoricalData(
-        commodities,
-        cities,
-        source,
+
+      // Update the Seasonal Trends chart
+      updateSeasonalChart(commodities, cities, startDate, endDate);
+    });
+
+    // Initial chart update with default values (whole time period)
+    const defaultCommodities = $("#commodityFilterSeasonal").val();
+    const defaultCities = $("#cityFilterSeasonal").val();
+
+    updateSeasonalChart(defaultCommodities, defaultCities);
+  });
+</script>
+
+<script>
+  /* ---- Historical Data ---- */
+  let historicalChartInstance;
+
+  function fetchHistoricalData(
+    commodities,
+    cities,
+    source,
+    start_date,
+    end_date,
+    averageCommodities,
+    averageCities,
+  ) {
+    const chartContainer = document.getElementById("historicalChart");
+    chartContainer.style.opacity = "0.5";
+
+    // Input validation
+    if (!start_date || !end_date) {
+      alert("Please select both start and end dates.");
+      return;
+    }
+    if (new Date(start_date) > new Date(end_date)) {
+      alert("Start date cannot be after the end date.");
+      return;
+    }
+
+    // Clean up existing chart
+    if (historicalChartInstance) {
+      historicalChartInstance.destroy();
+      historicalChartInstance = null;
+    }
+
+    $.ajax({
+      url: "/api/historical_data",
+      type: "GET",
+      data: {
+        commodities: commodities.join(","),
+        cities: cities.join(","),
         start_date,
         end_date,
+        source,
         averageCommodities,
-        averageCities
-      ) {
-        const chartContainer = document.getElementById("historicalChart");
-        chartContainer.style.opacity = "0.5";
-    
-        // Input validation
-        if (!start_date || !end_date) {
-          alert("Please select both start and end dates.");
-          return;
-        }
-        if (new Date(start_date) > new Date(end_date)) {
-          alert("Start date cannot be after the end date.");
-          return;
-        }
-    
-        // Clean up existing chart
-        if (historicalChartInstance) {
-          historicalChartInstance.destroy();
-          historicalChartInstance = null;
-        }
-    
-        $.ajax({
-          url: "/api/historical_data",
-          type: "GET",
-          data: {
-            commodities: commodities.join(","),
-            cities: cities.join(","),
-            start_date,
-            end_date,
-            source,
-            averageCommodities,
-            averageCities,
-          },
-          success: function (response) {
-            updateHistoricalChart(response);
-            chartContainer.style.opacity = "1";
-          },
-          error: function (xhr, status, error) {
-            console.error("Error fetching historical data:", error);
-            alert("Failed to load historical data. Please try again.");
-            chartContainer.style.opacity = "1";
-          },
-        });
-      }
-    
-      function updateHistoricalChart(chartData) {
-        const ctx = document.getElementById("historicalChart").getContext("2d");
-    
-        // Clean up existing chart
-        if (historicalChartInstance) {
-          historicalChartInstance.destroy();
-        }
-    
-        if (!chartData.labels.length || !chartData.datasets.length) {
-          alert("No historical data available for the selected criteria.");
-          return;
-        }
-    
-        // Set fixed dimensions
-        const chartContainer = ctx.canvas.parentNode;
-        chartContainer.style.height = "400px";
-    
-        // Configure datasets with consistent styling
-        const datasets = chartData.datasets.map((dataset, index) => ({
-          ...dataset,
-          fill: false,
-          tension: 0.1,
-          borderWidth: 2,
-          pointRadius: 3,
-          pointHoverRadius: 5,
-          spanGaps: true,
-          borderColor: dataset.borderColor || getColor(index),
-          backgroundColor: dataset.backgroundColor || getColor(index),
-        }));
-    
-        historicalChartInstance = new Chart(ctx, {
-          type: "line",
-          data: {
-            labels: chartData.labels,
-            datasets: datasets,
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-              x: {
-                display: true,
-                type: "category", // Changed from 'time' to 'category'
-                grid: {
-                  display: true,
-                  drawBorder: true,
-                  color: "#E0E0E0",
-                },
-                ticks: {
-                  display: true,
-                  maxTicksLimit: 10,
-                  color: "#666666",
-                  padding: 10,
-                  autoSkip: true,
-                  maxRotation: 45,
-                  minRotation: 45,
-                },
-                title: {
-                  display: true,
-                  text: "Date",
-                  color: "#666666",
-                  padding: { top: 10, bottom: 10 },
-                },
-              },
-              y: {
-                display: true,
-                position: "left",
-                grid: {
-                  display: true,
-                  drawBorder: true,
-                  color: "#E0E0E0",
-                },
-                ticks: {
-                  display: true,
-                  color: "#666666",
-                  padding: 10,
-                  callback: (value) => `$${value.toFixed(2)}`,
-                },
-                title: {
-                  display: true,
-                  text: "Price ($)",
-                  color: "#666666",
-                  padding: { top: 10, bottom: 10 },
-                },
-              },
+        averageCities,
+      },
+      success: function (response) {
+        updateHistoricalChart(response);
+        chartContainer.style.opacity = "1";
+      },
+      error: function (xhr, status, error) {
+        console.error("Error fetching historical data:", error);
+        alert("Failed to load historical data. Please try again.");
+        chartContainer.style.opacity = "1";
+      },
+    });
+  }
+
+  function updateHistoricalChart(chartData) {
+    const ctx = document.getElementById("historicalChart").getContext("2d");
+
+    // Clean up existing chart
+    if (historicalChartInstance) {
+      historicalChartInstance.destroy();
+    }
+
+    if (!chartData.labels.length || !chartData.datasets.length) {
+      alert("No historical data available for the selected criteria.");
+      return;
+    }
+
+    // Set fixed dimensions
+    const chartContainer = ctx.canvas.parentNode;
+    chartContainer.style.height = "400px";
+
+    // Configure datasets with consistent styling
+    const datasets = chartData.datasets.map((dataset, index) => ({
+      ...dataset,
+      fill: false,
+      tension: 0.1,
+      borderWidth: 2,
+      pointRadius: 3,
+      pointHoverRadius: 5,
+      spanGaps: true,
+      borderColor: dataset.borderColor || getColor(index),
+      backgroundColor: dataset.backgroundColor || getColor(index),
+    }));
+
+    historicalChartInstance = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels: chartData.labels,
+        datasets: datasets,
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: {
+            display: true,
+            type: "category", // Changed from 'time' to 'category'
+            grid: {
+              display: true,
+              drawBorder: true,
+              color: "#E0E0E0",
             },
-            plugins: {
-              tooltip: {
-                enabled: true,
-                mode: "index",
-                intersect: false,
-                backgroundColor: "rgba(255, 255, 255, 0.9)",
-                titleColor: "#666666",
-                bodyColor: "#666666",
-                borderColor: "#E0E0E0",
-                borderWidth: 1,
-                padding: 10,
-                callbacks: {
-                  title: (context) => {
-                    const label = context[0].label;
-                    return moment(label).format("MMM D, YYYY");
-                  },
-                  label: (context) =>
-                    `${context.dataset.label}: $${context.parsed.y.toFixed(2)}`,
-                },
-              },
-              legend: {
-                display: true,
-                position: "top",
-                align: "center",
-                labels: {
-                  boxWidth: 12,
-                  padding: 15,
-                  color: "#666666",
-                  font: {
-                    size: 11,
-                  },
-                },
-              },
+            ticks: {
+              display: true,
+              maxTicksLimit: 10,
+              color: "#666666",
+              padding: 10,
+              autoSkip: true,
+              maxRotation: 45,
+              minRotation: 45,
             },
-            interaction: {
-              mode: "index",
-              intersect: false,
+            title: {
+              display: true,
+              text: "Date",
+              color: "#666666",
+              padding: { top: 10, bottom: 10 },
             },
           },
-        });
+          y: {
+            display: true,
+            position: "left",
+            grid: {
+              display: true,
+              drawBorder: true,
+              color: "#E0E0E0",
+            },
+            ticks: {
+              display: true,
+              color: "#666666",
+              padding: 10,
+              callback: (value) => `$${value.toFixed(2)}`,
+            },
+            title: {
+              display: true,
+              text: "Price ($)",
+              color: "#666666",
+              padding: { top: 10, bottom: 10 },
+            },
+          },
+        },
+        plugins: {
+          tooltip: {
+            enabled: true,
+            mode: "index",
+            intersect: false,
+            backgroundColor: "rgba(255, 255, 255, 0.9)",
+            titleColor: "#666666",
+            bodyColor: "#666666",
+            borderColor: "#E0E0E0",
+            borderWidth: 1,
+            padding: 10,
+            callbacks: {
+              title: (context) => {
+                const label = context[0].label;
+                return moment(label).format("MMM D, YYYY");
+              },
+              label: (context) =>
+                `${context.dataset.label}: $${context.parsed.y.toFixed(2)}`,
+            },
+          },
+          legend: {
+            display: true,
+            position: "top",
+            align: "center",
+            labels: {
+              boxWidth: 12,
+              padding: 15,
+              color: "#666666",
+              font: {
+                size: 11,
+              },
+            },
+          },
+        },
+        interaction: {
+          mode: "index",
+          intersect: false,
+        },
+      },
+    });
+  }
+
+  // Helper function to get colors for datasets
+  function getColor(index) {
+    const colors = [
+      "#FF6384", // red
+      "#36A2EB", // blue
+      "#FFCE56", // yellow
+      "#4BC0C0", // turquoise
+      "#9966FF", // purple
+      "#FF9F40", // orange
+      "#FF6384", // red
+      "#4BC0C0", // turquoise
+    ];
+    return colors[index % colors.length];
+  }
+
+  // Initialize Historical Data when document is ready
+  $(document).ready(function () {
+    // Preselect all commodities and cities
+    $("#commodityFilterHistorical option").prop("selected", true);
+    $("#cityFilterHistorical option").prop("selected", true);
+
+    // Calculate default date range (last 30 days)
+    const today = moment();
+    const past30Days = moment().subtract(30, "days");
+
+    // Set default date values
+    $("#startDateFilterHistorical").val(past30Days.format("YYYY-MM-DD"));
+    $("#endDateFilterHistorical").val(today.format("YYYY-MM-DD"));
+
+    // Initial data fetch
+    fetchHistoricalData(
+      $("#commodityFilterHistorical").val(),
+      $("#cityFilterHistorical").val(),
+      $("#sourceFilterHistorical").val(),
+      past30Days.format("YYYY-MM-DD"),
+      today.format("YYYY-MM-DD"),
+      $("#averageCommodities").is(":checked"),
+      $("#averageCities").is(":checked"),
+    );
+
+    // Event handler for Apply Filters button
+    $("#filters-historical-data").on("click", "button", function () {
+      fetchHistoricalData(
+        $("#commodityFilterHistorical").val(),
+        $("#cityFilterHistorical").val(),
+        $("#sourceFilterHistorical").val(),
+        $("#startDateFilterHistorical").val(),
+        $("#endDateFilterHistorical").val(),
+        $("#averageCommodities").is(":checked"),
+        $("#averageCities").is(":checked"),
+      );
+    });
+
+    // Download functionality
+    $("#historical-data-card .btn-primary").on("click", function () {
+      if (historicalChartInstance) {
+        const canvas = document.getElementById("historicalChart");
+        const imageLink = document.createElement("a");
+        imageLink.download = "historical_prices_chart.png";
+        imageLink.href = canvas.toDataURL("image/png");
+        imageLink.click();
       }
-    
-      // Helper function to get colors for datasets
-      function getColor(index) {
-        const colors = [
-          "#FF6384", // red
-          "#36A2EB", // blue
-          "#FFCE56", // yellow
-          "#4BC0C0", // turquoise
-          "#9966FF", // purple
-          "#FF9F40", // orange
-          "#FF6384", // red
-          "#4BC0C0", // turquoise
-        ];
-        return colors[index % colors.length];
-      }
-    
-      // Initialize Historical Data when document is ready
-      $(document).ready(function () {
-        // Preselect all commodities and cities
-        $("#commodityFilterHistorical option").prop("selected", true);
-        $("#cityFilterHistorical option").prop("selected", true);
-    
-        // Calculate default date range (last 30 days)
-        const today = moment();
-        const past30Days = moment().subtract(30, "days");
-    
-        // Set default date values
-        $("#startDateFilterHistorical").val(past30Days.format("YYYY-MM-DD"));
-        $("#endDateFilterHistorical").val(today.format("YYYY-MM-DD"));
-    
-        // Initial data fetch
-        fetchHistoricalData(
-          $("#commodityFilterHistorical").val(),
-          $("#cityFilterHistorical").val(),
-          $("#sourceFilterHistorical").val(),
-          past30Days.format("YYYY-MM-DD"),
-          today.format("YYYY-MM-DD"),
-          $("#averageCommodities").is(":checked"),
-          $("#averageCities").is(":checked")
-        );
-    
-        // Event handler for Apply Filters button
-        $("#filters-historical-data").on("click", "button", function () {
-          fetchHistoricalData(
-            $("#commodityFilterHistorical").val(),
-            $("#cityFilterHistorical").val(),
-            $("#sourceFilterHistorical").val(),
-            $("#startDateFilterHistorical").val(),
-            $("#endDateFilterHistorical").val(),
-            $("#averageCommodities").is(":checked"),
-            $("#averageCities").is(":checked")
-          );
-        });
-    
-        // Download functionality
-        $("#historical-data-card .btn-primary").on("click", function () {
-          if (historicalChartInstance) {
-            const canvas = document.getElementById("historicalChart");
-            const imageLink = document.createElement("a");
-            imageLink.download = "historical_prices_chart.png";
-            imageLink.href = canvas.toDataURL("image/png");
-            imageLink.click();
-          }
-        });
-      });
-    </script>
-    
-    {% include "weather_dashboard_scripts.html" %} {%endblock%}
+    });
+  });
+</script>
+
+{% include "weather_dashboard_scripts.html" %} {%endblock%}

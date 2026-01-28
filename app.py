@@ -8,8 +8,7 @@ from flask import (
     session,
     jsonify,
     send_file,
-    Blueprint
-
+    Blueprint,
 )
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import and_, or_, func, text, case, true
@@ -75,18 +74,24 @@ import ibmpairs.query as query
 from ibmpairs.client import get_client
 import logging
 from functools import wraps
-from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity, get_jwt
+from flask_jwt_extended import (
+    JWTManager,
+    create_access_token,
+    jwt_required,
+    get_jwt_identity,
+    get_jwt,
+)
 from sqlalchemy.exc import SQLAlchemyError
 from flask import send_from_directory
 from notebook import get_best_start_dates, fetch_data_from_api
-from fetch_shipping_point_data import fetch_shipping_point_data  # Replace with the correct module name
+from fetch_shipping_point_data import (
+    fetch_shipping_point_data,
+)  # Replace with the correct module name
 from flask_caching import Cache
 import hashlib
 from flask import request, make_response
 from collections import defaultdict
 import secrets
-
-
 
 
 # Configuration for Logging
@@ -95,30 +100,27 @@ logging.basicConfig(
 )
 
 
-
 CSV_DIRECTORY = "data/"
 
 # Initialize Flask app
-app = Flask(__name__, static_folder= 'frontend/build', static_url_path="/")
+app = Flask(__name__, static_folder="frontend/build", static_url_path="/")
 
 
-if 'JWT_SECRET_KEY' not in os.environ:
-    os.environ['JWT_SECRET_KEY'] = secrets.token_hex(32)
+if "JWT_SECRET_KEY" not in os.environ:
+    os.environ["JWT_SECRET_KEY"] = secrets.token_hex(32)
 
 
-
-app.config['JWT_SECRET_KEY'] = os.environ['JWT_SECRET_KEY']
-app.config['DEBUG'] = True
-app.config['JWT_ALGORITHM'] = 'HS256'
-app.config['CACHE_NO_CACHE_ROUTES'] = [
-    '/api/delete-alert-by-id',
-    '/api/clear-alerts',
-    '/api/alert-settings',
-    '/api/alert-entries-fresh',
-    '/api/break_even'
+app.config["JWT_SECRET_KEY"] = os.environ["JWT_SECRET_KEY"]
+app.config["DEBUG"] = True
+app.config["JWT_ALGORITHM"] = "HS256"
+app.config["CACHE_NO_CACHE_ROUTES"] = [
+    "/api/delete-alert-by-id",
+    "/api/clear-alerts",
+    "/api/alert-settings",
+    "/api/alert-entries-fresh",
+    "/api/break_even",
 ]
 jwt = JWTManager(app)
-
 
 
 @app.route("/api/normalize_price_data")
@@ -134,7 +136,10 @@ def normalize_price_data():
             normalized_city = original_city.strip().lower().title()
             normalized_commodity = original_commodity.strip().lower().title()
 
-            if original_city != normalized_city or original_commodity != normalized_commodity:
+            if (
+                original_city != normalized_city
+                or original_commodity != normalized_commodity
+            ):
                 record.city_name = normalized_city
                 record.commodity = normalized_commodity
                 updated += 1
@@ -147,8 +152,6 @@ def normalize_price_data():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
-
-
 @app.route("/", defaults={"path": ""})
 @app.route("/<path:path>")
 def serve(path):
@@ -159,25 +162,26 @@ def serve(path):
 
 
 # Configure Flask-Caching to use Redis
-app.config['CACHE_TYPE'] = 'redis'
-app.config['CACHE_REDIS_URL'] = 'redis://localhost:6379/0'  # Adjust if needed
+app.config["CACHE_TYPE"] = "redis"
+app.config["CACHE_REDIS_URL"] = "redis://localhost:6379/0"  # Adjust if needed
 # app.config['CACHE_REDIS_URL'] = os.environ.get("REDIS_URL", "redis://<MEMORISTORE_IP>:6379/0")
 
 cache = Cache(app)
 
 
-
 # Redis implementation for the caching of data coming from the db
 def generate_cache_key():
     # Use the full path (which includes query parameters)
-    key = request.full_path  # e.g., "/api/sales_dashboard?commodity=Jalapeno&source=USDA"
+    key = (
+        request.full_path
+    )  # e.g., "/api/sales_dashboard?commodity=Jalapeno&source=USDA"
     # Optionally, you can hash it to ensure it's a consistent format
-    return hashlib.md5(key.encode('utf-8')).hexdigest()
+    return hashlib.md5(key.encode("utf-8")).hexdigest()
 
 
 @app.before_request
 def serve_from_cache():
-    if request.method == 'GET':
+    if request.method == "GET":
         cache_key = generate_cache_key()
         cached_response = cache.get(cache_key)
         if cached_response:
@@ -188,23 +192,21 @@ def serve_from_cache():
         else:
             app.logger.info(f"Cache miss for key: {cache_key}")
 
+
 @app.after_request
 def cache_response(response):
-    if request.method == 'GET' and response.status_code == 200:
+    if request.method == "GET" and response.status_code == 200:
         cache_key = generate_cache_key()
-        # time out 
+        # time out
         ttl = 86400  # Set TTL to 1 day (24 hours)
         # For more dynamic TTL, you can calculate it based on some parameters
         # e.g., setting a shorter TTL for endpoints that change often
-        if 'historical_data' in request.full_path:
+        if "historical_data" in request.full_path:
             ttl = 3600  # Shorter TTL of 1 hour for historical data
- 
 
         cache.set(cache_key, response.get_data(), timeout=ttl)
         app.logger.info(f"Cached response for key: {cache_key}")
     return response
-
-
 
 
 CORS(
@@ -214,24 +216,23 @@ CORS(
         r"/api/*": {
             "origins": [
                 "http://localhost:3000",  # Local frontend (for development)
-                "https://arkfoods.klicksai.com"  # Replace with your production domain
+                "https://arkfoods.klicksai.com",  # Replace with your production domain
             ],
             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],  # Add OPTIONS
             "allow_headers": [
-                "Content-Type", 
-                "Authorization", 
-                "Access-Control-Allow-Credentials"
-            ]
+                "Content-Type",
+                "Authorization",
+                "Access-Control-Allow-Credentials",
+            ],
         }
     },
 )
 
 
-
-
 @jwt.unauthorized_loader
 def custom_unauthorized_response(err):
     return jsonify({"error": "Unauthorized. Please log in."}), 401
+
 
 load_dotenv()
 
@@ -249,7 +250,11 @@ load_dotenv()
 
 
 # Enable CORS
-CORS(app, supports_credentials=True, origins=["http://localhost:3000", "http://127.0.0.1"])
+CORS(
+    app,
+    supports_credentials=True,
+    origins=["http://localhost:3000", "http://127.0.0.1"],
+)
 
 
 # Set the secret key for session handling
@@ -257,16 +262,19 @@ CORS(app, supports_credentials=True, origins=["http://localhost:3000", "http://1
 
 # app.config["SECRET_KEY"] = "your_secret_key_here"
 
-app.config['JWT_BLACKLIST_ENABLED'] = True
-app.config['JWT_BLACKLIST_TOKEN_CHECKS'] = ['access']
-app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=2)
+app.config["JWT_BLACKLIST_ENABLED"] = True
+app.config["JWT_BLACKLIST_TOKEN_CHECKS"] = ["access"]
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=2)
 
 
 blacklist = set()
 
+
 @jwt.token_in_blocklist_loader
 def check_if_token_in_blacklist(jwt_header, jwt_payload):
-    return jwt_payload['jti'] in blacklist
+    return jwt_payload["jti"] in blacklist
+
+
 # Set session cookie options
 # app.config["SESSION_COOKIE_HTTPONLY"] = True  # Prevent access to cookies via JS
 # app.config["SESSION_COOKIE_SAMESITE"] = "Lax"  # Adjust SameSite based on needs
@@ -300,8 +308,6 @@ app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 db = SQLAlchemy(app)
 
 
-
-
 # Initialize LoginManager for handling user sessions
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -314,10 +320,12 @@ Bootstrap(app)
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
-            return redirect(url_for('login'))
+        if "user_id" not in session:
+            return redirect(url_for("login"))
         return f(*args, **kwargs)
+
     return decorated_function
+
 
 # Data Base Models
 class User(UserMixin, db.Model):
@@ -341,7 +349,7 @@ class User(UserMixin, db.Model):
 
 
 class PriceData(db.Model):
-    __tablename__ = 'price_data'  # Match the actual table name in the database
+    __tablename__ = "price_data"  # Match the actual table name in the database
 
     id = db.Column(db.Integer, primary_key=True)
     city_name = db.Column(db.String(100), nullable=False)
@@ -354,27 +362,27 @@ class PriceData(db.Model):
 
 
 class BreakEvenEstimation(db.Model):
-    __tablename__ = 'break_even_estimations'
-    
+    __tablename__ = "break_even_estimations"
+
     id = db.Column(db.Integer, primary_key=True)
-    
+
     # Revenue Calculator Fields
     variety = db.Column(db.String(100), nullable=False)
     city = db.Column(db.String(100), nullable=False)
     start_date = db.Column(db.Date, nullable=False)
     forecast_date = db.Column(db.Date, nullable=False)
     yield_per_acre = db.Column(db.Float, nullable=False)
-    
+
     # Cost Fields
     cost_per_acre = db.Column(db.Float, nullable=False)
     harvest_cost_per_box = db.Column(db.Float, nullable=False)
     cost_of_box = db.Column(db.Float, nullable=False)
     boxes_bonus_per_yield = db.Column(db.Float, nullable=False)
-    
+
     # Analysis Date Range
     start_date_range = db.Column(db.Date, nullable=False)
     end_date_range = db.Column(db.Date, nullable=False)
-    
+
     # Results
     forecasted_price = db.Column(db.Float, nullable=True)
     revenue_per_acre = db.Column(db.Float, nullable=True)
@@ -385,34 +393,49 @@ class BreakEvenEstimation(db.Model):
 
     # Timestamps
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+    updated_at = db.Column(
+        db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
     def __repr__(self):
-        return f'<BreakEvenEstimation {self.id} for {self.variety} in {self.city}>'
-    
+        return f"<BreakEvenEstimation {self.id} for {self.variety} in {self.city}>"
+
     def to_dict(self):
         """Convert instance to dictionary for API responses"""
         return {
-            'id': self.id,
-            'variety': self.variety,
-            'city': self.city,
-            'start_date': self.start_date.strftime('%Y-%m-%d') if self.start_date else None,
-            'forecast_date': self.forecast_date.strftime('%Y-%m-%d') if self.forecast_date else None,
-            'yield_per_acre': self.yield_per_acre,
-            'cost_per_acre': self.cost_per_acre,
-            'harvest_cost_per_box': self.harvest_cost_per_box,
-            'cost_of_box': self.cost_of_box,
-            'boxes_bonus_per_yield': self.boxes_bonus_per_yield,
-            'start_date_range': self.start_date_range.strftime('%Y-%m-%d') if self.start_date_range else None,
-            'end_date_range': self.end_date_range.strftime('%Y-%m-%d') if self.end_date_range else None,
-            'forecasted_price': self.forecasted_price,
-            'revenue_per_acre': self.revenue_per_acre,
-            'revenue_after_costs': self.revenue_after_costs,
-            'revenue_per_box': self.revenue_per_box,
-            'season': self.season,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+            "id": self.id,
+            "variety": self.variety,
+            "city": self.city,
+            "start_date": (
+                self.start_date.strftime("%Y-%m-%d") if self.start_date else None
+            ),
+            "forecast_date": (
+                self.forecast_date.strftime("%Y-%m-%d") if self.forecast_date else None
+            ),
+            "yield_per_acre": self.yield_per_acre,
+            "cost_per_acre": self.cost_per_acre,
+            "harvest_cost_per_box": self.harvest_cost_per_box,
+            "cost_of_box": self.cost_of_box,
+            "boxes_bonus_per_yield": self.boxes_bonus_per_yield,
+            "start_date_range": (
+                self.start_date_range.strftime("%Y-%m-%d")
+                if self.start_date_range
+                else None
+            ),
+            "end_date_range": (
+                self.end_date_range.strftime("%Y-%m-%d")
+                if self.end_date_range
+                else None
+            ),
+            "forecasted_price": self.forecasted_price,
+            "revenue_per_acre": self.revenue_per_acre,
+            "revenue_after_costs": self.revenue_after_costs,
+            "revenue_per_box": self.revenue_per_box,
+            "season": self.season,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
+
 
 class ShippingPriceData(db.Model):
 
@@ -423,13 +446,11 @@ class ShippingPriceData(db.Model):
     day = db.Column(db.Integer, nullable=False)
     source = db.Column(db.String, nullable=False)
     price = db.Column(db.Float)
-    season = db.Column(db.String, nullable=True)  
-
-    
+    season = db.Column(db.String, nullable=True)
 
 
 class UShippingPriceData(db.Model):
-    __tablename__ = 'usda_shipping_price_data'
+    __tablename__ = "usda_shipping_price_data"
 
     id = db.Column(db.Integer, primary_key=True)
     city_name = db.Column(db.String(100), nullable=False)
@@ -471,68 +492,80 @@ class ClimatologyData(db.Model):
 
 class AlertSetting(db.Model):
     """Model for price alert settings."""
-    
-    __tablename__ = 'alert_settings'
-    
+
+    __tablename__ = "alert_settings"
+
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)  # Add user_id
-    city = db.Column(db.String(100), nullable=False)  
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id"), nullable=False
+    )  # Add user_id
+    city = db.Column(db.String(100), nullable=False)
     commodity = db.Column(db.String(100), nullable=False)
     threshold = db.Column(db.Float, nullable=False, default=5.0)  # Default 5% threshold
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
     # Relationship with User
-    user = db.relationship('User', backref=db.backref('alert_settings', lazy=True))
+    user = db.relationship("User", backref=db.backref("alert_settings", lazy=True))
 
     def __repr__(self):
-        return f'<AlertSetting {self.id}: {self.commodity} @ {self.threshold}%>'
-    
+        return f"<AlertSetting {self.id}: {self.commodity} @ {self.threshold}%>"
+
     def to_dict(self):
         """Convert instance to dictionary."""
         return {
-            'id': self.id,
-            'user_id': self.user_id,
-            'city': self.city,
-            'commodity': self.commodity,
-            'threshold': self.threshold,
-            'isActive': self.is_active,
-            'createdAt': self.created_at.isoformat(),
-            'updatedAt': self.updated_at.isoformat()
+            "id": self.id,
+            "user_id": self.user_id,
+            "city": self.city,
+            "commodity": self.commodity,
+            "threshold": self.threshold,
+            "isActive": self.is_active,
+            "createdAt": self.created_at.isoformat(),
+            "updatedAt": self.updated_at.isoformat(),
         }
+
 
 class Notification(db.Model):
     """Model for notifications."""
-    
-    __tablename__ = 'notifications'
-    
+
+    __tablename__ = "notifications"
+
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)  # Add user_id
-    alert_setting_id = db.Column(db.Integer, db.ForeignKey('alert_settings.id'), nullable=True)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id"), nullable=False
+    )  # Add user_id
+    alert_setting_id = db.Column(
+        db.Integer, db.ForeignKey("alert_settings.id"), nullable=True
+    )
     title = db.Column(db.String(200), nullable=False)
     message = db.Column(db.Text, nullable=False)
     is_read = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     # Relationships
-    user = db.relationship('User', backref=db.backref('notifications', lazy=True))
-    alert_setting = db.relationship('AlertSetting', backref=db.backref('notifications', lazy=True))
-    
+    user = db.relationship("User", backref=db.backref("notifications", lazy=True))
+    alert_setting = db.relationship(
+        "AlertSetting", backref=db.backref("notifications", lazy=True)
+    )
+
     def __repr__(self):
-        return f'<Notification {self.id}: {self.title}>'
-    
+        return f"<Notification {self.id}: {self.title}>"
+
     def to_dict(self):
         """Convert instance to dictionary."""
         return {
-            'id': self.id,
-            'user_id': self.user_id,
-            'title': self.title,
-            'message': self.message,
-            'is_read': self.is_read,
-            'created_at': self.created_at.isoformat(),
-            'alert_setting_id': self.alert_setting_id
+            "id": self.id,
+            "user_id": self.user_id,
+            "title": self.title,
+            "message": self.message,
+            "is_read": self.is_read,
+            "created_at": self.created_at.isoformat(),
+            "alert_setting_id": self.alert_setting_id,
         }
+
 
 # USDA DATA IMPORT SETTINGS HERE!
 INTERESTED_CITIES = [
@@ -544,6 +577,8 @@ INTERESTED_CITIES = [
     "NEW YORK",
     "PHILADELPHIA",
     "LOS ANGELES",
+    "DETROIT",
+    "ATLANTA",
 ]
 
 INTERESTED_COMMODITIES = [
@@ -573,8 +608,7 @@ INTERESTED_COMMODITIES_USDA = [
 ]
 
 
-
-@app.route('/api/fetch-data', methods=['GET'])
+@app.route("/api/fetch-data", methods=["GET"])
 def fetch_data():
     try:
         start_dates = get_best_start_dates()
@@ -697,8 +731,6 @@ def fetch_usda_daily_data():
             current_dt += timedelta(days=1)
             json_data = None
             gc.collect()
-
-
 
 
 # Process and store USDA data in the database, filtered by interested commodities and cities
@@ -981,12 +1013,13 @@ def fetch_daily_data():
                     # Map back to the desired format
                     variety_name = standardized_name.get(variety_name, variety_name)
 
-                    city_name = item.get("terminalMarketCityName", "").strip().lower().title()
+                    city_name = (
+                        item.get("terminalMarketCityName", "").strip().lower().title()
+                    )
                     year = item.get("isoYear")
                     day_of_year = item.get("day")
                     price = item.get("price")
                     source = "ProduceIQ"
-
 
                     # Calculate the season based on the month
                     month = (
@@ -1034,10 +1067,8 @@ def fetch_daily_data():
         )
 
 
-
-
-
 import threading
+
 
 def fetch_shipping_data():
     with app.app_context():  # Ensure Flask app context is active
@@ -1047,12 +1078,12 @@ def fetch_shipping_data():
         except Exception as e:
             print(f"Error: {str(e)}")
 
-@app.route('/fetch-shipping', methods=['GET'])
+
+@app.route("/fetch-shipping", methods=["GET"])
 def fetch_shipping():
     thread = threading.Thread(target=fetch_shipping_data)
     thread.start()
     return jsonify({"status": "success", "message": "Task started in background"}), 202
-
 
 
 @app.route("/api/test_ibm_live", methods=["GET"])
@@ -1070,20 +1101,24 @@ def test_ibm_live():
                 "temporal": {
                     "intervals": [
                         {
-                            "start": (datetime.utcnow() - timedelta(minutes=1)).strftime(iso_8601),
-                            "end": (datetime.utcnow() + timedelta(minutes=1)).strftime(iso_8601)
+                            "start": (
+                                datetime.utcnow() - timedelta(minutes=1)
+                            ).strftime(iso_8601),
+                            "end": (datetime.utcnow() + timedelta(minutes=1)).strftime(
+                                iso_8601
+                            ),
                         }
                     ]
                 },
                 "dimensions": [
                     {"name": "forecast", "value": "01"},
-                    {"name": "horizon", "value": 0}
+                    {"name": "horizon", "value": 0},
                 ],
             }
         ],
         "spatial": {"type": "point", "coordinates": [lon, lat]},
         "temporal": {"intervals": [{"snapshot": "1982-01-01T00:00:00Z"}]},
-        "outputType": "json"
+        "outputType": "json",
     }
 
     try:
@@ -1256,7 +1291,6 @@ import logging
 #     return "Weather forecast data query completed."
 
 
-
 #  Weather forecast data fetching insertion and pruning
 def fetch_and_store_weather_forecast(
     start_forecast_date,
@@ -1375,7 +1409,9 @@ def fetch_and_store_weather_forecast(
 
                 try:
                     logging.info("Submitting query to IBM PAIRS API.")
-                    df = query.submit(query_json, client=eis_client).point_data_as_dataframe()
+                    df = query.submit(
+                        query_json, client=eis_client
+                    ).point_data_as_dataframe()
 
                     if df.empty:
                         logging.warning(
@@ -1406,7 +1442,9 @@ def fetch_and_store_weather_forecast(
                                 value_val = float(row["value"])
                                 # property might look like "forecast:01; horizon:3"
                                 # so parse out ensemble:
-                                ens_str = row.get("property", "forecast:0").split(";")[0]
+                                ens_str = row.get("property", "forecast:0").split(";")[
+                                    0
+                                ]
                                 ens_member = int(ens_str.split(":")[1])
 
                                 forecast_date = datetime.fromtimestamp(
@@ -1461,15 +1499,10 @@ def fetch_and_store_weather_forecast(
     return "Weather forecast data query completed."
 
 
-
 # @app.route("/api/test_fake_weather_forecast")
 # def run_fake_weather_test():
 #     test_fake_weather_forecast_insertion_and_prune()
 #     return "Fake weather forecast test complete!"
-
-
-
-
 
 
 # def test_fake_weather_forecast_insertion_and_prune():
@@ -1682,10 +1715,6 @@ def fetch_elevation_data(lat, lon):
     return temperature_adjustment
 
 
-
-
-
-
 # for climatology Data
 # def fetch_and_store_climatology_data(start_climo_date, end_climo_date):
 #     # IBM API Configuration
@@ -1772,8 +1801,8 @@ def fetch_elevation_data(lat, lon):
 #     return "Climatology data query completed."
 
 
-
 # Insertion and pruning
+
 
 def fetch_and_store_climatology_data(start_climo_date, end_climo_date):
     # IBM API Configuration
@@ -1830,17 +1859,23 @@ def fetch_and_store_climatology_data(start_climo_date, end_climo_date):
             # Submit the query and process the results
             try:
                 logging.info("Submitting query to IBM PAIRS API for climatology data.")
-                df = query.submit(query_json, client=eis_client).point_data_as_dataframe()
+                df = query.submit(
+                    query_json, client=eis_client
+                ).point_data_as_dataframe()
 
                 if df.empty:
-                    logging.warning(f"No data returned for climatology data for {VARIABLE}")
+                    logging.warning(
+                        f"No data returned for climatology data for {VARIABLE}"
+                    )
                     continue
 
                 # Apply temperature adjustment if the variable is TAVG
                 if VARIABLE == "TAVG":
                     df["value"] = df["value"].astype(float) + temperature_adjustment
 
-                logging.info(f"Climatology data retrieved, processing {len(df)} records.")
+                logging.info(
+                    f"Climatology data retrieved, processing {len(df)} records."
+                )
 
                 # ------------------------------------------------------------------
                 # Insert new rows and prune the oldest rows 1:1
@@ -1896,14 +1931,13 @@ def fetch_and_store_climatology_data(start_climo_date, end_climo_date):
                 gc.collect()
 
             except Exception as e:
-                logging.error(f"Error during climatology data query for {VARIABLE}: {e}")
+                logging.error(
+                    f"Error during climatology data query for {VARIABLE}: {e}"
+                )
                 continue
 
     logging.info("Climatology data query completed successfully.")
     return "Climatology data query completed."
-
-
-
 
 
 def process_and_store_climatology_data(df, city, lat, lon, VARIABLE):
@@ -2025,11 +2059,6 @@ class LoginForm(FlaskForm):
     submit = SubmitField("Login")
 
 
-
-
-
-
-
 # Home page
 @app.route("/api/")
 # @jwt_required()
@@ -2043,26 +2072,23 @@ def index():
         return redirect(url_for("sales_dashboard"))
 
 
-
 # Current user route
 @app.route("/api/current_user", methods=["GET"])
 def get_current_user():
     print("Current User:", current_user)  # Debugging
     print("Is Authenticated:", current_user.is_authenticated)  # Check if true
     if current_user.is_authenticated:
-        return jsonify({
-            "isAuthenticated": True,
-            "isAdmin": current_user.is_admin(),
-            "isOwner": current_user.is_owner(),
-            "username": current_user.username
-        })
-    return jsonify({
-        "isAuthenticated": False,
-        "isAdmin": False,
-        "isOwner": False,
-        "username": None
-    })
-
+        return jsonify(
+            {
+                "isAuthenticated": True,
+                "isAdmin": current_user.is_admin(),
+                "isOwner": current_user.is_owner(),
+                "username": current_user.username,
+            }
+        )
+    return jsonify(
+        {"isAuthenticated": False, "isAdmin": False, "isOwner": False, "username": None}
+    )
 
 
 # Dashboards
@@ -2075,15 +2101,21 @@ def admin_dashboard():
             return jsonify({"error": "User not authenticated"}), 401
 
         # Return admin-specific data
-        return jsonify({
-            "message": "Welcome to the Admin Dashboard!",
-            "username": current_user.username,
-            "role": current_user.role,
-        }), 200
+        return (
+            jsonify(
+                {
+                    "message": "Welcome to the Admin Dashboard!",
+                    "username": current_user.username,
+                    "role": current_user.role,
+                }
+            ),
+            200,
+        )
     except Exception as e:
         # Log the exception
         app.logger.error(f"Error in /admin_dashboard: {str(e)}")
         return jsonify({"error": "Internal Server Error"}), 500
+
 
 # @app.route("/admin_dashboard")
 # @login_required
@@ -2101,9 +2133,6 @@ def owner_dashboard():
 # # @jwt_required()
 def weather_dashboard():
     return render_template("weather_dashboard.html")
-
-
-
 
 
 @app.route("/api/sales_dashboard", methods=["GET"])
@@ -2147,32 +2176,38 @@ def sales_dashboard_api():
         )
 
         # Format the result
-        formatted_best_market = [
-            {
-                "city_name": item.city_name,
-                "max_price": item.max_price,
-                "year": item.year,
-                "day": item.day,
-                "formatted_date": (datetime(item.year, 1, 1) + timedelta(days=item.day - 1)).strftime("%Y-%m-%d"),
-            }
-            for item in best_market
-        ] if best_market else []
+        formatted_best_market = (
+            [
+                {
+                    "city_name": item.city_name,
+                    "max_price": item.max_price,
+                    "year": item.year,
+                    "day": item.day,
+                    "formatted_date": (
+                        datetime(item.year, 1, 1) + timedelta(days=item.day - 1)
+                    ).strftime("%Y-%m-%d"),
+                }
+                for item in best_market
+            ]
+            if best_market
+            else []
+        )
 
-        return jsonify({
-            "best_market": formatted_best_market,
-            "selected_commodity": selected_commodity,
-            "selected_source": selected_source,
-        })
+        return jsonify(
+            {
+                "best_market": formatted_best_market,
+                "selected_commodity": selected_commodity,
+                "selected_source": selected_source,
+            }
+        )
 
     except SQLAlchemyError as e:
         return jsonify({"error": "Database query failed", "details": str(e)}), 500
 
 
-
 @app.route("/api/test_cache", methods=["GET"])
 def test_cache():
     return jsonify({"message": "Hello from cache test"})
-
 
 
 # Registration route
@@ -2188,7 +2223,13 @@ def register():
         role = data.get("role")
 
         # Validate the input data
-        if not username or not email or not password or not confirm_password or not role:
+        if (
+            not username
+            or not email
+            or not password
+            or not confirm_password
+            or not role
+        ):
             return jsonify({"error": "All fields are required"}), 400
 
         if password != confirm_password:
@@ -2212,7 +2253,6 @@ def register():
         )
         logging.info(f"Received registration data: {data}")
 
-
         # Add the new user to the database
         db.session.add(new_user)
         db.session.commit()
@@ -2223,8 +2263,6 @@ def register():
         return jsonify({"error": str(e)}), 500
 
 
-
-
 @app.route("/api/protected", methods=["GET"])
 # @jwt_required()
 def protected():
@@ -2233,6 +2271,7 @@ def protected():
 
 
 from datetime import timedelta
+
 
 @app.route("/api/login", methods=["POST"])
 def login():
@@ -2252,31 +2291,43 @@ def login():
         # Validate the user and password
         if user and check_password_hash(user.password, password):
             if not user.approved:
-                return jsonify({"error": "Your account is not approved yet. Please wait for approval."}), 403
-
-            # Create a JWT access token with an expiration time
-        
-            access_token = create_access_token(
-                    identity=str(user.id),  # Use user.id or a unique string identifier
-                    additional_claims={"username": user.username, "role": user.role},
-                    expires_delta=timedelta(hours=5)
+                return (
+                    jsonify(
+                        {
+                            "error": "Your account is not approved yet. Please wait for approval."
+                        }
+                    ),
+                    403,
                 )
 
-            return jsonify({
-                "message": "Login successful!",
-                "token": access_token,
-                "role": user.role,
-                "username": user.username,
-                "user_id": user.id,
-            }), 200
+            # Create a JWT access token with an expiration time
+
+            access_token = create_access_token(
+                identity=str(user.id),  # Use user.id or a unique string identifier
+                additional_claims={"username": user.username, "role": user.role},
+                expires_delta=timedelta(hours=5),
+            )
+
+            return (
+                jsonify(
+                    {
+                        "message": "Login successful!",
+                        "token": access_token,
+                        "role": user.role,
+                        "username": user.username,
+                        "user_id": user.id,
+                    }
+                ),
+                200,
+            )
         else:
             return jsonify({"error": "Invalid email or password"}), 401
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
-
 # Logout route
+
 
 @app.route("/api/logout", methods=["POST"])
 # @jwt_required()
@@ -2285,6 +2336,7 @@ def logout():
     jti = get_jwt()["jti"]
     blacklist.add(jti)
     return jsonify({"message": "Successfully logged out"}), 200
+
 
 # Route for approving users
 
@@ -2297,17 +2349,24 @@ def approve_users():
         claims = get_jwt()  # Fetch additional claims
 
         # Check role
-        if claims['role'] not in ['admin', 'owner']:
+        if claims["role"] not in ["admin", "owner"]:
             return jsonify({"error": "Access denied"}), 403
 
         # Fetch unapproved users
         unapproved_users = User.query.filter_by(approved=False).all()
-        users = [{"id": user.id, "username": user.username, "email": user.email, "role": user.role} for user in unapproved_users]
+        users = [
+            {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "role": user.role,
+            }
+            for user in unapproved_users
+        ]
 
         return jsonify({"users": users}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 
 @app.route("/api/approve_user/<int:user_id>", methods=["POST"])
@@ -2318,7 +2377,7 @@ def approve_user(user_id):
         claims = get_jwt()  # Fetch additional claims
 
         # Check if the current user is an owner
-        if claims['role'] != 'owner':
+        if claims["role"] != "owner":
             return jsonify({"error": "Access denied"}), 403
 
         # Fetch the user to be approved
@@ -2333,8 +2392,6 @@ def approve_user(user_id):
     except Exception as e:
         print(f"Error approving user: {e}")  # Debug log
         return jsonify({"error": "An error occurred while approving the user."}), 500
-
-
 
 
 # FrontEND API internal
@@ -2359,6 +2416,8 @@ def api_best_sell_market():
         "New York",
         "Philadelphia",
         "Los Angeles",
+        "Atlanta",
+        "Detroit",
     ]
 
     # Get the current US time and calculate the date 7 days ago
@@ -2442,8 +2501,6 @@ def api_best_sell_market():
     return jsonify({"best_market": best_market_data})
 
 
-
-
 from datetime import datetime, timedelta
 from flask import Flask, request, jsonify
 from sqlalchemy import func, or_, and_, true, select, over
@@ -2451,16 +2508,33 @@ from pytz import timezone
 
 # Assume your app, SQLAlchemy (db), and PriceData model are already configured
 
+
 @app.route("/api/most_recent_prices", methods=["GET"])
 def api_most_recent_prices():
     # Define cities and commodities
     cities = [
-        "Baltimore", "Boston", "Chicago", "Columbia",
-        "Miami", "New York", "Philadelphia", "Los Angeles",
+        "Baltimore",
+        "Boston",
+        "Chicago",
+        "Columbia",
+        "Miami",
+        "New York",
+        "Philadelphia",
+        "Los Angeles",
+        "Atlanta",
+        "Detroit",
     ]
     commodities = [
-        "Anaheim", "Cubanelles", "Fresno", "Habanero", "Hungarian Wax",
-        "Jalapeno", "Long Hot", "Poblano", "Serrano", "Shishito",
+        "Anaheim",
+        "Cubanelles",
+        "Fresno",
+        "Habanero",
+        "Hungarian Wax",
+        "Jalapeno",
+        "Long Hot",
+        "Poblano",
+        "Serrano",
+        "Shishito",
     ]
 
     selected_source = request.args.get("source", "USDA")
@@ -2497,7 +2571,10 @@ def api_most_recent_prices():
 
     if date_filters:
         date_filter_conditions = or_(
-            *[and_(PriceData.year == year, PriceData.day == day) for year, day in date_filters]
+            *[
+                and_(PriceData.year == year, PriceData.day == day)
+                for year, day in date_filters
+            ]
         )
     else:
         date_filter_conditions = true()
@@ -2509,14 +2586,14 @@ def api_most_recent_prices():
             PriceData.city_name,
             PriceData.year,
             PriceData.day,
-            func.avg(func.nullif(PriceData.price, 0)).label("avg_price")
+            func.avg(func.nullif(PriceData.price, 0)).label("avg_price"),
         )
         .filter(
             PriceData.commodity.in_(adjusted_commodities),
             city_filter_conditions,
             date_filter_conditions,
             PriceData.source.in_(valid_sources),
-            PriceData.price != 0
+            PriceData.price != 0,
         )
         .group_by(
             PriceData.commodity,
@@ -2530,7 +2607,7 @@ def api_most_recent_prices():
     window = over(
         func.row_number(),
         partition_by=[price_subquery_cte.c.commodity, price_subquery_cte.c.city_name],
-        order_by=[price_subquery_cte.c.year.desc(), price_subquery_cte.c.day.desc()]
+        order_by=[price_subquery_cte.c.year.desc(), price_subquery_cte.c.day.desc()],
     )
 
     ranked_prices_cte = (
@@ -2538,7 +2615,7 @@ def api_most_recent_prices():
             price_subquery_cte.c.commodity,
             price_subquery_cte.c.city_name,
             price_subquery_cte.c.avg_price,
-            window.label('rn')
+            window.label("rn"),
         )
     ).cte("ranked_prices")
 
@@ -2549,7 +2626,7 @@ def api_most_recent_prices():
         select(
             ranked_prices_cte.c.commodity,
             ranked_prices_cte.c.city_name,
-            ranked_prices_cte.c.avg_price
+            ranked_prices_cte.c.avg_price,
         )
         .select_from(ranked_prices_cte)
         .where(ranked_prices_cte.c.rn == 1)
@@ -2559,8 +2636,7 @@ def api_most_recent_prices():
 
     # Build the dictionary for recent prices
     recent_prices = {
-        commodity: {city: "-" for city in cities}
-        for commodity in commodities
+        commodity: {city: "-" for city in cities} for commodity in commodities
     }
 
     for row in results:
@@ -2568,7 +2644,9 @@ def api_most_recent_prices():
         normalized_city = row.city_name.lower()
         original_city = city_lower_map.get(normalized_city)
         if original_city and original_commodity in recent_prices:
-            recent_prices[original_commodity][original_city] = float(row.avg_price) if row.avg_price is not None else "-"
+            recent_prices[original_commodity][original_city] = (
+                float(row.avg_price) if row.avg_price is not None else "-"
+            )
     return jsonify({"prices": recent_prices})
 
 
@@ -2579,11 +2657,12 @@ def get_sales_seasonal_prices():
     cities_str = request.args.get("cities")
     start_date_str = request.args.get("start_date")
     end_date_str = request.args.get("end_date")
-    source_str       = request.args.get("source", "Both")
-
+    source_str = request.args.get("source", "Both")
 
     # Log received parameters
-    app.logger.info(f"Received request with commodities: {commodities_str}, cities: {cities_str}, start_date: {start_date_str}, end_date: {end_date_str}")
+    app.logger.info(
+        f"Received request with commodities: {commodities_str}, cities: {cities_str}, start_date: {start_date_str}, end_date: {end_date_str}"
+    )
 
     # Convert commodities and cities to lists if provided, else use all
     if commodities_str:
@@ -2599,7 +2678,7 @@ def get_sales_seasonal_prices():
 
     if cities_str:
         cities = cities_str.split(",")
-       
+
     else:
         cities = [
             row[0] for row in db.session.query(PriceData.city_name).distinct().all()
@@ -2631,7 +2710,7 @@ def get_sales_seasonal_prices():
         func.lower(PriceData.city_name).in_([city.lower() for city in cities]),
         PriceData.source.in_(["ProduceIQ"]),
     )
-       # Base query
+    # Base query
     query = db.session.query(PriceData.season, PriceData.price).filter(
         PriceData.commodity.in_(commodities),
         func.lower(PriceData.city_name).in_([city.lower() for city in cities]),
@@ -2643,7 +2722,6 @@ def get_sales_seasonal_prices():
     else:  # "Both" or not supplied ⇒ allow both major sources
         query = query.filter(PriceData.source.in_(["USDA", "ProduceIQ"]))
 
-
     # Apply date filters if both start_date and end_date are provided
     if start_date and end_date:
         start_year = start_date.year
@@ -2652,7 +2730,9 @@ def get_sales_seasonal_prices():
         end_day = end_date.timetuple().tm_yday
 
         # Log the filter conditions for date range
-        app.logger.info(f"Query Filters: Commodities: {commodities}, Cities: {cities}, Start Year: {start_year}, End Year: {end_year}, Start Day: {start_day}, End Day: {end_day}")
+        app.logger.info(
+            f"Query Filters: Commodities: {commodities}, Cities: {cities}, Start Year: {start_year}, End Year: {end_year}, Start Day: {start_day}, End Day: {end_day}"
+        )
 
         if start_year == end_year:
             query = query.filter(
@@ -2704,7 +2784,6 @@ def get_sales_seasonal_prices():
     return jsonify(seasonal_prices)
 
 
-
 @app.route("/api/historical_data", methods=["GET"])
 def historical_data():
     try:
@@ -2752,7 +2831,9 @@ def historical_data():
 
         # Query the database with proper date filtering
         query = PriceData.query.filter(
-            func.upper(PriceData.commodity).in_([c.upper() for c in db_query_commodities]),
+            func.upper(PriceData.commodity).in_(
+                [c.upper() for c in db_query_commodities]
+            ),
             func.upper(PriceData.city_name).in_([city.upper() for city in cities]),
             PriceData.source == source,
         )
@@ -2763,7 +2844,7 @@ def historical_data():
             query = query.filter(
                 PriceData.year == start_dt.year,
                 PriceData.day >= start_day,  # Include start_day
-                PriceData.day <= end_day     # Include end_day
+                PriceData.day <= end_day,  # Include end_day
             )
         else:
             # If the start and end dates span multiple years
@@ -2851,6 +2932,7 @@ def historical_data():
         app.logger.error(f"Error: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
+
 #  route for the shipping point price
 @app.route("/api/shipping_point_price", methods=["GET"])
 # @jwt_required()
@@ -2866,7 +2948,6 @@ def shipping_point_price():
             request.args.get("averageCommodities", "false").lower() == "true"
         )
         avg_regions = request.args.get("averageRegions", "false").lower() == "true"
-
 
         # Convert dates
         start_dt = datetime.strptime(start_date, "%Y-%m-%d")
@@ -2897,13 +2978,24 @@ def shipping_point_price():
         else:
             query = query.filter(
                 or_(
-                    and_(ShippingPriceData.year == start_dt.year, ShippingPriceData.day >= start_day),
-                    and_(ShippingPriceData.year == end_dt.year, ShippingPriceData.day <= end_day),
-                    and_(ShippingPriceData.year > start_dt.year, ShippingPriceData.year < end_dt.year),
+                    and_(
+                        ShippingPriceData.year == start_dt.year,
+                        ShippingPriceData.day >= start_day,
+                    ),
+                    and_(
+                        ShippingPriceData.year == end_dt.year,
+                        ShippingPriceData.day <= end_day,
+                    ),
+                    and_(
+                        ShippingPriceData.year > start_dt.year,
+                        ShippingPriceData.year < end_dt.year,
+                    ),
                 )
             )
 
-        query = query.order_by(ShippingPriceData.year.asc(), ShippingPriceData.day.asc())
+        query = query.order_by(
+            ShippingPriceData.year.asc(), ShippingPriceData.day.asc()
+        )
         data = query.all()
 
         # Debug: Log raw query results
@@ -2984,8 +3076,6 @@ def shipping_point_price():
     except Exception as e:
         app.logger.error(f"Error: {str(e)}")
         return jsonify({"error": str(e)}), 500
-
-
 
 
 @app.route("/api/download_historical_data", methods=["GET"])
@@ -3201,6 +3291,7 @@ def calculate_accumulated_precipitation(lat, lon, start_date, end_date):
         "probability_below_climo": probability_below_climo,
     }
 
+
 # def calculate_accumulated_precipitation(lat, lon, start_date, end_date):
 #     # Get daily climatology for precipitation (average per historical record per day of the year)
 #     daily_precip_climatology = get_daily_precip_climatology(lat, lon)
@@ -3287,8 +3378,6 @@ def get_daily_precip_climatology_v2(lat, lon):
     }
 
     return avg_daily_climatology
-
-
 
 
 # # Main API route: Serve aggregated forecast and climatology data
@@ -3396,7 +3485,6 @@ def api_weather_forecasts():
         return jsonify({"error": str(e)}), 500
 
 
-
 # City list for dropdowns
 @app.route("/api/cities", methods=["GET"])
 def get_cities():
@@ -3449,8 +3537,6 @@ def get_cities():
 #         average_price = 0.0
 
 #     return average_price
-
-
 
 
 # @app.route("/api/calculate_forecast", methods=["POST"])
@@ -3516,7 +3602,9 @@ def get_cities():
 #     })
 
 
-def calculate_forecasted_price(variety, start_date, forecast_date, city=None, source="ProduceIQ"):
+def calculate_forecasted_price(
+    variety, start_date, forecast_date, city=None, source="ProduceIQ"
+):
     # Step 1: Determine the season of the forecast date
     season = determine_season_for_dashboard(forecast_date)
 
@@ -3525,26 +3613,23 @@ def calculate_forecasted_price(variety, start_date, forecast_date, city=None, so
     start_day = start_date.timetuple().tm_yday
 
     # Step 3: Start building the query
-    query = (
-        db.session.query(PriceData.price)
-        .filter(
-            PriceData.commodity == variety,
-            PriceData.season == season,
-            PriceData.year >= start_year,
-            PriceData.day >= start_day
-        )
+    query = db.session.query(PriceData.price).filter(
+        PriceData.commodity == variety,
+        PriceData.season == season,
+        PriceData.year >= start_year,
+        PriceData.day >= start_day,
     )
-    
+
     # Add source filter
     if source == "ProduceIQ,USDA" or source == "USDA,ProduceIQ":
         query = query.filter(PriceData.source.in_(["ProduceIQ", "USDA"]))
     else:
         query = query.filter(PriceData.source == source)
-    
+
     # Add city filter if provided
     if city and city != "All cities":
         query = query.filter(PriceData.city_name == city)
-    
+
     # Execute the query
     historical_data = query.all()
 
@@ -3588,15 +3673,21 @@ def calculate_forecast():
 
         # Convert the cost fields to float; default to 0 if missing
         cost_per_acre = float(cost_per_acre) if cost_per_acre else 0
-        harvest_cost_per_box = float(harvest_cost_per_box) if harvest_cost_per_box else 0
+        harvest_cost_per_box = (
+            float(harvest_cost_per_box) if harvest_cost_per_box else 0
+        )
         cost_of_box = float(cost_of_box) if cost_of_box else 0
-        boxes_bonus_per_yield = float(boxes_bonus_per_yield) if boxes_bonus_per_yield else 0
+        boxes_bonus_per_yield = (
+            float(boxes_bonus_per_yield) if boxes_bonus_per_yield else 0
+        )
 
     except ValueError:
         return jsonify({"error": "Invalid date or numeric format."}), 400
 
     # 1) Calculate the forecasted price (now with city parameter):
-    forecasted_price = calculate_forecasted_price(variety, start_date, forecast_date, city)
+    forecasted_price = calculate_forecasted_price(
+        variety, start_date, forecast_date, city
+    )
     revenue_per_acre = forecasted_price * yield_per_acre
 
     # Rest of function remains the same...
@@ -3606,42 +3697,51 @@ def calculate_forecast():
 
     # 3) Calculate total costs:
     # cost_per_acre + (harvest_cost_per_box * yield_per_acre) + (cost_of_box * yield_per_acre) + (boxes_bonus_per_yield)
-    total_costs = cost_per_acre  + (harvest_cost_per_box * yield_per_acre)  + (cost_of_box * yield_per_acre)  + (boxes_bonus_per_yield)
+    total_costs = (
+        cost_per_acre
+        + (harvest_cost_per_box * yield_per_acre)
+        + (cost_of_box * yield_per_acre)
+        + (boxes_bonus_per_yield)
+    )
     # 4) Subtract total costs from revenue
     revenue_after_costs = revenue_per_acre - total_costs
 
+    # Add the debug print here:
+    print(
+        "DEBUG: forecasted_price =",
+        forecasted_price,
+        " revenue_per_acre_after_costings =",
+        revenue_after_costs,
+    )
 
-        # Add the debug print here:
-    print("DEBUG: forecasted_price =", forecasted_price,
-          " revenue_per_acre_after_costings =", revenue_after_costs)
-
-
-    return jsonify({
-        "forecasted_price": round(forecasted_price, 2),
-        "revenue_per_acre": round(revenue_per_acre, 2),
-        "revenue_per_acre_after_costings": round(revenue_after_costs, 2),
-        "season": season,
-    })
+    return jsonify(
+        {
+            "forecasted_price": round(forecasted_price, 2),
+            "revenue_per_acre": round(revenue_per_acre, 2),
+            "revenue_per_acre_after_costings": round(revenue_after_costs, 2),
+            "season": season,
+        }
+    )
 
 
 # Endpoint to get price averages with normalized commodity names
-@app.route('/api/price_averages', methods=['GET'])
+@app.route("/api/price_averages", methods=["GET"])
 def get_price_averages():
     try:
-        start_date = request.args.get('start_date')
-        end_date = request.args.get('end_date')
-        source = request.args.get('source', 'both').lower()
-        city = request.args.get('city', 'All cities')
-        
+        start_date = request.args.get("start_date")
+        end_date = request.args.get("end_date")
+        source = request.args.get("source", "both").lower()
+        city = request.args.get("city", "All cities")
+
         if not start_date or not end_date:
-            return jsonify({'error': 'Both start and end dates are required'}), 400
-        
+            return jsonify({"error": "Both start and end dates are required"}), 400
+
         # Convert dates to year/day-of-year
-        start_date_obj = datetime.strptime(start_date, '%Y-%m-%d')
-        end_date_obj = datetime.strptime(end_date, '%Y-%m-%d')
+        start_date_obj = datetime.strptime(start_date, "%Y-%m-%d")
+        end_date_obj = datetime.strptime(end_date, "%Y-%m-%d")
         start_year, start_day = start_date_obj.year, start_date_obj.timetuple().tm_yday
         end_year, end_day = end_date_obj.year, end_date_obj.timetuple().tm_yday
-        
+
         # Mapping USDA city names to normalized names
         usda_city_mapping = {
             "BALTIMORE": "Baltimore",
@@ -3652,170 +3752,185 @@ def get_price_averages():
             "MIAMI": "Miami",
             "NEW YORK": "New York",
             "PHILADELPHIA": "Philadelphia",
+            "ATLANTA": "Atlanta",
+            "DETROIT": "Detroit",
         }
-        
+
         # Normalize city names
         normalized_city = case(
-            *[(PriceData.city_name == key, value) for key, value in usda_city_mapping.items()],
-            else_=PriceData.city_name
+            *[
+                (PriceData.city_name == key, value)
+                for key, value in usda_city_mapping.items()
+            ],
+            else_=PriceData.city_name,
         ).label("normalized_city")
-        
+
         # Normalize commodity name - ensure consistent naming between sources
         # Handle special case where Cubanelle in USDA matches Cubanelles in ProduceIQ
-        normalized_commodity = func.lower(func.trim(PriceData.commodity)).label("normalized_commodity")
-        
+        normalized_commodity = func.lower(func.trim(PriceData.commodity)).label(
+            "normalized_commodity"
+        )
+
         # Build basic query filtering by date range
         query = db.session.query(
             normalized_city,
             normalized_commodity,
             PriceData.source,
-            func.avg(PriceData.price).label('avg_price')
+            func.avg(PriceData.price).label("avg_price"),
         ).filter(
             or_(
                 and_(PriceData.year == start_year, PriceData.day >= start_day),
                 and_(PriceData.year == end_year, PriceData.day <= end_day),
-                and_(PriceData.year > start_year, PriceData.year < end_year)
+                and_(PriceData.year > start_year, PriceData.year < end_year),
             )
         )
-        
+
         # Apply city filter if not "All cities"
-        if city.lower() != 'all cities':
+        if city.lower() != "all cities":
             query = query.filter(normalized_city == city)
-        
+
         # Apply source filter if not "both"
-        if source == 'usda':
+        if source == "usda":
             query = query.filter(PriceData.source == "USDA")
-        elif source == 'produceiq':
+        elif source == "produceiq":
             query = query.filter(PriceData.source == "ProduceIQ")
-        
+
         # Group by city, commodity, and source
         query = query.group_by(normalized_city, normalized_commodity, PriceData.source)
         query = query.order_by(normalized_commodity)
-        
+
         results = query.all()
-        
+
         # Convert query results to dictionary format for easier manipulation
         raw_data = []
         for row in results:
             # Skip if no data (shouldn't happen with avg, but just in case)
             if row.avg_price is None:
                 continue
-                
-            raw_data.append({
-                'city': row.normalized_city,
-                'commodity': row.normalized_commodity,
-                'source': row.source,
-                'avg_price': round(row.avg_price, 2)
-            })
-        
+
+            raw_data.append(
+                {
+                    "city": row.normalized_city,
+                    "commodity": row.normalized_commodity,
+                    "source": row.source,
+                    "avg_price": round(row.avg_price, 2),
+                }
+            )
+
         # Format the results based on filters
         price_averages = []
-        
+
         # Special handling for the "cubanelle/cubanelles" case
-        cubanelle_map = {
-            "cubanelle": "cubanelles",
-            "cubanelles": "cubanelles"
-        }
-        
+        cubanelle_map = {"cubanelle": "cubanelles", "cubanelles": "cubanelles"}
+
         # Standardize commodity names
         for item in raw_data:
-            if item['commodity'] in cubanelle_map:
-                item['commodity'] = cubanelle_map[item['commodity']]
-        
+            if item["commodity"] in cubanelle_map:
+                item["commodity"] = cubanelle_map[item["commodity"]]
+
         # For "both" sources, we need to combine USDA and ProduceIQ
-        if source == 'both':
+        if source == "both":
             # Create a dictionary to combine by commodity (and city if relevant)
             combined_data = {}
-            
-            if city.lower() == 'all cities':
+
+            if city.lower() == "all cities":
                 # Combine by commodity across all cities and both sources
                 for item in raw_data:
-                    commodity = item['commodity']
+                    commodity = item["commodity"]
                     if commodity not in combined_data:
                         combined_data[commodity] = {
-                            'commodity': commodity,
-                            'source': 'U/P',
-                            'sum_price': item['avg_price'],
-                            'count': 1
+                            "commodity": commodity,
+                            "source": "U/P",
+                            "sum_price": item["avg_price"],
+                            "count": 1,
                         }
                     else:
-                        combined_data[commodity]['sum_price'] += item['avg_price']
-                        combined_data[commodity]['count'] += 1
-                
+                        combined_data[commodity]["sum_price"] += item["avg_price"]
+                        combined_data[commodity]["count"] += 1
+
                 # Calculate averages and create the final output
                 for commodity, data in combined_data.items():
-                    price_averages.append({
-                        'commodity': commodity,
-                        'source': 'U/P',
-                        'avg_price': round(data['sum_price'] / data['count'], 2)
-                    })
+                    price_averages.append(
+                        {
+                            "commodity": commodity,
+                            "source": "U/P",
+                            "avg_price": round(data["sum_price"] / data["count"], 2),
+                        }
+                    )
             else:
                 # Combine by commodity and city
                 for item in raw_data:
-                    key = (item['commodity'], item['city'])
+                    key = (item["commodity"], item["city"])
                     if key not in combined_data:
                         combined_data[key] = {
-                            'commodity': item['commodity'],
-                            'city': item['city'],
-                            'source': 'Both',
-                            'sum_price': item['avg_price'],
-                            'count': 1
+                            "commodity": item["commodity"],
+                            "city": item["city"],
+                            "source": "Both",
+                            "sum_price": item["avg_price"],
+                            "count": 1,
                         }
                     else:
-                        combined_data[key]['sum_price'] += item['avg_price']
-                        combined_data[key]['count'] += 1
-                
+                        combined_data[key]["sum_price"] += item["avg_price"]
+                        combined_data[key]["count"] += 1
+
                 # Calculate averages
                 for data in combined_data.values():
-                    price_averages.append({
-                        'commodity': data['commodity'],
-                        'city_name': data['city'],
-                        'source': 'U/P',
-                        'avg_price': round(data['sum_price'] / data['count'], 2)
-                    })
+                    price_averages.append(
+                        {
+                            "commodity": data["commodity"],
+                            "city_name": data["city"],
+                            "source": "U/P",
+                            "avg_price": round(data["sum_price"] / data["count"], 2),
+                        }
+                    )
         else:
             # For single source queries
-            if city.lower() == 'all cities':
+            if city.lower() == "all cities":
                 # Combine by commodity across all cities
                 commodity_data = {}
                 for item in raw_data:
-                    commodity = item['commodity']
+                    commodity = item["commodity"]
                     if commodity not in commodity_data:
                         commodity_data[commodity] = {
-                            'commodity': commodity,
-                            'source': item['source'],
-                            'sum_price': item['avg_price'],
-                            'count': 1
+                            "commodity": commodity,
+                            "source": item["source"],
+                            "sum_price": item["avg_price"],
+                            "count": 1,
                         }
                     else:
-                        commodity_data[commodity]['sum_price'] += item['avg_price']
-                        commodity_data[commodity]['count'] += 1
-                
+                        commodity_data[commodity]["sum_price"] += item["avg_price"]
+                        commodity_data[commodity]["count"] += 1
+
                 # Calculate averages
                 for commodity, data in commodity_data.items():
-                    price_averages.append({
-                        'commodity': commodity,
-                        'source': data['source'],
-                        'avg_price': round(data['sum_price'] / data['count'], 2)
-                    })
+                    price_averages.append(
+                        {
+                            "commodity": commodity,
+                            "source": data["source"],
+                            "avg_price": round(data["sum_price"] / data["count"], 2),
+                        }
+                    )
             else:
                 # Direct mapping for specific city and source
                 for item in raw_data:
-                    price_averages.append({
-                        'commodity': item['commodity'],
-                        'city_name': item['city'],
-                        'source': item['source'],
-                        'avg_price': item['avg_price']
-                    })
-        
+                    price_averages.append(
+                        {
+                            "commodity": item["commodity"],
+                            "city_name": item["city"],
+                            "source": item["source"],
+                            "avg_price": item["avg_price"],
+                        }
+                    )
+
         # Sort results by commodity for consistency
-        price_averages.sort(key=lambda x: x['commodity'])
-        
-        return jsonify({'price_averages': price_averages}), 200
-    
+        price_averages.sort(key=lambda x: x["commodity"])
+
+        return jsonify({"price_averages": price_averages}), 200
+
     except Exception as e:
-        app.logger.error(f'Error fetching price averages: {str(e)}')
-        return jsonify({'error': f'Internal server error: {str(e)}'}), 500
+        app.logger.error(f"Error fetching price averages: {str(e)}")
+        return jsonify({"error": f"Internal server error: {str(e)}"}), 500
+
 
 # API FOR Forecast visual
 @app.route("/api/seasonal_prices", methods=["GET"])
@@ -3823,18 +3938,20 @@ def get_seasonal_prices():
     variety = request.args.get("variety")
     city = request.args.get("city", "All cities")
     start_date_str = request.args.get("start_date")
-    forecast_date_str = request.args.get("forecast_date")  # Added forecast date parameter
-    
+    forecast_date_str = request.args.get(
+        "forecast_date"
+    )  # Added forecast date parameter
+
     # Check if required parameters are missing
     if not variety:
         return jsonify({"error": "Missing variety"}), 400
-        
+
     # Parse dates if provided
     start_date = None
     forecast_date = None
     start_year = None
     start_day = None
-    
+
     if start_date_str:
         try:
             start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
@@ -3842,7 +3959,7 @@ def get_seasonal_prices():
             start_day = start_date.timetuple().tm_yday
         except ValueError:
             return jsonify({"error": "Invalid start date format"}), 400
-            
+
     if forecast_date_str:
         try:
             forecast_date = datetime.strptime(forecast_date_str, "%Y-%m-%d")
@@ -3851,30 +3968,29 @@ def get_seasonal_prices():
 
     # Initialize seasonal_prices dictionary
     seasonal_prices = {"Spring": 0, "Summer": 0, "Autumn": 0, "Winter": 0}
-    
+
     # Loop through each season and calculate the average price
     for season in seasonal_prices.keys():
         # Create a query similar to calculate_forecasted_price
-        query = (
-            db.session.query(PriceData.price)
-            .filter(
-                PriceData.commodity == variety,  # Match the commodity (variety)
-                PriceData.season == season,      # Match the season
-                PriceData.source == "ProduceIQ",
-            )
+        query = db.session.query(PriceData.price).filter(
+            PriceData.commodity == variety,  # Match the commodity (variety)
+            PriceData.season == season,  # Match the season
+            PriceData.source == "ProduceIQ",
         )
-        
+
         # Add date filters if start date is provided
         if start_date:
             query = query.filter(
-                PriceData.year >= start_year,     # Consider data from the start year onward
-                PriceData.day >= start_day,       # Ensure data is after the start date in the year
+                PriceData.year
+                >= start_year,  # Consider data from the start year onward
+                PriceData.day
+                >= start_day,  # Ensure data is after the start date in the year
             )
-        
+
         # Add city filter if provided and not "All cities"
         if city and city != "All cities":
             query = query.filter(PriceData.city_name == city)
-            
+
         # Execute the query
         historical_data = query.all()
 
@@ -3885,12 +4001,13 @@ def get_seasonal_prices():
             seasonal_prices[season] = round(average_price, 2)
         else:
             seasonal_prices[season] = 0.0
-            
+
         # Log for debugging
-        print(f"Season {season} for {variety}, City: {city}, Start: {start_date_str}, Forecast: {forecast_date_str} - Found {len(historical_data)} records, Avg: {seasonal_prices[season]}")
+        print(
+            f"Season {season} for {variety}, City: {city}, Start: {start_date_str}, Forecast: {forecast_date_str} - Found {len(historical_data)} records, Avg: {seasonal_prices[season]}"
+        )
 
     return jsonify(seasonal_prices)
-
 
 
 @app.route("/api/forecast_line_data", methods=["GET"])
@@ -3907,11 +4024,19 @@ def get_forecast_line_data():
         from collections import defaultdict
 
         # ────────── 1. Parse & validate input ──────────
-        commodities = [c.strip() for c in request.args.get("commodities", "").split(",") if c.strip()]
-        cities_raw  = [c.strip() for c in request.args.get("cities", "").split(",") if c.strip()]
-        avg_cities  = request.args.get("averageCities", "false").lower() == "true"
+        commodities = [
+            c.strip()
+            for c in request.args.get("commodities", "").split(",")
+            if c.strip()
+        ]
+        cities_raw = [
+            c.strip() for c in request.args.get("cities", "").split(",") if c.strip()
+        ]
+        avg_cities = request.args.get("averageCities", "false").lower() == "true"
         forecast_years = int(request.args.get("forecastYears", "1"))
-        data_source = request.args.get("source", "ProduceIQ")  # Default to ProduceIQ if not specified
+        data_source = request.args.get(
+            "source", "ProduceIQ"
+        )  # Default to ProduceIQ if not specified
 
         if not commodities:
             return jsonify({"error": "Missing commodities"}), 400
@@ -3923,14 +4048,17 @@ def get_forecast_line_data():
 
         # ────────── 2. Season helpers ──────────
         seasons = ["Winter", "Spring", "Summer", "Autumn"]
-        now     = datetime.now()
+        now = datetime.now()
         current_year = now.year
-        month   = now.month
+        month = now.month
         current_season = (
-            "Spring" if 3 <= month <= 5 else
-            "Summer" if 6 <= month <= 8 else
-            "Autumn" if 9 <= month <= 11 else
-            "Winter"
+            "Spring"
+            if 3 <= month <= 5
+            else (
+                "Summer"
+                if 6 <= month <= 8
+                else "Autumn" if 9 <= month <= 11 else "Winter"
+            )
         )
 
         # Build season labels: current season + forecast_years * 4
@@ -3948,7 +4076,7 @@ def get_forecast_line_data():
             PriceData.commodity.in_(commodities),
             PriceData.year >= current_year - 5,
         ]
-        
+
         # Handle source filtering
         if data_source == "ProduceIQ,USDA" or data_source == "USDA,ProduceIQ":
             # Include both sources
@@ -3956,7 +4084,7 @@ def get_forecast_line_data():
         else:
             # Use specified source
             filters.append(PriceData.source == data_source)
-            
+
         if not avg_cities:
             filters.append(PriceData.city_name.in_(cities))
 
@@ -3984,7 +4112,7 @@ def get_forecast_line_data():
             data[key][r.season][r.year].append(r.price)
 
         # ────────── 4. Seasonal averages (without trend factors) ──────────
-        season_stats = {}     # season_stats[key][season] = {avg_price}
+        season_stats = {}  # season_stats[key][season] = {avg_price}
         seasons_list = seasons  # alias for clarity
         for key, season_dict in data.items():
             season_stats[key] = {}
@@ -4007,7 +4135,7 @@ def get_forecast_line_data():
                 prices = []
                 for label in season_labels:
                     season, yr = label.split()
-                    
+
                     # Calculate average price for this season across all cities
                     # WITHOUT applying any trend factor
                     total, cnt = 0, 0
@@ -4037,7 +4165,7 @@ def get_forecast_line_data():
                 for city in cities:
                     key = f"{commodity}_{city}"
                     prices = []
-                    
+
                     # For each season label, get the corresponding seasonal average
                     # WITHOUT applying any trend factor
                     for label in season_labels:
@@ -4049,7 +4177,9 @@ def get_forecast_line_data():
                             prices.append(0)
 
                     # Include the data source in the label
-                    source_label = "ProduceIQ & USDA" if "," in data_source else data_source
+                    source_label = (
+                        "ProduceIQ & USDA" if "," in data_source else data_source
+                    )
                     result["datasets"].append(
                         {
                             "label": f"{commodity} – {city} ({source_label})",
@@ -4066,7 +4196,7 @@ def get_forecast_line_data():
     except Exception as exc:
         app.logger.error(f"forecast_line_data error: {exc}")
         return jsonify({"error": str(exc)}), 500
-    
+
 
 @app.route("/api/volatility_data", methods=["GET"])
 def get_volatility_data():
@@ -4076,15 +4206,15 @@ def get_volatility_data():
         cities = request.args.get("cities", "").split(",")
         time_frame = request.args.get("timeFrame", "1m")  # Time frame parameter
         data_source = request.args.get("source", "ProduceIQ")  # Data source parameter
-        
+
         # Parse date range parameters
         start_date_str = request.args.get("startDate", "")
         end_date_str = request.args.get("endDate", "")
-        
+
         # Check if commodity or cities are missing or empty
-        if not commodity or not cities or cities[0] == '':
+        if not commodity or not cities or cities[0] == "":
             return jsonify({"error": "Missing commodity or cities"}), 400
-            
+
         # Parse start and end dates
         if start_date_str and end_date_str:
             try:
@@ -4096,37 +4226,36 @@ def get_volatility_data():
             # Default to current year if dates aren't provided
             end_date = datetime.now()
             start_date = datetime(end_date.year, 1, 1)  # January 1st of current year
-            
+
         # Convert time frame to number of days
         days_to_fetch = 30  # Default to 1m
-        if time_frame == '1d':
+        if time_frame == "1d":
             days_to_fetch = 1
-        elif time_frame == '3d':
+        elif time_frame == "3d":
             days_to_fetch = 3
-        elif time_frame == '7d':
+        elif time_frame == "7d":
             days_to_fetch = 7
-        elif time_frame == '14d':
+        elif time_frame == "14d":
             days_to_fetch = 14
         # 1m is default 30 days
-        
+
         # Define result structure
-        result = {
-            "labels": [],
-            "datasets": []
-        }
-        
+        result = {"labels": [], "datasets": []}
+
         # Calculate the number of intervals based on date range and time frame
         # This determines how many candlesticks we'll have
         date_delta = (end_date - start_date).days + 1
-        
+
         # For short time frames with few intervals, we'll show detailed labels
-        if time_frame in ['1d', '3d', '7d']:
+        if time_frame in ["1d", "3d", "7d"]:
             # Generate daily labels based on date range
             if date_delta <= 90:  # If less than 3 months, show daily dates
                 current_date = start_date
                 labels = []
                 while current_date <= end_date:
-                    labels.append(current_date.strftime("%b %d"))  # Format like "Apr 18"
+                    labels.append(
+                        current_date.strftime("%b %d")
+                    )  # Format like "Apr 18"
                     current_date += timedelta(days=1)
                 result["labels"] = labels
             else:
@@ -4135,68 +4264,78 @@ def get_volatility_data():
                 num_intervals = max(1, date_delta // days_to_fetch)
                 current_date = start_date
                 labels = []
-                
+
                 for i in range(num_intervals):
-                    interval_end = min(current_date + timedelta(days=days_to_fetch - 1), end_date)
+                    interval_end = min(
+                        current_date + timedelta(days=days_to_fetch - 1), end_date
+                    )
                     label = f"{current_date.strftime('%b %d')} - {interval_end.strftime('%b %d')}"
                     labels.append(label)
                     current_date += timedelta(days=days_to_fetch)
                     if current_date > end_date:
                         break
-                        
+
                 result["labels"] = labels
 
-        elif time_frame == '14d':
+        elif time_frame == "14d":
             # For 14-day intervals, create bi-weekly labels
             # Calculate how many 14-day periods fit in the date range
             num_intervals = max(1, date_delta // 14)
             current_date = start_date
             labels = []
-            
+
             for i in range(num_intervals):
-                interval_end = min(current_date + timedelta(days=13), end_date)  # 14 days including start date
+                interval_end = min(
+                    current_date + timedelta(days=13), end_date
+                )  # 14 days including start date
                 label = f"{current_date.strftime('%b %d')} - {interval_end.strftime('%b %d')}"
                 labels.append(label)
                 current_date += timedelta(days=14)
                 if current_date > end_date:
                     break
-                    
+
             result["labels"] = labels
-                
-        elif time_frame == '1m':
+
+        elif time_frame == "1m":
             # For monthly view, group by months
             months_data = {}
             current_date = start_date
             labels = []
-            
+
             # Generate month labels
             while current_date <= end_date:
                 month_key = current_date.strftime("%Y-%m")
                 month_label = current_date.strftime("%B %Y")
-                
+
                 if month_key not in months_data:
                     months_data[month_key] = {"label": month_label}
                     labels.append(month_label)
-                    
+
                 current_date += timedelta(days=1)
                 # If we've moved to a new month, update current_date to first day of that month
                 if current_date.day == 1:
                     pass  # Already at the first day of a month
-                
+
             result["labels"] = labels
-        
+
         # Fetch price range data (min/max/open/close) for the selected commodity, across cities
         price_range_data = calculate_price_range_for_timeframe(
-            commodity, cities, start_date, end_date, time_frame, days_to_fetch, data_source
+            commodity,
+            cities,
+            start_date,
+            end_date,
+            time_frame,
+            days_to_fetch,
+            data_source,
         )
-            
+
         # Colors for the dataset
         colors = ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40"]
         color_index = 0
-        
+
         # Include source in the label
         source_label = "ProduceIQ & USDA" if "," in data_source else data_source
-        
+
         # Create dataset for this commodity's minimum prices
         min_dataset = {
             "label": f"{commodity} - Min Price ({source_label})",
@@ -4206,23 +4345,24 @@ def get_volatility_data():
             "borderWidth": 2,
             "borderDash": [],
             "pointRadius": 3,
-            "fill": 'false',
-            "type": "line"
+            "fill": "false",
+            "type": "line",
         }
-        
+
         # Create dataset for this commodity's maximum prices
         max_dataset = {
             "label": f"{commodity} - Max Price ({source_label})",
             "data": price_range_data.get("max", [0] * len(result["labels"])),
             "borderColor": colors[color_index % len(colors)],
-            "backgroundColor": colors[color_index % len(colors)] + "33",  # Add transparency
+            "backgroundColor": colors[color_index % len(colors)]
+            + "33",  # Add transparency
             "borderWidth": 2,
             "borderDash": [],
             "pointRadius": 3,
             "fill": "-1",  # Fill to previous dataset (min price)
-            "type": "line"
+            "type": "line",
         }
-        
+
         # Create datasets for opening and closing prices (needed for candlestick)
         open_dataset = {
             "label": f"{commodity} - Open Price ({source_label})",
@@ -4231,9 +4371,9 @@ def get_volatility_data():
             "borderColor": "transparent",
             "backgroundColor": "transparent",
             "pointRadius": 0,
-            "fill": 'false'
+            "fill": "false",
         }
-        
+
         close_dataset = {
             "label": f"{commodity} - Close Price ({source_label})",
             "data": price_range_data.get("close", [0] * len(result["labels"])),
@@ -4241,49 +4381,58 @@ def get_volatility_data():
             "borderColor": "transparent",
             "backgroundColor": "transparent",
             "pointRadius": 0,
-            "fill": 'false'
+            "fill": "false",
         }
-        
+
         # Add datasets to result
         result["datasets"].append(min_dataset)
         result["datasets"].append(max_dataset)
         result["datasets"].append(open_dataset)
         result["datasets"].append(close_dataset)
-        
+
         # Get the latest price data
         latest_price_data = get_latest_price(commodity, cities, data_source)
-        
+
         # Add it to the result dictionary
         result["latest_price"] = latest_price_data
-        
+
         return jsonify(result)
-        
+
     except Exception as e:
         app.logger.error(f"Error in price range data: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-def calculate_price_range_for_timeframe(commodity, cities, start_date, end_date, time_frame, days_to_fetch, data_source="ProduceIQ"):
+
+def calculate_price_range_for_timeframe(
+    commodity,
+    cities,
+    start_date,
+    end_date,
+    time_frame,
+    days_to_fetch,
+    data_source="ProduceIQ",
+):
     """
     Calculate price ranges (min, max, open, close) for the selected commodity,
     aggregated across all selected cities, using the same averaging approach as historical_data.
     """
     try:
         from collections import defaultdict
-        
+
         result = {
             "min": [],
             "max": [],
             "open": [],  # First price in the period
-            "close": []  # Last price in the period
+            "close": [],  # Last price in the period
         }
-        
+
         # Convert dates to days of year for filtering
         start_year = start_date.year
         end_year = end_date.year
-        
+
         start_day_of_year = start_date.timetuple().tm_yday
         end_day_of_year = end_date.timetuple().tm_yday
-        
+
         # Handle source filtering
         if data_source == "ProduceIQ,USDA" or data_source == "USDA,ProduceIQ":
             # Include both sources
@@ -4291,152 +4440,159 @@ def calculate_price_range_for_timeframe(commodity, cities, start_date, end_date,
         else:
             # Use specified source
             source_filter = PriceData.source == data_source
-        
+
         # Query conditions to filter by date range
         query_conditions = [
             PriceData.commodity == commodity,
             PriceData.city_name.in_(cities),
-            source_filter
+            source_filter,
         ]
-        
+
         # Handle date range query differently depending on if it spans multiple years
         if start_year == end_year:
             # Single year query
-            query_conditions.extend([
-                PriceData.year == start_year,
-                PriceData.day >= start_day_of_year,
-                PriceData.day <= end_day_of_year
-            ])
-            
-            all_data = db.session.query(
-                PriceData.day,
-                PriceData.price,
-                PriceData.year,
-                PriceData.city_name
-            ).filter(*query_conditions).all()
-            
+            query_conditions.extend(
+                [
+                    PriceData.year == start_year,
+                    PriceData.day >= start_day_of_year,
+                    PriceData.day <= end_day_of_year,
+                ]
+            )
+
+            all_data = (
+                db.session.query(
+                    PriceData.day, PriceData.price, PriceData.year, PriceData.city_name
+                )
+                .filter(*query_conditions)
+                .all()
+            )
+
         else:
             # Multi-year query (need to handle each year separately)
             # First year: from start_day to end of year
             first_year_conditions = query_conditions.copy()
-            first_year_conditions.extend([
-                PriceData.year == start_year,
-                PriceData.day >= start_day_of_year
-            ])
-            
+            first_year_conditions.extend(
+                [PriceData.year == start_year, PriceData.day >= start_day_of_year]
+            )
+
             # Last year: from beginning of year to end_day
             last_year_conditions = query_conditions.copy()
-            last_year_conditions.extend([
-                PriceData.year == end_year,
-                PriceData.day <= end_day_of_year
-            ])
-            
+            last_year_conditions.extend(
+                [PriceData.year == end_year, PriceData.day <= end_day_of_year]
+            )
+
             # Middle years (if any): entire years
             middle_years = list(range(start_year + 1, end_year))
             middle_year_data = []
-            
+
             if middle_years:
                 middle_year_conditions = query_conditions.copy()
                 middle_year_conditions.append(PriceData.year.in_(middle_years))
-                middle_year_data = db.session.query(
-                    PriceData.day,
-                    PriceData.price,
-                    PriceData.year,
-                    PriceData.city_name
-                ).filter(*middle_year_conditions).all()
-            
+                middle_year_data = (
+                    db.session.query(
+                        PriceData.day,
+                        PriceData.price,
+                        PriceData.year,
+                        PriceData.city_name,
+                    )
+                    .filter(*middle_year_conditions)
+                    .all()
+                )
+
             # Query for first and last year data
-            first_year_data = db.session.query(
-                PriceData.day,
-                PriceData.price,
-                PriceData.year,
-                PriceData.city_name
-            ).filter(*first_year_conditions).all()
-            
-            last_year_data = db.session.query(
-                PriceData.day,
-                PriceData.price,
-                PriceData.year,
-                PriceData.city_name
-            ).filter(*last_year_conditions).all()
-            
+            first_year_data = (
+                db.session.query(
+                    PriceData.day, PriceData.price, PriceData.year, PriceData.city_name
+                )
+                .filter(*first_year_conditions)
+                .all()
+            )
+
+            last_year_data = (
+                db.session.query(
+                    PriceData.day, PriceData.price, PriceData.year, PriceData.city_name
+                )
+                .filter(*last_year_conditions)
+                .all()
+            )
+
             # Combine all the data
             all_data = first_year_data + middle_year_data + last_year_data
-        
+
         # First, average data by day and city (just like in historical_data)
         daily_city_data = {}
-        
+
         for row in all_data:
             # Create a date object for this data point
             row_date = datetime(row.year, 1, 1) + timedelta(days=row.day - 1)
             date_key = row_date.strftime("%Y-%m-%d")
             city_key = row.city_name
-            
+
             # Create compound key for date+city
             compound_key = f"{date_key}_{city_key}"
-            
+
             # Initialize the structure for this date+city if it doesn't exist
             if compound_key not in daily_city_data:
                 daily_city_data[compound_key] = {
-                    "sum": 0, 
-                    "count": 0, 
+                    "sum": 0,
+                    "count": 0,
                     "date": row_date,
-                    "city": city_key
+                    "city": city_key,
                 }
-            
+
             # Sum up prices and count entries for this date+city
             daily_city_data[compound_key]["sum"] += row.price
             daily_city_data[compound_key]["count"] += 1
-        
+
         # Then average across cities for each day
         daily_avg_data = {}
-        
+
         for key, data in daily_city_data.items():
             date_str = data["date"].strftime("%Y-%m-%d")
-            
+
             if date_str not in daily_avg_data:
                 daily_avg_data[date_str] = {"sum": 0, "count": 0, "date": data["date"]}
-            
+
             # Add the city average to the daily total
             city_avg = data["sum"] / data["count"]
             daily_avg_data[date_str]["sum"] += city_avg
             daily_avg_data[date_str]["count"] += 1
-        
+
         # Convert daily averages to date-price pairs
         daily_data = []
         for date_str, data in daily_avg_data.items():
             if data["count"] > 0:  # Ensure we have data for this day
                 avg_price = data["sum"] / data["count"]
                 daily_data.append((data["date"], avg_price))
-        
+
         # Sort by date
         daily_data.sort(key=lambda x: x[0])
-        
+
         # Process based on time frame
-        if time_frame == '1m':
+        if time_frame == "1m":
             # Group by month
             data_by_month = defaultdict(list)
             data_by_month_with_dates = defaultdict(list)
-            
+
             for date, price in daily_data:
                 month_key = date.strftime("%Y-%m")
                 data_by_month[month_key].append(price)
                 data_by_month_with_dates[month_key].append((date, price))
-            
+
             # Sort months chronologically
             sorted_months = sorted(data_by_month.keys())
-            
+
             # Calculate min, max, open, and close for each month
             for month in sorted_months:
                 prices = data_by_month[month]
                 date_price_pairs = data_by_month_with_dates[month]
-                
+
                 if prices:
                     # Sort by date to determine open (first) and close (last)
                     date_price_pairs.sort(key=lambda x: x[0])
                     open_price = date_price_pairs[0][1]  # First price in month
                     close_price = date_price_pairs[-1][1]  # Last price in month
-                    
+
                     result["min"].append(round(min(prices), 2))
                     result["max"].append(round(max(prices), 2))
                     result["open"].append(round(open_price, 2))
@@ -4449,43 +4605,47 @@ def calculate_price_range_for_timeframe(commodity, cities, start_date, end_date,
         else:
             # For other time frames, group by the specified interval
             # Convert all data to actual dates for easier grouping
-            
+
             # Group data into intervals based on time_frame
             interval_data = defaultdict(list)
-            
+
             current_interval_start = start_date
             interval_index = 0
-            
+
             # Store data by interval with date info for sorting
             interval_data_with_dates = defaultdict(list)
-            
+
             for date, price in daily_data:
                 # Check if this data point belongs to current interval or we need to move to next interval
                 while date > current_interval_start + timedelta(days=days_to_fetch - 1):
                     # Move to next interval
                     current_interval_start += timedelta(days=days_to_fetch)
                     interval_index += 1
-                    
+
                     # If we've moved past the end date, break
                     if current_interval_start > end_date:
                         break
-                        
+
                 # If date is within current interval, add the price
-                if current_interval_start <= date <= current_interval_start + timedelta(days=days_to_fetch - 1):
+                if (
+                    current_interval_start
+                    <= date
+                    <= current_interval_start + timedelta(days=days_to_fetch - 1)
+                ):
                     interval_data[interval_index].append(price)
                     interval_data_with_dates[interval_index].append((date, price))
-            
+
             # Calculate min, max, open, and close for each interval
             for i in range(len(interval_data)):
                 prices = interval_data.get(i, [])
                 date_price_pairs = interval_data_with_dates.get(i, [])
-                
+
                 if prices:
                     # Sort by date to determine open (first) and close (last)
                     date_price_pairs.sort(key=lambda x: x[0])
                     open_price = date_price_pairs[0][1]  # First price in interval
                     close_price = date_price_pairs[-1][1]  # Last price in interval
-                    
+
                     result["min"].append(round(min(prices), 2))
                     result["max"].append(round(max(prices), 2))
                     result["open"].append(round(open_price, 2))
@@ -4495,12 +4655,13 @@ def calculate_price_range_for_timeframe(commodity, cities, start_date, end_date,
                     result["max"].append(0)
                     result["open"].append(0)
                     result["close"].append(0)
-        
+
         return result
 
     except Exception as e:
         app.logger.error(f"Error calculating price ranges: {str(e)}")
         return {"min": [], "max": [], "open": [], "close": []}
+
 
 def get_latest_price(commodity, cities, data_source="ProduceIQ"):
     """
@@ -4514,44 +4675,38 @@ def get_latest_price(commodity, cities, data_source="ProduceIQ"):
         else:
             # Use specified source
             source_filter = PriceData.source == data_source
-            
+
         # Simple query to get the latest price
-        latest_price_query = db.session.query(
-            PriceData.price,
-            PriceData.year, 
-            PriceData.day
-        ).filter(
-            PriceData.commodity == commodity,
-            PriceData.city_name.in_(cities),
-            source_filter
-        ).order_by(
-            PriceData.year.desc(),
-            PriceData.day.desc()
-        ).first()
-        
+        latest_price_query = (
+            db.session.query(PriceData.price, PriceData.year, PriceData.day)
+            .filter(
+                PriceData.commodity == commodity,
+                PriceData.city_name.in_(cities),
+                source_filter,
+            )
+            .order_by(PriceData.year.desc(), PriceData.day.desc())
+            .first()
+        )
+
         if not latest_price_query:
-            return {
-                "price": 0,
-                "date": None
-            }
-        
+            return {"price": 0, "date": None}
+
         # Calculate the date
-        latest_date = datetime(latest_price_query.year, 1, 1) + timedelta(days=latest_price_query.day - 1)
-        
+        latest_date = datetime(latest_price_query.year, 1, 1) + timedelta(
+            days=latest_price_query.day - 1
+        )
+
         # Format the result
         result = {
             "price": round(latest_price_query.price, 2),
-            "date": latest_date.strftime("%b %d, %Y")
+            "date": latest_date.strftime("%b %d, %Y"),
         }
-        
+
         return result
-        
+
     except Exception as e:
         app.logger.error(f"Error getting latest price: {str(e)}")
-        return {
-            "price": 0,
-            "date": None
-        }
+        return {"price": 0, "date": None}
 
 
 # Helper function to get the first and last day of a month
@@ -4562,24 +4717,21 @@ def get_month_day_range(month, year):
     # First day of the month
     first_day = datetime(year, month, 1)
     first_day_of_year = first_day.timetuple().tm_yday
-    
+
     # Last day of the month (first day of next month - 1 day)
     if month == 12:
         last_day = datetime(year + 1, 1, 1) - timedelta(days=1)
     else:
         last_day = datetime(year, month + 1, 1) - timedelta(days=1)
-        
+
     last_day_of_year = last_day.timetuple().tm_yday
-    
+
     return first_day_of_year, last_day_of_year
 
 
-
-
-
-    
 # Existing calculate_forecast helper functions can be reused
 from sqlalchemy import desc
+
 
 @app.route("/api/break_even/save", methods=["POST"])
 def save_break_even_estimation():
@@ -4588,7 +4740,7 @@ def save_break_even_estimation():
     Uses the same data from calculate_forecast and adds additional fields
     """
     data = request.json
-    
+
     try:
         # Extract all fields from the request
         variety = data.get("variety")
@@ -4604,43 +4756,58 @@ def save_break_even_estimation():
         end_date_range_str = data.get("end_date_range")
         source = data.get("source", "ProduceIQ")
 
-        
         # Validate required fields
-        if not all([
-            variety, city, start_date_str, forecast_date_str, yield_per_acre, 
-            start_date_range_str, end_date_range_str
-        ]):
+        if not all(
+            [
+                variety,
+                city,
+                start_date_str,
+                forecast_date_str,
+                yield_per_acre,
+                start_date_range_str,
+                end_date_range_str,
+            ]
+        ):
             return jsonify({"error": "Missing required fields"}), 400
-        
+
         # Convert string dates to datetime objects
         start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
         forecast_date = datetime.strptime(forecast_date_str, "%Y-%m-%d")
         start_date_range = datetime.strptime(start_date_range_str, "%Y-%m-%d")
         end_date_range = datetime.strptime(end_date_range_str, "%Y-%m-%d")
-        
+
         # Convert numeric fields to float
         yield_per_acre = float(yield_per_acre)
         cost_per_acre = float(cost_per_acre)
         harvest_cost_per_box = float(harvest_cost_per_box)
         cost_of_box = float(cost_of_box)
         boxes_bonus_per_yield = float(boxes_bonus_per_yield)
-        
+
         # Calculate forecasted price using the same function as the forecast component
-        forecasted_price = calculate_forecasted_price(variety, start_date, forecast_date, city, source)
+        forecasted_price = calculate_forecasted_price(
+            variety, start_date, forecast_date, city, source
+        )
         revenue_per_acre = forecasted_price * yield_per_acre
-        
+
         # Calculate total costs
-        total_costs = cost_per_acre + (harvest_cost_per_box * yield_per_acre) + (cost_of_box * yield_per_acre) + boxes_bonus_per_yield
-        
+        total_costs = (
+            cost_per_acre
+            + (harvest_cost_per_box * yield_per_acre)
+            + (cost_of_box * yield_per_acre)
+            + boxes_bonus_per_yield
+        )
+
         # Calculate revenue after costs
         revenue_after_costs = revenue_per_acre - total_costs
-        
+
         # Determine season
         season = determine_season_for_dashboard(forecast_date)
-        
+
         # Calculate revenue per box
-        revenue_per_box = revenue_after_costs / yield_per_acre if yield_per_acre > 0 else 0
-        
+        revenue_per_box = (
+            revenue_after_costs / yield_per_acre if yield_per_acre > 0 else 0
+        )
+
         # Create new BreakEvenEstimation instance
         estimation = BreakEvenEstimation(
             variety=variety,
@@ -4659,24 +4826,28 @@ def save_break_even_estimation():
             revenue_after_costs=revenue_after_costs,
             revenue_per_box=revenue_per_box,
             season=season,
-            source=source  # Add this line (requires DB model update)
-
+            source=source,  # Add this line (requires DB model update)
         )
-        
+
         db.session.add(estimation)
         db.session.commit()
-        
-        return jsonify({
-            "id": estimation.id,
-            "message": "Break-even estimation saved successfully"
-        }), 201
-        
+
+        return (
+            jsonify(
+                {
+                    "id": estimation.id,
+                    "message": "Break-even estimation saved successfully",
+                }
+            ),
+            201,
+        )
+
     except ValueError as e:
         return jsonify({"error": f"Invalid data: {str(e)}"}), 400
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": f"Failed to save estimation: {str(e)}"}), 500
-    
+
 
 @app.route("/api/break_even", methods=["GET"])
 def get_break_even_estimations():
@@ -4684,37 +4855,42 @@ def get_break_even_estimations():
     try:
         # Always bypass cache for this route
         print(f"Fetching fresh break-even estimations for route: {request.path}")
-        
+
         # Query all estimations, ordered by creation date (newest first)
-        estimations = BreakEvenEstimation.query.order_by(desc(BreakEvenEstimation.created_at)).all()
-        
+        estimations = BreakEvenEstimation.query.order_by(
+            desc(BreakEvenEstimation.created_at)
+        ).all()
+
         # Convert to dictionaries for JSON response
         result = [estimation.to_dict() for estimation in estimations]
-        
+
         # Completely remove any cached data
         cache.clear()  # This clears the entire cache
-        
+
         # Create response with aggressive no-cache headers
         response = jsonify(result)
-        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0, s-maxage=0, proxy-revalidate'
-        response.headers['Pragma'] = 'no-cache'
-        response.headers['Expires'] = '0'
-        response.headers['X-Accel-Expires'] = '0'  # Nginx cache control
-        
+        response.headers["Cache-Control"] = (
+            "no-store, no-cache, must-revalidate, max-age=0, s-maxage=0, proxy-revalidate"
+        )
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        response.headers["X-Accel-Expires"] = "0"  # Nginx cache control
+
         return response, 200
-    
+
     except Exception as e:
         print(f"Error fetching break-even estimations: {str(e)}")
-        
-        response = jsonify({
-            "error": "Failed to retrieve break-even estimations",
-            "details": str(e)
-        })
-        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0, s-maxage=0, proxy-revalidate'
-        response.headers['Pragma'] = 'no-cache'
-        response.headers['Expires'] = '0'
-        response.headers['X-Accel-Expires'] = '0'
-        
+
+        response = jsonify(
+            {"error": "Failed to retrieve break-even estimations", "details": str(e)}
+        )
+        response.headers["Cache-Control"] = (
+            "no-store, no-cache, must-revalidate, max-age=0, s-maxage=0, proxy-revalidate"
+        )
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        response.headers["X-Accel-Expires"] = "0"
+
         return response, 500
 
 
@@ -4724,13 +4900,14 @@ def get_break_even_estimation(estimation_id):
     try:
         # Query the estimation by ID
         estimation = BreakEvenEstimation.query.filter_by(id=estimation_id).first()
-        
+
         if not estimation:
             return jsonify({"error": "Estimation not found"}), 404
-        
+
         return jsonify(estimation.to_dict()), 200
     except Exception as e:
         return jsonify({"error": f"Failed to retrieve estimation: {str(e)}"}), 500
+
 
 @app.route("/api/break_even/<int:estimation_id>", methods=["DELETE"])
 def delete_break_even_estimation(estimation_id):
@@ -4738,31 +4915,32 @@ def delete_break_even_estimation(estimation_id):
     try:
         # Query the estimation by ID
         estimation = BreakEvenEstimation.query.filter_by(id=estimation_id).first()
-        
+
         if not estimation:
             return jsonify({"error": "Estimation not found"}), 404
-        
+
         # Delete the estimation
         db.session.delete(estimation)
         db.session.commit()
-        
+
         return jsonify({"message": "Estimation deleted successfully"}), 200
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": f"Failed to delete estimation: {str(e)}"}), 500
 
+
 @app.route("/api/break_even/<int:estimation_id>", methods=["PUT"])
 def update_break_even_estimation(estimation_id):
     """Update an existing break-even estimation"""
     data = request.json
-    
+
     try:
         # Query the estimation by ID
         estimation = BreakEvenEstimation.query.filter_by(id=estimation_id).first()
-        
+
         if not estimation:
             return jsonify({"error": "Estimation not found"}), 404
-        
+
         # Update fields if provided
         if "variety" in data:
             estimation.variety = data["variety"]
@@ -4771,7 +4949,9 @@ def update_break_even_estimation(estimation_id):
         if "start_date" in data:
             estimation.start_date = datetime.strptime(data["start_date"], "%Y-%m-%d")
         if "forecast_date" in data:
-            estimation.forecast_date = datetime.strptime(data["forecast_date"], "%Y-%m-%d")
+            estimation.forecast_date = datetime.strptime(
+                data["forecast_date"], "%Y-%m-%d"
+            )
         if "yield_per_acre" in data:
             estimation.yield_per_acre = float(data["yield_per_acre"])
         if "cost_per_acre" in data:
@@ -4783,49 +4963,72 @@ def update_break_even_estimation(estimation_id):
         if "boxes_bonus_per_yield" in data:
             estimation.boxes_bonus_per_yield = float(data["boxes_bonus_per_yield"])
         if "start_date_range" in data:
-            estimation.start_date_range = datetime.strptime(data["start_date_range"], "%Y-%m-%d")
+            estimation.start_date_range = datetime.strptime(
+                data["start_date_range"], "%Y-%m-%d"
+            )
         if "end_date_range" in data:
-            estimation.end_date_range = datetime.strptime(data["end_date_range"], "%Y-%m-%d")
-        
+            estimation.end_date_range = datetime.strptime(
+                data["end_date_range"], "%Y-%m-%d"
+            )
+
         # Recalculate derived fields if any inputs changed
-        if any(key in data for key in [
-            "variety", "city", "start_date", "forecast_date", "yield_per_acre", 
-            "cost_per_acre", "harvest_cost_per_box", "cost_of_box", "boxes_bonus_per_yield"
-        ]):
+        if any(
+            key in data
+            for key in [
+                "variety",
+                "city",
+                "start_date",
+                "forecast_date",
+                "yield_per_acre",
+                "cost_per_acre",
+                "harvest_cost_per_box",
+                "cost_of_box",
+                "boxes_bonus_per_yield",
+            ]
+        ):
             # Recalculate using the same function as the forecast component
             forecasted_price = calculate_forecasted_price(
-                estimation.variety, 
-                estimation.start_date, 
-                estimation.forecast_date, 
-                estimation.city
+                estimation.variety,
+                estimation.start_date,
+                estimation.forecast_date,
+                estimation.city,
             )
-            
+
             # Update the estimation fields
             estimation.forecasted_price = forecasted_price
             estimation.revenue_per_acre = forecasted_price * estimation.yield_per_acre
-            
+
             # Recalculate total costs
-            total_costs = estimation.cost_per_acre + \
-                         (estimation.harvest_cost_per_box * estimation.yield_per_acre) + \
-                         (estimation.cost_of_box * estimation.yield_per_acre) + \
-                         estimation.boxes_bonus_per_yield
-            
+            total_costs = (
+                estimation.cost_per_acre
+                + (estimation.harvest_cost_per_box * estimation.yield_per_acre)
+                + (estimation.cost_of_box * estimation.yield_per_acre)
+                + estimation.boxes_bonus_per_yield
+            )
+
             # Update revenue after costs
             estimation.revenue_after_costs = estimation.revenue_per_acre - total_costs
-            
+
             # Update season
             estimation.season = determine_season_for_dashboard(estimation.forecast_date)
-            
+
             # Recalculate revenue per box
             if estimation.yield_per_acre > 0:
-                estimation.revenue_per_box = estimation.revenue_after_costs / estimation.yield_per_acre
-        
+                estimation.revenue_per_box = (
+                    estimation.revenue_after_costs / estimation.yield_per_acre
+                )
+
         db.session.commit()
-        
-        return jsonify({
-            "message": "Estimation updated successfully",
-            "estimation": estimation.to_dict()
-        }), 200
+
+        return (
+            jsonify(
+                {
+                    "message": "Estimation updated successfully",
+                    "estimation": estimation.to_dict(),
+                }
+            ),
+            200,
+        )
     except ValueError as e:
         return jsonify({"error": f"Invalid data: {str(e)}"}), 400
     except Exception as e:
@@ -4844,65 +5047,66 @@ def get_break_even_chart_data():
         variety = request.args.get("variety")
         city = request.args.get("city")
         start_date_str = request.args.get("start_date")
-        current_date_str = request.args.get("current_date", datetime.now().strftime("%Y-%m-%d"))
+        current_date_str = request.args.get(
+            "current_date", datetime.now().strftime("%Y-%m-%d")
+        )
         forecast_date_str = request.args.get("forecast_date")
         is_all_cities = request.args.get("is_all_cities") == "true"
         data_source = request.args.get("source", "ProduceIQ")  # Add this line
 
-        
         # Validate required parameters
         if not variety or not start_date_str:
             return jsonify({"error": "Missing required parameters"}), 400
-            
+
         # Parse dates
         start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
         current_date = datetime.strptime(current_date_str, "%Y-%m-%d")
-        
+
         # If forecast date is provided, use it; otherwise default to current_date + 1 year
         if forecast_date_str:
             forecast_date = datetime.strptime(forecast_date_str, "%Y-%m-%d")
         else:
             forecast_date = current_date + timedelta(days=365)
-        
+
         # Handle "All Cities" case
         if is_all_cities or city == "All Cities":
             city = "All cities"
-        
+
         # Initialize result structure
-        result = {
-            "labels": [],
-            "datasets": []
-        }
-        
+        result = {"labels": [], "datasets": []}
+
         # Define seasons and determine current season
         seasons = ["Winter", "Spring", "Summer", "Autumn"]
-        
+
         month = current_date.month
         current_season = (
-            "Spring" if 3 <= month <= 5 else
-            "Summer" if 6 <= month <= 8 else
-            "Autumn" if 9 <= month <= 11 else
-            "Winter"
+            "Spring"
+            if 3 <= month <= 5
+            else (
+                "Summer"
+                if 6 <= month <= 8
+                else "Autumn" if 9 <= month <= 11 else "Winter"
+            )
         )
-        
+
         current_season_index = seasons.index(current_season)
         current_year = current_date.year
-        
+
         # Generate labels for 1 year forward (4 seasons) starting from current season
         labels = []
         for i in range(4):
             season_index = (current_season_index + i) % 4
             year = current_year + ((current_season_index + i) // 4)
             labels.append(f"{seasons[season_index]} {year}")
-        
+
         result["labels"] = labels
-        
+
         # Calculate prices for each season
         prices = []
         for label in labels:
             season, year = label.split()
             year = int(year)
-            
+
             # Calculate the middle date of this season
             if season == "Spring":
                 month = 4  # April
@@ -4912,43 +5116,45 @@ def get_break_even_chart_data():
                 month = 10  # October
             else:  # Winter
                 month = 1  # January
-                
+
             # Middle of the month
             day = 15
-            
+
             # Create forecast date for this season
             season_date = datetime(year, month, day)
-            
+
             # Use the calculate_forecasted_price function with historical data
             # start_date is the historical starting point, season_date is the future date to predict
-            price = calculate_forecasted_price(variety, start_date, season_date, city, data_source)
+            price = calculate_forecasted_price(
+                variety, start_date, season_date, city, data_source
+            )
             prices.append(round(price, 2))
-        
+
         # Add dataset for the variety
         source_label = "ProduceIQ & USDA" if "," in data_source else data_source
-        result["datasets"] = [{
-            "label": f"{variety} Forecast Price ({source_label})",
-            "data": prices,
-            "borderColor": "#FF6384",
-            "backgroundColor": "#FF6384",
-            "borderWidth": 2,
-            "pointRadius": 3,
-            "pointHoverRadius": 5,
-            "tension": 0.1,
-            "fill": 'false',
-            "borderDash": [5, 5]
-        }]
-        
+        result["datasets"] = [
+            {
+                "label": f"{variety} Forecast Price ({source_label})",
+                "data": prices,
+                "borderColor": "#FF6384",
+                "backgroundColor": "#FF6384",
+                "borderWidth": 2,
+                "pointRadius": 3,
+                "pointHoverRadius": 5,
+                "tension": 0.1,
+                "fill": "false",
+                "borderDash": [5, 5],
+            }
+        ]
+
         return jsonify(result)
-        
+
     except Exception as e:
         app.logger.error(f"Break-even chart data error: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 
-
-
-@app.route('/api/commodities', methods=['GET'])
+@app.route("/api/commodities", methods=["GET"])
 # @jwt_required()
 def get_commodities():
     """Get list of available commodities."""
@@ -4956,35 +5162,35 @@ def get_commodities():
         # Get unique commodity names from price data
         commodities = db.session.query(PriceData.commodity).distinct().all()
         commodity_list = [commodity[0] for commodity in commodities]
-        
+
         # Standardize commodity names
         standardized_commodities = []
         for commodity in commodity_list:
             # Handle the specific case of Cubanelle/Cubanelles
-            if commodity.lower() in ['cubanelle', 'cubanelles']:
-                if 'Cubanelles' not in standardized_commodities:
-                    standardized_commodities.append('Cubanelles')
+            if commodity.lower() in ["cubanelle", "cubanelles"]:
+                if "Cubanelles" not in standardized_commodities:
+                    standardized_commodities.append("Cubanelles")
             else:
                 standardized_commodities.append(commodity)
-        
+
         return jsonify(sorted(standardized_commodities))
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
-
 
 
 # A function to check whether the current route should be cached
 def should_cache_route():
-    return request.path not in app.config['CACHE_NO_CACHE_ROUTES']
+    return request.path not in app.config["CACHE_NO_CACHE_ROUTES"]
+
 
 # Update your caching logic in the relevant routes:
+
 
 @app.route("/api/harvest_planning", methods=["POST"])
 def harvest_planning():
     try:
         from collections import defaultdict
-        
+
         payload = request.json
         if not payload or "varieties" not in payload:
             return jsonify({"error": "Missing varieties data"}), 400
@@ -4992,24 +5198,32 @@ def harvest_planning():
         result = []
         now = datetime.now()
         current_year = now.year
-        
+
         seasons = ["Winter", "Spring", "Summer", "Autumn"]
         season_month_map = {"Winter": 1, "Spring": 4, "Summer": 7, "Autumn": 10}
-        
+
         # Process each variety separately to match forecast_line_data exactly
         for variety in payload["varieties"]:
             # Validate required fields
-            required_fields = ["name", "plantingDate", "growingDays", "harvestPeriod", "sellingPeriod"]
+            required_fields = [
+                "name",
+                "plantingDate",
+                "growingDays",
+                "harvestPeriod",
+                "sellingPeriod",
+            ]
             for f in required_fields:
                 if f not in variety:
                     return jsonify({"error": f"Missing field {f}"}), 400
 
             # Parse dates
-            plant = datetime.fromisoformat(variety["plantingDate"].replace("Z","+00:00"))
+            plant = datetime.fromisoformat(
+                variety["plantingDate"].replace("Z", "+00:00")
+            )
             grow_days = int(variety["growingDays"])
             harvest_period = int(variety["harvestPeriod"])
             selling_period = int(variety["sellingPeriod"])
-            
+
             # Calculate dates
             harvest_start = plant + timedelta(days=grow_days)
             harvest_end = harvest_start + timedelta(days=harvest_period * 30)
@@ -5017,33 +5231,33 @@ def harvest_planning():
             selling_end = selling_start + timedelta(days=selling_period * 30)
 
             commodity = variety["name"]
-            market = variety.get("market","").strip()
+            market = variety.get("market", "").strip()
             source = variety.get("source", "ProduceIQ")
-            
+
             # Handle market selection
-            if market.lower() in ("select all","all","national",""):
+            if market.lower() in ("select all", "all", "national", ""):
                 cities = []  # Empty means average all cities
                 avg_cities = True
             else:
                 cities = [market]
                 avg_cities = False
-            
+
             # Build filters exactly like forecast_line_data
             filters = [
                 PriceData.commodity == commodity,
                 PriceData.year >= current_year - 5,
             ]
-            
+
             # Handle source filtering exactly like forecast_line_data
             if source == "ProduceIQ,USDA" or source == "USDA,ProduceIQ":
                 filters.append(PriceData.source.in_(["ProduceIQ", "USDA"]))
             else:
                 filters.append(PriceData.source == source)
-            
+
             # Only filter by city if not averaging all cities
             if not avg_cities:
                 filters.append(PriceData.city_name.in_(cities))
-            
+
             # Get historical data
             rows = (
                 db.session.query(
@@ -5057,13 +5271,13 @@ def harvest_planning():
                 .filter(*filters)
                 .all()
             )
-            
+
             # Group data exactly like forecast_line_data
             data = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
             for r in rows:
                 key = f"{r.commodity}_{r.city_name}"
                 data[key][r.season][r.year].append(r.price)
-            
+
             # Calculate seasonal averages exactly like forecast_line_data
             season_stats = {}
             for key, season_dict in data.items():
@@ -5073,26 +5287,28 @@ def harvest_planning():
                     for yr, prices in season_dict[season].items():
                         if prices:
                             yearly_avgs.append(sum(prices) / len(prices))
-                    
-                    overall_avg = sum(yearly_avgs) / len(yearly_avgs) if yearly_avgs else 0
+
+                    overall_avg = (
+                        sum(yearly_avgs) / len(yearly_avgs) if yearly_avgs else 0
+                    )
                     season_stats[key][season] = {"avg": overall_avg}
-            
+
             # Find best selling time
             best_season = None
             best_year = None
             highest_price = 0
             best_date = None
-            
+
             # Check each season to find the highest price (only after harvest end)
             for year in range(current_year, current_year + 3):
                 for season in seasons:
                     month = season_month_map[season]
                     season_date = datetime(year, month, 15)
-                    
+
                     # Only consider seasons after harvest is complete
                     if season_date <= harvest_end:
                         continue
-                    
+
                     # Calculate price exactly like forecast_line_data
                     if avg_cities:
                         # Average across all cities present in rows
@@ -5110,33 +5326,36 @@ def harvest_planning():
                         key = f"{commodity}_{cities[0]}"
                         st = season_stats.get(key, {}).get(season)
                         avg_price = st["avg"] if st and st["avg"] > 0 else 0
-                    
+
                     if avg_price > highest_price:
                         highest_price = avg_price
                         best_season = season
                         best_year = year
                         best_date = season_date
-            
+
             # Calculate expected selling price exactly like forecast data
             expected_price = 0
             selling_seasons = set()
             price_details = []
             season_prices = []
-            
+
             # Find all seasons in selling period
             current_date = selling_start
             while current_date <= selling_end:
                 month = current_date.month
                 season = (
-                    "Spring" if 3 <= month <= 5 else
-                    "Summer" if 6 <= month <= 8 else
-                    "Autumn" if 9 <= month <= 11 else
-                    "Winter"
+                    "Spring"
+                    if 3 <= month <= 5
+                    else (
+                        "Summer"
+                        if 6 <= month <= 8
+                        else "Autumn" if 9 <= month <= 11 else "Winter"
+                    )
                 )
-                
+
                 if season not in selling_seasons:
                     selling_seasons.add(season)
-                    
+
                     # Get price for this season using same logic as above
                     if avg_cities:
                         all_cities_in_db = sorted({r.city_name for r in rows})
@@ -5152,44 +5371,48 @@ def harvest_planning():
                         key = f"{commodity}_{cities[0]}"
                         st = season_stats.get(key, {}).get(season)
                         avg_price = st["avg"] if st and st["avg"] > 0 else 0
-                    
+
                     if avg_price > 0:
                         season_prices.append(avg_price)
                         price_details.append(f"{season}: ${avg_price:.2f}")
-                
+
                 current_date = current_date + timedelta(days=30)
-            
+
             # Calculate final expected price
             if season_prices:
                 expected_price = sum(season_prices) / len(season_prices)
                 if len(selling_seasons) == 1:
-                    price_description = f"Price for {list(selling_seasons)[0]}: ${expected_price:.2f}"
+                    price_description = (
+                        f"Price for {list(selling_seasons)[0]}: ${expected_price:.2f}"
+                    )
                 else:
                     price_description = f"Average of {', '.join(price_details)}"
             else:
                 expected_price = 0
                 price_description = "No price data available"
-            
-            result.append({
-                "name": commodity,
-                "plantingDate": plant.isoformat(),
-                "harvestStartDate": harvest_start.isoformat(),
-                "harvestEndDate": harvest_end.isoformat(),
-                "sellingStartDate": selling_start.isoformat(),
-                "sellingEndDate": selling_end.isoformat(),
-                "growingDays": grow_days,
-                "harvestPeriod": harvest_period,
-                "sellingPeriod": selling_period,
-                "source": source,
-                "bestSellingTime": {
-                    "season": best_season,
-                    "year": best_year,
-                    "price": round(highest_price, 2),
-                    "date": best_date.isoformat() if best_date else None
-                },
-                "expectedSellingPrice": round(expected_price, 2),
-                "priceDescription": price_description
-            })
+
+            result.append(
+                {
+                    "name": commodity,
+                    "plantingDate": plant.isoformat(),
+                    "harvestStartDate": harvest_start.isoformat(),
+                    "harvestEndDate": harvest_end.isoformat(),
+                    "sellingStartDate": selling_start.isoformat(),
+                    "sellingEndDate": selling_end.isoformat(),
+                    "growingDays": grow_days,
+                    "harvestPeriod": harvest_period,
+                    "sellingPeriod": selling_period,
+                    "source": source,
+                    "bestSellingTime": {
+                        "season": best_season,
+                        "year": best_year,
+                        "price": round(highest_price, 2),
+                        "date": best_date.isoformat() if best_date else None,
+                    },
+                    "expectedSellingPrice": round(expected_price, 2),
+                    "priceDescription": price_description,
+                }
+            )
 
         return jsonify({"varieties": result})
 
@@ -5198,262 +5421,295 @@ def harvest_planning():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route('/api/alert-entries-fresh', methods=['GET'])
+@app.route("/api/alert-entries-fresh", methods=["GET"])
 @jwt_required()
 def get_alert_settings_fresh():
     """Fetch all alert settings for the current user with guaranteed fresh data."""
     try:
         # Get current user ID from the JWT token
         current_user_id = get_jwt_identity()
-        
+
         # Always bypass cache for this route
         print(f"Fetching fresh alert settings for user {current_user_id}")
-        
+
         # Query the database directly to get the most recent data for this user
         settings = AlertSetting.query.filter_by(user_id=current_user_id).all()
         result = [alert.to_dict() for alert in settings]
-        
+
         # Completely remove any cached data
-        cache.delete(f'alert_settings:{current_user_id}')
-        
+        cache.delete(f"alert_settings:{current_user_id}")
+
         # Create response with aggressive no-cache headers
         response = jsonify(result)
-        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0, s-maxage=0, proxy-revalidate'
-        response.headers['Pragma'] = 'no-cache'
-        response.headers['Expires'] = '0'
-        response.headers['X-Accel-Expires'] = '0'
-        
+        response.headers["Cache-Control"] = (
+            "no-store, no-cache, must-revalidate, max-age=0, s-maxage=0, proxy-revalidate"
+        )
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        response.headers["X-Accel-Expires"] = "0"
+
         return response
-    
+
     except Exception as e:
         print(f"Error fetching alert settings: {str(e)}")
-        
-        response = jsonify({
-            "error": "Failed to retrieve alert settings",
-            "details": str(e)
-        })
-        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0, s-maxage=0, proxy-revalidate'
-        response.headers['Pragma'] = 'no-cache'
-        response.headers['Expires'] = '0'
-        response.headers['X-Accel-Expires'] = '0'
-        
+
+        response = jsonify(
+            {"error": "Failed to retrieve alert settings", "details": str(e)}
+        )
+        response.headers["Cache-Control"] = (
+            "no-store, no-cache, must-revalidate, max-age=0, s-maxage=0, proxy-revalidate"
+        )
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        response.headers["X-Accel-Expires"] = "0"
+
         return response, 500
 
 
-@app.route('/api/alert-settings', methods=['POST'])
+@app.route("/api/alert-settings", methods=["POST"])
 @jwt_required()
 def create_alert_setting():
     """Create a new alert setting for the current user."""
     # Get current user ID from the JWT token
     current_user_id = get_jwt_identity()
-    
+
     # Log the incoming request details
-    app.logger.info(f"Received alert setting creation request for user {current_user_id}")
-    
+    app.logger.info(
+        f"Received alert setting creation request for user {current_user_id}"
+    )
+
     try:
         # Validate request data
         data = request.json
         if not data:
             response = jsonify({"error": "No data provided"})
-            response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-            response.headers['Pragma'] = 'no-cache'
-            response.headers['Expires'] = '0'
+            response.headers["Cache-Control"] = (
+                "no-store, no-cache, must-revalidate, max-age=0"
+            )
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
             return response, 400
 
         # Validate city (required field)
-        city = data.get('city')
+        city = data.get("city")
         if not city or not isinstance(city, str):
             response = jsonify({"error": "Valid city is required"})
-            response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-            response.headers['Pragma'] = 'no-cache'
-            response.headers['Expires'] = '0'
+            response.headers["Cache-Control"] = (
+                "no-store, no-cache, must-revalidate, max-age=0"
+            )
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
             return response, 400
-        
+
         # Validate commodity (required field)
-        commodity = data.get('commodity')
+        commodity = data.get("commodity")
         if not commodity or not isinstance(commodity, str):
             response = jsonify({"error": "Valid commodity is required"})
-            response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-            response.headers['Pragma'] = 'no-cache'
-            response.headers['Expires'] = '0'
+            response.headers["Cache-Control"] = (
+                "no-store, no-cache, must-revalidate, max-age=0"
+            )
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
             return response, 400
-        
+
         # Validate and sanitize threshold
         try:
-            threshold = float(data.get('threshold', 5.0))
+            threshold = float(data.get("threshold", 5.0))
             # No bounds check on threshold so it can be negative for price decreases
         except (TypeError, ValueError):
             response = jsonify({"error": "Invalid threshold value"})
-            response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-            response.headers['Pragma'] = 'no-cache'
-            response.headers['Expires'] = '0'
+            response.headers["Cache-Control"] = (
+                "no-store, no-cache, must-revalidate, max-age=0"
+            )
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
             return response, 400
-        
+
         # Validate is_active (use default if not provided)
-        is_active = bool(data.get('isActive', True))
-        
+        is_active = bool(data.get("isActive", True))
+
         # Check for duplicate alert setting for this user
         existing_alert = AlertSetting.query.filter_by(
-            user_id=current_user_id,
-            city=city,
-            commodity=commodity,
-            threshold=threshold
+            user_id=current_user_id, city=city, commodity=commodity, threshold=threshold
         ).first()
-        
+
         if existing_alert:
-            response = jsonify({
-                "error": "You already have an alert for this commodity and city with the same threshold",
-                "existing_alert_id": existing_alert.id
-            })
-            response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-            response.headers['Pragma'] = 'no-cache'
-            response.headers['Expires'] = '0'
+            response = jsonify(
+                {
+                    "error": "You already have an alert for this commodity and city with the same threshold",
+                    "existing_alert_id": existing_alert.id,
+                }
+            )
+            response.headers["Cache-Control"] = (
+                "no-store, no-cache, must-revalidate, max-age=0"
+            )
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
             return response, 409  # Conflict status code
-        
+
         # Create new alert setting with user_id and city
         new_alert = AlertSetting(
             user_id=current_user_id,
             city=city.strip(),
             commodity=commodity.strip(),
             threshold=threshold,
-            is_active=is_active
+            is_active=is_active,
         )
-        
+
         # Add the new alert to the session and commit
         db.session.add(new_alert)
         db.session.commit()
-        
+
         # Update the user-specific cache
         settings = AlertSetting.query.filter_by(user_id=current_user_id).all()
         result = [alert.to_dict() for alert in settings]
-        cache.set(f'alert_settings:{current_user_id}', result, timeout=300)
-        
+        cache.set(f"alert_settings:{current_user_id}", result, timeout=300)
+
         # Log successful creation
-        app.logger.info(f"Alert setting created for user {current_user_id}: City={city}, Commodity={commodity}, Threshold={threshold}")
-        
+        app.logger.info(
+            f"Alert setting created for user {current_user_id}: City={city}, Commodity={commodity}, Threshold={threshold}"
+        )
+
         # Prepare response
         response = jsonify(new_alert.to_dict())
-        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-        response.headers['Pragma'] = 'no-cache'
-        response.headers['Expires'] = '0'
-        
+        response.headers["Cache-Control"] = (
+            "no-store, no-cache, must-revalidate, max-age=0"
+        )
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+
         return response, 201
-    
+
     except Exception as e:
         db.session.rollback()
         app.logger.error(f"Error creating alert setting: {str(e)}")
-        
-        response = jsonify({
-            "error": "An unexpected error occurred",
-            "details": str(e)
-        })
-        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-        response.headers['Pragma'] = 'no-cache'
-        response.headers['Expires'] = '0'
-        
-        return response, 500  
+
+        response = jsonify({"error": "An unexpected error occurred", "details": str(e)})
+        response.headers["Cache-Control"] = (
+            "no-store, no-cache, must-revalidate, max-age=0"
+        )
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+
+        return response, 500
 
 
-@app.route('/api/alert-settings/<int:alert_id>', methods=['PATCH'])
+@app.route("/api/alert-settings/<int:alert_id>", methods=["PATCH"])
 @jwt_required()
 def update_alert_setting(alert_id):
     """Update an existing alert setting."""
     current_user_id = get_jwt_identity()
     data = request.json
-    
+
     try:
         # Find the alert setting for this user
         alert = AlertSetting.query.filter_by(
-            id=alert_id, 
-            user_id=current_user_id
+            id=alert_id, user_id=current_user_id
         ).first()
-        
+
         if not alert:
             return jsonify({"error": "Alert setting not found"}), 404
-        
+
         # Update fields
-        if 'threshold' in data:
-            alert.threshold = float(data['threshold'])
-        
-        if 'isActive' in data:
-            alert.is_active = bool(data['isActive'])
-        
+        if "threshold" in data:
+            alert.threshold = float(data["threshold"])
+
+        if "isActive" in data:
+            alert.is_active = bool(data["isActive"])
+
         alert.updated_at = datetime.utcnow()
         db.session.commit()
-        
+
         return jsonify(alert.to_dict())
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/delete-alert-by-id', methods=['POST'])
+
+@app.route("/api/delete-alert-by-id", methods=["POST"])
 @jwt_required()
 def delete_alert_by_id():
     """Delete an alert by ID for the current user."""
     current_user_id = get_jwt_identity()
     try:
         data = request.json
-        alert_id = data.get('id')
-        
+        alert_id = data.get("id")
+
         if not alert_id:
             response = jsonify({"error": "Alert ID is required"})
-            response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-            response.headers['Pragma'] = 'no-cache'
-            response.headers['Expires'] = '0'
+            response.headers["Cache-Control"] = (
+                "no-store, no-cache, must-revalidate, max-age=0"
+            )
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
             return response, 400
-        
+
         # Find the alert by ID and user_id
-        alert = AlertSetting.query.filter_by(id=alert_id, user_id=current_user_id).first()
-        
+        alert = AlertSetting.query.filter_by(
+            id=alert_id, user_id=current_user_id
+        ).first()
+
         if not alert:
-            response = jsonify({"error": "No alert found with this ID for your account"})
-            response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-            response.headers['Pragma'] = 'no-cache'
-            response.headers['Expires'] = '0'
+            response = jsonify(
+                {"error": "No alert found with this ID for your account"}
+            )
+            response.headers["Cache-Control"] = (
+                "no-store, no-cache, must-revalidate, max-age=0"
+            )
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
             return response, 404
-        
+
         # Delete the alert
         db.session.delete(alert)
         db.session.commit()
 
         # Update user's cache
-        cache.delete(f'alert_settings:{current_user_id}')
-        
-        response = jsonify({
-            "success": True, 
-            "message": f"Alert with ID {alert_id} deleted successfully",
-            "deleted_alert": {
-                "id": alert.id,
-                "commodity": alert.commodity,
-                "threshold": alert.threshold
+        cache.delete(f"alert_settings:{current_user_id}")
+
+        response = jsonify(
+            {
+                "success": True,
+                "message": f"Alert with ID {alert_id} deleted successfully",
+                "deleted_alert": {
+                    "id": alert.id,
+                    "commodity": alert.commodity,
+                    "threshold": alert.threshold,
+                },
             }
-        })
-        
+        )
+
         # Add no-cache headers
-        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-        response.headers['Pragma'] = 'no-cache'
-        response.headers['Expires'] = '0'
-        
+        response.headers["Cache-Control"] = (
+            "no-store, no-cache, must-revalidate, max-age=0"
+        )
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+
         return response
-    
+
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/notifications', methods=['GET'])
+
+@app.route("/api/notifications", methods=["GET"])
 @jwt_required()
 def get_notifications():
     """Get all notifications for the current user."""
     current_user_id = get_jwt_identity()
     try:
-        notifications = Notification.query.filter_by(user_id=current_user_id).order_by(
-            Notification.created_at.desc()
-        ).all()
+        notifications = (
+            Notification.query.filter_by(user_id=current_user_id)
+            .order_by(Notification.created_at.desc())
+            .all()
+        )
         return jsonify([notification.to_dict() for notification in notifications])
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/notifications/unread-count', methods=['GET'])
+
+@app.route("/api/notifications/unread-count", methods=["GET"])
 @jwt_required()
 def get_unread_count():
     """Get count of unread notifications for the current user."""
@@ -5461,116 +5717,114 @@ def get_unread_count():
     try:
         # Count unread notifications for this user
         count = Notification.query.filter_by(
-            user_id=current_user_id,
-            is_read=False
+            user_id=current_user_id, is_read=False
         ).count()
-        
+
         return jsonify({"count": count})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
 
-@app.route('/api/notifications/<int:notification_id>', methods=['PATCH'])
+
+@app.route("/api/notifications/<int:notification_id>", methods=["PATCH"])
 @jwt_required()  # Add this decorator
 def update_notification(notification_id):
     """Update a notification (mark as read)."""
     current_user_id = get_jwt_identity()  # Get the current user
     data = request.json
-    
+
     try:
         # Find the notification for this user
         notification = Notification.query.filter_by(
             id=notification_id,
-            user_id=current_user_id  # Only allow users to update their own notifications
+            user_id=current_user_id,  # Only allow users to update their own notifications
         ).first()
-        
+
         if not notification:
             return jsonify({"error": "Notification not found"}), 404
-        
+
         # Update read status
-        if 'read' in data:
-            notification.read = bool(data['read'])
-        
+        if "read" in data:
+            notification.read = bool(data["read"])
+
         db.session.commit()
-        
+
         return jsonify(notification.to_dict())
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
 
-@app.route('/api/notifications/<int:notification_id>', methods=['DELETE'])
+@app.route("/api/notifications/<int:notification_id>", methods=["DELETE"])
 @jwt_required()  # Add this decorator
 def delete_notification(notification_id):
     """Delete a notification."""
     current_user_id = get_jwt_identity()  # Get the current user
-    
+
     try:
         # Find the notification for this user
         notification = Notification.query.filter_by(
             id=notification_id,
-            user_id=current_user_id  # Only allow users to delete their own notifications
+            user_id=current_user_id,  # Only allow users to delete their own notifications
         ).first()
-        
+
         if not notification:
             return jsonify({"error": "Notification not found"}), 404
-        
+
         db.session.delete(notification)
         db.session.commit()
-        
+
         return jsonify({"message": "Notification deleted successfully"})
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
 
-@app.route('/api/notifications/mark-all-read', methods=['POST'])
+@app.route("/api/notifications/mark-all-read", methods=["POST"])
 @jwt_required()  # Add this decorator
 def mark_all_read():
     """Mark all notifications as read for the current user."""
     current_user_id = get_jwt_identity()  # Get the current user
-    
+
     try:
         # Update all unread notifications for this user only
         notifications = Notification.query.filter_by(
-            user_id=current_user_id,
-            is_read=False
+            user_id=current_user_id, is_read=False
         ).all()
-        
+
         for notification in notifications:
             notification.is_read = True
-        
+
         db.session.commit()
-        
-        return jsonify({"message": f"{len(notifications)} notifications marked as read"})
+
+        return jsonify(
+            {"message": f"{len(notifications)} notifications marked as read"}
+        )
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
 
-
-@app.route('/api/current-user-id', methods=['GET'])
+@app.route("/api/current-user-id", methods=["GET"])
 @jwt_required()
 def get_current_user_id():
     try:
         # Get the JWT token from the request
-        jwt_header = request.headers.get('Authorization')
+        jwt_header = request.headers.get("Authorization")
         print(f"Received JWT Header: {jwt_header}")
 
         # Extract the current user ID
         current_user_id = get_jwt_identity()
-        
+
         # Log the user ID
         print(f"Extracted User ID: {current_user_id}")
-        
+
         return jsonify({"user_id": current_user_id})
     except Exception as e:
         print(f"Error in current-user-id route: {str(e)}")
         return jsonify({"error": str(e)}), 500
-    
 
 
-import calendar 
+import calendar
 
 # @app.route("/api/monthly-average-prices", methods=["GET"])
 # def get_monthly_average_prices():
@@ -5585,41 +5839,41 @@ import calendar
 #         start_year = int(request.args.get('start_year'))
 #         end_year = int(request.args.get('end_year'))
 #         data_source = request.args.get('source', 'ProduceIQ')  # Default to ProduceIQ
-        
+
 #         # Validate required parameters
 #         if not commodity or not start_year or not end_year:
 #             return jsonify({"error": "Commodity, start year, and end year are required"}), 400
-        
+
 #         # Prepare months list based on selected range
 #         months_to_analyze = list(range(start_month, end_month + 1))
-        
+
 #         # Prepare results
 #         monthly_analysis = []
-        
+
 #         # For SQLite: Properly calculate day ranges for each month
 #         for month in months_to_analyze:
 #             # Query for this specific month across years
 #             month_data = []
-            
+
 #             # For each year in the range
 #             for year in range(start_year, end_year + 1):
 #                 # Determine if it's a leap year
 #                 is_leap_year = (year % 4 == 0 and year % 100 != 0) or (year % 400 == 0)
-                
+
 #                 # Define days in each month for the current year
 #                 days_in_month = [31, 29 if is_leap_year else 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-                
+
 #                 # Calculate cumulative days at the beginning of each month
 #                 cumulative_days = [0]  # Start with 0
 #                 running_sum = 0
 #                 for days in days_in_month:
 #                     running_sum += days
 #                     cumulative_days.append(running_sum)
-                
+
 #                 # Calculate day range for the specified month (1-indexed)
 #                 month_start_day = cumulative_days[month-1] + 1
 #                 month_end_day = cumulative_days[month]
-                
+
 #                 # Create base query with filters
 #                 query = db.session.query(
 #                     func.avg(PriceData.price).label('avg_price'),
@@ -5632,16 +5886,16 @@ import calendar
 #                     PriceData.day <= month_end_day,
 #                     PriceData.price > 0
 #                 )
-                
+
 #                 # Add source filter
 #                 if data_source == "ProduceIQ,USDA" or data_source == "USDA,ProduceIQ":
 #                     query = query.filter(PriceData.source.in_(["ProduceIQ", "USDA"]))
 #                 else:
 #                     query = query.filter(PriceData.source == data_source)
-                
+
 #                 # Execute the query
 #                 year_month_data = query.first()
-                
+
 #                 # Only add if we have valid data
 #                 if year_month_data and year_month_data.avg_price is not None:
 #                     month_data.append({
@@ -5650,14 +5904,14 @@ import calendar
 #                         'min_price': round(float(year_month_data.min_price), 2),
 #                         'max_price': round(float(year_month_data.max_price), 2)
 #                     })
-            
+
 #             # Process the data for this month
 #             if month_data:
 #                 # Calculate overall statistics for this month across years
 #                 all_prices = [entry['avg_price'] for entry in month_data]
 #                 all_min_prices = [entry['min_price'] for entry in month_data]
 #                 all_max_prices = [entry['max_price'] for entry in month_data]
-                
+
 #                 monthly_analysis.append({
 #                     'month': calendar.month_name[month],
 #                     'avg_price': round(sum(all_prices) / len(all_prices), 2),
@@ -5674,7 +5928,7 @@ import calendar
 #                     'max_price': 0,
 #                     'years_data': []
 #                 })
-        
+
 #         return jsonify({
 #             "monthly_prices": monthly_analysis,
 #             "commodity": commodity,
@@ -5684,11 +5938,10 @@ import calendar
 #             "end_year": end_year,
 #             "source": data_source
 #         }), 200
-    
+
 #     except Exception as e:
 #         app.logger.error(f"Error in monthly average prices: {str(e)}")
 #         return jsonify({"error": str(e)}), 500
-
 
 
 @app.route("/api/monthly-average-prices", methods=["GET"])
@@ -5699,20 +5952,23 @@ def get_monthly_average_prices():
     """
     try:
         # Extract query parameters
-        commodity = request.args.get('commodity')
-        start_month = int(request.args.get('start_month', 1))  # Default January
-        end_month = int(request.args.get('end_month', 12))    # Default December
-        start_year = int(request.args.get('start_year'))
-        end_year = int(request.args.get('end_year'))
-        data_source = request.args.get('source', 'ProduceIQ')  # Default to ProduceIQ
-        
+        commodity = request.args.get("commodity")
+        start_month = int(request.args.get("start_month", 1))  # Default January
+        end_month = int(request.args.get("end_month", 12))  # Default December
+        start_year = int(request.args.get("start_year"))
+        end_year = int(request.args.get("end_year"))
+        data_source = request.args.get("source", "ProduceIQ")  # Default to ProduceIQ
+
         # Validate required parameters
         if not commodity or not start_year or not end_year:
-            return jsonify({"error": "Commodity, start year, and end year are required"}), 400
-        
+            return (
+                jsonify({"error": "Commodity, start year, and end year are required"}),
+                400,
+            )
+
         # Create a single SQL query instead of multiple queries
         # This uses Common Table Expressions (CTEs) to efficiently calculate everything in one go
-        
+
         # Build the month ranges CTE
         month_ranges_sql = """
         WITH month_ranges AS (
@@ -5773,16 +6029,17 @@ def get_monthly_average_prices():
                 m.month_num BETWEEN :start_month AND :end_month
         ),
         """
-        
+
         # Build source filter
         source_filter = ""
         if data_source == "ProduceIQ,USDA" or data_source == "USDA,ProduceIQ":
             source_filter = "AND pd.source IN ('ProduceIQ', 'USDA')"
         else:
             source_filter = f"AND pd.source = '{data_source}'"
-        
+
         # Build monthly stats query
-        monthly_stats_sql = """
+        monthly_stats_sql = (
+            """
         monthly_stats AS (
             SELECT
                 mr.month_name,
@@ -5801,12 +6058,15 @@ def get_monthly_average_prices():
             WHERE
                 pd.commodity = :commodity
                 AND pd.price > 0
-                """ + source_filter + """
+                """
+            + source_filter
+            + """
             GROUP BY
                 mr.month_name, mr.month_num, mr.year
         ),
         """
-        
+        )
+
         # Build aggregated stats query
         aggregated_stats_sql = """
         aggregated_stats AS (
@@ -5823,9 +6083,13 @@ def get_monthly_average_prices():
                 month_name, month_num
         )
         """
-        
+
         # Build final query with JSON aggregation
-        final_query = month_ranges_sql + monthly_stats_sql + aggregated_stats_sql + """
+        final_query = (
+            month_ranges_sql
+            + monthly_stats_sql
+            + aggregated_stats_sql
+            + """
         SELECT
             a.month_name AS month,
             a.avg_price,
@@ -5849,49 +6113,63 @@ def get_monthly_average_prices():
         ORDER BY
             a.month_num;
         """
-        
+        )
+
         # Execute the query with parameters
         result = db.session.execute(
             text(final_query),
             {
-                'commodity': commodity,
-                'start_month': start_month,
-                'end_month': end_month,
-                'start_year': start_year,
-                'end_year': end_year
-            }
+                "commodity": commodity,
+                "start_month": start_month,
+                "end_month": end_month,
+                "start_year": start_year,
+                "end_year": end_year,
+            },
         )
-        
+
         # Process the results
         monthly_analysis = []
         for row in result:
             # Extract the years_data JSON and ensure it's not None
             years_data = row.years_data if row.years_data else []
-            
+
             # Create monthly data entry
-            monthly_analysis.append({
-                'month': row.month,
-                'avg_price': float(row.avg_price) if row.avg_price is not None else 0,
-                'min_price': float(row.min_price) if row.min_price is not None else 0,
-                'max_price': float(row.max_price) if row.max_price is not None else 0,
-                'years_data': years_data
-            })
-        
-        return jsonify({
-            "monthly_prices": monthly_analysis,
-            "commodity": commodity,
-            "start_month": start_month,
-            "end_month": end_month,
-            "start_year": start_year,
-            "end_year": end_year,
-            "source": data_source
-        }), 200
-    
+            monthly_analysis.append(
+                {
+                    "month": row.month,
+                    "avg_price": (
+                        float(row.avg_price) if row.avg_price is not None else 0
+                    ),
+                    "min_price": (
+                        float(row.min_price) if row.min_price is not None else 0
+                    ),
+                    "max_price": (
+                        float(row.max_price) if row.max_price is not None else 0
+                    ),
+                    "years_data": years_data,
+                }
+            )
+
+        return (
+            jsonify(
+                {
+                    "monthly_prices": monthly_analysis,
+                    "commodity": commodity,
+                    "start_month": start_month,
+                    "end_month": end_month,
+                    "start_year": start_year,
+                    "end_year": end_year,
+                    "source": data_source,
+                }
+            ),
+            200,
+        )
+
     except Exception as e:
         app.logger.error(f"Error in monthly average prices: {str(e)}")
         return jsonify({"error": str(e)}), 500
-    
-    
+
+
 # TEST ROUTE
 @app.route("/api/trigger_usda_fetch", methods=["GET"])
 def trigger_usda_fetch():
@@ -5991,20 +6269,21 @@ def upload_historical():
         return f"Error during upload: {str(e)}", 500
 
 
-
-
 from sqlalchemy.sql import text  # Import `text` from SQLAlchemy
-        
+
 import plotly.graph_objects as go
 from flask import jsonify
 
 
 # voilin plot for terminal data
 
+
 @app.route("/api/terminal_price_violin", methods=["GET"])
 def terminal_price_violin():
     try:
-        app.logger.info("Generating terminal violin plots for USDA and ProduceIQ without downsampling...")
+        app.logger.info(
+            "Generating terminal violin plots for USDA and ProduceIQ without downsampling..."
+        )
 
         # Get the time frame from query parameters (default to '7d')
         time_frame = request.args.get("timeFrame", "7d")
@@ -6022,13 +6301,15 @@ def terminal_price_violin():
         postgres_interval = time_intervals.get(time_frame.lower(), "7 days")
 
         # PostgreSQL-compatible query to fetch data filtered by source and time range
-        query = text(f"""
+        query = text(
+            f"""
             SELECT commodity, price, source
             FROM price_data
             WHERE source IN ('USDA', 'ProduceIQ')
             AND make_date(year, 1, 1) + (day - 1) * INTERVAL '1 day' >= NOW() - INTERVAL '{postgres_interval}'
             AND price > 2
-        """)
+        """
+        )
         result = db.session.execute(query).fetchall()
 
         # Group data by source and commodity
@@ -6046,7 +6327,7 @@ def terminal_price_violin():
                 name=commodity,
                 box_visible=True,
                 meanline_visible=True,
-                marker_color='blue'  # Color for USDA
+                marker_color="blue",  # Color for USDA
             )
             for commodity, prices in grouped_data["USDA"].items()
         ]
@@ -6058,16 +6339,26 @@ def terminal_price_violin():
                 name=commodity,
                 box_visible=True,
                 meanline_visible=True,
-                marker_color='green'  # Color for ProduceIQ
+                marker_color="green",  # Color for ProduceIQ
             )
             for commodity, prices in grouped_data["ProduceIQ"].items()
         ]
 
         # Layout for USDA
         usda_layout = {
-            "title": {"text": "USDA Terminal Price Distribution by Commodity", "font": {"size": 16, "weight": "bold"}},
-            "xaxis": {"title": {"text": "Commodity", "font": {"size": 14, "weight": "bold"}}, "automargin": True},
-            "yaxis": {"title": {"text": "Price", "font": {"size": 14, "weight": "bold"}}, "zeroline": True, "automargin": True},
+            "title": {
+                "text": "USDA Terminal Price Distribution by Commodity",
+                "font": {"size": 16, "weight": "bold"},
+            },
+            "xaxis": {
+                "title": {"text": "Commodity", "font": {"size": 14, "weight": "bold"}},
+                "automargin": True,
+            },
+            "yaxis": {
+                "title": {"text": "Price", "font": {"size": 14, "weight": "bold"}},
+                "zeroline": True,
+                "automargin": True,
+            },
             "height": 500,
             "width": 700,
             "showlegend": False,
@@ -6077,9 +6368,18 @@ def terminal_price_violin():
 
         # Layout for ProduceIQ
         produceiq_layout = {
-            "title": {"text": "ProduceIQ Terminal Price Distribution by Commodity", "font": {"size": 16, "weight": "bold"}},
-            "xaxis": {"title": {"text": "Commodity", "font": {"size": 14, "weight": "bold"}}, "automargin": True},
-            "yaxis": {"title": {"text": "Price", "font": {"size": 14, "weight": "bold"}}, "automargin": True},
+            "title": {
+                "text": "ProduceIQ Terminal Price Distribution by Commodity",
+                "font": {"size": 16, "weight": "bold"},
+            },
+            "xaxis": {
+                "title": {"text": "Commodity", "font": {"size": 14, "weight": "bold"}},
+                "automargin": True,
+            },
+            "yaxis": {
+                "title": {"text": "Price", "font": {"size": 14, "weight": "bold"}},
+                "automargin": True,
+            },
             "height": 500,
             "width": 700,
             "showlegend": False,
@@ -6092,16 +6392,22 @@ def terminal_price_violin():
         produceiq_traces_json = [trace.to_plotly_json() for trace in produceiq_traces]
 
         # Return JSON response containing separate charts for USDA and ProduceIQ
-        return jsonify({
-            "usda": {"data": usda_traces_json, "layout": usda_layout},
-            "produceiq": {"data": produceiq_traces_json, "layout": produceiq_layout}
-        }), 200
+        return (
+            jsonify(
+                {
+                    "usda": {"data": usda_traces_json, "layout": usda_layout},
+                    "produceiq": {
+                        "data": produceiq_traces_json,
+                        "layout": produceiq_layout,
+                    },
+                }
+            ),
+            200,
+        )
 
     except Exception as e:
         app.logger.error(f"Error generating terminal violin plots: {str(e)}")
         return jsonify({"error": "Failed to generate terminal violin plots"}), 500
-
-
 
 
 @app.route("/api/shipping_price_violin", methods=["GET"])
@@ -6125,13 +6431,15 @@ def shipping_price_violin():
         postgres_interval = time_intervals.get(time_frame.lower(), "'7 days'")
 
         # SQL query to fetch data filtered by source and time range
-        query = text(f"""
+        query = text(
+            f"""
     SELECT commodity, price
     FROM shipping_price_data
     WHERE source = 'ProduceIQ'
       AND TO_DATE(year || '-01-01', 'YYYY-MM-DD') + (day - 1) * interval '1 day' >= NOW() - INTERVAL {postgres_interval}
       AND price > 1  
-        """)
+        """
+        )
 
         result = db.session.execute(query).fetchall()
 
@@ -6153,16 +6461,27 @@ def shipping_price_violin():
                     name=commodity,
                     box_visible=True,
                     meanline_visible=True,
-                    marker_color='green',  # Custom color
-
+                    marker_color="green",  # Custom color
                 )
             )
 
         # Create the layout for the chart
         layout = {
-            "title": {"text": "Shipping Price Distribution by Commodity", "font": {"size": 16, "weight": "bold"}},
-            "xaxis": {"title": {"text": "Commodity", "font": {"size": 14, "weight": "bold"}}, "automargin": True},
-            "yaxis": {"title": {"text": "Shipping Price", "font": {"size": 14, "weight": "bold"}}, "automargin": True},
+            "title": {
+                "text": "Shipping Price Distribution by Commodity",
+                "font": {"size": 16, "weight": "bold"},
+            },
+            "xaxis": {
+                "title": {"text": "Commodity", "font": {"size": 14, "weight": "bold"}},
+                "automargin": True,
+            },
+            "yaxis": {
+                "title": {
+                    "text": "Shipping Price",
+                    "font": {"size": 14, "weight": "bold"},
+                },
+                "automargin": True,
+            },
             "height": 500,
             "width": 700,
             "showlegend": False,
@@ -6171,24 +6490,28 @@ def shipping_price_violin():
         }
 
         # Return the chart data and layout as JSON
-        return jsonify({"data": [trace.to_plotly_json() for trace in traces], "layout": layout}), 200
+        return (
+            jsonify(
+                {"data": [trace.to_plotly_json() for trace in traces], "layout": layout}
+            ),
+            200,
+        )
 
     except Exception as e:
         app.logger.error(f"Error generating shipping violin plot: {str(e)}")
         return jsonify({"error": "Failed to generate shipping violin plot"}), 500
 
 
-
-
 # terminal empricial probability chart fetch
 
 from sqlalchemy import func
 
-@app.route('/api/terminal_empricial_probability', methods=['GET'])
+
+@app.route("/api/terminal_empricial_probability", methods=["GET"])
 def get_terminal_empricial_probability():
     try:
         # Get the time frame from query parameters (default to '7d')
-        time_frame = request.args.get('timeFrame', '7d')
+        time_frame = request.args.get("timeFrame", "7d")
 
         # Map timeFrame to PostgreSQL-compatible intervals
         time_intervals = {
@@ -6200,16 +6523,18 @@ def get_terminal_empricial_probability():
         }
 
         # Get the corresponding PostgreSQL interval for the time frame
-        postgres_interval = time_intervals.get(time_frame.lower(), '7 days')
+        postgres_interval = time_intervals.get(time_frame.lower(), "7 days")
 
         # Query to get mean and standard deviation directly from the database
-        query = text(f"""
+        query = text(
+            f"""
             SELECT commodity, price, source
             FROM price_data
             WHERE source = 'USDA'
             AND make_date(year, 1, 1) + (day - 1) * INTERVAL '1 day' >= NOW() - INTERVAL '{postgres_interval}'
             AND price > 2
-        """)
+        """
+        )
         result = db.session.execute(query).fetchall()
 
         if not result:
@@ -6228,26 +6553,26 @@ def get_terminal_empricial_probability():
         for commodity, prices in grouped_data.items():
             hist, bin_edges = np.histogram(prices, bins=50)
             histogram_trace = go.Bar(
-                x=bin_edges[:-1].tolist(), 
+                x=bin_edges[:-1].tolist(),
                 y=hist.tolist(),
                 name=f"{commodity} Histogram",
-                marker_color="#636EFA"
+                marker_color="#636EFA",
             )
             mean = np.mean(prices)
             std_dev = np.std(prices)
             mean_trace = go.Scatter(
-                x=[mean, mean], 
-                y=[0, max(hist)], 
-                mode="lines", 
-                line=dict(color="red", dash="dash"), 
-                name=f"{commodity} Mean"
+                x=[mean, mean],
+                y=[0, max(hist)],
+                mode="lines",
+                line=dict(color="red", dash="dash"),
+                name=f"{commodity} Mean",
             )
             std_dev_trace = go.Scatter(
-                x=[mean - std_dev, mean + std_dev], 
-                y=[0, 0], 
-                mode="markers", 
-                marker=dict(color="blue", size=8, symbol="cross"), 
-                name=f"{commodity} Std Dev"
+                x=[mean - std_dev, mean + std_dev],
+                y=[0, 0],
+                mode="markers",
+                marker=dict(color="blue", size=8, symbol="cross"),
+                name=f"{commodity} Std Dev",
             )
 
             layout = {
@@ -6261,11 +6586,17 @@ def get_terminal_empricial_probability():
                 "paper_bgcolor": "white",
             }
 
-            charts.append({
-                "commodity": commodity,
-                "data": [histogram_trace.to_plotly_json(), mean_trace.to_plotly_json(), std_dev_trace.to_plotly_json()],
-                "layout": layout,
-            })
+            charts.append(
+                {
+                    "commodity": commodity,
+                    "data": [
+                        histogram_trace.to_plotly_json(),
+                        mean_trace.to_plotly_json(),
+                        std_dev_trace.to_plotly_json(),
+                    ],
+                    "layout": layout,
+                }
+            )
 
         return jsonify(charts), 200
 
@@ -6275,17 +6606,12 @@ def get_terminal_empricial_probability():
         return jsonify({"error": error_message}), 500
 
 
-
-
-
-
-
 # shipping empricial probability chart fetch ProduceIQ
-@app.route('/api/shipping_empricial_probability', methods=['GET'])
+@app.route("/api/shipping_empricial_probability", methods=["GET"])
 def get_shipping_empricial_probability():
     try:
         # Get the time frame from query parameters (default to '7d')
-        time_frame = request.args.get('timeFrame', '7d')
+        time_frame = request.args.get("timeFrame", "7d")
 
         # Map timeFrame to PostgreSQL-compatible intervals
         time_intervals = {
@@ -6297,16 +6623,18 @@ def get_shipping_empricial_probability():
         }
 
         # Get the corresponding PostgreSQL interval for the time frame
-        postgres_interval = time_intervals.get(time_frame.lower(), '7 days')
+        postgres_interval = time_intervals.get(time_frame.lower(), "7 days")
 
         # Query to get shipping data from ProduceIQ within the given time frame
-        query = text(f"""
+        query = text(
+            f"""
             SELECT commodity, price
             FROM shipping_price_data
             WHERE source = 'ProduceIQ'
             AND make_date(year, 1, 1) + (day - 1) * INTERVAL '1 day' >= NOW() - INTERVAL '{postgres_interval}'
             AND price > 2
-        """)
+        """
+        )
         result = db.session.execute(query).fetchall()
 
         if not result:
@@ -6328,23 +6656,23 @@ def get_shipping_empricial_probability():
                 x=bin_edges[:-1].tolist(),
                 y=hist.tolist(),
                 name=f"{commodity} Histogram",
-                marker_color="green"
+                marker_color="green",
             )
             mean = np.mean(prices)
             std_dev = np.std(prices)
             mean_trace = go.Scatter(
-                x=[mean, mean], 
-                y=[0, max(hist)], 
-                mode="lines", 
-                line=dict(color="red", dash="dash"), 
-                name=f"{commodity} Mean"
+                x=[mean, mean],
+                y=[0, max(hist)],
+                mode="lines",
+                line=dict(color="red", dash="dash"),
+                name=f"{commodity} Mean",
             )
             std_dev_trace = go.Scatter(
-                x=[mean - std_dev, mean + std_dev], 
-                y=[0, 0], 
-                mode="markers", 
-                marker=dict(color="green", size=8, symbol="cross"), 
-                name=f"{commodity} Std Dev"
+                x=[mean - std_dev, mean + std_dev],
+                y=[0, 0],
+                mode="markers",
+                marker=dict(color="green", size=8, symbol="cross"),
+                name=f"{commodity} Std Dev",
             )
 
             layout = {
@@ -6358,11 +6686,17 @@ def get_shipping_empricial_probability():
                 "paper_bgcolor": "white",
             }
 
-            charts.append({
-                "commodity": commodity,
-                "data": [histogram_trace.to_plotly_json(), mean_trace.to_plotly_json(), std_dev_trace.to_plotly_json()],
-                "layout": layout,
-            })
+            charts.append(
+                {
+                    "commodity": commodity,
+                    "data": [
+                        histogram_trace.to_plotly_json(),
+                        mean_trace.to_plotly_json(),
+                        std_dev_trace.to_plotly_json(),
+                    ],
+                    "layout": layout,
+                }
+            )
 
         return jsonify(charts), 200
 
@@ -6372,16 +6706,13 @@ def get_shipping_empricial_probability():
         return jsonify({"error": error_message}), 500
 
 
-
-
-
-
 @app.route("/api/terminal_correlation", methods=["GET"])
 def get_terminal_correlation():
     try:
         # Query data with proper filtering
-        source = request.args.get('source', 'ProduceIQ')  # Default to USDA
-        query = text("""
+        source = request.args.get("source", "ProduceIQ")  # Default to USDA
+        query = text(
+            """
             SELECT 
                 commodity,
                 price,
@@ -6389,49 +6720,57 @@ def get_terminal_correlation():
             FROM price_data
             WHERE source = :source
             ORDER BY date, commodity
-        """)
-        
-        result = db.session.execute(query, {'source': source}).fetchall()
+        """
+        )
+
+        result = db.session.execute(query, {"source": source}).fetchall()
         print(f"Query result length: {len(result)}")  # Debugging log
 
         if not result:
             return jsonify({"error": "No data found"}), 404
 
         # Create DataFrame and process data
-        df = pd.DataFrame(result, columns=['commodity', 'price', 'date'])
+        df = pd.DataFrame(result, columns=["commodity", "price", "date"])
         print(f"Initial DataFrame shape: {df.shape}")  # Debugging log
 
         # Ensure 'date' column is treated as datetime
-        df['date'] = pd.to_datetime(df['date'])
+        df["date"] = pd.to_datetime(df["date"])
 
         # Handle duplicate (date, commodity) entries by aggregating
-        df = df.groupby(['date', 'commodity'], as_index=False)['price'].mean()
+        df = df.groupby(["date", "commodity"], as_index=False)["price"].mean()
         print(f"DataFrame shape after grouping: {df.shape}")  # Debugging log
 
         # Create pivot table
-        pivot_df = df.pivot(index='date', columns='commodity', values='price')
+        pivot_df = df.pivot(index="date", columns="commodity", values="price")
         print(f"Pivot table shape: {pivot_df.shape}")  # Debugging log
 
         del df
         import gc
+
         gc.collect()
 
         # Forward fill missing values before calculating percentage change
         pivot_df = pivot_df.ffill(limit=3)  # Forward fill up to 3 missing values
         returns = pivot_df.pct_change()  # Calculate percentage change
-        print(f"Returns DataFrame shape before filtering: {returns.shape}")  # Debugging log
+        print(
+            f"Returns DataFrame shape before filtering: {returns.shape}"
+        )  # Debugging log
 
         # Remove columns with too many missing values
         min_valid_ratio = 0.3  # At least 30% valid data
-        valid_columns = returns.columns[returns.count() > len(returns) * min_valid_ratio]
+        valid_columns = returns.columns[
+            returns.count() > len(returns) * min_valid_ratio
+        ]
         returns = returns[valid_columns]
-        print(f"Returns DataFrame shape after filtering: {returns.shape}")  # Debugging log
+        print(
+            f"Returns DataFrame shape after filtering: {returns.shape}"
+        )  # Debugging log
 
         del pivot_df
         gc.collect()
 
         # Calculate correlation matrix
-        correlation_matrix = returns.corr(method='pearson')
+        correlation_matrix = returns.corr(method="pearson")
         correlation_matrix.fillna(0, inplace=True)
         print(f"Correlation matrix shape: {correlation_matrix.shape}")  # Debugging log
 
@@ -6469,7 +6808,9 @@ def get_terminal_correlation():
                     "type": "heatmap",
                     "colorscale": "CoolWarm",
                     "showscale": True,
-                    "text": [[f"{val:.2f}" for val in row] for row in reversed_z_values],
+                    "text": [
+                        [f"{val:.2f}" for val in row] for row in reversed_z_values
+                    ],
                     "hoverinfo": "text",
                 }
             ],
@@ -6495,37 +6836,33 @@ def get_terminal_correlation():
             "total_records": len(returns),  # Updated to use 'returns'
             "unique_commodities": len(labels),
             "date_range": {
-                "start": returns.index.min().strftime('%Y-%m-%d'),
-                "end": returns.index.max().strftime('%Y-%m-%d'),
+                "start": returns.index.min().strftime("%Y-%m-%d"),
+                "end": returns.index.max().strftime("%Y-%m-%d"),
             },
             "average_correlation": float(correlation_matrix.mean().mean()),
         }
 
-        print(f"Final chart labels: {len(labels)}, annotations: {len(annotations)}")  # Debugging log
+        print(
+            f"Final chart labels: {len(labels)}, annotations: {len(annotations)}"
+        )  # Debugging log
 
         return jsonify({"chart": chart, "stats": summary_stats}), 200
 
     except Exception as e:
         app.logger.error(f"Error generating terminal correlation chart: {str(e)}")
         import traceback
+
         traceback.print_exc()
         return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
-
-
-
-
-
-
-
-
 
 
 @app.route("/api/shipping_correlation", methods=["GET"])
 def get_shipping_correlation():
     try:
         # Query data with proper filtering
-        source = request.args.get('source', 'ProduceIQ')  # Default to USDA
-        query = text("""
+        source = request.args.get("source", "ProduceIQ")  # Default to USDA
+        query = text(
+            """
             SELECT 
                 commodity,
                 price,
@@ -6533,49 +6870,57 @@ def get_shipping_correlation():
             FROM shipping_price_data
             WHERE source = :source
             ORDER BY date, commodity
-        """)
-        
-        result = db.session.execute(query, {'source': source}).fetchall()
+        """
+        )
+
+        result = db.session.execute(query, {"source": source}).fetchall()
         print(f"Query result length: {len(result)}")  # Debugging log
 
         if not result:
             return jsonify({"error": "No data found"}), 404
 
         # Create DataFrame and process data
-        df = pd.DataFrame(result, columns=['commodity', 'price', 'date'])
+        df = pd.DataFrame(result, columns=["commodity", "price", "date"])
         print(f"Initial DataFrame shape: {df.shape}")  # Debugging log
 
         # Ensure 'date' column is treated as datetime
-        df['date'] = pd.to_datetime(df['date'])
+        df["date"] = pd.to_datetime(df["date"])
 
         # Handle duplicate (date, commodity) entries by aggregating
-        df = df.groupby(['date', 'commodity'], as_index=False)['price'].mean()
+        df = df.groupby(["date", "commodity"], as_index=False)["price"].mean()
         print(f"DataFrame shape after grouping: {df.shape}")  # Debugging log
 
         # Create pivot table
-        pivot_df = df.pivot(index='date', columns='commodity', values='price')
+        pivot_df = df.pivot(index="date", columns="commodity", values="price")
         print(f"Pivot table shape: {pivot_df.shape}")  # Debugging log
 
         del df
         import gc
+
         gc.collect()
 
         # Calculate returns and handle missing values
         pivot_df = pivot_df.ffill(limit=3)  # Forward fill missing values up to 3 days
         returns = pivot_df.pct_change()  # Calculate percentage change
-        print(f"Returns DataFrame shape before filtering: {returns.shape}")  # Debugging log
+        print(
+            f"Returns DataFrame shape before filtering: {returns.shape}"
+        )  # Debugging log
 
         # Remove columns with too many missing values
         min_valid_ratio = 0.3  # At least 30% valid data
-        valid_columns = returns.columns[returns.count() > len(returns) * min_valid_ratio]
+        valid_columns = returns.columns[
+            returns.count() > len(returns) * min_valid_ratio
+        ]
         returns = returns[valid_columns]
-        print(f"Returns DataFrame shape after filtering: {returns.shape}")  # Debugging log
+        print(
+            f"Returns DataFrame shape after filtering: {returns.shape}"
+        )  # Debugging log
 
         del pivot_df
         gc.collect()
 
         # Calculate correlation matrix
-        correlation_matrix = returns.corr(method='pearson')
+        correlation_matrix = returns.corr(method="pearson")
         correlation_matrix.fillna(0, inplace=True)
         print(f"Correlation matrix shape: {correlation_matrix.shape}")  # Debugging log
 
@@ -6613,7 +6958,9 @@ def get_shipping_correlation():
                     "type": "heatmap",
                     "colorscale": "CoolWarm",
                     "showscale": True,
-                    "text": [[f"{val:.2f}" for val in row] for row in reversed_z_values],
+                    "text": [
+                        [f"{val:.2f}" for val in row] for row in reversed_z_values
+                    ],
                     "hoverinfo": "text",
                 }
             ],
@@ -6639,24 +6986,24 @@ def get_shipping_correlation():
             "total_records": len(returns),  # Updated to use 'returns'
             "unique_commodities": len(labels),
             "date_range": {
-                "start": returns.index.min().strftime('%Y-%m-%d'),
-                "end": returns.index.max().strftime('%Y-%m-%d'),
+                "start": returns.index.min().strftime("%Y-%m-%d"),
+                "end": returns.index.max().strftime("%Y-%m-%d"),
             },
             "average_correlation": float(correlation_matrix.mean().mean()),
         }
 
-        print(f"Final chart labels: {len(labels)}, annotations: {len(annotations)}")  # Debugging log
+        print(
+            f"Final chart labels: {len(labels)}, annotations: {len(annotations)}"
+        )  # Debugging log
 
         return jsonify({"chart": chart, "stats": summary_stats}), 200
 
     except Exception as e:
         app.logger.error(f"Error generating shipping correlation chart: {str(e)}")
         import traceback
+
         traceback.print_exc()
         return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
-
-
-
 
 
 # terminal scatterplot for usda data
@@ -6673,10 +7020,14 @@ def get_terminal_scatterplot_matrix():
             return jsonify({"error": "Both commodities must be provided"}), 400
 
         # Query data for the selected commodities from PriceData where source is 'USDA'
-        result = db.session.query(PriceData.commodity, PriceData.price).filter(
-            PriceData.commodity.in_([commodity_x, commodity_y]),
-            PriceData.source == source
-        ).all()
+        result = (
+            db.session.query(PriceData.commodity, PriceData.price)
+            .filter(
+                PriceData.commodity.in_([commodity_x, commodity_y]),
+                PriceData.source == source,
+            )
+            .all()
+        )
 
         if not result:
             return jsonify({"error": "No data found for the selected commodities"}), 404
@@ -6688,8 +7039,8 @@ def get_terminal_scatterplot_matrix():
             return jsonify({"error": "No valid data available"}), 404
 
         # Separate data for each commodity
-        x_data = df[df['commodity'] == commodity_x]['price'].tolist()
-        y_data = df[df['commodity'] == commodity_y]['price'].tolist()
+        x_data = df[df["commodity"] == commodity_x]["price"].tolist()
+        y_data = df[df["commodity"] == commodity_y]["price"].tolist()
 
         # Get the minimum length to ensure equal pairs
         min_length = min(len(x_data), len(y_data))
@@ -6749,10 +7100,6 @@ def get_terminal_scatterplot_matrix():
         return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
 
 
-
-
-
-
 # shipping scatterplot for ProduceIQ data
 @app.route("/api/shipping_scatterplot_matrix", methods=["POST"])
 def get_shipping_scatterplot_matrix():
@@ -6767,10 +7114,14 @@ def get_shipping_scatterplot_matrix():
             return jsonify({"error": "Both commodities must be provided"}), 400
 
         # Query data for the selected commodities from ShippingPriceData where source is 'ProduceIQ'
-        result = db.session.query(ShippingPriceData.commodity, ShippingPriceData.price).filter(
-            ShippingPriceData.commodity.in_([commodity_x, commodity_y]),
-            ShippingPriceData.source == source
-        ).all()
+        result = (
+            db.session.query(ShippingPriceData.commodity, ShippingPriceData.price)
+            .filter(
+                ShippingPriceData.commodity.in_([commodity_x, commodity_y]),
+                ShippingPriceData.source == source,
+            )
+            .all()
+        )
 
         if not result:
             return jsonify({"error": "No data found for the selected commodities"}), 404
@@ -6782,8 +7133,8 @@ def get_shipping_scatterplot_matrix():
             return jsonify({"error": "No valid data available"}), 404
 
         # Separate data for each commodity
-        x_data = df[df['commodity'] == commodity_x]['price'].tolist()
-        y_data = df[df['commodity'] == commodity_y]['price'].tolist()
+        x_data = df[df["commodity"] == commodity_x]["price"].tolist()
+        y_data = df[df["commodity"] == commodity_y]["price"].tolist()
 
         # Get the minimum length to ensure equal pairs
         min_length = min(len(x_data), len(y_data))
@@ -6843,13 +7194,10 @@ def get_shipping_scatterplot_matrix():
         return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
 
 
-
-
-
-
 # Rolling Correlations for Terminal prices
 
 import plotly.express as px
+
 
 def calculate_rolling_price_correlations(window, source_df, series1, series2):
     """
@@ -6858,25 +7206,27 @@ def calculate_rolling_price_correlations(window, source_df, series1, series2):
     try:
         # Sort index to ensure proper time-based calculations
         source_df = source_df.sort_index()
-        
+
         # Forward fill missing values (up to 7 days)
-        source_df = source_df.fillna(method='ffill', limit=7)
-        
+        source_df = source_df.fillna(method="ffill", limit=7)
+
         # Calculate rolling correlation
-        roll_corr = source_df[series1].rolling(
-            window=window,
-            min_periods=window // 2  # Allow for some missing data
-        ).corr(source_df[series2])
-        
+        roll_corr = (
+            source_df[series1]
+            .rolling(
+                window=window, min_periods=window // 2  # Allow for some missing data
+            )
+            .corr(source_df[series2])
+        )
+
         # Create result DataFrame
-        result_df = pd.DataFrame({
-            'date': roll_corr.index,
-            'correlation': roll_corr.values
-        })
+        result_df = pd.DataFrame(
+            {"date": roll_corr.index, "correlation": roll_corr.values}
+        )
 
         # Convert numpy values to Python native types
-        result_df['correlation'] = result_df['correlation'].astype(float)
-        result_df['date'] = result_df['date'].dt.strftime('%Y-%m-%d')
+        result_df["correlation"] = result_df["correlation"].astype(float)
+        result_df["date"] = result_df["date"].dt.strftime("%Y-%m-%d")
 
         # Clean up memory
         del roll_corr
@@ -6885,7 +7235,9 @@ def calculate_rolling_price_correlations(window, source_df, series1, series2):
         return result_df
 
     except KeyError as e:
-        raise ValueError(f"KeyError: {e}. At least one of the selected varieties has no price data.")
+        raise ValueError(
+            f"KeyError: {e}. At least one of the selected varieties has no price data."
+        )
     except Exception as e:
         raise ValueError(f"Unexpected error: {str(e)}")
 
@@ -6896,14 +7248,14 @@ def plot_rolling_price_correlations(roll_corr_df, series1, series2, window):
     """
     try:
         # Convert date strings back to datetime for plotting
-        roll_corr_df['date'] = pd.to_datetime(roll_corr_df['date'])
-        
+        roll_corr_df["date"] = pd.to_datetime(roll_corr_df["date"])
+
         # Create the plot
         fig_roll_corr = px.line(
             roll_corr_df,
-            x='date',
-            y='correlation',
-            title=f"{window}-day rolling correlation between {series1} and {series2}"
+            x="date",
+            y="correlation",
+            title=f"{window}-day rolling correlation between {series1} and {series2}",
         )
 
         fig_roll_corr.update_layout(
@@ -6912,17 +7264,17 @@ def plot_rolling_price_correlations(roll_corr_df, series1, series2, window):
                 "x": 0.5,
                 "y": 0.9,
                 "xanchor": "center",
-                "yanchor": "top"
+                "yanchor": "top",
             },
             xaxis_title="Date",
             yaxis_title="Correlation Coefficient",
             yaxis=dict(
-                tickformat='.2f',
-                range=[-1, 1]  # Correlation coefficient ranges from -1 to 1
+                tickformat=".2f",
+                range=[-1, 1],  # Correlation coefficient ranges from -1 to 1
             ),
             height=600,
             width=600,
-            showlegend=False
+            showlegend=False,
         )
 
         # Add reference lines
@@ -6940,8 +7292,8 @@ def plot_rolling_price_correlations(roll_corr_df, series1, series2, window):
         raise ValueError(f"Error creating plot: {str(e)}")
 
 
-
 # terminal correlations for usda data
+
 
 @app.route("/api/terminal_rolling_correlations", methods=["POST"])
 def terminal_rolling_correlations():
@@ -6960,16 +7312,17 @@ def terminal_rolling_correlations():
             return jsonify({"error": "Window size must be at least 5 days"}), 400
 
         # Fetch data from the database, filtering by source 'USDA'
-        result = db.session.query(
-            PriceData.year,
-            PriceData.day,
-            PriceData.commodity,
-            PriceData.price
-        ).filter(
-            PriceData.commodity.in_([series1, series2]),
-            PriceData.price > 0,  # Ensure we only get valid prices
-            PriceData.source == source  # Use selected source
-        ).all()
+        result = (
+            db.session.query(
+                PriceData.year, PriceData.day, PriceData.commodity, PriceData.price
+            )
+            .filter(
+                PriceData.commodity.in_([series1, series2]),
+                PriceData.price > 0,  # Ensure we only get valid prices
+                PriceData.source == source,  # Use selected source
+            )
+            .all()
+        )
 
         if not result:
             return jsonify({"error": "No data found for the selected commodities"}), 404
@@ -6979,16 +7332,12 @@ def terminal_rolling_correlations():
 
         # Generate a date column from year and day
         df["date"] = pd.to_datetime(
-            df.apply(lambda row: f"{row.year}-{row.day}", axis=1),
-            format="%Y-%j"
+            df.apply(lambda row: f"{row.year}-{row.day}", axis=1), format="%Y-%j"
         )
 
         # Pivot the data for rolling correlation
         pivot_data = df.pivot_table(
-            values="price",
-            index="date",
-            columns="commodity",
-            aggfunc="mean"
+            values="price", index="date", columns="commodity", aggfunc="mean"
         ).sort_index()
 
         # Clean up the main DataFrame after pivoting
@@ -7000,16 +7349,18 @@ def terminal_rolling_correlations():
         if len(pivot_data) < min_required_points:
             del pivot_data
             gc.collect()
-            return jsonify({
-                "error": f"Insufficient data points. Need at least {min_required_points} days of data for {window}-day window"
-            }), 400
+            return (
+                jsonify(
+                    {
+                        "error": f"Insufficient data points. Need at least {min_required_points} days of data for {window}-day window"
+                    }
+                ),
+                400,
+            )
 
         # Calculate rolling correlation
         roll_corr_df = calculate_rolling_price_correlations(
-            window=window,
-            source_df=pivot_data,
-            series1=series1,
-            series2=series2
+            window=window, source_df=pivot_data, series1=series1, series2=series2
         )
 
         # Clean up the pivot DataFrame after rolling correlation
@@ -7021,7 +7372,7 @@ def terminal_rolling_correlations():
             roll_corr_df,
             x="date",
             y="correlation",
-            title=f"{window}-day rolling correlation between {series1} and {series2}"
+            title=f"{window}-day rolling correlation between {series1} and {series2}",
         )
 
         # Customize the layout
@@ -7031,17 +7382,17 @@ def terminal_rolling_correlations():
                 "x": 0.5,
                 "y": 0.9,
                 "xanchor": "center",
-                "yanchor": "top"
+                "yanchor": "top",
             },
             xaxis_title="Date",
             yaxis_title="Correlation Coefficient",
             yaxis=dict(
-                tickformat='.2f',
-                range=[-1, 1]  # Correlation coefficient ranges from -1 to 1
+                tickformat=".2f",
+                range=[-1, 1],  # Correlation coefficient ranges from -1 to 1
             ),
             height=600,
             width=600,
-            showlegend=False
+            showlegend=False,
         )
 
         # Add reference lines
@@ -7054,9 +7405,7 @@ def terminal_rolling_correlations():
 
         # Return the chart as JSON
         return app.response_class(
-            response=fig_json,
-            status=200,
-            mimetype='application/json'
+            response=fig_json, status=200, mimetype="application/json"
         )
 
     except ValueError as e:
@@ -7066,10 +7415,8 @@ def terminal_rolling_correlations():
         return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
 
 
-
-
-
 # Rolling Correlations for Shipping prices
+
 
 def calculate_rolling_price_correlations(window, source_df, series1, series2):
     """
@@ -7078,25 +7425,29 @@ def calculate_rolling_price_correlations(window, source_df, series1, series2):
     try:
         # Sort index to ensure proper time-based calculations
         source_df = source_df.sort_index()
-        
+
         # Forward fill missing values (up to 7 days)
-        source_df = source_df.ffill(limit=7)  # Use .ffill() instead of fillna(method='ffill')
+        source_df = source_df.ffill(
+            limit=7
+        )  # Use .ffill() instead of fillna(method='ffill')
 
         # Calculate rolling correlation
-        roll_corr = source_df[series1].rolling(
-            window=window,
-            min_periods=window // 2  # Allow for some missing data
-        ).corr(source_df[series2])
-        
+        roll_corr = (
+            source_df[series1]
+            .rolling(
+                window=window, min_periods=window // 2  # Allow for some missing data
+            )
+            .corr(source_df[series2])
+        )
+
         # Create result DataFrame
-        result_df = pd.DataFrame({
-            'date': roll_corr.index,
-            'correlation': roll_corr.values
-        })
+        result_df = pd.DataFrame(
+            {"date": roll_corr.index, "correlation": roll_corr.values}
+        )
 
         # Convert numpy values to Python native types
-        result_df['correlation'] = result_df['correlation'].astype(float)
-        result_df['date'] = result_df['date'].dt.strftime('%Y-%m-%d')
+        result_df["correlation"] = result_df["correlation"].astype(float)
+        result_df["date"] = result_df["date"].dt.strftime("%Y-%m-%d")
 
         # Clean up memory
         del roll_corr
@@ -7105,10 +7456,11 @@ def calculate_rolling_price_correlations(window, source_df, series1, series2):
         return result_df
 
     except KeyError as e:
-        raise ValueError(f"KeyError: {e}. At least one of the selected varieties has no price data.")
+        raise ValueError(
+            f"KeyError: {e}. At least one of the selected varieties has no price data."
+        )
     except Exception as e:
         raise ValueError(f"Unexpected error: {str(e)}")
-
 
 
 def plot_rolling_price_correlations(roll_corr_df, series1, series2, window):
@@ -7117,34 +7469,29 @@ def plot_rolling_price_correlations(roll_corr_df, series1, series2, window):
     """
     try:
         # Convert date strings back to datetime for plotting
-        roll_corr_df['date'] = pd.to_datetime(roll_corr_df['date'])
-        
+        roll_corr_df["date"] = pd.to_datetime(roll_corr_df["date"])
+
         # Create the Plotly figure
         fig_roll_corr = px.line(
             roll_corr_df,
-            x='date',
-            y='correlation',
+            x="date",
+            y="correlation",
             title=f"{window}-day Rolling Correlation between {series1} and {series2}",
-            labels={'correlation': 'Correlation Coefficient', 'date': 'Date'}
+            labels={"correlation": "Correlation Coefficient", "date": "Date"},
         )
 
         # Update layout for better visualization
         fig_roll_corr.update_layout(
-            title={
-                "x": 0.5,
-                "y": 0.9,
-                "xanchor": "center",
-                "yanchor": "top"
-            },
+            title={"x": 0.5, "y": 0.9, "xanchor": "center", "yanchor": "top"},
             xaxis=dict(title="Date"),
             yaxis=dict(
                 title="Correlation Coefficient",
-                tickformat='.2f',
-                range=[-1, 1]  # Correlation coefficient ranges from -1 to 1
+                tickformat=".2f",
+                range=[-1, 1],  # Correlation coefficient ranges from -1 to 1
             ),
             height=600,
             width=600,
-            showlegend=False
+            showlegend=False,
         )
 
         # Add reference lines
@@ -7157,7 +7504,6 @@ def plot_rolling_price_correlations(roll_corr_df, series1, series2, window):
 
     except Exception as e:
         raise ValueError(f"Error creating plot: {str(e)}")
-
 
 
 # rolling correlations for shipping produceiq
@@ -7181,16 +7527,20 @@ def shipping_rolling_correlations():
             return jsonify({"error": "Window size must be at least 5 days"}), 400
 
         # Fetch data from the database
-        result = db.session.query(
-            ShippingPriceData.year,
-            ShippingPriceData.day,
-            ShippingPriceData.commodity,
-            ShippingPriceData.price
-        ).filter(
-            ShippingPriceData.commodity.in_([series1, series2]),
-            ShippingPriceData.price > 0,  # Ensure we only get valid prices
-            ShippingPriceData.source == source  # Use selected source
-        ).all()
+        result = (
+            db.session.query(
+                ShippingPriceData.year,
+                ShippingPriceData.day,
+                ShippingPriceData.commodity,
+                ShippingPriceData.price,
+            )
+            .filter(
+                ShippingPriceData.commodity.in_([series1, series2]),
+                ShippingPriceData.price > 0,  # Ensure we only get valid prices
+                ShippingPriceData.source == source,  # Use selected source
+            )
+            .all()
+        )
 
         if not result:
             return jsonify({"error": "No data found for the selected commodities"}), 404
@@ -7200,45 +7550,38 @@ def shipping_rolling_correlations():
 
         # Generate a date column from year and day
         df["date"] = pd.to_datetime(
-            df.apply(lambda row: f"{row.year}-{row.day}", axis=1),
-            format="%Y-%j"
+            df.apply(lambda row: f"{row.year}-{row.day}", axis=1), format="%Y-%j"
         )
 
         # Pivot the data for rolling correlation
         pivot_data = df.pivot_table(
-            values="price",
-            index="date",
-            columns="commodity",
-            aggfunc="mean"
+            values="price", index="date", columns="commodity", aggfunc="mean"
         ).sort_index()
 
         # Check for minimum data points
         min_required_points = window * 2
         if len(pivot_data) < min_required_points:
-            return jsonify({
-                "error": f"Insufficient data points. Need at least {min_required_points} days of data for {window}-day window"
-            }), 400
+            return (
+                jsonify(
+                    {
+                        "error": f"Insufficient data points. Need at least {min_required_points} days of data for {window}-day window"
+                    }
+                ),
+                400,
+            )
 
         # Calculate rolling correlation
         roll_corr_df = calculate_rolling_price_correlations(
-            window=window,
-            source_df=pivot_data,
-            series1=series1,
-            series2=series2
+            window=window, source_df=pivot_data, series1=series1, series2=series2
         )
 
         # Plot and serialize the rolling correlation chart
         fig_json = plot_rolling_price_correlations(
-            roll_corr_df=roll_corr_df,
-            series1=series1,
-            series2=series2,
-            window=window
+            roll_corr_df=roll_corr_df, series1=series1, series2=series2, window=window
         )
 
         return app.response_class(
-            response=fig_json,
-            status=200,
-            mimetype='application/json'
+            response=fig_json, status=200, mimetype="application/json"
         )
 
     except ValueError as e:
@@ -7246,7 +7589,6 @@ def shipping_rolling_correlations():
     except Exception as e:
         app.logger.error(f"Error generating shipping rolling correlations: {str(e)}")
         return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
-
 
 
 # Run the app

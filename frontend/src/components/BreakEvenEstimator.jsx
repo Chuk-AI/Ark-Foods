@@ -1,12 +1,12 @@
-import React, { useState, useEffect, useRef } from 'react';
-import Chart from 'chart.js/auto';
-import 'chartjs-plugin-datalabels';
-import 'chartjs-adapter-moment';
-import 'chartjs-adapter-luxon';
-import moment from 'moment';
-import axios from 'axios';
+import React, { useState, useEffect, useRef } from "react";
+import Chart from "chart.js/auto";
+import "chartjs-plugin-datalabels";
+import "chartjs-adapter-moment";
+import "chartjs-adapter-luxon";
+import moment from "moment";
+import axios from "axios";
 
-import * as XLSX from 'xlsx';
+import * as XLSX from "xlsx";
 
 const BreakEvenEstimator = () => {
   const [forecastChart, setForecastChart] = useState(null);
@@ -17,7 +17,7 @@ const BreakEvenEstimator = () => {
   const [error, setError] = useState(null);
   const [savedEstimation, setSavedEstimation] = useState(null);
   const [savedEstimations, setSavedEstimations] = useState([]);
-  
+
   const [commoditiesList, setCommoditiesList] = useState([
     "Anaheim",
     "Cubanelles",
@@ -30,72 +30,91 @@ const BreakEvenEstimator = () => {
     "Serrano",
     "Shishito",
   ]);
-  
+
   const [citiesList, setCitiesList] = useState([
-    "Select All","Baltimore", "Boston", "Chicago", "Columbia", "Miami", "New York", "Philadelphia", "Los Angeles"
+    "Select All",
+    "Baltimore",
+    "Boston",
+    "Chicago",
+    "Columbia",
+    "Miami",
+    "New York",
+    "Philadelphia",
+    "Los Angeles",
+    "Detroit",
+    "Atlanta",
   ]);
-  
+
   // Form State - Matches Revenue Calculator fields exactly
   const [formState, setFormState] = useState({
-    variety: 'Shishito',
-    start_date: '2024-04-09',
+    variety: "Shishito",
+    start_date: "2024-04-09",
     // forecast_date: new Date(new Date().setMonth(new Date().getMonth() + 3)).toISOString().split('T')[0],
     yield_per_acre: 2000,
     cost_per_acre: 10,
     harvest_cost_per_box: 10,
     cost_of_box: 1,
     boxes_bonus_per_yield: 10,
-    source: 'ProduceIQ',  // Add this line
+    source: "ProduceIQ", // Add this line
 
     // Date range for forecast comparison
-    startDateRange: new Date().toISOString().split('T')[0],
-    endDateRange: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
-    city: 'New York' // Added for forecast line data API
+    startDateRange: new Date().toISOString().split("T")[0],
+    endDateRange: new Date(new Date().setFullYear(new Date().getFullYear() + 1))
+      .toISOString()
+      .split("T")[0],
+    city: "New York", // Added for forecast line data API
   });
-  
+
   const chartRef = useRef(null);
-  
+
   // Helper function to get colors
   const getColor = (index) => {
-    const colors = ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40"];
+    const colors = [
+      "#FF6384",
+      "#36A2EB",
+      "#FFCE56",
+      "#4BC0C0",
+      "#9966FF",
+      "#FF9F40",
+    ];
     return colors[index % colors.length];
   };
-  
+
   // Handle form input changes
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormState(prev => ({
+    setFormState((prev) => ({
       ...prev,
-      [name]: value
+      [name]: value,
     }));
   };
-  
+
   // Load saved estimations on component mount
   useEffect(() => {
     loadSavedEstimations();
   }, []);
-  
+
   // Function to load all saved estimations
   const loadSavedEstimations = async () => {
     try {
-      const token = localStorage.getItem('authToken');
-      if (!token) throw new Error('No token found');
-      
-      const response = await axios.get('/api/break_even', {
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache',
-          'Expires': '0'
+      const token = localStorage.getItem("authToken");
+      if (!token) throw new Error("No token found");
+
+      const response = await axios.get("/api/break_even", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Cache-Control": "no-cache",
+          Pragma: "no-cache",
+          Expires: "0",
         },
       });
-      
+
       setSavedEstimations(response.data);
     } catch (error) {
-      console.error('Error loading saved estimations:', error);
+      console.error("Error loading saved estimations:", error);
     }
   };
-  
+
   // Function to load a specific estimation
   const loadEstimation = (estimation) => {
     // Set form state from saved estimation
@@ -112,38 +131,38 @@ const BreakEvenEstimator = () => {
       startDateRange: estimation.start_date_range,
       endDateRange: estimation.end_date_range,
     });
-    
+
     // Set calculated forecast from saved data
     setCalculatedForecast({
       forecasted_price: estimation.forecasted_price,
       revenue_per_acre: estimation.revenue_per_acre,
       revenue_per_acre_after_costings: estimation.revenue_after_costs,
-      season: estimation.season
+      season: estimation.season,
     });
-    
+
     // Load the chart data (you would need to fetch this again)
     handleCalculate();
   };
-  
+
   // Function to save the current estimation
   const handleSaveEstimation = async () => {
     if (!calculatedForecast) {
-      setError('Please calculate before saving');
+      setError("Please calculate before saving");
       return;
     }
-    
+
     setLoading(true);
-    
+
     try {
-      const token = localStorage.getItem('authToken');
-      if (!token) throw new Error('No token found');
-      
+      const token = localStorage.getItem("authToken");
+      if (!token) throw new Error("No token found");
+
       // Use current date as reference for forecast date
-      const currentDate = new Date().toISOString().split('T')[0];
+      const currentDate = new Date().toISOString().split("T")[0];
       const forecast_date = moment(currentDate)
-        .add(1, 'year')
-        .format('YYYY-MM-DD');
-  
+        .add(1, "year")
+        .format("YYYY-MM-DD");
+
       // Prepare data for saving
       const saveData = {
         variety: formState.variety,
@@ -157,143 +176,148 @@ const BreakEvenEstimator = () => {
         boxes_bonus_per_yield: parseFloat(formState.boxes_bonus_per_yield),
         start_date_range: formState.startDateRange,
         end_date_range: formState.endDateRange,
-        source: formState.source,  // Add this line
+        source: formState.source, // Add this line
 
         // Include calculated results
         forecasted_price: calculatedForecast.forecasted_price,
         revenue_per_acre: calculatedForecast.revenue_per_acre,
         revenue_after_costs: calculatedForecast.revenue_per_acre_after_costings,
-        season: calculatedForecast.season
+        season: calculatedForecast.season,
       };
-      
-      const response = await axios.post('/api/break_even/save', saveData, {
-        headers: { Authorization: `Bearer ${token}` }
+
+      const response = await axios.post("/api/break_even/save", saveData, {
+        headers: { Authorization: `Bearer ${token}` },
       });
-      
+
       setSavedEstimation(response.data);
-      alert('Estimation saved successfully!');
-      
+      alert("Estimation saved successfully!");
+
       // Refresh the list of saved estimations
       loadSavedEstimations();
-      
     } catch (error) {
-      console.error('Error saving estimation:', error);
-      setError('Failed to save estimation. Please try again.');
+      console.error("Error saving estimation:", error);
+      setError("Failed to save estimation. Please try again.");
     } finally {
       setLoading(false);
     }
   };
-  
+
   // Calculate the true cost per box (break-even point)
-const costPerBox = (
-  parseFloat(formState.cost_per_acre) + 
-  (parseFloat(formState.harvest_cost_per_box) * parseFloat(formState.yield_per_acre)) +
-  (parseFloat(formState.cost_of_box) * parseFloat(formState.yield_per_acre)) +
-  parseFloat(formState.boxes_bonus_per_yield)
-) / parseFloat(formState.yield_per_acre);
+  const costPerBox =
+    (parseFloat(formState.cost_per_acre) +
+      parseFloat(formState.harvest_cost_per_box) *
+        parseFloat(formState.yield_per_acre) +
+      parseFloat(formState.cost_of_box) * parseFloat(formState.yield_per_acre) +
+      parseFloat(formState.boxes_bonus_per_yield)) /
+    parseFloat(formState.yield_per_acre);
 
   // Calculate forecast and fetch forecast line data
-// Calculate forecast and fetch break-even chart data
-const handleCalculate = async () => {
-  setLoading(true);
-  setError(null);
+  // Calculate forecast and fetch break-even chart data
+  const handleCalculate = async () => {
+    setLoading(true);
+    setError(null);
 
-  try {
-    /* 1 ──────────────────────────────────
+    try {
+      /* 1 ──────────────────────────────────
        Run the revenue‑calculator endpoint
     ────────────────────────────────────── */
 
-    // Use current date to generate forecast_date (1 year into the future)
-    const currentDate = new Date().toISOString().split('T')[0];
-    const forecast_date = moment(currentDate)
-      .add(1, 'year')
-      .format('YYYY-MM-DD');
+      // Use current date to generate forecast_date (1 year into the future)
+      const currentDate = new Date().toISOString().split("T")[0];
+      const forecast_date = moment(currentDate)
+        .add(1, "year")
+        .format("YYYY-MM-DD");
 
-    // Add city parameter to the forecast calculation
-    const forecastResponse = await axios.post("/api/calculate_forecast", {
-      variety: formState.variety,
-      city: formState.city,
-      start_date: formState.start_date, // Keep original start_date for historical analysis
-      forecast_date, // But use current date + 1 year for forecast
-      yield_per_acre: parseFloat(formState.yield_per_acre),
-      cost_per_acre: parseFloat(formState.cost_per_acre),
-      harvest_cost_per_box: parseFloat(formState.harvest_cost_per_box),
-      cost_of_box: parseFloat(formState.cost_of_box),
-      boxes_bonus_per_yield: parseFloat(formState.boxes_bonus_per_yield),
-      source: formState.source  // Add this line
-
-    });
-
-    const calculatedData = forecastResponse.data;
-    setCalculatedForecast(calculatedData);
-
-    /* 2 ──────────────────────────────────
-       Fetch the chart data
-    ────────────────────────────────────── */
-    const token = localStorage.getItem("authToken");
-    if (!token) throw new Error("No token found");
-
-    // Check if using "All Cities"
-    const isAllCities = formState.city === "All Cities";
-
-    // Get chart data using the endpoint with current date as reference point
-    const forecastLineResponse = await axios.get("/api/break_even_chart_data", {
-      headers: { Authorization: `Bearer ${token}` },
-      params: {
+      // Add city parameter to the forecast calculation
+      const forecastResponse = await axios.post("/api/calculate_forecast", {
         variety: formState.variety,
         city: formState.city,
-        start_date: formState.start_date, // Historical start date
-        current_date: currentDate, // Add current date as reference point
-        forecast_date: forecast_date,
-        is_all_cities: formState.city === "All Cities",
-        source: formState.source  // Add this line
+        start_date: formState.start_date, // Keep original start_date for historical analysis
+        forecast_date, // But use current date + 1 year for forecast
+        yield_per_acre: parseFloat(formState.yield_per_acre),
+        cost_per_acre: parseFloat(formState.cost_per_acre),
+        harvest_cost_per_box: parseFloat(formState.harvest_cost_per_box),
+        cost_of_box: parseFloat(formState.cost_of_box),
+        boxes_bonus_per_yield: parseFloat(formState.boxes_bonus_per_yield),
+        source: formState.source, // Add this line
+      });
 
-      },
-    });
+      const calculatedData = forecastResponse.data;
+      setCalculatedForecast(calculatedData);
 
-    const lineData = forecastLineResponse.data;
-    setForecastData(lineData);
+      /* 2 ──────────────────────────────────
+       Fetch the chart data
+    ────────────────────────────────────── */
+      const token = localStorage.getItem("authToken");
+      if (!token) throw new Error("No token found");
 
-    /* 3 ──────────────────────────────────
+      // Check if using "All Cities"
+      const isAllCities = formState.city === "All Cities";
+
+      // Get chart data using the endpoint with current date as reference point
+      const forecastLineResponse = await axios.get(
+        "/api/break_even_chart_data",
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          params: {
+            variety: formState.variety,
+            city: formState.city,
+            start_date: formState.start_date, // Historical start date
+            current_date: currentDate, // Add current date as reference point
+            forecast_date: forecast_date,
+            is_all_cities: formState.city === "All Cities",
+            source: formState.source, // Add this line
+          },
+        },
+      );
+
+      const lineData = forecastLineResponse.data;
+      setForecastData(lineData);
+
+      /* 3 ──────────────────────────────────
        Draw / refresh the chart
     ────────────────────────────────────── */
-    const revenuePerBox =
-      calculatedData.revenue_per_acre_after_costings /
-      parseFloat(formState.yield_per_acre);
+      const revenuePerBox =
+        calculatedData.revenue_per_acre_after_costings /
+        parseFloat(formState.yield_per_acre);
 
-    updateChart(lineData, revenuePerBox);
-  } catch (err) {
-    console.error("Error calculating or fetching forecast data:", err);
-    setError("Failed to calculate or fetch data. Please try again.");
-  } finally {
-    setLoading(false);
-  }
-};
-  
-  
+      updateChart(lineData, revenuePerBox);
+    } catch (err) {
+      console.error("Error calculating or fetching forecast data:", err);
+      setError("Failed to calculate or fetch data. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const updateChart = (chartData, revenuePerBox) => {
     if (!chartRef.current) {
-      console.error('Canvas element not found');
+      console.error("Canvas element not found");
       return;
     }
-    
-    const ctx = chartRef.current.getContext('2d');
-    
+
+    const ctx = chartRef.current.getContext("2d");
+
     if (forecastChart) {
       forecastChart.destroy();
     }
-    
-    if (!chartData || !chartData.labels || !chartData.datasets || chartData.datasets.length === 0) {
-      setError('No forecast data available for the selected criteria.');
+
+    if (
+      !chartData ||
+      !chartData.labels ||
+      !chartData.datasets ||
+      chartData.datasets.length === 0
+    ) {
+      setError("No forecast data available for the selected criteria.");
       return;
     }
-    
+
     // Get the forecast dataset
     const forecastDataset = chartData.datasets[0];
-    
+
     // Create the revenue per box line dataset
     const costLineData = Array(chartData.labels.length).fill(costPerBox);
-    
+
     // Create datasets
     const datasets = [
       // Original forecast line
@@ -307,46 +331,46 @@ const handleCalculate = async () => {
         pointHoverRadius: 5,
         tension: 0.1,
         fill: false,
-        borderDash: [5, 5]
+        borderDash: [5, 5],
       },
       // Revenue per box line
       {
-        label: 'Cost Per Box (Break-Even)',
+        label: "Cost Per Box (Break-Even)",
         data: costLineData,
-        borderColor: '#888888',
-        backgroundColor: '#888888',
+        borderColor: "#888888",
+        backgroundColor: "#888888",
         borderWidth: 2,
         pointRadius: 0,
         pointHoverRadius: 0,
         tension: 0,
-        fill: false
+        fill: false,
       },
       // Full background dataset
       {
-        label: 'Background Range',
+        label: "Background Range",
         data: forecastDataset.data,
         backgroundColor: (context) => {
-          if (context.index === undefined) return 'transparent';
+          if (context.index === undefined) return "transparent";
           const forecastPrice = forecastDataset.data[context.index];
-          return forecastPrice >= costPerBox 
-            ? 'rgba(75, 192, 75, 0.6)' // Green when above break-even
-            : 'rgba(255, 99, 132, 0.6)'; // Red when below break-even
+          return forecastPrice >= costPerBox
+            ? "rgba(75, 192, 75, 0.6)" // Green when above break-even
+            : "rgba(255, 99, 132, 0.6)"; // Red when below break-even
         },
         borderWidth: 0,
         pointRadius: 0,
         fill: {
-          target: {value: costPerBox},
-          below: 'rgba(255, 99, 132, 0.6)', // Red below break-even
-          above: 'rgba(75, 192, 75, 0.6)' // Green above break-even
-        }
-      }
+          target: { value: costPerBox },
+          below: "rgba(255, 99, 132, 0.6)", // Red below break-even
+          above: "rgba(75, 192, 75, 0.6)", // Green above break-even
+        },
+      },
     ];
-    
+
     const newChart = new Chart(ctx, {
-      type: 'line',
+      type: "line",
       data: {
         labels: chartData.labels,
-        datasets: datasets
+        datasets: datasets,
       },
       options: {
         responsive: true,
@@ -354,58 +378,58 @@ const handleCalculate = async () => {
         scales: {
           x: {
             display: true,
-            type: 'category',
-            grid: { display: true, drawBorder: true, color: '#E0E0E0' },
+            type: "category",
+            grid: { display: true, drawBorder: true, color: "#E0E0E0" },
             ticks: {
               display: true,
               maxTicksLimit: 10,
-              color: '#666666',
+              color: "#666666",
               padding: 10,
               autoSkip: true,
               maxRotation: 45,
-              minRotation: 45
+              minRotation: 45,
             },
             title: {
               display: true,
-              text: 'Season',
-              color: '#666666',
-              padding: { top: 10, bottom: 10 }
-            }
+              text: "Season",
+              color: "#666666",
+              padding: { top: 10, bottom: 10 },
+            },
           },
           y: {
             display: true,
-            position: 'left',
-            grid: { display: true, drawBorder: true, color: '#E0E0E0' },
+            position: "left",
+            grid: { display: true, drawBorder: true, color: "#E0E0E0" },
             ticks: {
               display: true,
-              color: '#666666',
+              color: "#666666",
               padding: 10,
-              callback: (value) => `$${value.toFixed(2)}`
+              callback: (value) => `$${value.toFixed(2)}`,
             },
             title: {
               display: true,
-              text: 'Price ($)',
-              color: '#666666',
-              padding: { top: 10, bottom: 10 }
-            }
-          }
+              text: "Price ($)",
+              color: "#666666",
+              padding: { top: 10, bottom: 10 },
+            },
+          },
         },
         plugins: {
           tooltip: {
             enabled: true,
-            mode: 'index',
+            mode: "index",
             intersect: false,
-            backgroundColor: 'rgba(255, 255, 255, 0.9)',
-            titleColor: '#666666',
-            bodyColor: '#666666',
-            borderColor: '#E0E0E0',
+            backgroundColor: "rgba(255, 255, 255, 0.9)",
+            titleColor: "#666666",
+            bodyColor: "#666666",
+            borderColor: "#E0E0E0",
             borderWidth: 1,
             padding: 10,
             callbacks: {
               title: (context) => context[0].label,
               label: (context) => {
                 // Don't show area datasets in tooltip
-                if (context.dataset.label === 'Background Range') {
+                if (context.dataset.label === "Background Range") {
                   return null;
                 }
                 return `${context.dataset.label}: $${context.parsed.y.toFixed(2)}`;
@@ -413,179 +437,191 @@ const handleCalculate = async () => {
               footer: (context) => {
                 const forecastValue = context[0].raw;
                 const difference = forecastValue - revenuePerBox;
-              
+
                 // // Return profit or loss text without any colors
                 // if (difference >= 0) {
                 //   return `Profit: $${difference.toFixed(2)} above break-even`;
                 // } else {
                 //   return `Loss: $${Math.abs(difference).toFixed(2)} below break-even`;
                 // }
-              
-              }
-            }
+              },
+            },
           },
           legend: {
             display: true,
-            position: 'top',
-            align: 'center',
+            position: "top",
+            align: "center",
             labels: {
               boxWidth: 12,
               padding: 15,
-              color: '#666666',
+              color: "#666666",
               font: { size: 11 },
               filter: (legendItem) => {
                 // Only show main datasets in legend
-                return legendItem.text !== 'Background Range';
-                
-              }
-            }
+                return legendItem.text !== "Background Range";
+              },
+            },
           },
           datalabels: {
-            display: false // Globally disable datalabels
-          }
+            display: false, // Globally disable datalabels
+          },
         },
-        interaction: { mode: 'index', intersect: false }
-      }
+        interaction: { mode: "index", intersect: false },
+      },
     });
-    
+
     setForecastChart(newChart);
   };
-  
+
   const handleDownloadChart = () => {
     if (forecastChart) {
-      const canvas = document.getElementById('breakEvenChart');
-      const imageLink = document.createElement('a');
-      imageLink.download = 'break_even_analysis.png';
-      imageLink.href = canvas.toDataURL('image/png');
+      const canvas = document.getElementById("breakEvenChart");
+      const imageLink = document.createElement("a");
+      imageLink.download = "break_even_analysis.png";
+      imageLink.href = canvas.toDataURL("image/png");
       imageLink.click();
     }
   };
-
 
   // ... rest of the component remains the same (download functions, return statement, etc.)
   const handleDownloadData = () => {
     if (forecastData && calculatedForecast) {
       // const revenuePerBox = calculatedForecast.revenue_per_acre_after_costings / parseFloat(formState.yield_per_acre);
-      
+
       // Calculate the true cost per box (break-even point)
-const costPerBox = (
-  parseFloat(formState.cost_per_acre) + 
-  (parseFloat(formState.harvest_cost_per_box) * parseFloat(formState.yield_per_acre)) +
-  (parseFloat(formState.cost_of_box) * parseFloat(formState.yield_per_acre)) +
-  parseFloat(formState.boxes_bonus_per_yield)
-) / parseFloat(formState.yield_per_acre);
+      const costPerBox =
+        (parseFloat(formState.cost_per_acre) +
+          parseFloat(formState.harvest_cost_per_box) *
+            parseFloat(formState.yield_per_acre) +
+          parseFloat(formState.cost_of_box) *
+            parseFloat(formState.yield_per_acre) +
+          parseFloat(formState.boxes_bonus_per_yield)) /
+        parseFloat(formState.yield_per_acre);
 
       const worksheet = XLSX.utils.json_to_sheet(
         forecastData.labels.map((label, index) => {
           const forecastPrice = forecastData.datasets[0].data[index];
           const difference = forecastPrice - costPerBox;
           const profitable = forecastPrice >= costPerBox;
-          
+
           return {
             Season: label,
-            'Forecast Price': forecastPrice,
-            'Cost Per Box': costPerBox.toFixed(2),
-            'Difference': difference.toFixed(2),
-            'Profitable': profitable ? 'Yes' : 'No'
+            "Forecast Price": forecastPrice,
+            "Cost Per Box": costPerBox.toFixed(2),
+            Difference: difference.toFixed(2),
+            Profitable: profitable ? "Yes" : "No",
           };
-        })
+        }),
       );
-      
+
       const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'Break Even Analysis');
-      XLSX.writeFile(workbook, 'break_even_analysis.xlsx');
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Break Even Analysis");
+      XLSX.writeFile(workbook, "break_even_analysis.xlsx");
     }
   };
-  
+
   const handleDownload = () => {
     handleDownloadChart();
     handleDownloadData();
   };
-  
+
   return (
     <div className="container-fluid p-0">
       <div className="row">
         {/* Form Panel - Left Side Column */}
         <div className="col-lg-3">
-          <div className={`filter-sidebar ${showFilters ? 'show' : 'd-none d-lg-block'}`}>
-            <div className="card mb-4" style={{ height: '100%' }}>
+          <div
+            className={`filter-sidebar ${showFilters ? "show" : "d-none d-lg-block"}`}
+          >
+            <div className="card mb-4" style={{ height: "100%" }}>
               <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
                 <h5 className="mb-0">Break-Even Calculator</h5>
-                <button 
+                <button
                   className="btn btn-sm btn-outline-light d-lg-none"
                   onClick={() => setShowFilters(false)}
                 >
                   <i className="fas fa-times"></i>
                 </button>
               </div>
-              <div className="card-body" style={{ 
-                padding: '15px', 
-                maxHeight: '75vh',
-                overflowY: 'auto'
-              }}>
+              <div
+                className="card-body"
+                style={{
+                  padding: "15px",
+                  maxHeight: "75vh",
+                  overflowY: "auto",
+                }}
+              >
                 {/* Saved Estimations Dropdown */}
                 {savedEstimations.length > 0 && (
                   <div className="form-group mb-4">
-                    <label className="font-weight-bold">Saved Estimations</label>
+                    <label className="font-weight-bold">
+                      Saved Estimations
+                    </label>
                     <select
                       className="form-control"
                       onChange={(e) => {
                         const id = parseInt(e.target.value);
                         if (id) {
-                          const selected = savedEstimations.find(est => est.id === id);
+                          const selected = savedEstimations.find(
+                            (est) => est.id === id,
+                          );
                           if (selected) loadEstimation(selected);
                         }
                       }}
                       defaultValue=""
                     >
                       <option value="">Select a saved estimation</option>
-                      {savedEstimations.map(est => (
+                      {savedEstimations.map((est) => (
                         <option key={est.id} value={est.id}>
-                          {est.variety} - {est.city} - {new Date(est.created_at).toLocaleDateString()}
+                          {est.variety} - {est.city} -{" "}
+                          {new Date(est.created_at).toLocaleDateString()}
                         </option>
                       ))}
                     </select>
                   </div>
                 )}
-                
+
                 <form id="break-even-form">
                   <h6 className="text-muted mb-3">Crop Information</h6>
-                  
+
                   {/* Variety Selection */}
                   <div className="form-group">
                     <label className="font-weight-bold">Variety</label>
-                    <select 
+                    <select
                       className="form-control"
                       name="variety"
                       value={formState.variety}
                       onChange={handleInputChange}
                     >
-                      {commoditiesList.map(commodity => (
-                        <option key={commodity} value={commodity}>{commodity}</option>
+                      {commoditiesList.map((commodity) => (
+                        <option key={commodity} value={commodity}>
+                          {commodity}
+                        </option>
                       ))}
                     </select>
                   </div>
-                  
+
                   {/* City Selection */}
                   <div className="form-group">
                     <label className="font-weight-bold">Market (City)</label>
-                 {/* ❷  city <select> → include the option */}
-                  <select
-                    className="form-control"
-                    name="city"
-                    value={formState.city}
-                    onChange={handleInputChange}
-                  >
-                  <option value="All Cities">All Cities (average)</option>
-                    {citiesList
-                      .filter(c => c !== "Select All")        
-                      .map(city => (
-                        <option key={city} value={city}>{city}</option>
-                    ))}
-                  </select>
-
+                    {/* ❷  city <select> → include the option */}
+                    <select
+                      className="form-control"
+                      name="city"
+                      value={formState.city}
+                      onChange={handleInputChange}
+                    >
+                      <option value="All Cities">All Cities (average)</option>
+                      {citiesList
+                        .filter((c) => c !== "Select All")
+                        .map((city) => (
+                          <option key={city} value={city}>
+                            {city}
+                          </option>
+                        ))}
+                    </select>
                   </div>
-                  
+
                   {/* Planting and Harvest Dates */}
                   <div className="form-group">
                     <label className="font-weight-bold">Start Date</label>
@@ -597,14 +633,14 @@ const costPerBox = (
                       onChange={handleInputChange}
                     />
                   </div>
-                  
-      
-                  
+
                   <h6 className="text-muted mb-3 mt-4">Yield Information</h6>
-                  
+
                   {/* Yield Per Acre */}
                   <div className="form-group">
-                    <label className="font-weight-bold">Yield Per Acre (boxes)</label>
+                    <label className="font-weight-bold">
+                      Yield Per Acre (boxes)
+                    </label>
                     <input
                       type="number"
                       className="form-control"
@@ -615,12 +651,14 @@ const costPerBox = (
                       step="1"
                     />
                   </div>
-                  
+
                   <h6 className="text-muted mb-3 mt-4">Cost Information</h6>
-                  
+
                   {/* Cost Fields */}
                   <div className="form-group">
-                    <label className="font-weight-bold">Cost Per Acre ($)</label>
+                    <label className="font-weight-bold">
+                      Cost Per Acre ($)
+                    </label>
                     <input
                       type="number"
                       className="form-control"
@@ -631,9 +669,11 @@ const costPerBox = (
                       step="0.01"
                     />
                   </div>
-                  
+
                   <div className="form-group">
-                    <label className="font-weight-bold">Harvest Cost Per Box ($)</label>
+                    <label className="font-weight-bold">
+                      Harvest Cost Per Box ($)
+                    </label>
                     <input
                       type="number"
                       className="form-control"
@@ -644,7 +684,7 @@ const costPerBox = (
                       step="0.01"
                     />
                   </div>
-                  
+
                   <div className="form-group">
                     <label className="font-weight-bold">Cost of Box ($)</label>
                     <input
@@ -657,9 +697,11 @@ const costPerBox = (
                       step="0.01"
                     />
                   </div>
-                  
+
                   <div className="form-group">
-                    <label className="font-weight-bold">Boxes Bonus Per Yield</label>
+                    <label className="font-weight-bold">
+                      Boxes Bonus Per Yield
+                    </label>
                     <input
                       type="number"
                       className="form-control"
@@ -671,54 +713,52 @@ const costPerBox = (
                     />
                   </div>
                   {/* Data Source Selection */}
-<div className="form-group">
-  <label className="font-weight-bold">Data Source</label>
-  <select
-    className="form-control"
-    name="source"
-    value={formState.source}
-    onChange={handleInputChange}
-  >
-    <option value="ProduceIQ">ProduceIQ</option>
-    <option value="USDA">USDA</option>
-    <option value="ProduceIQ,USDA">Both Sources</option>
-  </select>
-</div>
-           
-             
-                  
+                  <div className="form-group">
+                    <label className="font-weight-bold">Data Source</label>
+                    <select
+                      className="form-control"
+                      name="source"
+                      value={formState.source}
+                      onChange={handleInputChange}
+                    >
+                      <option value="ProduceIQ">ProduceIQ</option>
+                      <option value="USDA">USDA</option>
+                      <option value="ProduceIQ,USDA">Both Sources</option>
+                    </select>
+                  </div>
+
                   {/* Calculate Button */}
-                  <button 
-                    type="button" 
-                    className="btn btn-primary btn-block mt-4" 
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-block mt-4"
                     onClick={handleCalculate}
                     disabled={loading}
                   >
-                    {loading ? 'Calculating...' : 'Calculate Break-Even Analysis'}
+                    {loading
+                      ? "Calculating..."
+                      : "Calculate Break-Even Analysis"}
                   </button>
-                  
+
                   {/* Save Button - Shown after calculation */}
                   {calculatedForecast && (
-                    <button 
-                      type="button" 
-                      className="btn btn-success btn-block mt-2" 
+                    <button
+                      type="button"
+                      className="btn btn-success btn-block mt-2"
                       onClick={handleSaveEstimation}
                       disabled={loading}
                     >
-                      {loading ? 'Saving...' : 'Save Estimation'}
+                      {loading ? "Saving..." : "Save Estimation"}
                     </button>
                   )}
                 </form>
-                
-        
               </div>
             </div>
           </div>
         </div>
-        
+
         {/* Chart Display - Right Side Column */}
         <div className="col-lg-9">
-          <div className="card mb-4" style={{ height: '100%' }}>
+          <div className="card mb-4" style={{ height: "100%" }}>
             <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
               <h4 className="mb-0">Break-Even Price Analysis</h4>
               <div>
@@ -728,9 +768,15 @@ const costPerBox = (
                 >
                   <i className="fas fa-filter"></i> Calculator
                 </button>
-                <button 
+                <button
                   className="btn btn-sm btn-outline-light"
-                  onClick={() => window.toggleBlockSize && window.toggleBlockSize('break-even-chart-card', 'Break-Even Analysis')}
+                  onClick={() =>
+                    window.toggleBlockSize &&
+                    window.toggleBlockSize(
+                      "break-even-chart-card",
+                      "Break-Even Analysis",
+                    )
+                  }
                 >
                   <i className="fas fa-expand-arrows-alt"></i>
                 </button>
@@ -742,36 +788,57 @@ const costPerBox = (
                   {error}
                 </div>
               )}
-              
+
               {!calculatedForecast && !error && (
                 <div className="text-center p-5">
                   <i className="fas fa-chart-area fa-3x text-muted mb-3"></i>
-                  <h5 className="text-muted">Enter crop information and calculate to view the break-even analysis</h5>
-                  <p className="text-muted">The chart will show periods where forecasted prices are profitable compared to your break-even price.</p>
+                  <h5 className="text-muted">
+                    Enter crop information and calculate to view the break-even
+                    analysis
+                  </h5>
+                  <p className="text-muted">
+                    The chart will show periods where forecasted prices are
+                    profitable compared to your break-even price.
+                  </p>
                 </div>
               )}
-              
-              <div className="chart-container" style={{ position: 'relative', height: '60vh', width: '100%', display: calculatedForecast ? 'block' : 'none' }}>
+
+              <div
+                className="chart-container"
+                style={{
+                  position: "relative",
+                  height: "60vh",
+                  width: "100%",
+                  display: calculatedForecast ? "block" : "none",
+                }}
+              >
                 <canvas id="breakEvenChart" ref={chartRef}></canvas>
               </div>
-              
+
               {calculatedForecast && (
                 <div className="mt-3">
                   <div className="row">
                     <div className="col-md-8">
                       <div className="d-flex mt-2">
                         <div className="mr-4">
-                          <span className="badge badge-success mr-2">&nbsp;</span>
+                          <span className="badge badge-success mr-2">
+                            &nbsp;
+                          </span>
                           <small>Profitable (Above Break-Even)</small>
                         </div>
                         <div>
-                          <span className="badge badge-danger mr-2">&nbsp;</span>
+                          <span className="badge badge-danger mr-2">
+                            &nbsp;
+                          </span>
                           <small>Unprofitable (Below Break-Even)</small>
                         </div>
                       </div>
                     </div>
                     <div className="col-md-4 text-right">
-                      <button className="btn btn-primary" onClick={handleDownload}>
+                      <button
+                        className="btn btn-primary"
+                        onClick={handleDownload}
+                      >
                         <i className="fas fa-download mr-2"></i>
                         Download Analysis
                       </button>

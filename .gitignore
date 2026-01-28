@@ -10,3 +10,10 @@ node_modules/
 node_modules/
 data/
 .env
+frontend/node_modules/
+frontend/build/
+frontend/dist/
+produceiq_raw_export.py
+usda_terminal_export.py
+frontend/src/index.js
+frontend/src/reportWebVitals.js

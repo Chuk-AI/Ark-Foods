@@ -1,234 +1,281 @@
-{% extends "base.html" %}
-
-{% block title %}Admin Dashboard{% endblock %}
-
-{% block content %}
+{% extends "base.html" %} {% block title %}Admin Dashboard{% endblock %} {%
+block content %}
 
 <!-- Add the Approve Users button -->
 <div class="mt-3 mb-3">
-  <a href="{{ url_for('approve_users') }}" class="btn btn-primary">Approve Users</a>
+  <a href="{{ url_for('approve_users') }}" class="btn btn-primary"
+    >Approve Users</a
+  >
 </div>
 <h1 class="mt-4">Admin Dashboard</h1>
 
 <p>Welcome, {{ current_user.username }}! You have Admin privileges.</p>
-  <!-- Tabs Navigation -->
-  <ul class="nav nav-tabs" id="myTab" role="tablist">
-    <li class="nav-item" role="presentation">
-      <a class="nav-link active" id="yield-calculator-tab" data-toggle="tab" href="#yield-calculator" role="tab" aria-controls="yield-calculator" aria-selected="true">Yield Calculator</a>
-    </li>
-  </ul>
+<!-- Tabs Navigation -->
+<ul class="nav nav-tabs" id="myTab" role="tablist">
+  <li class="nav-item" role="presentation">
+    <a
+      class="nav-link active"
+      id="yield-calculator-tab"
+      data-toggle="tab"
+      href="#yield-calculator"
+      role="tab"
+      aria-controls="yield-calculator"
+      aria-selected="true"
+      >Yield Calculator</a
+    >
+  </li>
+</ul>
 
-  <!-- Tabs Content -->
-  <div class="tab-content" id="myTabContent">
-    <!-- Yield Calculator Tab -->
-    <div class="tab-pane fade show active" id="yield-calculator" role="tabpanel" aria-labelledby="yield-calculator-tab">
-      <div class="row mt-4">
-        <!-- Left Side: Filters (Col 6) -->
-        <div class="col-md-6">
-            <form action="{{ url_for('calculate_forecast') }}" method="POST">
-                <div class="input-group mb-3">
-                    <label for="variety">Select Variety:</label>
-                    <select name="variety" id="variety" class="form-control">
-                        <option value="Shishito">Shishito</option>
-                        <option value="Anaheim">Anaheim</option>
-                        <option value="Cubanelles">Cubanelles</option>
-                        <option value="Fresno">Fresno</option>
-                        <option value="Habanero">Habanero</option>
-                        <option value="Hungarian Wax">Hungarian Wax</option>
-                        <option value="Jalapeno">Jalapeno</option>
-                        <option value="Long Hot">Long Hot</option>
-                        <option value="Poblano">Poblano</option>
-                        <option value="Serrano">Serrano</option>
-                    </select>
-                </div>
+<!-- Tabs Content -->
+<div class="tab-content" id="myTabContent">
+  <!-- Yield Calculator Tab -->
+  <div
+    class="tab-pane fade show active"
+    id="yield-calculator"
+    role="tabpanel"
+    aria-labelledby="yield-calculator-tab"
+  >
+    <div class="row mt-4">
+      <!-- Left Side: Filters (Col 6) -->
+      <div class="col-md-6">
+        <form action="{{ url_for('calculate_forecast') }}" method="POST">
+          <div class="input-group mb-3">
+            <label for="variety">Select Variety:</label>
+            <select name="variety" id="variety" class="form-control">
+              <option value="Shishito">Shishito</option>
+              <option value="Anaheim">Anaheim</option>
+              <option value="Cubanelles">Cubanelles</option>
+              <option value="Fresno">Fresno</option>
+              <option value="Habanero">Habanero</option>
+              <option value="Hungarian Wax">Hungarian Wax</option>
+              <option value="Jalapeno">Jalapeno</option>
+              <option value="Long Hot">Long Hot</option>
+              <option value="Poblano">Poblano</option>
+              <option value="Serrano">Serrano</option>
+            </select>
+          </div>
 
-                <div class="input-group mb-3">
-                    <label for="city">Select City:</label>
-                    <select name="city" id="city" class="form-control">
-                        <option value="BALTIMORE">BALTIMORE</option>
-                        <option value="BOSTON">BOSTON</option>
-                        <option value="CHICAGO">CHICAGO</option>
-                        <option value="COLUMBIA">COLUMBIA</option>
-                        <option value="MIAMI">MIAMI</option>
-                        <option value="NEW YORK">NEW YORK</option>
-                        <option value="PHILADELPHIA">PHILADELPHIA</option>
-                        <option value="LOS ANGELES">LOS ANGELES</option>
-                    </select>
-                </div>
+          <div class="input-group mb-3">
+            <label for="city">Select City:</label>
+            <select name="city" id="city" class="form-control">
+              <option value="BALTIMORE">BALTIMORE</option>
+              <option value="BOSTON">BOSTON</option>
+              <option value="CHICAGO">CHICAGO</option>
+              <option value="COLUMBIA">COLUMBIA</option>
+              <option value="MIAMI">MIAMI</option>
+              <option value="NEW YORK">NEW YORK</option>
+              <option value="PHILADELPHIA">PHILADELPHIA</option>
+              <option value="LOS ANGELES">LOS ANGELES</option>
+              <option value="DETROIT">DETROIT</option>
+              <option value="ATLANTA">ATLANTA</option>
+            </select>
+          </div>
 
-                <div class="input-group mb-3">
-                    <label for="start_date">Enter Start Date:</label>
-                    <input type="date" name="start_date" id="start_date" class="form-control" required>
-                </div>
+          <div class="input-group mb-3">
+            <label for="start_date">Enter Start Date:</label>
+            <input
+              type="date"
+              name="start_date"
+              id="start_date"
+              class="form-control"
+              required
+            />
+          </div>
 
-                <div class="input-group mb-3">
-                    <label for="forecast_date">Enter Forecast Date:</label>
-                    <input type="date" name="forecast_date" id="forecast_date" class="form-control" required>
-                </div>
+          <div class="input-group mb-3">
+            <label for="forecast_date">Enter Forecast Date:</label>
+            <input
+              type="date"
+              name="forecast_date"
+              id="forecast_date"
+              class="form-control"
+              required
+            />
+          </div>
 
-                <div class="input-group mb-3">
-                    <label for="yield_per_acre">Enter Yield per Acre (Boxes per Acre):</label>
-                    <input type="number" name="yield_per_acre" id="yield_per_acre" class="form-control" required>
-                </div>
+          <div class="input-group mb-3">
+            <label for="yield_per_acre"
+              >Enter Yield per Acre (Boxes per Acre):</label
+            >
+            <input
+              type="number"
+              name="yield_per_acre"
+              id="yield_per_acre"
+              class="form-control"
+              required
+            />
+          </div>
 
-                <button type="submit" class="btn btn-primary">Calculate</button>
-            </form>
-        </div>
-
-        <!-- Right Side: Results (Col 6) -->
-        <div class="col-md-6">
-            <div id="forecast-results-container">
-                <p id="no-forecast-message">No forecast available. Please enter the data and submit the form.</p>
-            </div>
-        </div>
+          <button type="submit" class="btn btn-primary">Calculate</button>
+        </form>
       </div>
 
-      <!-- Analytics Section -->
-      <hr>
-      <div class="row">
-        <div class="col-md-12">
-          <h2>Analytics: Forecasted Prices by Season</h2>
-          <canvas id="seasonPriceChart"></canvas>
+      <!-- Right Side: Results (Col 6) -->
+      <div class="col-md-6">
+        <div id="forecast-results-container">
+          <p id="no-forecast-message">
+            No forecast available. Please enter the data and submit the form.
+          </p>
         </div>
       </div>
     </div>
-  </div>
 
-  <!-- Include Chart.js -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
-  
-  <script>
-    let seasonPriceChart;  // Define globally to allow chart updates
-    const varietySelect = document.getElementById("variety");
-    const citySelect = document.getElementById("city");
-  
-    // Event listeners to automatically update chart when city or variety changes
-    varietySelect.addEventListener('change', updateChart);
-    citySelect.addEventListener('change', updateChart);
-  
-    function updateChart() {
-      const variety = varietySelect.value;
-      const city = citySelect.value;
-    
-      if (!variety || !city) {
-        alert("Please select both variety and city!");
-        return;
-      }
-    
-      fetch(`/api/seasonal_prices?variety=${variety}&city=${city}`)
-        .then(response => {
-          if (!response.ok) {
-            throw new Error('Network response was not ok');
-          }
-          return response.json();
-        })
-        .then(data => {
-          // If the chart already exists, destroy it before creating a new one
-          if (seasonPriceChart) {
-            seasonPriceChart.destroy();
-          }
-    
-          const ctx = document.getElementById('seasonPriceChart').getContext('2d');
-          seasonPriceChart = new Chart(ctx, {
-            type: 'bar',
-            data: {
-              labels: ['Spring', 'Summer', 'Autumn', 'Winter'],
-              datasets: [{
+    <!-- Analytics Section -->
+    <hr />
+    <div class="row">
+      <div class="col-md-12">
+        <h2>Analytics: Forecasted Prices by Season</h2>
+        <canvas id="seasonPriceChart"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Include Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+
+<script>
+  let seasonPriceChart; // Define globally to allow chart updates
+  const varietySelect = document.getElementById("variety");
+  const citySelect = document.getElementById("city");
+
+  // Event listeners to automatically update chart when city or variety changes
+  varietySelect.addEventListener("change", updateChart);
+  citySelect.addEventListener("change", updateChart);
+
+  function updateChart() {
+    const variety = varietySelect.value;
+    const city = citySelect.value;
+
+    if (!variety || !city) {
+      alert("Please select both variety and city!");
+      return;
+    }
+
+    fetch(`/api/seasonal_prices?variety=${variety}&city=${city}`)
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("Network response was not ok");
+        }
+        return response.json();
+      })
+      .then((data) => {
+        // If the chart already exists, destroy it before creating a new one
+        if (seasonPriceChart) {
+          seasonPriceChart.destroy();
+        }
+
+        const ctx = document
+          .getElementById("seasonPriceChart")
+          .getContext("2d");
+        seasonPriceChart = new Chart(ctx, {
+          type: "bar",
+          data: {
+            labels: ["Spring", "Summer", "Autumn", "Winter"],
+            datasets: [
+              {
                 label: `Forecasted Price per Box for ${variety} in ${city}`,
                 data: [data.Spring, data.Summer, data.Autumn, data.Winter],
-                backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0'],
-                borderColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0'],
-                borderWidth: 1
-              }]
-            },
-            plugins: [ChartDataLabels],  // Enable data labels plugin
-            options: {
-              responsive: true,
-              plugins: {
-                legend: {
-                  display: false  // Remove the legend
+                backgroundColor: ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0"],
+                borderColor: ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0"],
+                borderWidth: 1,
+              },
+            ],
+          },
+          plugins: [ChartDataLabels], // Enable data labels plugin
+          options: {
+            responsive: true,
+            plugins: {
+              legend: {
+                display: false, // Remove the legend
+              },
+              datalabels: {
+                color: "black",
+                anchor: "end",
+                align: "top",
+                formatter: function (value) {
+                  return `$${value}`;
                 },
-                datalabels: {
-                  color: 'black',
-                  anchor: 'end',
-                  align: 'top',
-                  formatter: function(value) {
-                    return `$${value}`;
-                  }
-                }
               },
-              scales: {
-                y: {
-                  beginAtZero: true,
-                  title: {
-                    display: true,
-                    text: 'Price ($)'
-                  }
-                }
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                title: {
+                  display: true,
+                  text: "Price ($)",
+                },
               },
-              title: {
-                display: true,
-                text: `Forecasted Prices by Season for ${variety} in ${city}`,
-                font: {
-                  size: 18
-                }
-              }
-            }
-          });
-        })
-        .catch(error => console.error('There was a problem with the fetch operation:', error));
+            },
+            title: {
+              display: true,
+              text: `Forecasted Prices by Season for ${variety} in ${city}`,
+              font: {
+                size: 18,
+              },
+            },
+          },
+        });
+      })
+      .catch((error) =>
+        console.error("There was a problem with the fetch operation:", error),
+      );
+  }
+
+  // Initial chart update on page load
+  updateChart();
+
+  // Form submission handler for the calculator (uses start date)
+  document.querySelector("form").addEventListener("submit", function (event) {
+    event.preventDefault(); // Prevent form from submitting the traditional way
+
+    // Get form field values
+    const variety = document.getElementById("variety").value;
+    const city = document.getElementById("city").value;
+    const startDate = document.getElementById("start_date").value;
+    const forecastDate = document.getElementById("forecast_date").value;
+    const yieldPerAcre = document.getElementById("yield_per_acre").value;
+
+    // Validate that all fields are filled in
+    if (!startDate || !forecastDate || !yieldPerAcre) {
+      alert("Please fill in all required fields!");
+      return;
     }
-    
-    // Initial chart update on page load
-    updateChart();
-  
-    // Form submission handler for the calculator (uses start date)
-    document.querySelector('form').addEventListener('submit', function (event) {
-      event.preventDefault();  // Prevent form from submitting the traditional way
-  
-      // Get form field values
-      const variety = document.getElementById("variety").value;
-      const city = document.getElementById("city").value;
-      const startDate = document.getElementById("start_date").value;
-      const forecastDate = document.getElementById("forecast_date").value;
-      const yieldPerAcre = document.getElementById("yield_per_acre").value;
-  
-      // Validate that all fields are filled in
-      if (!startDate || !forecastDate || !yieldPerAcre) {
-          alert("Please fill in all required fields!");
-          return;
-      }
-  
-      // Prepare the form data to send via POST request
-      const formData = new FormData();
-      formData.append('variety', variety);
-      formData.append('city', city);
-      formData.append('start_date', startDate);
-      formData.append('forecast_date', forecastDate);
-      formData.append('yield_per_acre', yieldPerAcre);
-  
-      // Send the form data to the backend using fetch
-      fetch('/api/calculate_forecast', {
-          method: 'POST',
-          body: formData,
+
+    // Prepare the form data to send via POST request
+    const formData = new FormData();
+    formData.append("variety", variety);
+    formData.append("city", city);
+    formData.append("start_date", startDate);
+    formData.append("forecast_date", forecastDate);
+    formData.append("yield_per_acre", yieldPerAcre);
+
+    // Send the form data to the backend using fetch
+    fetch("/api/calculate_forecast", {
+      method: "POST",
+      body: formData,
+    })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("Network response was not ok");
+        }
+        return response.json();
       })
-      .then(response => {
-          if (!response.ok) {
-              throw new Error('Network response was not ok');
-          }
-          return response.json();
-      })
-      .then(data => {
-          // Remove the "No forecast available" message, if it exists
-          const noForecastMessage = document.getElementById('no-forecast-message');
-          if (noForecastMessage) {
-              noForecastMessage.style.display = 'none';
-          }
-  
-          // Ensure the forecast container exists and update the results dynamically
-          let forecastContainer = document.getElementById('forecast-results-container');
-          forecastContainer.innerHTML = `
+      .then((data) => {
+        // Remove the "No forecast available" message, if it exists
+        const noForecastMessage = document.getElementById(
+          "no-forecast-message",
+        );
+        if (noForecastMessage) {
+          noForecastMessage.style.display = "none";
+        }
+
+        // Ensure the forecast container exists and update the results dynamically
+        let forecastContainer = document.getElementById(
+          "forecast-results-container",
+        );
+        forecastContainer.innerHTML = `
               <div class="card">
                   <div class="card-body">
                       <h2>Forecast Results</h2>
@@ -241,9 +288,10 @@
               </div>
           `;
       })
-      .catch(error => console.error('There was a problem with the fetch operation:', error));
+      .catch((error) =>
+        console.error("There was a problem with the fetch operation:", error),
+      );
   });
-  
-  </script>
-  
+</script>
+
 {% endblock %}
