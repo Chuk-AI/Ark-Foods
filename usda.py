@@ -8,16 +8,73 @@ logging.basicConfig(
 )
 
 
-def fetch_usda_terminal_data():
-    from app import db, PriceData  # Use the existing PriceData model
+import re
+from fractions import Fraction
 
-    # API Key and Endpoint
+# ── Bushel weight (lbs) per variety ──────────────────────────────────────────
+BUSHEL_LBS = {
+    "jalapeno": 32,
+    "hungarian wax": 28,
+    "shishito": 22,  # bu = 22 lbs
+    "fresno": 28,  # bu = 28-30 lbs, using lower bound
+    "long hot": 24,  # bu = 24 lbs
+    "habanero": 22,  # bu = 22 lbs
+    "anaheim": 30,
+    "cubanelle": 20,
+    "serrano": 28,  # clarified at 28 lbs
+    "poblano": 26,  # bu = 25-27 lbs, using midpoint
+}
+
+
+def parse_package_lbs(package_str: str, lbs_per_bu: float) -> float | None:
+    """
+    Parse a USDA package string and return its weight in lbs.
+    Returns None if the string cannot be parsed (e.g. bare "crates").
+
+    Handles:
+      - "1 1/9 bushel cartons"  → 1.111 * lbs_per_bu
+      - "1/2 bushel cartons"    → 0.5   * lbs_per_bu
+      - "20 lb cartons"         → 20.0
+      - "10 lb reusable ..."    → 10.0
+      - "4 kg cartons"          → 4 * 2.20462
+    """
+    if not package_str:
+        return None
+
+    s = package_str.strip().lower()
+
+    # ── Bushel fractions/multiples (e.g. "1 1/9 bushel", "1/2 bushel") ──────
+    bu_match = re.search(r"(\d+\s+\d+/\d+|\d+/\d+|\d+\.?\d*)\s*bushel", s)
+    if bu_match:
+        qty_str = bu_match.group(1).strip()
+        parts = qty_str.split()
+        if len(parts) == 2:  # mixed number e.g. "1 1/9"
+            qty = int(parts[0]) + float(Fraction(parts[1]))
+        else:
+            qty = float(Fraction(qty_str))
+        return qty * lbs_per_bu
+
+    # ── Pounds (e.g. "20 lb cartons", "10 lb reusable plastic containers") ───
+    lb_match = re.search(r"(\d+\.?\d*)\s*lb", s)
+    if lb_match:
+        return float(lb_match.group(1))
+
+    # ── Kilograms (e.g. "4 kg cartons") ──────────────────────────────────────
+    kg_match = re.search(r"(\d+\.?\d*)\s*kg", s)
+    if kg_match:
+        return float(kg_match.group(1)) * 2.20462
+
+    return None  # e.g. bare "crates" — cannot determine weight
+
+
+def fetch_usda_terminal_data():
+    from app import db, PriceData
+
     API_KEY = "LIm1Mr7tz2MRDq+5CyCXttTtSkfsD1Kr"
     BASE_URL = (
         "https://marsapi.ams.usda.gov/services/v1.2/marketTypes/sc-cr/sc/terminal/daily"
     )
 
-    # Commodities to filter
     wanted_commodities = [
         "Anaheim",
         "Cubanelle",
@@ -31,7 +88,6 @@ def fetch_usda_terminal_data():
         "Shishito",
     ]
 
-    # Cities to filter
     wanted_cities = [
         "Chicago",
         "New York",
@@ -45,10 +101,8 @@ def fetch_usda_terminal_data():
         "Atlanta",
     ]
 
-    # Standardize the commodity list for comparison
-    wanted_commodities = [commodity.lower() for commodity in wanted_commodities]
+    wanted_commodities = [c.lower() for c in wanted_commodities]
 
-    # Map standardized names back to desired format
     standardized_name = {
         "anaheim": "Anaheim",
         "cubanelle": "Cubanelle",
@@ -62,16 +116,12 @@ def fetch_usda_terminal_data():
         "shishito": "Shishito",
     }
 
-    # Define date range
-    start_date = pd.Timestamp("2024-12-06")  # Adjust as needed
+    start_date = pd.Timestamp("2024-12-06")
     end_date = pd.Timestamp.today()
-
     current_date = start_date
 
     while current_date <= end_date:
         params = {"q": f"report_date={current_date.strftime('%m/%d/%Y')}"}
-
-        # Fetch data for the current day
         response = requests.get(BASE_URL, auth=(API_KEY, ""), params=params)
 
         if response.status_code == 200:
@@ -80,11 +130,9 @@ def fetch_usda_terminal_data():
                 f"Fetched {len(data)} records for {current_date.strftime('%Y-%m-%d')}."
             )
 
-            # Process and filter data
             for item in data:
                 commodity = item.get("commodity", "").strip().lower()
 
-                # Check if the commodity starts with 'peppers,' and matches wanted_commodities
                 if commodity.startswith("peppers,"):
                     stripped_commodity = commodity.replace("peppers, ", "").strip()
                     if stripped_commodity in wanted_commodities:
@@ -92,13 +140,10 @@ def fetch_usda_terminal_data():
                             stripped_commodity, stripped_commodity
                         )
 
-                        # Extract first city name before the comma
                         location = item.get("location", "")
                         first_city = location.split(",")[0].strip()
 
-                        # Filter by wanted cities
                         if first_city in wanted_cities:
-                            # Calculate season
                             report_date = pd.Timestamp(item.get("report_date", ""))
                             year = report_date.year
                             month = report_date.month
@@ -113,39 +158,66 @@ def fetch_usda_terminal_data():
                             else:
                                 season = "Winter"
 
-                            # Calculate price as average of low and high price and round to 1 decimal place
                             low_price = item.get("low_price")
                             high_price = item.get("high_price")
 
                             try:
-                                price = (
+                                raw_price = (
                                     round((float(low_price) + float(high_price)) / 2, 1)
                                     if low_price and high_price
                                     else round(float(low_price or high_price or 0), 1)
                                 )
                             except ValueError:
-                                price = 0.0
+                                raw_price = 0.0
 
-                            # Save to database
+                            # ── NEW: extract raw fields ───────────────────────
+                            package = item.get("package", None)
+                            origin = item.get("origin", None)
+                            item_size = item.get("item_size", None)
+
+                            # ── NEW: convert price to per-bushel ──────────────
+                            lbs_per_bu = BUSHEL_LBS.get(stripped_commodity)
+                            package_lbs = (
+                                parse_package_lbs(package, lbs_per_bu)
+                                if lbs_per_bu and package
+                                else None
+                            )
+
+                            if package_lbs and package_lbs > 0:
+                                # price_per_bu = (raw_price / package_lbs) * lbs_per_bu
+                                price = round((raw_price / package_lbs) * lbs_per_bu, 2)
+                            else:
+                                # Package unit unrecognisable — skip to avoid
+                                # mixing incomparable units in the DB
+                                logging.warning(
+                                    f"Cannot parse package '{package}' for "
+                                    f"{standardized_commodity} on {current_date.date()} "
+                                    f"— row skipped."
+                                )
+                                continue
+                            # ─────────────────────────────────────────────────
+
                             price_data = PriceData(
                                 city_name=first_city,
                                 commodity=standardized_commodity,
                                 year=year,
                                 day=day_of_year,
-                                price=price,
+                                price=price,  # now always $/bushel
                                 source="USDA",
                                 season=season,
+                                package=package,  # raw string kept for reference
+                                origin=origin,
+                                item_size=item_size,
                             )
                             db.session.add(price_data)
 
-            # Commit data to the database
             db.session.commit()
         else:
             logging.error(
-                f"Failed to fetch data for {current_date.strftime('%Y-%m-%d')}. Status code: {response.status_code}"
+                f"Failed to fetch data for {current_date.strftime('%Y-%m-%d')}. "
+                f"Status code: {response.status_code}"
             )
 
-        # Move to the next day
         current_date += pd.Timedelta(days=1)
 
     logging.info("Data fetching and saving completed.")

@@ -350,7 +350,6 @@ class User(UserMixin, db.Model):
 
 class PriceData(db.Model):
     __tablename__ = "price_data"  # Match the actual table name in the database
-
     id = db.Column(db.Integer, primary_key=True)
     city_name = db.Column(db.String(100), nullable=False)
     commodity = db.Column(db.String(100), nullable=False)
@@ -359,6 +358,10 @@ class PriceData(db.Model):
     price = db.Column(db.Float, nullable=False)
     source = db.Column(db.String(50), nullable=False)
     season = db.Column(db.String(20), nullable=False)
+    # ── NEW columns ──
+    package = db.Column(db.String(150), nullable=True)
+    origin = db.Column(db.String(100), nullable=True)
+    item_size = db.Column(db.String(50), nullable=True)
 
 
 class BreakEvenEstimation(db.Model):
@@ -906,7 +909,6 @@ def fetch_daily_data():
         base_url = "https://api.produceiq.com/index/v2/trends/"
         headers = {"Api-Subscription-Key": "5aa11f87fed04300b05addd031c56ffa"}
 
-        # Define the 10 specific commodities to filter by
         wanted_commodities = [
             "Anaheim",
             "Cubanelles",
@@ -920,10 +922,8 @@ def fetch_daily_data():
             "Shishito",
         ]
 
-        # Standardize the list to lowercase for comparison
         wanted_commodities = [commodity.lower() for commodity in wanted_commodities]
 
-        # Mapping standardized names back to desired format
         standardized_name = {
             "anaheim": "Anaheim",
             "cubanelles": "Cubanelles",
@@ -937,14 +937,26 @@ def fetch_daily_data():
             "shishito": "Shishito",
         }
 
-        # Get the last fetched date
-        start_dt = get_last_fetched_date()
-        end_dt = pd.Timestamp.today()  # Fetch data up to today
+        # ── ProduceIQ variety name → BUSHEL_LBS key mapping ──────────────────
+        # ProduceIQ uses "cubanelles" but BUSHEL_LBS uses "cubanelle" (no s)
+        variety_to_bushel_key = {
+            "anaheim": "anaheim",
+            "cubanelles": "cubanelle",
+            "fresno": "fresno",
+            "habanero": "habanero",
+            "hungarian wax": "hungarian wax",
+            "jalapeno": "jalapeno",
+            "long hot": "long hot",
+            "poblano": "poblano",
+            "serrano": "serrano",
+            "shishito": "shishito",
+        }
 
-        # Loop through each day one by one from the last fetched date to today
+        start_dt = get_last_fetched_date()
+        end_dt = pd.Timestamp.today()
+
         current_dt = start_dt
         while current_dt <= end_dt:
-            # Check if data for the current date already exists in the database
             existing_data = (
                 db.session.query(PriceData)
                 .filter(
@@ -963,14 +975,11 @@ def fetch_daily_data():
                 continue
 
             params = {
-                "commodityId": 18,  # Adjust this for different commodities
+                "commodityId": 18,
                 "from": current_dt.strftime("%Y-%m-%d"),
-                "to": current_dt.strftime(
-                    "%Y-%m-%d"
-                ),  # Fetch data for one day at a time
+                "to": current_dt.strftime("%Y-%m-%d"),
             }
 
-            # Fetch data for the current day
             response = requests.get(
                 f"{base_url}terminal-market-trends",
                 headers=headers,
@@ -978,7 +987,6 @@ def fetch_daily_data():
                 verify=False,
             )
 
-            # Log the full response for debugging
             logging.info(f"API Response for {current_dt.strftime('%Y-%m-%d')}")
 
             if response.status_code == 200:
@@ -986,31 +994,24 @@ def fetch_daily_data():
                 logging.info(f"Fetched data for {current_dt.strftime('%Y-%m-%d')}")
             else:
                 logging.error(
-                    f"Failed to fetch data for {current_dt.strftime('%Y-%m-%d')}. Status code: {response.status_code}"
+                    f"Failed to fetch data for {current_dt.strftime('%Y-%m-%d')}. "
+                    f"Status code: {response.status_code}"
                 )
-                logging.error(
-                    f"API Error Response: {response.text}"
-                )  # Log the error response
-                # Move to the next day even if this request fails
+                logging.error(f"API Error Response: {response.text}")
                 current_dt += pd.Timedelta(days=1)
                 continue
 
-            # Process and save the data
             if not data:
                 logging.error(
                     f"No data found in the response for {current_dt.strftime('%Y-%m-%d')}."
                 )
-                # Move to the next day even if no data is found
                 current_dt += pd.Timedelta(days=1)
                 continue
 
             for item in data:
-                # Standardize variety name from the API
                 variety_name = item.get("varietyName", "").strip().lower()
 
-                # Compare in standardized format
                 if variety_name in wanted_commodities:
-                    # Map back to the desired format
                     variety_name = standardized_name.get(variety_name, variety_name)
 
                     city_name = (
@@ -1018,10 +1019,9 @@ def fetch_daily_data():
                     )
                     year = item.get("isoYear")
                     day_of_year = item.get("day")
-                    price = item.get("price")
+                    raw_price = item.get("price")
                     source = "ProduceIQ"
 
-                    # Calculate the season based on the month
                     month = (
                         pd.Timestamp(year=year, day=1, month=1).day_of_year // 30 + 1
                     )
@@ -1034,36 +1034,66 @@ def fetch_daily_data():
                     else:
                         season = "Winter"
 
-                    # Save to the database
+                    # ── NEW: extract the three additional fields ───────────────
+                    package = item.get("packageTypeName", None)  # e.g. "20 lb cartons"
+                    origin = None  # not provided by ProduceIQ
+                    item_size = item.get("itemSizeName", None)  # e.g. "extra large"
+
+                    # ── NEW: convert raw price to per-bushel ───────────────────
+                    variety_key = variety_to_bushel_key.get(
+                        variety_name.lower(), variety_name.lower()
+                    )
+                    lbs_per_bu = BUSHEL_LBS.get(variety_key)
+                    package_lbs = (
+                        parse_package_lbs(package, lbs_per_bu)
+                        if lbs_per_bu and package
+                        else None
+                    )
+
+                    if package_lbs and package_lbs > 0:
+                        # price_per_bu = (raw_price / package_lbs) * lbs_per_bu
+                        price = round((raw_price / package_lbs) * lbs_per_bu, 2)
+                    else:
+                        logging.warning(
+                            f"Cannot parse package '{package}' for "
+                            f"{variety_name} on {current_dt.date()} — row skipped."
+                        )
+                        continue
+                    # ──────────────────────────────────────────────────────────
+
                     price_data = PriceData(
                         city_name=city_name,
                         commodity=variety_name,
                         year=year,
                         day=day_of_year,
-                        price=price,
+                        price=price,  # now always $/bushel
                         source=source,
                         season=season,
+                        # ── NEW columns ──
+                        package=package,  # raw string kept for reference
+                        origin=origin,
+                        item_size=item_size,
                     )
 
                     db.session.add(price_data)
                     logging.info(
-                        f"Added {variety_name} for {current_dt.strftime('%Y-%m-%d')} in {city_name}"
+                        f"Added {variety_name} for {current_dt.strftime('%Y-%m-%d')} "
+                        f"in {city_name} @ ${price}/bu (package: {package})"
                     )
 
-            # Commit the data for the current day
             db.session.commit()
             gc.collect()
             logging.info(
-                f'Data for {current_dt.strftime("%Y-%m-%d")} saved to the database.'
+                f"Data for {current_dt.strftime('%Y-%m-%d')} saved to the database."
             )
 
-            # Move to the next day
             current_dt += pd.Timedelta(days=1)
-            data = None  # Release JSON data memory
-            gc.collect()  # Explicit garbage collection
+            data = None
+            gc.collect()
 
         logging.info(
-            f"Data fetching completed from {start_dt.strftime('%Y-%m-%d')} to {end_dt.strftime('%Y-%m-%d')}."
+            f"Data fetching completed from {start_dt.strftime('%Y-%m-%d')} "
+            f"to {end_dt.strftime('%Y-%m-%d')}."
         )
 
 
