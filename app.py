@@ -609,7 +609,67 @@ INTERESTED_COMMODITIES_USDA = [
     "Poblano",
     "Serrano",
 ]
+# ============================================
+# BUSHEL CONVERSION CONSTANTS & HELPERS
+# ============================================
 
+from fractions import Fraction
+import re
+
+# Lbs per bushel for each pepper variety (keyed to lowercase stripped commodity name)
+BUSHEL_LBS = {
+    "jalapeno":      32,
+    "hungarian wax": 28,
+    "shishito":      22,   # bu = 22 lbs
+    "fresno":        28,   # bu = 28 lbs
+    "long hot":      24,   # bu = 24 lbs
+    "habanero":      22,   # bu = 22 lbs
+    "anaheim":       30,
+    "cubanelle":     20,
+    "serrano":       28,   # bu = 28 lbs
+    "poblano":       26,   # bu = 25-27 lbs, midpoint
+}
+
+
+def parse_package_lbs(package_str: str, lbs_per_bu: float) -> float | None:
+    """
+    Parse a USDA/ProduceIQ package string and return its weight in lbs.
+    Returns None if the string cannot be parsed (e.g. bare "crates").
+
+    Handles:
+      - "1 1/9 bushel cartons"   → 1.111 * lbs_per_bu
+      - "1/2 bushel cartons"     → 0.5   * lbs_per_bu
+      - "20 lb cartons"          → 20.0
+      - "10 lb reusable ..."     → 10.0
+      - "4 kg cartons"           → 4 * 2.20462
+    """
+    if not package_str:
+        return None
+
+    s = package_str.strip().lower()
+
+    # Bushel fractions/multiples e.g. "1 1/9 bushel", "1/2 bushel"
+    bu_match = re.search(r'(\d+\s+\d+/\d+|\d+/\d+|\d+\.?\d*)\s*bushel', s)
+    if bu_match:
+        qty_str = bu_match.group(1).strip()
+        parts = qty_str.split()
+        if len(parts) == 2:                      # mixed number e.g. "1 1/9"
+            qty = int(parts[0]) + float(Fraction(parts[1]))
+        else:
+            qty = float(Fraction(qty_str))
+        return qty * lbs_per_bu
+
+    # Pounds e.g. "20 lb cartons", "10 lb reusable plastic containers"
+    lb_match = re.search(r'(\d+\.?\d*)\s*lb', s)
+    if lb_match:
+        return float(lb_match.group(1))
+
+    # Kilograms e.g. "4 kg cartons"
+    kg_match = re.search(r'(\d+\.?\d*)\s*kg', s)
+    if kg_match:
+        return float(kg_match.group(1)) * 2.20462
+
+    return None  # e.g. bare "crates" — cannot determine weight
 
 @app.route("/api/fetch-data", methods=["GET"])
 def fetch_data():
@@ -676,12 +736,10 @@ def fetch_usda_daily_data():
         logging.info("USDA data fetch job triggered")
         base_endpoint = "https://marsapi.ams.usda.gov/services/v1.2/marketTypes/1030/cr?dsId=/1/1/&q=report_date="
 
-        # Get the last fetched date
         start_dt = get_last_fetched_usda_date()
         logging.info(f"Last fetched USDA date: {start_dt}")
         end_dt = pd.Timestamp.today()
 
-        # Prepare the authorization header
         api_key = "7XWk8PBs9+O3lWfreM+DtrsaM3OCkzOx"
         encoded_api_key = base64.b64encode(f"{api_key}:".encode()).decode()
         headers = {
@@ -690,12 +748,36 @@ def fetch_usda_daily_data():
             "Accept": "application/json",
         }
 
+        # Commodities and cities to filter
+        wanted_commodities = [
+            "Anaheim", "Cubanelle", "Fresno", "Habanero", "Hungarian Wax",
+            "Jalapeno", "Long Hot", "Poblano", "Serrano", "Shishito",
+        ]
+        wanted_cities = [
+            "Chicago", "New York", "Boston", "Miami", "Baltimore",
+            "Los Angeles", "Philadelphia", "Columbia", "Detroit", "Atlanta",
+        ]
+
+        wanted_commodities_lower = [c.lower() for c in wanted_commodities]
+
+        standardized_name = {
+            "anaheim": "Anaheim",
+            "cubanelle": "Cubanelle",
+            "fresno": "Fresno",
+            "habanero": "Habanero",
+            "hungarian wax": "Hungarian Wax",
+            "jalapeno": "Jalapeno",
+            "long hot": "Long Hot",
+            "poblano": "Poblano",
+            "serrano": "Serrano",
+            "shishito": "Shishito",
+        }
+
         current_dt = start_dt
         while current_dt <= end_dt:
             current_date_formatted = current_dt.strftime("%m/%d/%Y")
             logging.info(f"Fetching USDA data for {current_date_formatted}")
 
-            # Check if data for the current date already exists in the database
             existing_record = (
                 db.session.query(PriceData)
                 .filter(
@@ -713,24 +795,116 @@ def fetch_usda_daily_data():
             else:
                 endpoint = base_endpoint + current_date_formatted
                 response = requests.get(endpoint, headers=headers)
-
                 logging.info(f"API Response Status Code: {response.status_code}")
 
                 if response.status_code == 200:
                     json_data = response.json()
-                    if json_data.get("results") and isinstance(
-                        json_data["results"], list
-                    ):
+
+                    if json_data.get("results") and isinstance(json_data["results"], list):
                         logging.info(f"Valid data found for {current_date_formatted}")
-                        process_usda_data(json_data["results"])
+
+                        for item in json_data["results"]:
+                            commodity_raw = item.get("commodity", "")
+                            commodity = commodity_raw.strip().lower()
+
+                            # Must start with "peppers," and match wanted varieties
+                            if not commodity.startswith("peppers,"):
+                                continue
+
+                            stripped_commodity = commodity.replace("peppers, ", "").strip()
+                            if stripped_commodity not in wanted_commodities_lower:
+                                continue
+
+                            standardized_commodity = standardized_name.get(
+                                stripped_commodity, stripped_commodity
+                            )
+
+                            # Extract first city before the comma
+                            location = item.get("location", "")
+                            first_city = location.split(",")[0].strip()
+                            if first_city not in wanted_cities:
+                                continue
+
+                            # Date / season
+                            report_date = pd.Timestamp(item.get("report_date", ""))
+                            year = report_date.year
+                            month = report_date.month
+                            day_of_year = report_date.day_of_year
+
+                            if month in [3, 4, 5]:
+                                season = "Spring"
+                            elif month in [6, 7, 8]:
+                                season = "Summer"
+                            elif month in [9, 10, 11]:
+                                season = "Autumn"
+                            else:
+                                season = "Winter"
+
+                            # Raw price: average of low and high
+                            low_price = item.get("low_price")
+                            high_price = item.get("high_price")
+                            try:
+                                raw_price = (
+                                    round((float(low_price) + float(high_price)) / 2, 1)
+                                    if low_price and high_price
+                                    else round(float(low_price or high_price or 0), 1)
+                                )
+                            except ValueError:
+                                raw_price = 0.0
+
+                            # ── NEW: extract the three additional fields ──────
+                            package   = item.get("package", None)
+                            origin    = item.get("origin", None)
+                            item_size = item.get("item_size", None)
+
+                            # ── NEW: convert price to $/bushel ────────────────
+                            lbs_per_bu = BUSHEL_LBS.get(stripped_commodity)
+                            package_lbs = (
+                                parse_package_lbs(package, lbs_per_bu)
+                                if lbs_per_bu and package
+                                else None
+                            )
+
+                            if package_lbs and package_lbs > 0:
+                                price = round(
+                                    (raw_price / package_lbs) * lbs_per_bu, 2
+                                )
+                            else:
+                                logging.warning(
+                                    f"Cannot parse package '{package}' for "
+                                    f"{standardized_commodity} on {current_date_formatted}"
+                                    f" — row skipped."
+                                )
+                                continue
+                            # ─────────────────────────────────────────────────
+
+                            price_data = PriceData(
+                                city_name=first_city,
+                                commodity=standardized_commodity,
+                                year=year,
+                                day=day_of_year,
+                                price=price,        # now always $/bushel
+                                source="USDA",
+                                season=season,
+                                # ── NEW columns ──
+                                package=package,    # raw string kept for reference
+                                origin=origin,
+                                item_size=item_size,
+                            )
+                            db.session.add(price_data)
+
+                        db.session.commit()
+
                     else:
                         logging.warning(
                             f"No valid results found in the API response for {current_date_formatted}"
                         )
                 else:
                     logging.error(
-                        f"Error fetching USDA data for {current_date_formatted}: {response.status_code} - {response.text}"
+                        f"Error fetching USDA data for {current_date_formatted}: "
+                        f"{response.status_code} - {response.text}"
                     )
+
             current_dt += timedelta(days=1)
             json_data = None
             gc.collect()
@@ -1319,6 +1493,8 @@ import logging
 
 #     logging.info("Weather forecast data query completed successfully.")
 #     return "Weather forecast data query completed."
+
+
 
 
 #  Weather forecast data fetching insertion and pruning

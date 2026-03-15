@@ -18,12 +18,11 @@ def execute_scheduled_functions():
             fetch_daily_data()
             print("Daily data fetched successfully.")
 
+            fetch_usda_daily_data()
+            print("Daily usda data fetched successfully.")
             fetch_shipping_data()
             print("Shipping data fetched successfully.")
 
-            fetch_usda_terminal_data()
-            print("USDA terminal data fetched successfully.")
-            
             # Then check for alerts based on the new data
             check_price_alerts()
             print("Price alerts checked successfully.")
