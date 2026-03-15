@@ -54,7 +54,7 @@ import csv
 from werkzeug.utils import secure_filename
 import json
 from dateutil.relativedelta import relativedelta
-
+from usda import fetch_usda_terminal_data
 
 # Imports for Weather Forecasting
 import time
@@ -3672,6 +3672,23 @@ def calculate_forecasted_price(
 
     return average_price
 
+@app.route("/api/runthisshit", methods=["GET"])
+def runthisshit():
+    results = {}
+    
+    try:
+        fetch_daily_data()
+        results["fetch_daily_data"] = "success"
+    except Exception as e:
+        results["fetch_daily_data"] = f"error: {str(e)}"
+    
+    try:
+        fetch_usda_terminal_data()
+        results["fetch_usda_terminal_data"] = "success"
+    except Exception as e:
+        results["fetch_usda_terminal_data"] = f"error: {str(e)}"
+    
+    return jsonify({"status": "completed", "results": results}), 200
 
 @app.route("/api/calculate_forecast", methods=["POST"])
 def calculate_forecast():
