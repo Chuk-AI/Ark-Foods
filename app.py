@@ -631,45 +631,117 @@ BUSHEL_LBS = {
 }
 
 
-def parse_package_lbs(package_str: str, lbs_per_bu: float) -> float | None:
+_KG_TO_LBS = 2.20462
+ 
+ 
+def parse_package_lbs(package: str, lbs_per_bu: float) -> "float | None":
     """
-    Parse a USDA/ProduceIQ package string and return its weight in lbs.
-    Returns None if the string cannot be parsed (e.g. bare "crates").
-
-    Handles:
-      - "1 1/9 bushel cartons"   → 1.111 * lbs_per_bu
-      - "1/2 bushel cartons"     → 0.5   * lbs_per_bu
-      - "20 lb cartons"          → 20.0
-      - "10 lb reusable ..."     → 10.0
-      - "4 kg cartons"           → 4 * 2.20462
+    Parse a USDA package string and return the total weight in lbs for that package.
+ 
+    Used to convert raw per-package price to per-bushel:
+        price_per_bu = (raw_price / package_lbs) * lbs_per_bu
+ 
+    Handles all known USDA MARS package string formats:
+ 
+    Bushel-based:
+      "1 1/9 bushel cartons"              -> 1.111 * lbs_per_bu
+      "1/2 and 5/9 bushel cartons"        -> avg(0.5, 0.556) * lbs_per_bu
+      "5/9 bushel cartons"                -> 0.556 * lbs_per_bu
+      "1/2 bushel cartons"                -> 0.5   * lbs_per_bu
+      "1 bushel cartons"                  -> 1.0   * lbs_per_bu
+      "bushel cartons"                    -> 1.0   * lbs_per_bu  (no number = 1 bu)
+ 
+    Pound-based:
+      "10 lb cartons"                     -> 10.0
+      "28 lbs cartons"                    -> 28.0
+      "30 lb cartons"                     -> 30.0
+      "cartons 12 1-lb film bags"         -> 12 * 1 = 12.0
+      "cartons 6 2-lb film bags"          -> 6  * 2 = 12.0
+ 
+    Kg-based:
+      "5 kg cartons"                      -> 5 * 2.20462 = 11.02
+      "16 kg cartons"                     -> 16 * 2.20462 = 35.27
+ 
+    No-size fallback:
+      "cartons/crates"                    -> 1.0 * lbs_per_bu  (assume 1 bu)
+      "cartons"                           -> 1.0 * lbs_per_bu
+      "crates"                            -> 1.0 * lbs_per_bu
     """
-    if not package_str:
+    if not package or not lbs_per_bu:
         return None
+ 
+    p = package.strip().lower()
+    bu_pat = r"bus?h?e?l?s?\b|bu\b"
+ 
+    # ----------------------------------------------------------------
+    # 1. BUSHEL-BASED PACKAGES
+    # ----------------------------------------------------------------
+ 
+    if re.search(bu_pat, p):
+ 
+        # 1a. Mixed number + fraction: "1 1/9 bushel cartons"
+        m = re.search(r"(\d+)\s+(\d+)\s*/\s*(\d+)\s*(?:" + bu_pat + r")", p)
+        if m:
+            bu = int(m.group(1)) + int(m.group(2)) / int(m.group(3))
+            return round(bu * lbs_per_bu, 4)
+ 
+        # 1b. Range fraction: "1/2 and 5/9 bushel" → average
+        m = re.search(
+            r"(\d+)\s*/\s*(\d+)\s+and\s+(\d+)\s*/\s*(\d+)\s*(?:" + bu_pat + r")", p
+        )
+        if m:
+            lo = int(m.group(1)) / int(m.group(2))
+            hi = int(m.group(3)) / int(m.group(4))
+            bu = (lo + hi) / 2.0
+            return round(bu * lbs_per_bu, 4)
+ 
+        # 1c. Simple fraction: "5/9 bushel", "1/2 bushel"
+        m = re.search(r"(\d+)\s*/\s*(\d+)\s*(?:" + bu_pat + r")", p)
+        if m:
+            bu = int(m.group(1)) / int(m.group(2))
+            return round(bu * lbs_per_bu, 4)
+ 
+        # 1d. Whole or decimal number: "1 bushel", "1.5 bu"
+        m = re.search(r"(\d+(?:\.\d+)?)\s*(?:" + bu_pat + r")", p)
+        if m:
+            bu = float(m.group(1))
+            return round(bu * lbs_per_bu, 4)
+ 
+        # 1e. Word "bushel" with NO number: "bushel cartons" → assume 1 bushel
+        return round(1.0 * lbs_per_bu, 4)
+ 
+    # ----------------------------------------------------------------
+    # 2. MULTI-BAG / COUNT × WEIGHT: "cartons 12 1-lb film bags"
+    #    Matches patterns like "12 1-lb", "6 2-lb", "12 1 lb"
+    # ----------------------------------------------------------------
+    m = re.search(r"(\d+)\s+(\d+(?:\.\d+)?)\s*-?\s*lb", p)
+    if m:
+        return round(float(m.group(1)) * float(m.group(2)), 4)
+ 
+    # ----------------------------------------------------------------
+    # 3. KG-BASED: "5 kg cartons", "16 kg cartons"
+    # ----------------------------------------------------------------
+    m = re.search(r"(\d+(?:\.\d+)?)\s*kg\b", p)
+    if m:
+        return round(float(m.group(1)) * _KG_TO_LBS, 4)
+ 
+    # ----------------------------------------------------------------
+    # 4. POUND-BASED: "10 lb cartons", "28 lbs", "30 lb cartons"
+    # ----------------------------------------------------------------
+    m = re.search(r"(\d+(?:\.\d+)?)\s*(?:lbs?|pounds?)\b", p)
+    if m:
+        return round(float(m.group(1)), 4)
+ 
+    # ----------------------------------------------------------------
+    # 5. NO SIZE INFO FALLBACK: "cartons/crates", "cartons", "crates"
+    #    Assume 1 bushel — price is already effectively per-bushel
+    # ----------------------------------------------------------------
+    if re.search(r"^cartons?(/crates?)?$|^crates?$", p):
+        return round(1.0 * lbs_per_bu, 4)
+ 
+    # Cannot parse
+    return None
 
-    s = package_str.strip().lower()
-
-    # Bushel fractions/multiples e.g. "1 1/9 bushel", "1/2 bushel"
-    bu_match = re.search(r'(\d+\s+\d+/\d+|\d+/\d+|\d+\.?\d*)\s*bushel', s)
-    if bu_match:
-        qty_str = bu_match.group(1).strip()
-        parts = qty_str.split()
-        if len(parts) == 2:                      # mixed number e.g. "1 1/9"
-            qty = int(parts[0]) + float(Fraction(parts[1]))
-        else:
-            qty = float(Fraction(qty_str))
-        return qty * lbs_per_bu
-
-    # Pounds e.g. "20 lb cartons", "10 lb reusable plastic containers"
-    lb_match = re.search(r'(\d+\.?\d*)\s*lb', s)
-    if lb_match:
-        return float(lb_match.group(1))
-
-    # Kilograms e.g. "4 kg cartons"
-    kg_match = re.search(r'(\d+\.?\d*)\s*kg', s)
-    if kg_match:
-        return float(kg_match.group(1)) * 2.20462
-
-    return None  # e.g. bare "crates" — cannot determine weight
 
 @app.route("/api/fetch-data", methods=["GET"])
 def fetch_data():
