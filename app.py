@@ -804,7 +804,7 @@ def fetch_usda_daily_data():
             # ✅ FIX 4: Stop immediately on auth failure instead of looping forever
             if response.status_code == 401:
                 logging.error(
-                    f"Authentication failed (401). Check API key. Stopping fetch."
+                    "Authentication failed (401). Check API key. Stopping fetch."
                 )
                 break
 
@@ -840,7 +840,7 @@ def fetch_usda_daily_data():
                     location = item.get("location", "")
                     first_city = location.split(",")[0].strip()
 
-                    # ✅ FIX 5: Case-insensitive city matching (consistent with working script)
+                    # ✅ FIX 5: Case-insensitive city matching
                     if first_city.lower() not in wanted_cities_lower:
                         continue
 
@@ -873,17 +873,16 @@ def fetch_usda_daily_data():
                     origin    = item.get("origin", None)
                     item_size = item.get("item_size", None)
 
-                    # ✅ FIX 6: Use correct names from app.py
-                    lbs_per_bu = BUSHEL_WEIGHTS_LBS.get(standardized_commodity)
-                    package_multiplier = (
-                        parse_package_multiplier(package, standardized_commodity)
+                    # ✅ FIX 6: Use BUSHEL_LBS (lowercase key) + parse_package_lbs
+                    lbs_per_bu = BUSHEL_LBS.get(stripped_commodity)
+                    package_lbs = (
+                        parse_package_lbs(package, lbs_per_bu)
                         if lbs_per_bu and package
                         else None
                     )
 
-                    if package_multiplier and package_multiplier > 0:
-                        # Convert from per-package price → per-bushel for storage
-                        price = round(raw_price / package_multiplier, 2)
+                    if package_lbs and package_lbs > 0:
+                        price = round((raw_price / package_lbs) * lbs_per_bu, 2)
                     else:
                         logging.warning(
                             f"Cannot parse package '{package}' for "
