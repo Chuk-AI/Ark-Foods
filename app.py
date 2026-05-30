@@ -5234,7 +5234,6 @@ def upload_historical():
 
 from sqlalchemy.sql import text  # Import `text` from SQLAlchemy
 
-import plotly.graph_objects as go
 from flask import jsonify
 
 
@@ -5279,94 +5278,29 @@ def terminal_price_violin():
         grouped_data = {"USDA": {}, "ProduceIQ": {}}
         for row in result:
             commodity, price, source = row
-            if commodity not in grouped_data[source]:
-                grouped_data[source][commodity] = []
-            grouped_data[source][commodity].append(price)
+            if source in grouped_data:
+                grouped_data[source].setdefault(commodity, []).append(price)
 
-        # Create violin traces for USDA
-        usda_traces = [
-            go.Violin(
-                y=prices,
-                name=commodity,
-                box_visible=True,
-                meanline_visible=True,
-                marker_color="blue",  # Color for USDA
-            )
-            for commodity, prices in grouped_data["USDA"].items()
-        ]
+        def compute_stats(prices_dict):
+            stats = []
+            for commodity, prices in prices_dict.items():
+                arr = np.array(prices)
+                stats.append({
+                    "name": commodity,
+                    "min": float(np.min(arr)),
+                    "q1": float(np.percentile(arr, 25)),
+                    "median": float(np.median(arr)),
+                    "mean": float(np.mean(arr)),
+                    "q3": float(np.percentile(arr, 75)),
+                    "max": float(np.max(arr)),
+                    "count": len(prices)
+                })
+            return sorted(stats, key=lambda x: x["name"])
 
-        # Create violin traces for ProduceIQ
-        produceiq_traces = [
-            go.Violin(
-                y=prices,
-                name=commodity,
-                box_visible=True,
-                meanline_visible=True,
-                marker_color="green",  # Color for ProduceIQ
-            )
-            for commodity, prices in grouped_data["ProduceIQ"].items()
-        ]
-
-        # Layout for USDA
-        usda_layout = {
-            "title": {
-                "text": "USDA Terminal Price Distribution by Commodity",
-                "font": {"size": 16, "weight": "bold"},
-            },
-            "xaxis": {
-                "title": {"text": "Commodity", "font": {"size": 14, "weight": "bold"}},
-                "automargin": True,
-            },
-            "yaxis": {
-                "title": {"text": "Price", "font": {"size": 14, "weight": "bold"}},
-                "zeroline": True,
-                "automargin": True,
-            },
-            "height": 500,
-            "width": 700,
-            "showlegend": False,
-            "plot_bgcolor": "#f0f8ff",
-            "paper_bgcolor": "white",
-        }
-
-        # Layout for ProduceIQ
-        produceiq_layout = {
-            "title": {
-                "text": "ProduceIQ Terminal Price Distribution by Commodity",
-                "font": {"size": 16, "weight": "bold"},
-            },
-            "xaxis": {
-                "title": {"text": "Commodity", "font": {"size": 14, "weight": "bold"}},
-                "automargin": True,
-            },
-            "yaxis": {
-                "title": {"text": "Price", "font": {"size": 14, "weight": "bold"}},
-                "automargin": True,
-            },
-            "height": 500,
-            "width": 700,
-            "showlegend": False,
-            "plot_bgcolor": "#f0f8ff",
-            "paper_bgcolor": "white",
-        }
-
-        # Convert traces to JSON serializable format
-        usda_traces_json = [trace.to_plotly_json() for trace in usda_traces]
-        produceiq_traces_json = [trace.to_plotly_json() for trace in produceiq_traces]
-
-        # Return JSON response containing separate charts for USDA and ProduceIQ
-        return (
-            jsonify(
-                {
-                    "usda": {"data": usda_traces_json, "layout": usda_layout},
-                    "produceiq": {
-                        "data": produceiq_traces_json,
-                        "layout": produceiq_layout,
-                    },
-                }
-            ),
-            200,
-        )
+        return jsonify({
+            "usda": compute_stats(grouped_data["USDA"]),
+            "produceiq": compute_stats(grouped_data["ProduceIQ"])
+        }), 200
 
     except Exception as e:
         app.logger.error(f"Error generating terminal violin plots: {str(e)}")
@@ -5409,56 +5343,23 @@ def shipping_price_violin():
         # Group data by commodity
         data = {}
         for row in result:
-            commodity = row[0]  # Commodity (varietyName)
-            price = row[1]  # Price
-            if commodity not in data:
-                data[commodity] = []
-            data[commodity].append(price)
+            data.setdefault(row[0], []).append(row[1])
 
-        # Create violin traces for each commodity
-        traces = []
+        stats = []
         for commodity, prices in data.items():
-            traces.append(
-                go.Violin(
-                    y=prices,
-                    name=commodity,
-                    box_visible=True,
-                    meanline_visible=True,
-                    marker_color="green",  # Custom color
-                )
-            )
-
-        # Create the layout for the chart
-        layout = {
-            "title": {
-                "text": "Shipping Price Distribution by Commodity",
-                "font": {"size": 16, "weight": "bold"},
-            },
-            "xaxis": {
-                "title": {"text": "Commodity", "font": {"size": 14, "weight": "bold"}},
-                "automargin": True,
-            },
-            "yaxis": {
-                "title": {
-                    "text": "Shipping Price",
-                    "font": {"size": 14, "weight": "bold"},
-                },
-                "automargin": True,
-            },
-            "height": 500,
-            "width": 700,
-            "showlegend": False,
-            "plot_bgcolor": "#f0f8ff",
-            "paper_bgcolor": "white",
-        }
-
-        # Return the chart data and layout as JSON
-        return (
-            jsonify(
-                {"data": [trace.to_plotly_json() for trace in traces], "layout": layout}
-            ),
-            200,
-        )
+            arr = np.array(prices)
+            stats.append({
+                "name": commodity,
+                "min": float(np.min(arr)),
+                "q1": float(np.percentile(arr, 25)),
+                "median": float(np.median(arr)),
+                "mean": float(np.mean(arr)),
+                "q3": float(np.percentile(arr, 75)),
+                "max": float(np.max(arr)),
+                "count": len(prices)
+            })
+        stats.sort(key=lambda x: x["name"])
+        return jsonify({"data": stats}), 200
 
     except Exception as e:
         app.logger.error(f"Error generating shipping violin plot: {str(e)}")
@@ -5511,55 +5412,17 @@ def get_terminal_empricial_probability():
                 grouped_data[commodity] = []
             grouped_data[commodity].append(price)
 
-        # Create violin traces
         charts = []
         for commodity, prices in grouped_data.items():
-            hist, bin_edges = np.histogram(prices, bins=50)
-            histogram_trace = go.Bar(
-                x=bin_edges[:-1].tolist(),
-                y=hist.tolist(),
-                name=f"{commodity} Histogram",
-                marker_color="#636EFA",
-            )
-            mean = np.mean(prices)
-            std_dev = np.std(prices)
-            mean_trace = go.Scatter(
-                x=[mean, mean],
-                y=[0, max(hist)],
-                mode="lines",
-                line=dict(color="red", dash="dash"),
-                name=f"{commodity} Mean",
-            )
-            std_dev_trace = go.Scatter(
-                x=[mean - std_dev, mean + std_dev],
-                y=[0, 0],
-                mode="markers",
-                marker=dict(color="blue", size=8, symbol="cross"),
-                name=f"{commodity} Std Dev",
-            )
-
-            layout = {
-                "title": f"{commodity} Price Distribution",
-                "xaxis": {"title": "Price", "automargin": True},
-                "yaxis": {"title": "Frequency", "automargin": True},
-                "height": 400,
-                "width": 370,
-                "showlegend": False,
-                "plot_bgcolor": "#f0f8ff",
-                "paper_bgcolor": "white",
-            }
-
-            charts.append(
-                {
-                    "commodity": commodity,
-                    "data": [
-                        histogram_trace.to_plotly_json(),
-                        mean_trace.to_plotly_json(),
-                        std_dev_trace.to_plotly_json(),
-                    ],
-                    "layout": layout,
-                }
-            )
+            arr = np.array(prices)
+            hist, bin_edges = np.histogram(arr, bins=20)
+            charts.append({
+                "commodity": commodity,
+                "bins": [{"x": float(bin_edges[i]), "y": int(hist[i])} for i in range(len(hist))],
+                "mean": float(np.mean(arr)),
+                "stdDev": float(np.std(arr)),
+                "median": float(np.median(arr))
+            })
 
         return jsonify(charts), 200
 
@@ -5611,55 +5474,17 @@ def get_shipping_empricial_probability():
                 grouped_data[commodity] = []
             grouped_data[commodity].append(price)
 
-        # Create violin traces
         charts = []
         for commodity, prices in grouped_data.items():
-            hist, bin_edges = np.histogram(prices, bins=50)
-            histogram_trace = go.Bar(
-                x=bin_edges[:-1].tolist(),
-                y=hist.tolist(),
-                name=f"{commodity} Histogram",
-                marker_color="green",
-            )
-            mean = np.mean(prices)
-            std_dev = np.std(prices)
-            mean_trace = go.Scatter(
-                x=[mean, mean],
-                y=[0, max(hist)],
-                mode="lines",
-                line=dict(color="red", dash="dash"),
-                name=f"{commodity} Mean",
-            )
-            std_dev_trace = go.Scatter(
-                x=[mean - std_dev, mean + std_dev],
-                y=[0, 0],
-                mode="markers",
-                marker=dict(color="green", size=8, symbol="cross"),
-                name=f"{commodity} Std Dev",
-            )
-
-            layout = {
-                "title": f"{commodity} Price Distribution",
-                "xaxis": {"title": "Price", "automargin": True},
-                "yaxis": {"title": "Frequency", "automargin": True},
-                "height": 400,
-                "width": 370,
-                "showlegend": False,
-                "plot_bgcolor": "#f0f8ff",
-                "paper_bgcolor": "white",
-            }
-
-            charts.append(
-                {
-                    "commodity": commodity,
-                    "data": [
-                        histogram_trace.to_plotly_json(),
-                        mean_trace.to_plotly_json(),
-                        std_dev_trace.to_plotly_json(),
-                    ],
-                    "layout": layout,
-                }
-            )
+            arr = np.array(prices)
+            hist, bin_edges = np.histogram(arr, bins=20)
+            charts.append({
+                "commodity": commodity,
+                "bins": [{"x": float(bin_edges[i]), "y": int(hist[i])} for i in range(len(hist))],
+                "mean": float(np.mean(arr)),
+                "stdDev": float(np.std(arr)),
+                "median": float(np.median(arr))
+            })
 
         return jsonify(charts), 200
 
@@ -5737,77 +5562,28 @@ def get_terminal_correlation():
         correlation_matrix.fillna(0, inplace=True)
         print(f"Correlation matrix shape: {correlation_matrix.shape}")  # Debugging log
 
-        # Prepare data for plotting
-        labels = correlation_matrix.columns.tolist()
-        z_values = correlation_matrix.values.tolist()
+        # Build plain correlation matrix response
+        commodities_list = correlation_matrix.columns.tolist()
+        matrix_data = []
+        for i, row_label in enumerate(commodities_list):
+            for j, col_label in enumerate(commodities_list):
+                matrix_data.append({
+                    "row": row_label,
+                    "col": col_label,
+                    "value": round(float(correlation_matrix.iloc[i, j]), 3)
+                })
 
-        # Reverse the order of y-axis labels and rows in z_values
-        reversed_labels = labels[::-1]  # Reverse the y-axis labels
-        reversed_z_values = z_values[::-1]  # Reverse the rows of the correlation matrix
+        chart = {"commodities": commodities_list, "matrix": matrix_data}
 
-        # Create annotations dynamically for reversed labels and z_values
-        annotations = [
-            {
-                "x": labels[col],
-                "y": reversed_labels[row],  # Adjust for reversed y-axis
-                "text": f"{reversed_z_values[row][col]:.2f}",  # Use reversed data
-                "showarrow": False,
-                "font": {
-                    "color": "white",
-                    "size": 10,
-                },
-            }
-            for row in range(len(reversed_labels))
-            for col in range(len(labels))
-        ]
-
-        # Prepare Plotly chart
-        chart = {
-            "data": [
-                {
-                    "z": reversed_z_values,  # Use reversed rows for heatmap
-                    "x": labels,
-                    "y": reversed_labels,  # Use reversed y-axis labels
-                    "type": "heatmap",
-                    "colorscale": "CoolWarm",
-                    "showscale": True,
-                    "text": [
-                        [f"{val:.2f}" for val in row] for row in reversed_z_values
-                    ],
-                    "hoverinfo": "text",
-                }
-            ],
-            "layout": {
-                "title": "Correlation Matrix of Terminal Market Prices",
-                "xaxis": {
-                    "title": "Commodities",
-                    "tickangle": -45,
-                    "automargin": True,
-                },
-                "yaxis": {
-                    "title": "Commodities",
-                    "automargin": True,
-                },
-                "height": 600,
-                "width": 600,
-                "annotations": annotations,
-            },
-        }
-
-        # Add summary statistics
         summary_stats = {
-            "total_records": len(returns),  # Updated to use 'returns'
-            "unique_commodities": len(labels),
+            "total_records": len(returns),
+            "unique_commodities": len(commodities_list),
             "date_range": {
                 "start": returns.index.min().strftime("%Y-%m-%d"),
                 "end": returns.index.max().strftime("%Y-%m-%d"),
             },
             "average_correlation": float(correlation_matrix.mean().mean()),
         }
-
-        print(
-            f"Final chart labels: {len(labels)}, annotations: {len(annotations)}"
-        )  # Debugging log
 
         return jsonify({"chart": chart, "stats": summary_stats}), 200
 
@@ -5887,77 +5663,28 @@ def get_shipping_correlation():
         correlation_matrix.fillna(0, inplace=True)
         print(f"Correlation matrix shape: {correlation_matrix.shape}")  # Debugging log
 
-        # Prepare data for plotting
-        labels = correlation_matrix.columns.tolist()
-        z_values = correlation_matrix.values.tolist()
+        # Build plain correlation matrix response
+        commodities_list = correlation_matrix.columns.tolist()
+        matrix_data = []
+        for i, row_label in enumerate(commodities_list):
+            for j, col_label in enumerate(commodities_list):
+                matrix_data.append({
+                    "row": row_label,
+                    "col": col_label,
+                    "value": round(float(correlation_matrix.iloc[i, j]), 3)
+                })
 
-        # Reverse the order of y-axis labels and rows in z_values
-        reversed_labels = labels[::-1]  # Reverse the y-axis labels
-        reversed_z_values = z_values[::-1]  # Reverse the rows of the correlation matrix
+        chart = {"commodities": commodities_list, "matrix": matrix_data}
 
-        # Create annotations dynamically for reversed labels and z_values
-        annotations = [
-            {
-                "x": labels[col],
-                "y": reversed_labels[row],  # Adjust for reversed y-axis
-                "text": f"{reversed_z_values[row][col]:.2f}",  # Use reversed data
-                "showarrow": False,
-                "font": {
-                    "color": "white",
-                    "size": 10,
-                },
-            }
-            for row in range(len(reversed_labels))
-            for col in range(len(labels))
-        ]
-
-        # Prepare Plotly chart
-        chart = {
-            "data": [
-                {
-                    "z": reversed_z_values,  # Use reversed rows for heatmap
-                    "x": labels,
-                    "y": reversed_labels,  # Use reversed y-axis labels
-                    "type": "heatmap",
-                    "colorscale": "CoolWarm",
-                    "showscale": True,
-                    "text": [
-                        [f"{val:.2f}" for val in row] for row in reversed_z_values
-                    ],
-                    "hoverinfo": "text",
-                }
-            ],
-            "layout": {
-                "title": "Correlation Matrix of Shipping Prices",
-                "xaxis": {
-                    "title": "Commodities",
-                    "tickangle": -45,
-                    "automargin": True,
-                },
-                "yaxis": {
-                    "title": "Commodities",
-                    "automargin": True,
-                },
-                "height": 600,
-                "width": 600,
-                "annotations": annotations,
-            },
-        }
-
-        # Add summary statistics
         summary_stats = {
-            "total_records": len(returns),  # Updated to use 'returns'
-            "unique_commodities": len(labels),
+            "total_records": len(returns),
+            "unique_commodities": len(commodities_list),
             "date_range": {
                 "start": returns.index.min().strftime("%Y-%m-%d"),
                 "end": returns.index.max().strftime("%Y-%m-%d"),
             },
             "average_correlation": float(correlation_matrix.mean().mean()),
         }
-
-        print(
-            f"Final chart labels: {len(labels)}, annotations: {len(annotations)}"
-        )  # Debugging log
 
         return jsonify({"chart": chart, "stats": summary_stats}), 200
 
@@ -6159,8 +5886,6 @@ def get_shipping_scatterplot_matrix():
 
 # Rolling Correlations for Terminal prices
 
-import plotly.express as px
-
 
 def calculate_rolling_price_correlations(window, source_df, series1, series2):
     """
@@ -6203,56 +5928,6 @@ def calculate_rolling_price_correlations(window, source_df, series1, series2):
         )
     except Exception as e:
         raise ValueError(f"Unexpected error: {str(e)}")
-
-
-def plot_rolling_price_correlations(roll_corr_df, series1, series2, window):
-    """
-    Create a plotly figure for rolling correlations.
-    """
-    try:
-        # Convert date strings back to datetime for plotting
-        roll_corr_df["date"] = pd.to_datetime(roll_corr_df["date"])
-
-        # Create the plot
-        fig_roll_corr = px.line(
-            roll_corr_df,
-            x="date",
-            y="correlation",
-            title=f"{window}-day rolling correlation between {series1} and {series2}",
-        )
-
-        fig_roll_corr.update_layout(
-            title={
-                "text": f"{window}-day rolling correlation between {series1} and {series2}",
-                "x": 0.5,
-                "y": 0.9,
-                "xanchor": "center",
-                "yanchor": "top",
-            },
-            xaxis_title="Date",
-            yaxis_title="Correlation Coefficient",
-            yaxis=dict(
-                tickformat=".2f",
-                range=[-1, 1],  # Correlation coefficient ranges from -1 to 1
-            ),
-            height=600,
-            width=600,
-            showlegend=False,
-        )
-
-        # Add reference lines
-        fig_roll_corr.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5)
-        fig_roll_corr.add_hline(y=1, line_dash="dot", line_color="gray", opacity=0.3)
-        fig_roll_corr.add_hline(y=-1, line_dash="dot", line_color="gray", opacity=0.3)
-
-        # Clean up memory
-        del roll_corr_df
-        gc.collect()
-
-        return fig_roll_corr
-
-    except Exception as e:
-        raise ValueError(f"Error creating plot: {str(e)}")
 
 
 # terminal correlations for usda data
@@ -6330,46 +6005,15 @@ def terminal_rolling_correlations():
         del pivot_data
         gc.collect()
 
-        # Create the Plotly figure directly
-        fig_roll_corr = px.line(
-            roll_corr_df,
-            x="date",
-            y="correlation",
-            title=f"{window}-day rolling correlation between {series1} and {series2}",
-        )
-
-        # Customize the layout
-        fig_roll_corr.update_layout(
-            title={
-                "text": f"{window}-day rolling correlation between {series1} and {series2}",
-                "x": 0.5,
-                "y": 0.9,
-                "xanchor": "center",
-                "yanchor": "top",
-            },
-            xaxis_title="Date",
-            yaxis_title="Correlation Coefficient",
-            yaxis=dict(
-                tickformat=".2f",
-                range=[-1, 1],  # Correlation coefficient ranges from -1 to 1
-            ),
-            height=600,
-            width=600,
-            showlegend=False,
-        )
-
-        # Add reference lines
-        fig_roll_corr.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5)
-        fig_roll_corr.add_hline(y=1, line_dash="dot", line_color="gray", opacity=0.3)
-        fig_roll_corr.add_hline(y=-1, line_dash="dot", line_color="gray", opacity=0.3)
-
-        # Convert the Plotly figure to JSON, ensuring all values are serializable
-        fig_json = fig_roll_corr.to_json()
-
-        # Return the chart as JSON
-        return app.response_class(
-            response=fig_json, status=200, mimetype="application/json"
-        )
+        # Return plain data instead of plotly figure
+        roll_corr_df["date"] = pd.to_datetime(roll_corr_df["date"])
+        return jsonify({
+            "dates": roll_corr_df["date"].dt.strftime("%Y-%m-%d").tolist(),
+            "values": [round(v, 4) for v in roll_corr_df["correlation"].tolist()],
+            "series1": series1,
+            "series2": series2,
+            "window": window
+        }), 200
 
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
@@ -6424,49 +6068,6 @@ def calculate_rolling_price_correlations(window, source_df, series1, series2):
         )
     except Exception as e:
         raise ValueError(f"Unexpected error: {str(e)}")
-
-
-def plot_rolling_price_correlations(roll_corr_df, series1, series2, window):
-    """
-    Create a Plotly figure for rolling correlations and convert it to JSON.
-    """
-    try:
-        # Convert date strings back to datetime for plotting
-        roll_corr_df["date"] = pd.to_datetime(roll_corr_df["date"])
-
-        # Create the Plotly figure
-        fig_roll_corr = px.line(
-            roll_corr_df,
-            x="date",
-            y="correlation",
-            title=f"{window}-day Rolling Correlation between {series1} and {series2}",
-            labels={"correlation": "Correlation Coefficient", "date": "Date"},
-        )
-
-        # Update layout for better visualization
-        fig_roll_corr.update_layout(
-            title={"x": 0.5, "y": 0.9, "xanchor": "center", "yanchor": "top"},
-            xaxis=dict(title="Date"),
-            yaxis=dict(
-                title="Correlation Coefficient",
-                tickformat=".2f",
-                range=[-1, 1],  # Correlation coefficient ranges from -1 to 1
-            ),
-            height=600,
-            width=600,
-            showlegend=False,
-        )
-
-        # Add reference lines
-        fig_roll_corr.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5)
-        fig_roll_corr.add_hline(y=1, line_dash="dot", line_color="gray", opacity=0.3)
-        fig_roll_corr.add_hline(y=-1, line_dash="dot", line_color="gray", opacity=0.3)
-
-        # Return the Plotly figure as JSON
-        return fig_roll_corr.to_json()
-
-    except Exception as e:
-        raise ValueError(f"Error creating plot: {str(e)}")
 
 
 # rolling correlations for shipping produceiq
@@ -6538,14 +6139,15 @@ def shipping_rolling_correlations():
             window=window, source_df=pivot_data, series1=series1, series2=series2
         )
 
-        # Plot and serialize the rolling correlation chart
-        fig_json = plot_rolling_price_correlations(
-            roll_corr_df=roll_corr_df, series1=series1, series2=series2, window=window
-        )
-
-        return app.response_class(
-            response=fig_json, status=200, mimetype="application/json"
-        )
+        # Return plain data instead of plotly figure
+        roll_corr_df["date"] = pd.to_datetime(roll_corr_df["date"])
+        return jsonify({
+            "dates": roll_corr_df["date"].dt.strftime("%Y-%m-%d").tolist(),
+            "values": [round(v, 4) for v in roll_corr_df["correlation"].tolist()],
+            "series1": series1,
+            "series2": series2,
+            "window": window
+        }), 200
 
     except ValueError as e:
         return jsonify({"error": str(e)}), 400

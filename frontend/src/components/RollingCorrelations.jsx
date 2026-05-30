@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import '../styles/RollingCorrelations.css';
 
 const RollingCorrelation = () => {
@@ -29,11 +30,9 @@ const RollingCorrelation = () => {
    * Otherwise keep the commodity as is.
    */
   const getCommodityNameForSource = (commodity, source) => {
-    // If it’s Cubanelles and the user selected USDA, rename it to Cubanelle
     if (commodity === 'Cubanelles' && source === 'USDA') {
       return 'Cubanelle';
     }
-    // Otherwise, keep it the same
     return commodity;
   };
 
@@ -52,7 +51,6 @@ const RollingCorrelation = () => {
     }
 
     try {
-      // Convert user’s chosen commodity names to correct names for the chosen data source
       const finalSeries1 = getCommodityNameForSource(series1, dataSource);
       const finalSeries2 = getCommodityNameForSource(series2, dataSource);
 
@@ -68,7 +66,7 @@ const RollingCorrelation = () => {
           series1: finalSeries1,
           series2: finalSeries2,
           window,
-          source: dataSource, // e.g. "USDA" or "ProduceIQ"
+          source: dataSource,
         }),
       });
 
@@ -181,7 +179,32 @@ const RollingCorrelation = () => {
       <div className="rolling-chart-box">
         {chartData && (
           <div className="rolling-chart-container">
-            <div style={{ padding: "20px", textAlign: "center", color: "#888" }}>Chart unavailable</div>
+            <h4 style={{ fontFamily: 'Inter', fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
+              {chartData.window}-day Rolling Correlation: {chartData.series1} vs {chartData.series2}
+            </h4>
+            <ResponsiveContainer width="100%" height={360}>
+              <LineChart
+                data={chartData.dates.map((d, i) => ({ date: d, correlation: chartData.values[i] }))}
+                margin={{ top: 8, right: 16, left: 0, bottom: 40 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fontSize: 11, fontFamily: 'Inter' }}
+                  angle={-35}
+                  textAnchor="end"
+                  interval={Math.max(1, Math.floor(chartData.dates.length / 8))}
+                />
+                <YAxis
+                  domain={[-1, 1]}
+                  tick={{ fontSize: 11, fontFamily: 'Inter' }}
+                  tickFormatter={v => v.toFixed(2)}
+                />
+                <Tooltip formatter={(v) => [v.toFixed(4), 'Correlation']} />
+                <ReferenceLine y={0} stroke="#94a3b8" strokeDasharray="3 3" />
+                <Line type="monotone" dataKey="correlation" stroke="#0d9488" dot={false} strokeWidth={2} />
+              </LineChart>
+            </ResponsiveContainer>
           </div>
         )}
       </div>

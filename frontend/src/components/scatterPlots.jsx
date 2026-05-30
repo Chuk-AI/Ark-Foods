@@ -1,14 +1,12 @@
 import React, { useState } from 'react';
+import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import '../styles/scatterPlot.css';
 
 // Helper function to handle the "Cubanelles" vs "Cubanelle" mismatch
 function mapCommodityForSource(commodity, source) {
-  // If user selected "Cubanelles" but source is USDA, change to "Cubanelle"
   if (commodity === 'Cubanelles' && source === 'USDA') {
     return 'Cubanelle';
   }
-  // If user selected "Cubanelle" but source is ProduceIQ, switch to "Cubanelles" 
-  // (Only do this if you need the reverse scenario. Otherwise, omit it.)
   if (commodity === 'Cubanelle' && source === 'ProduceIQ') {
     return 'Cubanelles';
   }
@@ -22,8 +20,6 @@ function ScatterPlot() {
   const [apiType, setApiType] = useState('terminal'); // 'terminal' or 'shipping'
   const [source, setSource] = useState('ProduceIQ'); // 'USDA' or 'ProduceIQ'
 
-  // Commodity list includes "Cubanelles" (with 's')
-  // so the user can pick it in the dropdown.
   const commodities = [
     'Anaheim',
     'Cubanelles',
@@ -38,17 +34,14 @@ function ScatterPlot() {
   ];
 
   const fetchScatterPlot = () => {
-    // Determine which endpoint to call
     const endpoint =
       apiType === 'terminal'
         ? '/api/terminal_scatterplot_matrix'
         : '/api/shipping_scatterplot_matrix';
 
-    // Map commodities based on the data source
     const mappedX = mapCommodityForSource(commodityX, source);
     const mappedY = mapCommodityForSource(commodityY, source);
 
-    // Make the request
     fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -146,11 +139,34 @@ function ScatterPlot() {
       </div>
 
       <div className="scatter-chart-container">
-        {scatterPlotData && (
-          <div className="scatter-chart">
-            <div style={{ padding: "20px", textAlign: "center", color: "#888" }}>Chart unavailable</div>
-          </div>
-        )}
+        {scatterPlotData && scatterPlotData.data && scatterPlotData.data[0] && (() => {
+          const pts = scatterPlotData.data[0].x.map((x, i) => ({ x, y: scatterPlotData.data[0].y[i] }));
+          return (
+            <div className="scatter-chart">
+              <ResponsiveContainer width="100%" height={400}>
+                <ScatterChart margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis
+                    dataKey="x"
+                    name={commodityX}
+                    tick={{ fontSize: 12 }}
+                    tickFormatter={v => `$${v}`}
+                    label={{ value: `${commodityX} Price`, position: 'insideBottom', offset: -5, fontSize: 12 }}
+                  />
+                  <YAxis
+                    dataKey="y"
+                    name={commodityY}
+                    tick={{ fontSize: 12 }}
+                    tickFormatter={v => `$${v}`}
+                    label={{ value: `${commodityY} Price`, angle: -90, position: 'insideLeft', fontSize: 12 }}
+                  />
+                  <Tooltip cursor={{ strokeDasharray: '3 3' }} formatter={(v, n) => [`$${v}`, n]} />
+                  <Scatter data={pts} fill="#0d9488" opacity={0.7} />
+                </ScatterChart>
+              </ResponsiveContainer>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
