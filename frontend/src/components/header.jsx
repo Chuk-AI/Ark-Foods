@@ -97,15 +97,10 @@ function Header() {
               )}
 
               {hasAccess([UserRole.OWNER, UserRole.ADMIN, UserRole.SALES]) && (
-                <li className="nav-item">
-                  <a
-                    className="nav-link"
-                    href="https://arkfoods2.klicksai.com"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
+                <li className={`nav-item ${isActive("/new_dashboard")}`}>
+                  <Link className="nav-link" to="/new_dashboard">
                     New Dashboard
-                  </a>
+                  </Link>
                 </li>
               )}
 

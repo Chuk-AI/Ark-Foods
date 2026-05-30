@@ -12,6 +12,7 @@ import ProtectedRoute from './components/protectedRoute';
 import DashAnalytics from './pages/analytics';
 import DynamicAnalytics from './pages/dynamicAnalytics';
 import Alerts from './pages/Alerts';
+import NewDashboard from './pages/NewDashboard';
 // Axios Defaults
 
 // axios.defaults.baseURL = 'http://localhost:5500/'; // local backend
@@ -92,6 +93,14 @@ const App = () => {
             element={
               <ProtectedRoute roles={['admin', 'owner']}>
                 <Alerts />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/new_dashboard"
+            element={
+              <ProtectedRoute roles={['sales', 'owner', 'admin']}>
+                <NewDashboard />
               </ProtectedRoute>
             }
           />
