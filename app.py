@@ -65,14 +65,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dotenv import load_dotenv
 import logging
 
-# IBM Environmental Intelligence Suite (EIS) related imports
-import numpy as np
-import pandas as pd
-from datetime import datetime, timedelta
-from dateutil.relativedelta import relativedelta
-import ibmpairs.query as query
-from ibmpairs.client import get_client
-import logging
 from functools import wraps
 from flask_jwt_extended import (
     JWTManager,
@@ -87,7 +79,6 @@ from notebook import get_best_start_dates, fetch_data_from_api
 from fetch_shipping_point_data import (
     fetch_shipping_point_data,
 )  # Replace with the correct module name
-from flask_caching import Cache
 import hashlib
 from flask import request, make_response
 from collections import defaultdict
@@ -113,13 +104,6 @@ if "JWT_SECRET_KEY" not in os.environ:
 app.config["JWT_SECRET_KEY"] = os.environ["JWT_SECRET_KEY"]
 app.config["DEBUG"] = True
 app.config["JWT_ALGORITHM"] = "HS256"
-app.config["CACHE_NO_CACHE_ROUTES"] = [
-    "/api/delete-alert-by-id",
-    "/api/clear-alerts",
-    "/api/alert-settings",
-    "/api/alert-entries-fresh",
-    "/api/break_even",
-]
 jwt = JWTManager(app)
 
 
@@ -161,52 +145,6 @@ def serve(path):
         return send_from_directory(app.static_folder, "index.html")
 
 
-# Configure Flask-Caching to use Redis
-app.config["CACHE_TYPE"] = "redis"
-app.config["CACHE_REDIS_URL"] = "redis://localhost:6379/0"  # Adjust if needed
-# app.config['CACHE_REDIS_URL'] = os.environ.get("REDIS_URL", "redis://<MEMORISTORE_IP>:6379/0")
-
-cache = Cache(app)
-
-
-# Redis implementation for the caching of data coming from the db
-def generate_cache_key():
-    # Use the full path (which includes query parameters)
-    key = (
-        request.full_path
-    )  # e.g., "/api/sales_dashboard?commodity=Jalapeno&source=USDA"
-    # Optionally, you can hash it to ensure it's a consistent format
-    return hashlib.md5(key.encode("utf-8")).hexdigest()
-
-
-@app.before_request
-def serve_from_cache():
-    if request.method == "GET":
-        cache_key = generate_cache_key()
-        cached_response = cache.get(cache_key)
-        if cached_response:
-            app.logger.info(f"Cache hit for key: {cache_key}")
-            response = make_response(cached_response)
-            response.headers["Content-Type"] = "application/json"
-            return response
-        else:
-            app.logger.info(f"Cache miss for key: {cache_key}")
-
-
-@app.after_request
-def cache_response(response):
-    if request.method == "GET" and response.status_code == 200:
-        cache_key = generate_cache_key()
-        # time out
-        ttl = 86400  # Set TTL to 1 day (24 hours)
-        # For more dynamic TTL, you can calculate it based on some parameters
-        # e.g., setting a shorter TTL for endpoints that change often
-        if "historical_data" in request.full_path:
-            ttl = 3600  # Shorter TTL of 1 hour for historical data
-
-        cache.set(cache_key, response.get_data(), timeout=ttl)
-        app.logger.info(f"Cached response for key: {cache_key}")
-    return response
 
 
 CORS(
@@ -351,13 +289,13 @@ class User(UserMixin, db.Model):
 class PriceData(db.Model):
     __tablename__ = "price_data"  # Match the actual table name in the database
     id = db.Column(db.Integer, primary_key=True)
-    city_name = db.Column(db.String(100), nullable=False)
-    commodity = db.Column(db.String(100), nullable=False)
-    year = db.Column(db.Integer, nullable=False)
-    day = db.Column(db.Integer, nullable=False)  # Day of the year
+    city_name = db.Column(db.String(100), nullable=False, index=True)
+    commodity = db.Column(db.String(100), nullable=False, index=True)
+    year = db.Column(db.Integer, nullable=False, index=True)
+    day = db.Column(db.Integer, nullable=False, index=True)  # Day of the year
     price = db.Column(db.Float, nullable=False)
-    source = db.Column(db.String(50), nullable=False)
-    season = db.Column(db.String(20), nullable=False)
+    source = db.Column(db.String(50), nullable=False, index=True)
+    season = db.Column(db.String(20), nullable=False, index=True)
     # ── NEW columns ──
     package = db.Column(db.String(150), nullable=True)
     origin = db.Column(db.String(100), nullable=True)
@@ -443,9 +381,9 @@ class BreakEvenEstimation(db.Model):
 class ShippingPriceData(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
-    commodity = db.Column(db.String, nullable=False)
+    commodity = db.Column(db.String, nullable=False, index=True)
     region_name = db.Column(db.String, nullable=False)
-    year = db.Column(db.Integer, nullable=False)
+    year = db.Column(db.Integer, nullable=False, index=True)
     day = db.Column(db.Integer, nullable=False)
     source = db.Column(db.String, nullable=False)
     price = db.Column(db.Float)
@@ -456,41 +394,12 @@ class UShippingPriceData(db.Model):
     __tablename__ = "usda_shipping_price_data"
 
     id = db.Column(db.Integer, primary_key=True)
-    city_name = db.Column(db.String(100), nullable=False)
-    commodity = db.Column(db.String(100), nullable=False)
-    year = db.Column(db.Integer, nullable=False)
+    city_name = db.Column(db.String(100), nullable=False, index=True)
+    commodity = db.Column(db.String(100), nullable=False, index=True)
+    year = db.Column(db.Integer, nullable=False, index=True)
     price = db.Column(db.Float, nullable=False)
     source = db.Column(db.String(50), nullable=False, default="USDA")
     season = db.Column(db.String(20), nullable=False)
-
-
-class WeatherForecast(db.Model):
-    __tablename__ = "weather_forecast"
-    id = db.Column(db.Integer, primary_key=True)
-    city_name = db.Column(db.String(100), nullable=False)
-    latitude = db.Column(db.Float, nullable=False)
-    longitude = db.Column(db.Float, nullable=False)
-    forecast_date = db.Column(db.Date, nullable=False)  # Date of forecast
-    variable = db.Column(db.String(10), nullable=False)  # PRECIP, TMIN, TMAX, TAVG
-    forecasted_value = db.Column(
-        db.Float, nullable=False
-    )  # Forecasted value (e.g., temp or precipitation)
-    ensemble_member = db.Column(db.Integer, nullable=False)  # Ensemble member
-    source = db.Column(db.String(50), nullable=False)  # Source of the data, e.g., 'IBM'
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-
-class ClimatologyData(db.Model):
-    __tablename__ = "climatology_data"
-    id = db.Column(db.Integer, primary_key=True)
-    city_name = db.Column(db.String(255), nullable=False)
-    latitude = db.Column(db.Float, nullable=False)
-    longitude = db.Column(db.Float, nullable=False)
-    forecast_date = db.Column(db.Date, nullable=False)  # Forecast date
-    variable = db.Column(db.String(10), nullable=False)  # e.g., PRECIP, TAVG
-    climatology_value = db.Column(db.Float, nullable=False)
-    source = db.Column(db.String(50), nullable=False)  # Data source (e.g., ERA5)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
 class AlertSetting(db.Model):
@@ -1415,14 +1324,6 @@ def test_ibm_live():
         return jsonify(df.to_dict(orient="records"))
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-
-import numpy as np
-import pandas as pd
-from datetime import datetime, timedelta
-from dateutil.relativedelta import relativedelta
-import ibmpairs.query as query
-import logging
 
 
 # def fetch_and_store_weather_forecast(
@@ -2415,11 +2316,6 @@ def admin_dashboard():
 def owner_dashboard():
     return render_template("owner_dashboard.html")
 
-
-@app.route("/api/weather_dashboard")
-# # @jwt_required()
-def weather_dashboard():
-    return render_template("weather_dashboard.html")
 
 
 @app.route("/api/sales_dashboard", methods=["GET"])
