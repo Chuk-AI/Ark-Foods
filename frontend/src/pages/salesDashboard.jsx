@@ -6,8 +6,6 @@ import L from "leaflet"; // For Leaflet maps
 import "leaflet/dist/leaflet.css";
 import { DateTime } from "luxon"; // For date-time handling
 import { useEffect, useState, useRef } from "react";
-import Header from "../components/header";
-import Footer from "../components/footer";
 import "../styles/sales_styles.css";
 import * as XLSX from "xlsx";
 
@@ -1210,7 +1208,6 @@ function SalesDashboard() {
 
   return (
     <div>
-      <Header />
       <div className="container-fluid d-flex">
         {/* Left Sidebar */}
         <div
@@ -2098,7 +2095,6 @@ function SalesDashboard() {
           </div>
         </div>
       </div>
-      <Footer />
     </div>
   );
 }

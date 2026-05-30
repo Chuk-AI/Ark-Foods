@@ -11,8 +11,6 @@ import {
   ResponsiveContainer,
   ComposedChart,
 } from 'recharts';
-import Header from '../components/header';
-import Footer from '../components/footer';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -622,7 +620,6 @@ function DashboardHeader() {
 export default function NewDashboard() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--color-bg)', fontFamily: 'Inter, sans-serif' }}>
-      <Header />
       <main style={{ maxWidth: 1280, margin: '0 auto', padding: '32px 24px' }}>
         <DashboardHeader />
         <PriceForecastSection />
@@ -630,7 +627,6 @@ export default function NewDashboard() {
         <WeatherSection />
         <GrowingConditionsSection />
       </main>
-      <Footer />
     </div>
   );
 }

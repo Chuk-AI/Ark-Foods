@@ -2,8 +2,6 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 import Chart from "chart.js/auto";
 import ChartDataLabels from "chartjs-plugin-datalabels";
-import Header from "../components/header";
-import Footer from "../components/footer";
 import { Link } from "react-router-dom";
 import "../styles/adminDashboard.css";
 
@@ -656,11 +654,6 @@ function AdminDashboard() {
 
   return (
     <div>
-      <Header
-        isAuthenticated={user.isAuthenticated}
-        isAdmin={user.isAdmin}
-        isOwner={user.isOwner}
-      />
       <div className="container adminDash-section">
         <div className="mt-3 mb-3">
           <Link to="/approve_users" className="btn btn-primary">
@@ -1289,7 +1282,6 @@ function AdminDashboard() {
           </div>
         </div>
       </div>
-      <Footer />
     </div>
   );
 }

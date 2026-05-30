@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
-import Footer from '../components/footer';
-import Header from '../components/header';
 import { UserContext } from '../components/userContext';
 
 function ApproveUsers() {
@@ -52,7 +50,6 @@ function ApproveUsers() {
 
   return (
     <div>
-      <Header />
       <div className="container">
         <h2>Approve Users</h2>
         <table className="table">
@@ -80,7 +77,6 @@ function ApproveUsers() {
           </tbody>
         </table>
       </div>
-      <Footer />
     </div>
   );
 }

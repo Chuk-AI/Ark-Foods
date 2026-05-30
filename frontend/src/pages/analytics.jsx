@@ -1,6 +1,4 @@
 import React from 'react';
-import Header from '../components/header';
-import Footer from '../components/footer';
 import '../styles/analytics.css';
 import EmpiricalChart from '../components/empirical';
 import CorrelationsPlots from '../components/correlations';
@@ -15,7 +13,6 @@ export default function DashAnalytics() {
 
   return (
     <div className="analytics-page">
-      <Header />
 
       {/* Terminal Violin Plot */}
       <div>
@@ -53,7 +50,6 @@ export default function DashAnalytics() {
         <RollingCorrelation />
       </div>
 
-      <Footer />
     </div>
   );
 }

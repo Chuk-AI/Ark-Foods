@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useContext } from "react";
 import { UserContext } from "../components/userContext";
-import Header from "../components/header";
 import axios from "axios";
 import "../styles/alerts.css";
 
@@ -280,7 +279,6 @@ const Alerts = () => {
 
   return (
     <div>
-      <Header />
       <div className="container mt-5 pt-4">
         <div className="row">
           <div className="col-md-12">

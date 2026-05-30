@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import Header from '../components/header';
 import ForecastLineChart from '../components/ForecastLineChart';
 import BreakEvenEstimator from '../components/BreakEvenEstimator';
 import HarvestPlanner from '../components/HarvestPlanner';
@@ -122,7 +121,6 @@ export default function DynamicAnalytics() {
 
   return (
     <div>
-      <Header />
       
       <div className="container-fluid mt-5 pt-4">
         {!activeChart ? (
