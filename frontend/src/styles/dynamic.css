@@ -1,149 +1,87 @@
-/* Analytics Styles - Updated for side-by-side layout */
+/* Dynamic Analytics Styles */
 
-/* Chart Option Cards */
-
-
-.chart-option-card {
-    transition: all 0.3s ease;
-    cursor: pointer;
-    border-radius: 8px;
-    background-color: #ffffff;
-    border: 1px solid #e0e0e0;
-    overflow: hidden;
-  }
-  
-  .chart-option-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
-  }
-  
-  .chart-option-card.active {
-    border-color: #4285f4;
-    box-shadow: 0 5px 15px rgba(66, 133, 244, 0.2);
-  }
-  
-  .chart-icon {
-    font-size: 2rem;
-    color: #4285f4;
-    margin-bottom: 1rem;
-  }
-  
-  /* Filter Sidebar */
-  .filter-sidebar {
-    height: 100%;
-    overflow-y: auto; /* Allow scrolling if content overflows */
-
-  }
-  
-  /* Make sure filters are always visible on desktop */
-  @media (min-width: 992px) {
-    .filter-sidebar {
-      display: block !important;
-    }
-  }
-  
-  /* On mobile, make the filter panel overlay the content */
-  @media (max-width: 991.98px) {
-    .filter-sidebar.show {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      z-index: 1050;
-      background-color: rgba(0, 0, 0, 0.5);
-      display: flex !important;
-      justify-content: center;
-      align-items: center;
-      padding: 15px;
-    }
-    
-    .filter-sidebar.show .card {
-      width: 100%;
-      max-width: 500px;
-      max-height: 90vh;
-      overflow-y: auto;
-      
-    }
-  }
-  
-  .scrollable-checkboxes {
-    max-height: 250px; /* Increase max height for better visibility */
-    overflow-y: auto;
-    border: 1px solid #dee2e6;
-    border-radius: 4px;
-    padding: 8px;
-    margin-bottom: 10px;
-  }
-  
-  /* Chart container */
-  .chart-container {
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.05) inset;
-    border-radius: 4px;
-    padding: 10px;
-    background-color: #fafafa;
-  }
-  
-  /* Row height for dashboard */
-  .analytics-row {
-    min-height: 70vh;
-  }
-  
-  /* Ensure consistent card heights */
-  .chart-card, .filter-card {
-    height: 100%;
-  }
-  
-  /* Make sure both cards have the same vertical spacing */
-  .card-body {
-    padding: 1.25rem;
-    padding: 15px;
-    overflow-y: auto; /* Add scroll functionality */
-    max-height: 80vh; /* Add a max height to make scrolling work */
-  
-  }
-  
-  /* Chart toolbar */
-  .chart-toolbar {
-    padding: 10px 15px;
-    background-color: #f8f9fa;
-    border-radius: 8px;
-    margin-bottom: 20px;
-  }
-  
-  /* Analytics Dashboard Title */
-  .analytics-header {
-    margin-bottom: 2rem;
-    border-bottom: 1px solid #e0e0e0;
-    padding-bottom: 1rem;
-  }
-  
-  .analytics-header h1 {
-    font-weight: 500;
-    color: #424242;
-  }
-  
-  .analytics-subtitle {
-    color: #757575;
-    font-weight: normal;
-  }
-
-  /* Add this to your analytics_styles.css */
-/* Add to your CSS file */
-.card-body::-webkit-scrollbar {
-  width: 8px;
+.terminal-voilin-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  align-content: center;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  background: var(--color-surface-2);
+  padding: 10px;
 }
 
-.card-body::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 4px;
+#terminal-violin-plot-section {
+  margin-top: 100px;
+  height: 680px;
 }
 
-.card-body::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 4px;
+.shipping-violin-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  align-content: center;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--color-primary);
+  padding: 20px;
+  height: 570px;
 }
 
-.card-body::-webkit-scrollbar-thumb:hover {
-  background: #a1a1a1;
+#shipping-violin-plot-section {
+  height: auto;
+  padding: 20px;
+  background-color: var(--color-surface-2);
+  border-radius: 8px;
+  box-shadow: var(--shadow-sm);
+  margin-top: 50px;
+}
+
+.corr-section {
+  display: flex;
+  justify-content: space-between;
+  padding: 20px;
+  border-radius: 8px;
+  background: var(--color-primary);
+  margin-top: 30px;
+  height: 634px;
+}
+
+/* Card Container - Flexbox */
+.card-container {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 20px;
+  margin-top: 20px;
+}
+
+/* Individual Selection Cards */
+.selection-card {
+  background-color: var(--color-surface);
+  border: 2px solid var(--color-border);
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+  width: 200px;
+  height: 70px;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.3s ease, background-color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Active and Hover Effects */
+.selection-card:hover {
+  transform: scale(1.05);
+  background-color: var(--color-primary);
+  color: #ffffff;
+  border-color: var(--color-primary);
+}
+
+.selection-card.active {
+  transform: scale(1.1);
+  background-color: var(--color-primary-dark);
+  color: #ffffff;
+  border-color: var(--color-primary-dark);
 }

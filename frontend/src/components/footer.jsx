@@ -2,8 +2,17 @@ import React from 'react';
 
 function Footer() {
   return (
-    <footer className="bg-light text-center text-lg-start mt-5 py-3" style={{color:'black', borderRadius:'20px'}}>
-      <div className="text-center">&copy; 2024 Ark Foods | Powered by Flask</div>
+    <footer style={{
+      backgroundColor: 'var(--color-surface)',
+      borderTop: '1px solid var(--color-border)',
+      height: '48px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+    }}>
+      <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>
+        &copy; 2025 Ark Foods. All rights reserved.
+      </span>
     </footer>
   );
 }

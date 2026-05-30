@@ -1,183 +1,140 @@
-@import url('https://fonts.googleapis.com/css2?family=Ubuntu:ital,wght@0,300;0,400;0,500;0,700;1,300;1,400;1,500;1,700&display=swap');
+/* Analytics Styles */
 
-
-body{
-    font-family: "Ubuntu", serif;
-  font-weight: 300;
-  font-style: normal;
-  margin: 20px;
-  background-color: #f4f7fc;
-  
-}
-.terminal-voilin-wrapper{
-    display: flex;
-    justify-content: center;
-   align-items: center;
-   align-content: center;
-
-
-   border-radius: 15px; /* Adjust the radius as needed */
-   overflow: hidden;    /* Ensures content respects the border-radius */
-   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Optional: Add a shadow effect */
-   background: #e6e6fa; /* Match this with `paper_bgcolor` */
-   padding: 10px;     
-}
-#terminal-violin-plot-section{
-    margin-top: 100px;
-    height: 680px;
+/* Chart Option Cards */
+.chart-option-card {
+  transition: all 0.3s ease;
+  cursor: pointer;
+  border-radius: 8px;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  overflow: hidden;
 }
 
+.chart-option-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-md);
+}
 
+.chart-option-card.active {
+  border-color: var(--color-primary);
+  box-shadow: 0 5px 15px rgba(13, 148, 136, 0.2);
+}
 
+.chart-icon {
+  font-size: 2rem;
+  color: var(--color-primary);
+  margin-bottom: 1rem;
+}
 
-.shipping-violin-wrapper {
-    display: flex;
+/* Filter Sidebar */
+.filter-sidebar {
+  height: 100%;
+  overflow-y: auto;
+}
+
+/* Make sure filters are always visible on desktop */
+@media (min-width: 992px) {
+  .filter-sidebar {
+    display: block !important;
+  }
+}
+
+/* On mobile, make the filter panel overlay the content */
+@media (max-width: 991.98px) {
+  .filter-sidebar.show {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1050;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex !important;
     justify-content: center;
     align-items: center;
-    align-content: center;
-    border-radius: 15px; /* Rounded corners */
-    overflow: hidden;    /* Ensures content respects the border-radius */
-    background: #33b1a7;
-    padding: 20px;       /* Padding inside the wrapper */
-    height: 570px;
+    padding: 15px;
+  }
+
+  .filter-sidebar.show .card {
+    width: 100%;
+    max-width: 500px;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
 }
 
-
-#shipping-violin-plot-section {
-    height: auto; /* Let height adjust automatically */
-    padding: 20px; /* Add spacing inside the section */
-    background-color: #f8f9fa;
-    border-radius: 10px; /* Rounded corners */
-    box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1); /* Subtle shadow */
-    margin-top: 50px; /* Space above the section */
+.scrollable-checkboxes {
+  max-height: 250px;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 8px;
+  margin-bottom: 10px;
 }
 
-
-.corr-section{
-    display: flex;
-    justify-content: space-between;
-    padding: 20px;
-    border-radius: 20px;
-    background: #33b1a7;
-    margin-top: 30px;
-    height: 634px;
+/* Chart container */
+.chart-container {
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.03);
+  border-radius: 4px;
+  padding: 10px;
+  background-color: var(--color-surface-2);
 }
 
-/* 
-.component-selector {
-    margin: 20px 0;
-    text-align: center;
-  }
-  select {
-    font-size: 16px;
-    padding: 10px;
-    border-radius: 5px;
-    border: 1px solid #ddd;
-  }
-  .component-container {
-    padding: 20px;
-    border: 1px solid #ddd;
-    border-radius: 5px;
-    background-color: #ffffff;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  }
-     */
+/* Row height for dashboard */
+.analytics-row {
+  min-height: 70vh;
+}
 
+/* Ensure consistent card heights */
+.chart-card,
+.filter-card {
+  height: 100%;
+}
 
+.card-body {
+  overflow-y: auto;
+  max-height: 80vh;
+}
 
-/* 
-     .component-selector {
-    text-align: center;
-    margin: 20px 0;
-  }
-  
-  .card-container {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 20px;
-  }
-  
-  .selection-card {
-    background-color: #ffffff;
-    border: 2px solid #ddd;
-    border-radius: 10px;
-    padding: 20px;
-    text-align: center;
-    width: 150px;
-    cursor: pointer;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    transition: transform 0.3s ease, background-color 0.3s ease, border-color 0.3s ease;
-  }
-  
-  .selection-card .icon {
-    font-size: 2rem;
-  }
-  
-  .selection-card .name {
-    font-weight: bold;
-    margin-top: 10px;
-    font-size: 1rem;
-  }
-  
-  .selection-card:hover {
-    transform: scale(1.05);
-    background-color: #33b1a7; 
-    color: #ffffff;
-    border-color: #33b1a7;
-  }
-  
-  .selection-card.active {
-    transform: scale(1.1);
-    background-color: #11998e;
-    color: #ffffff;
-    border-color: #11998e;
-  }
-  
-  .component-container {
-    padding: 20px;
-    border: 1px solid #ddd;
-    border-radius: 5px;
-    background-color: #ffffff;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  }
-   */
+/* Chart toolbar */
+.chart-toolbar {
+  padding: 10px 15px;
+  background-color: var(--color-surface-2);
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
 
+/* Analytics Dashboard Title */
+.analytics-header {
+  margin-bottom: 2rem;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 1rem;
+}
 
-/* Card Container - Flexbox */
-.card-container {
-    display: flex;
-    flex-wrap: wrap; /* Allow cards to wrap into multiple rows */
-    justify-content: center; /* Center cards horizontally */
-    gap: 20px; /* Add space between cards */
-    margin-top: 20px; /* Add some margin above the cards */
-  }
-  
-  /* Individual Selection Cards */
-  .selection-card {
-    background-color: #ffffff;
-    border: 2px solid #ddd;
-    border-radius: 10px;
-    padding: 20px;
-    text-align: center;
-    width: 200px; /* Set card width */
-    height: 70px;
-    cursor: pointer;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    transition: transform 0.3s ease, background-color 0.3s ease, border-color 0.3s ease;
-  }
-  
-  /* Active and Hover Effects */
-  .selection-card:hover {
-    transform: scale(1.05);
-    background-color: #33b1a7; /* Teal background on hover */
-    color: #ffffff;
-    border-color: #33b1a7;
-  }
-  
-  .selection-card.active {
-    transform: scale(1.1);
-    background-color: #11998e; /* Darker teal for the active card */
-    color: #ffffff;
-    border-color: #11998e;
-  }
+.analytics-header h1 {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.analytics-subtitle {
+  color: var(--color-text-muted);
+  font-weight: 400;
+}
+
+.card-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.card-body::-webkit-scrollbar-track {
+  background: var(--color-bg);
+  border-radius: 4px;
+}
+
+.card-body::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 4px;
+}
+
+.card-body::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+}

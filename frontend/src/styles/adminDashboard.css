@@ -1,90 +1,78 @@
-/* body{
-    background: linear-gradient(to right, #141e30, #243b55);
+.adminDash-section {
+  margin-top: 100px;
+}
 
-} */
-.adminDash-section{
-    margin-top: 100px;
+.Forecast-Results {
+  background: var(--color-primary);
+  color: white;
+  height: 300px;
+  border-radius: 8px;
 }
-.Forecast-Results{
-    background: #33b1a7;
-    color: white;
-    height: 300px;
-    border-radius: 20px;
-}
-/* 🔹 Commodity Prices Section */
+
+/* Commodity Prices Section */
 .commodity-prices-section {
-    background: #f9f9f9;
-    padding: 20px;
-    border-radius: 10px;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-    margin-top: 20px;
-  }
-  
-  /* 🔹 Filters Layout */
-  .filters-container {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    align-items: center;
-    justify-content: center;
-    padding: 15px;
-    background: #ffffff;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  }
-  
-  .filter-group {
-    display: flex;
-    flex-direction: column;
-    margin-right: 10px;
-  }
-  
-  .filter-group label {
-    font-weight: bold;
-    margin-bottom: 5px;
-  }
-  
-  .form-control {
-    padding: 8px;
-    border-radius: 5px;
-    border: 1px solid #ccc;
-    min-width: 150px;
-  }
-  
-  .generate-btn {
-    margin-top: 25px;
-    font-weight: bold;
-    padding: 10px 15px;
-  }
-  
-  /* 🔹 Error Message */
-  .error-message {
-    color: red;
-    font-weight: bold;
-    text-align: center;
-    margin-top: 10px;
-  }
-  
-  /* 🔹 Table Styling */
-  .table-responsive {
-    margin-top: 15px;
-  }
-  
-  .table {
-    background: white;
-  }
-  
-  .table th {
-    background: #007bff;
-    color: black;
-    text-align: center;
-  }
-  
-  .table td {
-    text-align: center;
-  }
-  
-  .table-hover tbody tr:hover {
-    background: rgba(0, 123, 255, 0.1);
-  }
-  
+  background: var(--color-surface-2);
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: var(--shadow-sm);
+  margin-top: 20px;
+}
+
+/* Filters Layout */
+.filters-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  padding: 15px;
+  background: var(--color-surface);
+  border-radius: 8px;
+  box-shadow: var(--shadow-sm);
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  margin-right: 10px;
+}
+
+.filter-group label {
+  font-weight: 600;
+  margin-bottom: 5px;
+  font-size: 13px;
+  color: var(--color-text);
+}
+
+.generate-btn {
+  margin-top: 25px;
+  font-weight: 600;
+  padding: 10px 15px;
+}
+
+/* Error Message */
+.error-message {
+  color: var(--color-danger);
+  font-weight: 600;
+  text-align: center;
+  margin-top: 10px;
+}
+
+/* Table Styling */
+.table-responsive {
+  margin-top: 15px;
+}
+
+.table th {
+  background: var(--color-primary);
+  color: white;
+  text-align: center;
+}
+
+.table td {
+  text-align: center;
+}
+
+.table-hover tbody tr:hover {
+  background: rgba(13, 148, 136, 0.06);
+}

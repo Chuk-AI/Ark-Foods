@@ -1,9 +1,9 @@
 /* General Styles for Sales Dashboard */
 :root {
-  --sales-card-bg: #ffffff;
-  --sales-border-color: #e0e0e0;
-  --sales-hover-color: #f1f3f5;
-  --sales-primary-color: #3498db;
+  --sales-card-bg: var(--color-surface, #ffffff);
+  --sales-border-color: var(--color-border, #e2e8f0);
+  --sales-hover-color: var(--color-surface-2, #f1f5f9);
+  --sales-primary-color: var(--color-primary, #0d9488);
   --sales-highlight-bg: #ffef96;
 }
 
@@ -137,7 +137,7 @@ select[multiple] {
   overflow-y: auto;
   transition: width 0.3s ease, visibility 0.3s ease, opacity 0.3s ease;
   z-index: 1001;
-  border: solid 1px #33b2a8;
+  border: solid 1px var(--color-primary);
 }
 .minimized-item {
   cursor: pointer;
@@ -207,7 +207,7 @@ select[multiple] {
 #minimized-sidebar h2 {
   padding: 15px;
   margin: 0;
-  color: #32a99f;
+  color: var(--color-primary);
   font-size: 20px;
   font-weight: 600;
   margin-top: 40px;
@@ -227,7 +227,7 @@ select[multiple] {
   border-bottom: 1px solid var(--sales-border-color);
   cursor: pointer;
   list-style: none; /* Remove bullets */
-  border: solid 1px #33b2a8;
+  border: solid 1px var(--color-primary);
 }
 #minimized-list {
   padding: 0;
@@ -296,7 +296,7 @@ select[multiple] {
 #current-section-title {
   font-size: 20px;
   font-weight: 600;
-  color: #32a99f;
+  color: var(--color-primary);
 }
 .card-body.p-0 {
   padding: 0;
@@ -378,9 +378,9 @@ select[multiple] {
   }
 }
 .sidebar {
-  border-radius: 10px;
+  border-radius: 8px;
   margin-top: 68px;
-  border: solid 1px #33b2a8;
+  border: solid 1px var(--color-primary);
   width: 220px;
 }
 /* Additional Filter Form Styles */
