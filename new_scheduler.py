@@ -1,10 +1,13 @@
 import os
+import logging
 from app import app, fetch_shipping_data, fetch_usda_daily_data, fetch_daily_data
 from usda import fetch_usda_terminal_data
 from dotenv import load_dotenv
 from alert_service import check_price_alerts, update_price_history
 
 load_dotenv()  # This loads variables from .env into the environment
+
+logger = logging.getLogger(__name__)
 
 
 def execute_scheduled_functions():
@@ -30,6 +33,23 @@ def execute_scheduled_functions():
         print("Scheduled tasks executed successfully.")
     except Exception as e:
         print(f"Error occurred during scheduled execution: {e}")
+
+
+# Daily cache build at 4 PM (run in background thread to avoid blocking)
+def run_cache_build():
+    try:
+        import sys
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        # Import here to avoid circular imports
+        from app import app as flask_app
+        with flask_app.app_context():
+            from historical_trend_forecasting import build_combined_forecasts_cache
+            from app import cache_set, db, PEPPER_VARIETIES
+            logger.info("Starting daily cache build...")
+            build_combined_forecasts_cache("All cities", db, cache_set, None)
+            logger.info("Daily cache build completed")
+    except Exception as e:
+        logger.error(f"Daily cache build failed: {e}")
 
 
 if __name__ == "__main__":

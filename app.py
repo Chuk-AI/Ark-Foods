@@ -479,6 +479,375 @@ class Notification(db.Model):
         }
 
 
+# ============================================
+# DASHBOARD CACHE MODEL
+# ============================================
+
+
+def get_json_column():
+    try:
+        if db.engine.dialect.name == "postgresql":
+            from sqlalchemy.dialects.postgresql import JSONB
+            return JSONB
+        return db.Text
+    except Exception:
+        return db.Text
+
+
+class DashboardCache(db.Model):
+    __tablename__ = "dashboard_cache"
+    cache_key = db.Column(db.String, primary_key=True)
+    payload = db.Column(db.Text, nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+
+
+class ClimatologyData(db.Model):
+    __tablename__ = "climatology_data"
+    id = db.Column(db.Integer, primary_key=True)
+    city_name = db.Column(db.String(100), nullable=False, index=True)
+    variable = db.Column(db.String(100), nullable=False)
+    forecast_date = db.Column(db.Date, nullable=False, index=True)
+    climatology_value = db.Column(db.Float, nullable=False)
+
+
+# ============================================
+# PEPPER VARIETIES & GROWING REGION CONSTANTS
+# ============================================
+
+PEPPER_VARIETIES = [
+    "Jalapeno",
+    "Hungarian Wax",
+    "Shishito",
+    "Fresno",
+    "Long Hot",
+    "Habanero",
+    "Anaheim",
+    "Cubanelle",
+    "Serrano",
+    "Poblano",
+]
+
+GROWING_REGIONS = {
+    "immokalee_fl": {"name": "Immokalee, FL", "lat": 26.4187, "lon": -81.4173, "city": "Immokalee", "crops": ["Jalapeño", "Serrano", "Poblano", "Habanero", "Anaheim", "Fresno"]},
+    "palm_beach_fl": {"name": "Palm Beach County, FL", "lat": 26.7153, "lon": -80.0534, "city": "Palm Beach County", "crops": ["Jalapeño", "Serrano", "Poblano", "Habanero", "Anaheim", "Fresno"]},
+    "vineland_nj": {"name": "Vineland, NJ", "lat": 39.4802, "lon": -75.0138, "city": "Vineland", "crops": ["Jalapeño", "Serrano", "Poblano", "Habanero", "Anaheim", "Fresno"]},
+    "sodus_mi": {"name": "Sodus, MI", "lat": 42.0086, "lon": -86.3614, "city": "Sodus", "crops": ["Jalapeño", "Serrano", "Poblano", "Habanero", "Anaheim", "Fresno"]},
+    "sinaloa_mx": {"name": "Sinaloa, Mexico", "lat": 25.1721, "lon": -107.4795, "city": "Sinaloa", "crops": ["Jalapeño", "Serrano", "Poblano", "Habanero"]},
+    "sonora_mx": {"name": "Sonora, Mexico", "lat": 29.2972, "lon": -110.3309, "city": "Sonora", "crops": ["Jalapeño", "Serrano", "Poblano", "Habanero"]},
+    "hendersonville_nc": {"name": "Hendersonville, NC", "lat": 35.3187, "lon": -82.4610, "city": "Hendersonville", "crops": ["Jalapeño", "Serrano", "Poblano", "Habanero", "Anaheim", "Fresno"]},
+    "cameron_sc": {"name": "Cameron, SC", "lat": 33.5568, "lon": -80.7151, "city": "Cameron", "crops": ["Jalapeño", "Serrano", "Poblano", "Habanero", "Anaheim", "Fresno"]},
+    "adel_ga": {"name": "Adel, GA", "lat": 31.13633333, "lon": -83.42216389, "city": "Adel", "crops": ["Jalapeño", "Serrano", "Poblano", "Habanero", "Long Hot"]},
+    "bowling_green_fl": {"name": "Bowling Green, FL", "lat": 27.6386, "lon": -81.8265, "city": "Bowling Green", "crops": ["Jalapeño", "Serrano", "Poblano", "Habanero", "Anaheim", "Fresno"]},
+}
+
+PEPPER_CONDITIONS = {
+    "Jalapeno": {"temp_min": 60, "temp_max": 80, "humidity_min": 20, "humidity_max": 40},
+    "Hungarian Wax": {"temp_min": 60, "temp_max": 80, "humidity_min": 20, "humidity_max": 40},
+    "Shishito": {"temp_min": 60, "temp_max": 80, "humidity_min": 20, "humidity_max": 40},
+    "Fresno": {"temp_min": 60, "temp_max": 80, "humidity_min": 20, "humidity_max": 40},
+    "Long Hot": {"temp_min": 60, "temp_max": 80, "humidity_min": 20, "humidity_max": 40},
+    "Habanero": {"temp_min": 60, "temp_max": 80, "humidity_min": 20, "humidity_max": 40},
+    "Anaheim": {"temp_min": 60, "temp_max": 80, "humidity_min": 20, "humidity_max": 40},
+    "Cubanelle": {"temp_min": 60, "temp_max": 80, "humidity_min": 20, "humidity_max": 40},
+    "Serrano": {"temp_min": 60, "temp_max": 80, "humidity_min": 20, "humidity_max": 40},
+    "Poblano": {"temp_min": 60, "temp_max": 80, "humidity_min": 20, "humidity_max": 40},
+}
+
+OPENWEATHER_API_KEY = os.environ.get("OPENWEATHER_API_KEY", "")
+
+_PEPPER_ALIASES = {
+    "jalapeño": "Jalapeno", "jalapeno": "Jalapeno", "cubanelles": "Cubanelle",
+    "cubanelle": "Cubanelle", "hungarian": "Hungarian Wax", "hungarian wax": "Hungarian Wax",
+    "long hot": "Long Hot",
+}
+
+
+# ============================================
+# HELPER FUNCTIONS
+# ============================================
+
+
+def normalize_commodity(name: str) -> str:
+    if not name:
+        return ""
+    raw = str(name).strip()
+    key = raw.lower()
+    if key in _PEPPER_ALIASES:
+        return _PEPPER_ALIASES[key]
+    for canon in PEPPER_VARIETIES:
+        if canon.lower() == key:
+            return canon
+    return raw
+
+
+def _linear_trend(values):
+    if len(values) < 5:
+        return 0
+    x = np.arange(len(values))
+    y = np.array(values)
+    return float(np.polyfit(x, y, 1)[0])
+
+
+def get_day_of_year(date_obj):
+    return date_obj.timetuple().tm_yday
+
+
+def cache_get(key: str, max_age_seconds=None):
+    from datetime import timezone as tz
+    row = db.session.query(DashboardCache).filter_by(cache_key=key).first()
+    if not row:
+        return None
+    if max_age_seconds is not None:
+        updated = row.updated_at
+        if updated.tzinfo is None:
+            updated = updated.replace(tzinfo=tz.utc)
+        age = (datetime.now(tz.utc) - updated).total_seconds()
+        if age > max_age_seconds:
+            return None
+    payload = row.payload
+    if isinstance(payload, str):
+        import json as _json
+        return _json.loads(payload)
+    return payload
+
+
+def cache_set(key: str, payload: dict):
+    import json as _json
+    try:
+        dialect = db.engine.dialect.name
+    except Exception:
+        dialect = ""
+    if dialect == "postgresql":
+        sql = text("""
+            INSERT INTO dashboard_cache (cache_key, payload, updated_at)
+            VALUES (:k, CAST(:p AS jsonb), now())
+            ON CONFLICT (cache_key)
+            DO UPDATE SET payload = EXCLUDED.payload, updated_at = now()
+        """)
+    else:
+        sql = text("""
+            INSERT OR REPLACE INTO dashboard_cache (cache_key, payload, updated_at)
+            VALUES (:k, :p, CURRENT_TIMESTAMP)
+        """)
+    try:
+        db.session.execute(sql, {"k": key, "p": _json.dumps(payload)})
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
+
+
+def _get_combined_current_price(commodity: str, city: str):
+    commodity = normalize_commodity(commodity)
+    today = datetime.now().date()
+    cutoff_date = today - timedelta(days=7)
+    commodity_variants = {commodity}
+    if commodity == "Cubanelle":
+        commodity_variants.add("Cubanelles")
+    base_filters = [
+        PriceData.commodity.in_(sorted(commodity_variants)),
+        PriceData.price > 0,
+        PriceData.source.in_(["ProduceIQ", "USDA"]),
+    ]
+    if city and city != "All cities":
+        base_filters.append(PriceData.city_name == city.strip())
+    latest = (
+        db.session.query(PriceData.year, PriceData.day)
+        .filter(*base_filters)
+        .order_by(PriceData.year.desc(), PriceData.day.desc())
+        .first()
+    )
+    if not latest:
+        return None
+    latest_date = datetime(int(latest.year), 1, 1).date() + timedelta(days=int(latest.day) - 1)
+    if latest_date < cutoff_date:
+        return None
+    source_averages = (
+        db.session.query(PriceData.source, func.avg(PriceData.price).label("avg_price"))
+        .filter(*base_filters, PriceData.year == latest.year, PriceData.day == latest.day)
+        .group_by(PriceData.source)
+        .all()
+    )
+    if not source_averages:
+        return None
+    prices = [float(r.avg_price) for r in source_averages if r.avg_price and r.avg_price > 0]
+    return float(sum(prices) / len(prices)) if prices else None
+
+
+def calculate_price_forecast(commodity, city=None, source="ProduceIQ", forecast_days=7):
+    try:
+        commodity = normalize_commodity(commodity)
+        now = datetime.now()
+        current_year = now.year
+        current_day = get_day_of_year(now)
+        current_price = _get_combined_current_price(commodity, city)
+        if not current_price or current_price <= 0:
+            return {"success": False, "error": "Insufficient current price data"}
+        commodity_variants = {commodity}
+        if commodity == "Cubanelle":
+            commodity_variants.add("Cubanelles")
+        base_filters = [
+            PriceData.commodity.in_(sorted(commodity_variants)),
+            PriceData.source.in_(["ProduceIQ", "USDA"]),
+            PriceData.price > 0,
+            PriceData.year == current_year,
+        ]
+        if city and city != "All cities":
+            base_filters.append(PriceData.city_name == city.strip())
+        min_day = max(current_day - 30, 1)
+        daily = (
+            db.session.query(PriceData.day, func.avg(PriceData.price).label("avg_price"))
+            .filter(*base_filters, PriceData.day >= min_day)
+            .group_by(PriceData.day)
+            .order_by(PriceData.day)
+            .all()
+        )
+        if not daily or len(daily) < 5:
+            return {"success": False, "error": "Insufficient historical data for forecast"}
+        series = [float(r.avg_price) for r in daily if r.avg_price and r.avg_price > 0]
+        recent = series[-14:] if len(series) >= 14 else series
+        momentum_pct = 0.0
+        std_dev = 0.0
+        if len(recent) >= 7:
+            slope = _linear_trend(recent)
+            avg_recent = float(np.mean(recent))
+            std_dev = float(np.std(recent))
+            momentum_pct = (slope / avg_recent * 100.0) if avg_recent > 0 else 0.0
+        forecasts = []
+        prev_price = float(current_price)
+        for day_offset in range(1, 8):
+            forecast_price = prev_price * (1.0 + momentum_pct / 100.0)
+            prev_price = forecast_price
+            forecast_date = now + timedelta(days=day_offset)
+            if day_offset == 1:
+                trend = "stable"
+            else:
+                prior = forecasts[-1]["price"]
+                trend = "up" if forecast_price > prior * 1.01 else ("down" if forecast_price < prior * 0.99 else "stable")
+            forecasts.append({"date": forecast_date.strftime("%Y-%m-%d"), "day_name": forecast_date.strftime("%A"), "price": round(float(forecast_price), 2), "trend": trend})
+        price_change = forecasts[-1]["price"] - forecasts[0]["price"]
+        price_change_pct = (price_change / forecasts[0]["price"]) * 100 if forecasts[0]["price"] else 0.0
+        if price_change_pct > 3:
+            overall_trend, trend_badge = "RISING", "danger"
+        elif price_change_pct < -3:
+            overall_trend, trend_badge = "FALLING", "success"
+        else:
+            overall_trend, trend_badge = "STABLE", "warning"
+        return {
+            "success": True, "commodity": commodity, "city": city or "All cities",
+            "source": "Combined (ProduceIQ + USDA)", "current_price": round(float(current_price), 2),
+            "forecasts": forecasts, "overall_trend": overall_trend, "trend_badge": trend_badge,
+            "price_change_pct": round(float(price_change_pct), 2), "momentum_pct": round(float(momentum_pct), 2),
+            "std_dev": round(float(std_dev), 2) if std_dev > 0 else 0.0,
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+def fetch_current_weather(lat, lon):
+    try:
+        response = requests.get("https://api.openweathermap.org/data/2.5/weather",
+            params={"lat": lat, "lon": lon, "appid": OPENWEATHER_API_KEY, "units": "imperial"}, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            return {
+                "success": True, "temp": round(data["main"]["temp"], 1),
+                "feels_like": round(data["main"]["feels_like"], 1),
+                "humidity": data["main"]["humidity"], "wind_speed": round(data["wind"]["speed"], 1),
+                "clouds": data["clouds"]["all"],
+                "weather_main": data["weather"][0]["main"], "weather_desc": data["weather"][0]["description"],
+                "weather_icon": data["weather"][0]["icon"],
+            }
+        return {"success": False, "error": f"API error: {response.status_code}"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+def fetch_7day_forecast(lat, lon):
+    try:
+        response = requests.get("https://api.openweathermap.org/data/2.5/forecast",
+            params={"lat": lat, "lon": lon, "appid": OPENWEATHER_API_KEY, "units": "imperial", "cnt": 40}, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            daily_forecasts = {}
+            for item in data["list"]:
+                date = datetime.fromtimestamp(item["dt"]).strftime("%Y-%m-%d")
+                daily_forecasts.setdefault(date, {"temps": [], "humidity": [], "conditions": [], "icons": [], "rain_prob": []})
+                daily_forecasts[date]["temps"].append(item["main"]["temp"])
+                daily_forecasts[date]["humidity"].append(item["main"]["humidity"])
+                daily_forecasts[date]["conditions"].append(item["weather"][0]["main"])
+                daily_forecasts[date]["icons"].append(item["weather"][0]["icon"])
+                daily_forecasts[date]["rain_prob"].append(item.get("pop", 0) * 100)
+            forecasts = []
+            for date, values in sorted(daily_forecasts.items())[:7]:
+                temps = values["temps"]
+                forecasts.append({
+                    "date": date, "day_name": datetime.strptime(date, "%Y-%m-%d").strftime("%A"),
+                    "temp_high": round(max(temps), 1), "temp_low": round(min(temps), 1),
+                    "temp_avg": round(sum(temps) / len(temps), 1),
+                    "humidity": round(sum(values["humidity"]) / len(values["humidity"]), 0),
+                    "condition": max(set(values["conditions"]), key=values["conditions"].count),
+                    "icon": max(set(values["icons"]), key=values["icons"].count),
+                    "rain_chance": round(max(values["rain_prob"]), 0),
+                })
+            return {"success": True, "forecasts": forecasts}
+        return {"success": False, "error": f"API error: {response.status_code}"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+def analyze_growing_conditions(weather_data, crops):
+    if not weather_data.get("success"):
+        return {"alerts": [], "status": "unknown", "recommendation": "Weather data unavailable"}
+    temp = weather_data["temp"]
+    humidity = weather_data["humidity"]
+    alerts = []
+    status = "optimal"
+    if temp <= 35:
+        alerts.append({"type": "critical", "message": f"FROST ALERT! {temp}°F - Protect crops immediately!"})
+        status = "critical"
+    elif temp <= 50:
+        alerts.append({"type": "warning", "message": f"Cold stress: {temp}°F - Growth may slow"})
+        status = "warning"
+    elif temp >= 100:
+        alerts.append({"type": "critical", "message": f"EXTREME HEAT! {temp}°F - Risk of blossom drop"})
+        status = "critical"
+    elif 65 <= temp <= 85:
+        alerts.append({"type": "good", "message": f"Optimal temperature: {temp}°F"})
+    if humidity < 20:
+        alerts.append({"type": "warning", "message": f"Very low humidity ({humidity}%) - Monitor for spider mites"})
+    elif humidity > 70:
+        alerts.append({"type": "warning", "message": f"High humidity ({humidity}%) - Watch for fungal diseases"})
+        if status == "optimal":
+            status = "caution"
+    elif 20 <= humidity <= 40:
+        alerts.append({"type": "good", "message": f"Optimal humidity: {humidity}%"})
+    recommendation = {"critical": "URGENT: Take immediate protective action!", "warning": "Monitor conditions closely", "caution": "Conditions acceptable but watch for changes"}.get(status, "Excellent growing conditions")
+    return {"alerts": alerts, "status": status, "recommendation": recommendation}
+
+
+def get_climatology_comparison(region_name, forecast_date=None):
+    try:
+        if forecast_date is None:
+            forecast_date = datetime.now().date()
+        start_date = forecast_date - timedelta(days=7)
+        end_date = forecast_date + timedelta(days=7)
+        climatology = (
+            db.session.query(ClimatologyData.variable, func.avg(ClimatologyData.climatology_value).label("avg_value"))
+            .filter(
+                func.lower(ClimatologyData.city_name).like(f"%{region_name.lower()}%"),
+                ClimatologyData.forecast_date >= start_date,
+                ClimatologyData.forecast_date <= end_date,
+            )
+            .group_by(ClimatologyData.variable)
+            .all()
+        )
+        result = {row.variable: round(row.avg_value, 2) for row in climatology}
+        return {"success": True, "region": region_name, "date": forecast_date.strftime("%Y-%m-%d"), "climatology": result}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 # USDA DATA IMPORT SETTINGS HERE!
 INTERESTED_CITIES = [
     "BALTIMORE",
@@ -6154,6 +6523,149 @@ def shipping_rolling_correlations():
     except Exception as e:
         app.logger.error(f"Error generating shipping rolling correlations: {str(e)}")
         return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
+
+
+# ============================================
+# ARKFOODS2 - WEATHER & FORECAST ROUTES
+# ============================================
+
+@app.route("/api/live_weather", methods=["GET"])
+def api_live_weather():
+    results = []
+    for region_key, region_info in GROWING_REGIONS.items():
+        weather = fetch_current_weather(region_info["lat"], region_info["lon"])
+        analysis = analyze_growing_conditions(weather, region_info["crops"])
+        results.append({
+            "key": region_key, "name": region_info["name"], "city": region_info["city"],
+            "lat": region_info["lat"], "lon": region_info["lon"], "crops": region_info["crops"],
+            "weather": weather, "analysis": analysis, "timestamp": datetime.now().isoformat(),
+        })
+    return jsonify({"success": True, "regions": results, "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
+
+
+@app.route("/api/weather_forecast_7day", methods=["GET"])
+def api_weather_forecast_7day():
+    cached = cache_get("weather_forecast_7day")
+    if cached:
+        return jsonify(cached)
+    return jsonify({"success": False, "error": "Cache not built yet. Trigger /api/trigger_cache_build"}), 503
+
+
+@app.route("/api/weather_forecast_7day/<region_key>", methods=["GET"])
+def api_region_forecast_7day(region_key):
+    cached = cache_get("weather_forecast_7day")
+    if cached and cached.get("regions"):
+        for r in cached["regions"]:
+            if r.get("key") == region_key:
+                return jsonify({"success": True, "key": r.get("key"), "name": r.get("name"), "forecast": r.get("forecast")})
+    return jsonify({"success": False, "error": "Region not found or cache missing"}), 404
+
+
+@app.route("/api/price_forecast", methods=["GET"])
+def api_price_forecast():
+    commodity = normalize_commodity(request.args.get("commodity", "Jalapeno"))
+    city = request.args.get("city", "All cities")
+    cache_key_str = f"price_forecast_all_combined_{city.lower().replace(' ', '_')}"
+    cached_all = cache_get(cache_key_str)
+    if cached_all and cached_all.get("forecasts"):
+        for f in cached_all["forecasts"]:
+            if normalize_commodity(f.get("commodity", "")) == commodity:
+                return jsonify(f)
+    return jsonify(calculate_price_forecast(commodity, city))
+
+
+@app.route("/api/price_forecast_all", methods=["GET"])
+def api_price_forecast_all():
+    city = request.args.get("city", "All cities")
+    cached = cache_get(f"price_forecast_all_combined_{city.lower().replace(' ', '_')}")
+    if cached:
+        return jsonify(cached)
+    return jsonify({"success": False, "error": "Cache not built yet. Trigger /api/trigger_cache_build"}), 503
+
+
+@app.route("/api/price_forecast_long_term", methods=["GET"])
+def api_price_forecast_long_term():
+    from historical_trend_forecasting import calculate_hybrid_6week_forecast
+    commodity = normalize_commodity(request.args.get("commodity", "Jalapeno"))
+    city = request.args.get("city", "All cities")
+    return jsonify(calculate_hybrid_6week_forecast(db.session, commodity, city))
+
+
+@app.route("/api/price_forecast_long_term_all", methods=["GET"])
+def api_price_forecast_long_term_all():
+    city = request.args.get("city", "All cities")
+    cached = cache_get(f"long_term_all_combined_{city.lower().replace(' ', '_')}")
+    if cached:
+        return jsonify(cached)
+    return jsonify({"success": False, "error": "Cache not built yet. Trigger /api/trigger_cache_build"}), 503
+
+
+@app.route("/api/growing_conditions", methods=["GET"])
+def api_growing_conditions():
+    return jsonify({"conditions": PEPPER_CONDITIONS, "description": "Temperature in °F, Humidity in %"})
+
+
+@app.route("/api/growing_regions", methods=["GET"])
+def api_growing_regions():
+    regions = [{"key": k, "name": v["name"], "city": v["city"], "lat": v["lat"], "lon": v["lon"], "crops": v["crops"]} for k, v in GROWING_REGIONS.items()]
+    return jsonify({"success": True, "regions": regions})
+
+
+@app.route("/api/climatology/<region_name>", methods=["GET"])
+def api_climatology(region_name):
+    date_str = request.args.get("date")
+    if date_str:
+        forecast_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+        return jsonify(get_climatology_comparison(region_name, forecast_date))
+    cached = cache_get("climatology_regions_today")
+    if cached and cached.get("regions"):
+        for rk, info in cached["regions"].items():
+            token = (info.get("query_token") or "").lower()
+            if region_name.lower() in token or token in region_name.lower():
+                return jsonify(info.get("result"))
+    return jsonify(get_climatology_comparison(region_name))
+
+
+@app.route("/api/trigger_cache_build", methods=["POST"])
+def trigger_cache_build():
+    import threading
+    if getattr(app, "_cache_build_running", False):
+        return jsonify({"success": False, "message": "Cache build already in progress"}), 409
+
+    def _run_build():
+        app._cache_build_running = True
+        app._cache_build_error = None
+        app._cache_build_started = datetime.now().isoformat()
+        try:
+            from scheduler_service import build_all_caches
+            with app.app_context():
+                build_all_caches()
+            app._cache_build_finished = datetime.now().isoformat()
+        except Exception as e:
+            import traceback
+            app._cache_build_error = str(e)
+            app._cache_build_finished = datetime.now().isoformat()
+            app.logger.error(f"Cache build failed: {e}\n{traceback.format_exc()}")
+        finally:
+            app._cache_build_running = False
+
+    threading.Thread(target=_run_build, daemon=True, name="cache-builder").start()
+    return jsonify({"success": True, "message": "Cache build started. Poll /api/cache_build_status for progress."})
+
+
+@app.route("/api/cache_build_status", methods=["GET"])
+def api_cache_build_status():
+    cache_times = {}
+    for ck in ["terminal_market_pricing_7", "most_recent_prices_produceiq", "price_forecast_all_combined_all_cities"]:
+        row = db.session.query(DashboardCache.updated_at).filter_by(cache_key=ck).first()
+        cache_times[ck] = row.updated_at.isoformat() if row else None
+    return jsonify({
+        "running": getattr(app, "_cache_build_running", False),
+        "error": getattr(app, "_cache_build_error", None),
+        "started": getattr(app, "_cache_build_started", None),
+        "finished": getattr(app, "_cache_build_finished", None),
+        "cache_last_updated": cache_times,
+    })
 
 
 # Run the app
