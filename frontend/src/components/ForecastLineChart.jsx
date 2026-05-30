@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import Chart from "chart.js/auto";
 import "chartjs-plugin-datalabels";
-import "chartjs-adapter-moment";
 import "chartjs-adapter-luxon";
-import moment from "moment";
 import axios from "axios";
 import * as XLSX from "xlsx";
 

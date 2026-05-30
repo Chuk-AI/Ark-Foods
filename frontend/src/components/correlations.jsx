@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import Plot from 'react-plotly.js';
 import '../styles/RollingCorrelations.css';
 
 export default function CorrelationsPlots() {
@@ -61,7 +60,7 @@ export default function CorrelationsPlots() {
       <div className="corr-section">
         {terminalChart ? (
           <div className="terminal-corr-section">
-            <Plot data={terminalChart.data} layout={terminalChart.layout} onError={(err) => console.error('Error rendering Terminal Chart:', err)} />
+            <div style={{ padding: "20px", textAlign: "center", color: "#888" }}>Chart unavailable</div>
           </div>
         ) : (
           <p>Terminal Correlation Loading...</p>
@@ -69,7 +68,7 @@ export default function CorrelationsPlots() {
 
         {shippingChart ? (
           <div className="shipping-corr-section">
-            <Plot data={shippingChart.data} layout={shippingChart.layout} onError={(err) => console.error('Error rendering Shipping Chart:', err)} />
+            <div style={{ padding: "20px", textAlign: "center", color: "#888" }}>Chart unavailable</div>
           </div>
         ) : (
           <p>Shipping Correlation Loading...</p>

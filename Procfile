@@ -1,3 +1,2 @@
-worker2: python scheduler_tasks2.py
+web: gunicorn app:app --timeout 120
 worker: python new_scheduler.py
-web: gunicorn app:app --timeout 60

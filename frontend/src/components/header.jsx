@@ -140,15 +140,6 @@ function Header() {
                   </li>
                 )}
 
-                {/* Weather Dashboard */}
-                {hasAccess([UserRole.OWNER, UserRole.ADMIN]) && (
-                  <li className={`nav-item ${isActive("/weather_dashboard")}`}>
-                    <Link className="nav-link" to="/weather_dashboard">
-                      Weather Dashboard
-                    </Link>
-                  </li>
-                )}
-
                 {/* Alerts/Notifications */}
                 {hasAccess([
                   UserRole.OWNER,

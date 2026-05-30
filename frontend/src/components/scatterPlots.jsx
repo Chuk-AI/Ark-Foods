@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import Plot from 'react-plotly.js';
 import '../styles/scatterPlot.css';
 
 // Helper function to handle the "Cubanelles" vs "Cubanelle" mismatch
@@ -149,7 +148,7 @@ function ScatterPlot() {
       <div className="scatter-chart-container">
         {scatterPlotData && (
           <div className="scatter-chart">
-            <Plot data={scatterPlotData.data} layout={scatterPlotData.layout} />
+            <div style={{ padding: "20px", textAlign: "center", color: "#888" }}>Chart unavailable</div>
           </div>
         )}
       </div>

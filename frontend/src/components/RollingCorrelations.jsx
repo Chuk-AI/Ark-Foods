@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import Plot from 'react-plotly.js';
 import '../styles/RollingCorrelations.css';
 
 const RollingCorrelation = () => {
@@ -182,15 +181,7 @@ const RollingCorrelation = () => {
       <div className="rolling-chart-box">
         {chartData && (
           <div className="rolling-chart-container">
-            <Plot
-              data={chartData.data}
-              layout={{
-                ...chartData.layout,
-                responsive: true,
-                autosize: true,
-              }}
-              className="plotly-chart"
-            />
+            <div style={{ padding: "20px", textAlign: "center", color: "#888" }}>Chart unavailable</div>
           </div>
         )}
       </div>

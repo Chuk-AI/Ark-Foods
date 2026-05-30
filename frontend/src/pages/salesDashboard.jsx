@@ -1,11 +1,10 @@
 import React from "react";
 import Chart from "chart.js/auto";
 import "chartjs-plugin-datalabels";
-import "chartjs-adapter-moment";
 import "chartjs-adapter-luxon";
 import L from "leaflet"; // For Leaflet maps
 import "leaflet/dist/leaflet.css";
-import moment from "moment"; // For date-time handling
+import { DateTime } from "luxon"; // For date-time handling
 import { useEffect, useState, useRef } from "react";
 import Header from "../components/header";
 import Footer from "../components/footer";
@@ -905,7 +904,7 @@ function SalesDashboard() {
             padding: 10,
             callbacks: {
               title: (context) =>
-                moment(context[0].label).format("MMM D, YYYY"),
+                DateTime.fromISO(context[0].label).toFormat("MMM d, yyyy"),
               label: (context) =>
                 `${context.dataset.label}: $${context.parsed.y.toFixed(2)}`,
             },
@@ -1126,7 +1125,7 @@ function SalesDashboard() {
             padding: 10,
             callbacks: {
               title: (context) =>
-                moment(context[0].label).format("MMM D, YYYY"),
+                DateTime.fromISO(context[0].label).toFormat("MMM d, yyyy"),
               label: (context) =>
                 `${context.dataset.label}: $${context.parsed.y.toFixed(2)}`,
             },

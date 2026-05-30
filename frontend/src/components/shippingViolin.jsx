@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import Plot from 'react-plotly.js';
 import '../styles/shippingViolin.css';
 
 export default function ShippingViolinPlot() {
@@ -70,14 +69,7 @@ export default function ShippingViolinPlot() {
               height: '100%',
             }}
           >
-            <Plot
-              data={chartData.data}
-              layout={chartData.layout}
-              style={{
-                width: '100%',
-                height: '100%',
-              }}
-            />
+            <div style={{ padding: "20px", textAlign: "center", color: "#888" }}>Chart unavailable</div>
           </div>
         ) : (
           <p style={{ color: 'white', fontSize: '18px', fontWeight: 'bold' }}>No data available</p>

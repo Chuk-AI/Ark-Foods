@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from "react";
-import Plot from "react-plotly.js";
 import "../styles/empirical.css";
 
 function EmpiricalChart({ apiEndpoint, title }) {
@@ -56,12 +55,7 @@ function EmpiricalChart({ apiEndpoint, title }) {
                 {!loading && !error && charts.map((chart, index) => (
                     <div key={index} className="chart-item">
                         <h5>{chart.commodity}</h5>
-                        <Plot
-                            data={chart.data} // Use preprocessed data from backend
-                            layout={chart.layout} // Use preprocessed layout from backend
-                            style={{ width: "100%", height: "100%" }}
-                            config={{ responsive: true }}
-                        />
+                        <div style={{ padding: "20px", textAlign: "center", color: "#888" }}>Chart unavailable</div>
                     </div>
                 ))}
             </div>

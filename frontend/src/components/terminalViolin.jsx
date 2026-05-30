@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import Plot from 'react-plotly.js';
 import '../styles/terminalViolin.css';
 
 const TerminalViolinPlot = () => {
@@ -65,18 +64,12 @@ const TerminalViolinPlot = () => {
           <div className="chart-row" style={{ display: 'flex', justifyContent: 'space-between' }}>
             {/* USDA Chart */}
             {usdaChartData && (
-              <Plot
-                data={usdaChartData.data}
-                layout={{ ...usdaChartData.layout, width: 600, height: 500 }} // Adjust size here
-              />
+              <div style={{ padding: "20px", textAlign: "center", color: "#888" }}>Chart unavailable</div>
             )}
 
             {/* ProduceIQ Chart */}
             {produceiqChartData && (
-              <Plot
-                data={produceiqChartData.data}
-                layout={{ ...produceiqChartData.layout, width: 600, height: 500 }} // Adjust size here
-              />
+              <div style={{ padding: "20px", textAlign: "center", color: "#888" }}>Chart unavailable</div>
             )}
           </div>
         )}

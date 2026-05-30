@@ -9,7 +9,6 @@ import { UserProvider, UserContext } from './components/userContext';
 import React, { useContext } from 'react';
 import axios from 'axios';
 import ProtectedRoute from './components/protectedRoute';
-import WeatherPage from './pages/WeatherPage';
 import DashAnalytics from './pages/analytics';
 import DynamicAnalytics from './pages/dynamicAnalytics';
 import Alerts from './pages/Alerts';
@@ -69,14 +68,6 @@ const App = () => {
             element={
               <ProtectedRoute roles={['admin', 'owner']}>
                 <ApproveUsers />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/weather_dashboard"
-            element={
-              <ProtectedRoute roles={['admin', 'owner']}>
-                <WeatherPage />
               </ProtectedRoute>
             }
           />

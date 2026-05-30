@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import Chart from "chart.js/auto";
 import "chartjs-plugin-datalabels";
-import "chartjs-adapter-moment";
 import "chartjs-adapter-luxon";
-import moment from "moment";
+import { DateTime } from "luxon";
 import axios from "axios";
 
 import * as XLSX from "xlsx";
@@ -159,9 +158,7 @@ const BreakEvenEstimator = () => {
 
       // Use current date as reference for forecast date
       const currentDate = new Date().toISOString().split("T")[0];
-      const forecast_date = moment(currentDate)
-        .add(1, "year")
-        .format("YYYY-MM-DD");
+      const forecast_date = DateTime.fromISO(currentDate).plus({ years: 1 }).toFormat("yyyy-MM-dd");
 
       // Prepare data for saving
       const saveData = {
@@ -224,9 +221,7 @@ const BreakEvenEstimator = () => {
 
       // Use current date to generate forecast_date (1 year into the future)
       const currentDate = new Date().toISOString().split("T")[0];
-      const forecast_date = moment(currentDate)
-        .add(1, "year")
-        .format("YYYY-MM-DD");
+      const forecast_date = DateTime.fromISO(currentDate).plus({ years: 1 }).toFormat("yyyy-MM-dd");
 
       // Add city parameter to the forecast calculation
       const forecastResponse = await axios.post("/api/calculate_forecast", {
