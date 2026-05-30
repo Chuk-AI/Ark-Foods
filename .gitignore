@@ -23,3 +23,4 @@ frontend/src/reportWebVitals.js
 0001redesignmodernInterbaseddesignsystemcleanhead.patch
 0001fixreplaceplotlyanalyticschartswithRechartscl.patch
 0002simplifyremoveweatherAPIRedisoldtemplatesslim.patch
+0001fixremoveganttforreactincompatiblewithReact1.patch
