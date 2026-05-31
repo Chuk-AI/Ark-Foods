@@ -1293,17 +1293,32 @@ function AdminDashboard() {
 function CacheManager() {
   const [status, setStatus] = useState(null);
   const [polling, setPolling] = useState(false);
+  const [diag, setDiag] = useState(null);
+  const [diagLoading, setDiagLoading] = useState(false);
+
+  const token = () => localStorage.getItem("authToken");
 
   const fetchStatus = async () => {
     try {
-      const token = localStorage.getItem("authToken");
-      const r = await axios.get("/api/cache_build_status", { headers: { Authorization: `Bearer ${token}` } });
+      const r = await axios.get("/api/cache_build_status", { headers: { Authorization: `Bearer ${token()}` } });
       setStatus(r.data);
       return r.data;
     } catch { return null; }
   };
 
-  useEffect(() => { fetchStatus(); }, []);
+  const fetchDiag = async () => {
+    setDiagLoading(true);
+    try {
+      const r = await axios.get("/api/forecast_diagnostics", { headers: { Authorization: `Bearer ${token()}` } });
+      setDiag(r.data);
+    } catch (e) {
+      setDiag({ error: e.message });
+    } finally {
+      setDiagLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchStatus(); fetchDiag(); }, []);
 
   useEffect(() => {
     if (!polling) return;
@@ -1312,6 +1327,7 @@ function CacheManager() {
       if (s && !s.running) {
         setPolling(false);
         clearInterval(interval);
+        fetchDiag(); // refresh diagnostics after build finishes
       }
     }, 3000);
     return () => clearInterval(interval);
@@ -1319,8 +1335,7 @@ function CacheManager() {
 
   const handleTrigger = async () => {
     try {
-      const token = localStorage.getItem("authToken");
-      await axios.post("/api/trigger_cache_build", {}, { headers: { Authorization: `Bearer ${token}` } });
+      await axios.post("/api/trigger_cache_build", {}, { headers: { Authorization: `Bearer ${token()}` } });
       setPolling(true);
       fetchStatus();
     } catch (e) {
@@ -1331,25 +1346,24 @@ function CacheManager() {
   const prog = status?.progress;
   const pct = prog?.total > 0 ? Math.round((prog.current / prog.total) * 100) : 0;
   const isRunning = status?.running;
-
   const cacheUpdated = status?.cache_last_updated?.["price_forecast_all_combined_all_cities"];
+  const cacheSummary = diag?.cache_summary?.["price_forecast_all_combined_all_cities"];
 
   return (
     <div className="row mt-4">
       <div className="col-md-12">
         <div style={{ border: "1px solid var(--border, #e2e8f0)", borderRadius: 10, background: "var(--surface, #fff)", padding: "24px 28px" }}>
+
+          {/* Header */}
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 20 }}>
             <div>
               <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Forecast Cache Manager</h2>
               <p style={{ margin: "6px 0 0", color: "#64748b", fontSize: 13 }}>
-                The Forecasts dashboard requires pre-computed data. Click <strong>Build Now</strong> to run the forecast algorithm for all cities and cache the results. This typically takes <strong>5–15 minutes</strong>.
+                The Forecasts dashboard requires pre-computed data. Click <strong>Build Now</strong> to run the forecast algorithm for all cities. This typically takes <strong>5–15 minutes</strong>.
               </p>
             </div>
-            <button
-              onClick={handleTrigger}
-              disabled={isRunning}
-              style={{ padding: "9px 22px", background: isRunning ? "#94a3b8" : "#0d9488", color: "#fff", border: "none", borderRadius: 7, fontWeight: 700, fontSize: 13, cursor: isRunning ? "not-allowed" : "pointer", whiteSpace: "nowrap", marginLeft: 20 }}
-            >
+            <button onClick={handleTrigger} disabled={isRunning}
+              style={{ padding: "9px 22px", background: isRunning ? "#94a3b8" : "#0d9488", color: "#fff", border: "none", borderRadius: 7, fontWeight: 700, fontSize: 13, cursor: isRunning ? "not-allowed" : "pointer", whiteSpace: "nowrap", marginLeft: 20 }}>
               {isRunning ? "Building…" : "Build Now"}
             </button>
           </div>
@@ -1358,7 +1372,7 @@ function CacheManager() {
           {isRunning && prog && (
             <div style={{ marginBottom: 16 }}>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#64748b", marginBottom: 6 }}>
-                <span>Building city: <strong>{prog.city || "…"}</strong></span>
+                <span>Building city: <strong>{prog.city || "starting…"}</strong></span>
                 <span>{prog.current}/{prog.total} ({pct}%)</span>
               </div>
               <div style={{ background: "#e2e8f0", borderRadius: 999, height: 8, overflow: "hidden" }}>
@@ -1367,13 +1381,14 @@ function CacheManager() {
             </div>
           )}
 
-          {/* Status rows */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 12, marginTop: 8 }}>
+          {/* Status tiles */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, marginTop: 8 }}>
             {[
               { label: "Status", value: isRunning ? "🟡 Running" : status?.error ? "🔴 Failed" : status?.finished ? "🟢 Complete" : "⚪ Idle" },
-              { label: "Last built", value: cacheUpdated ? new Date(cacheUpdated).toLocaleString() : "Never" },
+              { label: "Cache last built", value: cacheUpdated ? new Date(cacheUpdated).toLocaleString() : "Never" },
               { label: "Started", value: status?.started ? new Date(status.started).toLocaleString() : "—" },
               { label: "Finished", value: status?.finished ? new Date(status.finished).toLocaleString() : "—" },
+              { label: "Forecasts OK / Total", value: cacheSummary ? `${cacheSummary.ok_items} / ${cacheSummary.total_items}` : "—" },
             ].map(({ label, value }) => (
               <div key={label} style={{ background: "#f8fafc", borderRadius: 7, padding: "10px 14px" }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>{label}</div>
@@ -1382,15 +1397,73 @@ function CacheManager() {
             ))}
           </div>
 
+          {/* Build error */}
           {status?.error && (
             <div style={{ marginTop: 14, padding: "10px 14px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 7, fontSize: 12, color: "#dc2626", fontFamily: "monospace" }}>
-              Error: {status.error}
+              Build error: {status.error}
             </div>
           )}
 
-          <div style={{ marginTop: 14, fontSize: 12, color: "#94a3b8" }}>
-            <button onClick={fetchStatus} style={{ background: "none", border: "none", color: "#0d9488", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>↻ Refresh status</button>
-            {" · "}This builds caches for All Cities + 10 individual city views.
+          {/* Cache failures */}
+          {cacheSummary?.failures?.length > 0 && (
+            <div style={{ marginTop: 14 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#dc2626", marginBottom: 6 }}>
+                ⚠ {cacheSummary.failed_items} commodity forecast(s) failed:
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {cacheSummary.failures.map((f, i) => (
+                  <div key={i} style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 6, padding: "4px 10px", fontSize: 12 }}>
+                    <strong>{f.commodity}</strong>: {f.error}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Data freshness table */}
+          {diag?.data_freshness && (
+            <div style={{ marginTop: 20 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", marginBottom: 8 }}>Price Data Freshness</div>
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ background: "#f1f5f9" }}>
+                      {["Commodity", "Latest Data", "Age (days)", "Source", "City", "Status"].map(h => (
+                        <th key={h} style={{ padding: "6px 12px", textAlign: "left", fontWeight: 700, color: "#64748b", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {diag.data_freshness.map((row, i) => (
+                      <tr key={i} style={{ borderBottom: "1px solid #e2e8f0" }}>
+                        <td style={{ padding: "6px 12px", fontWeight: 600 }}>{row.commodity}</td>
+                        <td style={{ padding: "6px 12px", fontFamily: "monospace" }}>{row.latest_date || "No data"}</td>
+                        <td style={{ padding: "6px 12px", fontFamily: "monospace", color: row.age_days > 14 ? "#dc2626" : row.age_days > 7 ? "#d97706" : "#16a34a" }}>
+                          {row.age_days != null ? row.age_days : "—"}
+                        </td>
+                        <td style={{ padding: "6px 12px" }}>{row.source || "—"}</td>
+                        <td style={{ padding: "6px 12px" }}>{row.city || "—"}</td>
+                        <td style={{ padding: "6px 12px" }}>
+                          <span style={{ background: row.ok ? "#dcfce7" : "#fee2e2", color: row.ok ? "#16a34a" : "#dc2626", padding: "2px 8px", borderRadius: 999, fontWeight: 600, fontSize: 11 }}>
+                            {row.ok ? "OK" : "STALE"}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {!diag.all_data_ok && (
+                <div style={{ marginTop: 10, padding: "10px 14px", background: "#fef3c7", border: "1px solid #fde68a", borderRadius: 7, fontSize: 12, color: "#92400e" }}>
+                  ⚠ Some commodities have stale or missing price data (&gt;30 days old). The daily data fetch scheduler may not be running. Run <code>fetch_daily_data()</code> manually or check the scheduler.
+                </div>
+              )}
+            </div>
+          )}
+
+          <div style={{ marginTop: 14, fontSize: 12, color: "#94a3b8", display: "flex", gap: 12 }}>
+            <button onClick={() => { fetchStatus(); fetchDiag(); }} style={{ background: "none", border: "none", color: "#0d9488", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>↻ Refresh</button>
+            <span>Builds cache for All Cities + 10 individual cities · forecasts use last 30 days of price data</span>
           </div>
         </div>
       </div>

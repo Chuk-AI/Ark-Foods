@@ -637,10 +637,10 @@ def cache_set(key: str, payload: dict):
         raise
 
 
-def _get_combined_current_price(commodity: str, city: str):
+def _get_combined_current_price(commodity: str, city: str, max_age_days: int = 30):
     commodity = normalize_commodity(commodity)
     today = datetime.now().date()
-    cutoff_date = today - timedelta(days=7)
+    cutoff_date = today - timedelta(days=max_age_days)
     commodity_variants = {commodity}
     if commodity == "Cubanelle":
         commodity_variants.add("Cubanelles")
@@ -6753,6 +6753,72 @@ def api_cache_build_status():
         "finished": getattr(app, "_cache_build_finished", None),
         "progress": progress,
         "cache_last_updated": cache_times,
+    })
+
+
+@app.route("/api/forecast_diagnostics", methods=["GET"])
+def api_forecast_diagnostics():
+    """Diagnostic endpoint: shows data freshness per commodity and cache contents summary."""
+    import json as _json
+    from datetime import timezone as _tz
+
+    varieties = PEPPER_VARIETIES
+    today = datetime.now().date()
+
+    data_freshness = []
+    for commodity in varieties:
+        variants = {commodity}
+        if commodity == "Cubanelle":
+            variants.add("Cubanelles")
+        row = (
+            db.session.query(PriceData.year, PriceData.day, PriceData.source, PriceData.city_name)
+            .filter(PriceData.commodity.in_(sorted(variants)), PriceData.price > 0,
+                    PriceData.source.in_(["ProduceIQ", "USDA"]))
+            .order_by(PriceData.year.desc(), PriceData.day.desc())
+            .first()
+        )
+        if row:
+            latest_date = (datetime(int(row.year), 1, 1).date() + timedelta(days=int(row.day) - 1))
+            age_days = (today - latest_date).days
+            data_freshness.append({
+                "commodity": commodity,
+                "latest_date": latest_date.isoformat(),
+                "age_days": age_days,
+                "source": row.source,
+                "city": row.city_name,
+                "ok": age_days <= 30,
+            })
+        else:
+            data_freshness.append({"commodity": commodity, "latest_date": None, "age_days": None, "ok": False})
+
+    # Cache summary
+    cache_summary = {}
+    for key in ["price_forecast_all_combined_all_cities", "long_term_all_combined_all_cities"]:
+        cache_row = db.session.query(DashboardCache).filter_by(cache_key=key).first()
+        if cache_row:
+            try:
+                payload = cache_row.payload if isinstance(cache_row.payload, dict) else _json.loads(cache_row.payload)
+                items = payload.get("forecasts") or payload.get("results") or []
+                ok = [i for i in items if i.get("success") is not False and i.get("commodity")]
+                failed = [{"commodity": i.get("commodity", "?"), "error": i.get("error", "unknown")}
+                          for i in items if i.get("success") is False]
+                cache_summary[key] = {
+                    "updated_at": cache_row.updated_at.isoformat(),
+                    "total_items": len(items),
+                    "ok_items": len(ok),
+                    "failed_items": len(failed),
+                    "failures": failed,
+                }
+            except Exception as e:
+                cache_summary[key] = {"error": str(e)}
+        else:
+            cache_summary[key] = None
+
+    return jsonify({
+        "today": today.isoformat(),
+        "data_freshness": data_freshness,
+        "cache_summary": cache_summary,
+        "all_data_ok": all(d["ok"] for d in data_freshness),
     })
 
 
