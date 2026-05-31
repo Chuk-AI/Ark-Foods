@@ -20,21 +20,12 @@ function SalesDashboard() {
   const [source, setSource] = useState("Both");
   const [bestMarketData, setBestMarketData] = useState([]);
   // const [chartInstance, setChartInstance] = useState(null);
-  const [currentSectionTitle, setCurrentSectionTitle] =
-    useState("Most Recent Price");
-  const [filters, setFilters] = useState({
-    mostRecentPrice: true,
-    bestSellMarket: false,
-    map: false,
-    seasonalTrends: false,
-    historicalData: false,
-    shippingPointPrice: false,
-  });
-
-  const [minimizedBlocks, setMinimizedBlocks] = useState([]);
-  const sidebarRef = useRef(null);
-  const rightSidebarRef = useRef(null);
   const [prices, setPrices] = useState({});
+  const [showMostRecentFilters, setShowMostRecentFilters] = useState(false);
+  const [showBestSellFilters, setShowBestSellFilters] = useState(false);
+  const [showSeasonalFilters, setShowSeasonalFilters] = useState(false);
+  const [showHistoricalFilters, setShowHistoricalFilters] = useState(false);
+  const [showShippingFilters, setShowShippingFilters] = useState(false);
   // const [selectedCommodity, setSelectedCommodity] = useState('Anaheim');
   const [averageCommodities, setAverageCommodities] = useState(false);
   const [averageCities, setAverageCities] = useState(false);
@@ -345,24 +336,6 @@ function SalesDashboard() {
     }
   };
 
-  // Section Titles
-  const sectionTitles = {
-    "best-sell-market-section": "Best Sell Market",
-    "seasonal-trends-section": "Seasonal Trends",
-    "historical-data-section": "Historical Data",
-    "most-recent-price-section": "Most Recent Price",
-    "shipping-point-price-section": "Shipping Point Price",
-    "terminal-voilin-plot-section": "Terminal Voilin Plot",
-    "shipping-voilin-plot-section": "Shipping Voilin Plot",
-    "terminal-empricial-probability-section": "Terminal Empricial Probability",
-  };
-
-  // Update the Sidebar Section Title
-  const updateSidebarSectionTitle = (sectionId) => {
-    setCurrentSectionTitle(sectionTitles[sectionId] || "Unknown Section");
-  };
-
-  //
   useEffect(() => {
     const token = localStorage.getItem("authToken");
     if (!token) {
@@ -370,84 +343,6 @@ function SalesDashboard() {
       window.location.href = "/login";
     }
   }, []);
-
-  // Scroll Event Listener to Update Active Section
-  useEffect(() => {
-    const handleScroll = () => {
-      const sections = document.querySelectorAll(".section");
-      const windowHeight = window.innerHeight;
-
-      let currentSectionId = "";
-
-      sections.forEach((section) => {
-        const rect = section.getBoundingClientRect();
-        if (
-          rect.top <= windowHeight * 0.25 &&
-          rect.bottom >= windowHeight * 0.25
-        ) {
-          currentSectionId = section.id;
-        }
-      });
-
-      if (currentSectionId) {
-        updateSidebarSectionTitle(currentSectionId);
-        updateFiltersBasedOnSection(currentSectionId);
-      }
-    };
-
-    window.addEventListener("scroll", handleScroll);
-
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
-
-  // Update Filters Based on Section
-  const updateFiltersBasedOnSection = (sectionId) => {
-    const updatedFilters = {
-      mostRecentPrice: sectionId === "most-recent-price-section",
-      bestSellMarket: sectionId === "best-sell-market-section",
-      seasonalTrends: sectionId === "seasonal-trends-section",
-      historicalData: sectionId === "historical-data-section",
-      shippingPointPrice: sectionId === "shipping-point-price-section",
-    };
-
-    setFilters(updatedFilters);
-  };
-
-  // Toggle Sidebar (Left Sidebar)
-  const toggleSidebar = () => {
-    const sidebar = sidebarRef.current;
-    if (sidebar) {
-      sidebar.classList.toggle("collapsed");
-    }
-  };
-
-  // Toggle Right Sidebar and Manage Minimized Blocks
-  const toggleRightSidebar = () => {
-    const rightSidebar = rightSidebarRef.current;
-    if (rightSidebar) {
-      rightSidebar.classList.toggle("collapsed"); // Use 'collapsed' for consistency
-    } else {
-      console.log("");
-    }
-  };
-
-  // Minimize/Maximize Block
-  const toggleBlockSize = (blockId, blockTitle) => {
-    setMinimizedBlocks((prev) => {
-      if (prev.includes(blockId)) {
-        // Restore the block
-        const blockElement = document.getElementById(blockId);
-        blockElement.classList.remove("hidden");
-        return prev.filter((id) => id !== blockId); // Remove from minimizedBlocks
-      } else {
-        // Minimize the block
-
-        const blockElement = document.getElementById(blockId);
-        blockElement.classList.add("hidden");
-        return [...prev, blockId]; // Add to minimizedBlocks
-      }
-    });
-  };
 
   const fetchBestSellMarket = async (filters) => {
     const { commodity, source, last7Days } = filters;
@@ -1023,12 +918,6 @@ function SalesDashboard() {
     fetchShippingPointPriceData(shippingPointFilterState); // Fetch data using new filters
   };
 
-  useEffect(() => {
-    if (filters.shippingPointPrice) {
-      fetchShippingPointPriceData(shippingPointFilterState);
-    }
-  }, [filters.shippingPointPrice]);
-
   const shippingPointPriceChartRef = useRef(null);
 
   const updateShippingPointPriceChart = (chartData) => {
@@ -1206,891 +1095,679 @@ function SalesDashboard() {
     fetchShippingPointPriceData(); // Fetch default data on mount
   }, []);
 
+
   return (
     <div>
-      <div className="container-fluid d-flex">
-        {/* Left Sidebar */}
-        <div
-          className="sidebar bg-light p-3"
-          id="filters-sidebar"
-          ref={sidebarRef}
-        >
-          <div id="sidebar-toggle" onClick={toggleSidebar}>
-            <i className="icon">...</i>
-          </div>
-          <div id="filters-content">
-            <h2 id="current-section-title">{currentSectionTitle}</h2>
-            {/* Filters (conditionally rendered based on the active section) */}
-            {filters.mostRecentPrice}
-            {filters.bestSellMarket}
-            {filters.seasonalTrends}
-            {filters.historicalData}
-            {filters.shippingPointPrice}
-
-            {/* Filters for Most Recent Price */}
-            <form
-              id="filters-most-recent"
-              className={`filter-form ${filters.mostRecentPrice ? "active" : "d-none"}`}
-            >
-              <div className="form-group">
-                <label
-                  htmlFor="sourceFilterMostRecent"
-                  className="font-weight-bold"
-                >
-                  Source
-                </label>
-                <select
-                  id="sourceFilterMostRecent"
-                  className="form-control"
-                  value={source}
-                  onChange={(e) => setSource(e.target.value)}
-                >
-                  <option value="USDA">USDA</option>
-                  <option value="ProduceIQ">ProduceIQ</option>
-                  <option value="Both">Both</option>
-                </select>
-              </div>
-
-              <button
-                type="button"
-                className="btn btn-primary btn-block"
-                onClick={handleApplyMostRecentFilters}
+      <div>
+        {/* Most Recent Price Section */}
+        <div id="most-recent-price-section" className="section">
+          <div className="row mb-4 salesBody most-recent-container">
+            <div className="col-12 mb-4">
+              <div
+                className="card resizable-block"
+                id="most-recent-prices-card"
+                data-block-title="Most Recent Prices"
               >
-                Apply Filters
-              </button>
-            </form>
-
-            {/* Filters for Best Sell Market */}
-            <form
-              id="filters-best-sell-market"
-              className={`filter-form ${filters.bestSellMarket ? "active" : "d-none"}`}
-            >
-              {/* Commodity Filter */}
-              <div className="form-group">
-                <label
-                  htmlFor="commodityFilterBestSell"
-                  className="font-weight-bold"
-                >
-                  Commodity
-                </label>
-                <select
-                  id="commodityFilterBestSell"
-                  className="form-control"
-                  value={filterState.commodity}
-                  onChange={handleCommodityChange}
-                >
-                  {[
-                    "Anaheim",
-                    "Cubanelles",
-                    "Fresno",
-                    "Habanero",
-                    "Hungarian Wax",
-                    "Jalapeno",
-                    "Long Hot",
-                    "Poblano",
-                    "Serrano",
-                    "Shishito",
-                  ].map((item) => (
-                    <option key={item} value={item}>
-                      {item}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Source Filter */}
-
-              <div className="form-group">
-                <label
-                  htmlFor="sourceFilterBestSell"
-                  className="font-weight-bold"
-                >
-                  Source
-                </label>
-                <select
-                  id="sourceFilterBestSell"
-                  className="form-control"
-                  value={filterState.source} // Ensure the dropdown reflects the state
-                  onChange={handleSourceChange} // Update the state on selection
-                >
-                  {["USDA", "ProduceIQ"].map((sourceOption) => (
-                    <option key={sourceOption} value={sourceOption}>
-                      {sourceOption}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Last 7 Days Checkbox */}
-              <div className="form-group form-check">
-                <input
-                  type="checkbox"
-                  className="form-check-input"
-                  id="last7DaysBestSell"
-                  checked={filterState.last7Days} // Bind the checkbox to the state
-                  onChange={handleLast7DaysChange} // Update the state on change
-                />
-                <label
-                  className="form-check-label font-weight-bold"
-                  htmlFor="last7DaysBestSell"
-                >
-                  Only Last 7 Days
-                </label>
-              </div>
-
-              {/* Apply Filters Button */}
-              <button
-                type="button"
-                className="btn btn-primary btn-block"
-                onClick={handleApplyBestSellFilters}
-              >
-                Apply Filters
-              </button>
-            </form>
-
-            {/* Filters for Seasonal Trends */}
-            <form
-              id="filters-seasonal-trends"
-              className={`filter-form ${filters.seasonalTrends ? "active" : "d-none"}`}
-            >
-              {/* Commodity Filter with Checkboxes */}
-              <div className="form-group">
-                <label className="font-weight-bold">Commodity</label>
-                <div className="checkbox-container">
-                  <label className="select-all">
-                    <input
-                      type="checkbox"
-                      checked={
-                        seasonalFilterState.commodities.length ===
-                        commoditiesList.length
-                      }
-                      onChange={(e) => handleSelectAll(e, "commodities")}
-                    />
-                    Select All
-                  </label>
-
-                  {commoditiesList.map((item) => (
-                    <label key={item} className="checkbox-item">
-                      <input
-                        type="checkbox"
-                        value={item}
-                        checked={seasonalFilterState.commodities.includes(item)}
-                        onChange={(e) => handleCheckboxChange(e, "commodities")}
-                      />
-                      {item}
-                    </label>
-                  ))}
+                <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                  <h2>Most Recent Prices</h2>
                 </div>
-              </div>
-
-              {/* City Filter with Checkboxes */}
-              <div className="form-group">
-                <label className="font-weight-bold">City</label>
-                <div className="checkbox-container">
-                  <label className="select-all">
-                    <input
-                      type="checkbox"
-                      checked={
-                        seasonalFilterState.cities.length === citiesList.length
-                      }
-                      onChange={(e) => handleSelectAll(e, "cities")}
-                    />
-                    Select All
-                  </label>
-
-                  {citiesList.map((city) => (
-                    <label key={city} className="checkbox-item">
-                      <input
-                        type="checkbox"
-                        value={city}
-                        checked={seasonalFilterState.cities.includes(city)}
-                        onChange={(e) => handleCheckboxChange(e, "cities")}
-                      />
-                      {city}
-                    </label>
-                  ))}
+                {/* Inline filter bar */}
+                <div style={{ borderBottom: '1px solid var(--border)', padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--surface-2)' }}>
+                  <button
+                    onClick={() => setShowMostRecentFilters(f => !f)}
+                    style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-2)', display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, cursor: 'pointer' }}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+                    Filters {showMostRecentFilters ? '▲' : '▼'}
+                  </button>
                 </div>
-              </div>
-
-              {/* Date Pickers */}
-              <div className="form-group">
-                <label className="font-weight-bold">Start Date</label>
-                <input
-                  type="date"
-                  className="form-control"
-                  value={seasonalFilterState.startDate}
-                  onChange={(e) =>
-                    setSeasonalFilterState((prev) => ({
-                      ...prev,
-                      startDate: e.target.value,
-                    }))
-                  }
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="font-weight-bold">End Date</label>
-                <input
-                  type="date"
-                  className="form-control"
-                  value={seasonalFilterState.endDate}
-                  onChange={(e) =>
-                    setSeasonalFilterState((prev) => ({
-                      ...prev,
-                      endDate: e.target.value,
-                    }))
-                  }
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="font-weight-bold">Source</label>
-                <select
-                  className="form-control"
-                  value={seasonalFilterState.source}
-                  onChange={handleSeasonalSourceChange}
-                >
-                  {["USDA", "ProduceIQ", "Both"].map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <button
-                type="button"
-                className="btn btn-primary btn-block"
-                onClick={handleApplySeasonalFilters}
-              >
-                Apply Filters
-              </button>
-            </form>
-
-            <form
-              id="filters-historical-data"
-              className={`filter-form ${filters.historicalData ? "active" : "d-none"}`}
-            >
-              {/* Commodity Filter with Checkboxes */}
-              <div className="form-group">
-                <label className="font-weight-bold">Commodity</label>
-                <div className="checkbox-container">
-                  <label className="select-all">
-                    <input
-                      type="checkbox"
-                      checked={
-                        historicalFilterState.commodities.length ===
-                        commoditiesList.length
-                      }
-                      onChange={(e) =>
-                        handleSelectAllHistorical(e, "commodities")
-                      }
-                    />
-                    Select All
-                  </label>
-
-                  {commoditiesList.map((commodity) => (
-                    <label key={commodity} className="checkbox-item">
-                      <input
-                        type="checkbox"
-                        value={commodity}
-                        checked={historicalFilterState.commodities.includes(
-                          commodity,
-                        )}
-                        onChange={(e) =>
-                          handleCheckboxChangeHistorical(e, "commodities")
-                        }
-                      />
-                      {commodity}
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {/* Average Commodities Checkbox */}
-              <div className="form-group form-check">
-                <input
-                  type="checkbox"
-                  className="form-check-input"
-                  id="averageCommodities"
-                  checked={historicalFilterState.averageCommodities}
-                  onChange={handleAverageCommoditiesChange}
-                />
-                <label
-                  className="form-check-label font-weight-bold"
-                  htmlFor="averageCommodities"
-                >
-                  Average over Commodities
-                </label>
-              </div>
-
-              {/* City Filter with Checkboxes */}
-              <div className="form-group">
-                <label className="font-weight-bold">City</label>
-                <div className="checkbox-container">
-                  <label className="select-all">
-                    <input
-                      type="checkbox"
-                      checked={
-                        historicalFilterState.cities.length ===
-                        citiesList.length
-                      }
-                      onChange={(e) => handleSelectAllHistorical(e, "cities")}
-                    />
-                    Select All
-                  </label>
-
-                  {citiesList.map((city) => (
-                    <label key={city} className="checkbox-item">
-                      <input
-                        type="checkbox"
-                        value={city}
-                        checked={historicalFilterState.cities.includes(city)}
-                        onChange={(e) =>
-                          handleCheckboxChangeHistorical(e, "cities")
-                        }
-                      />
-                      {city}
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {/* Average Cities Checkbox */}
-              <div className="form-group form-check">
-                <input
-                  type="checkbox"
-                  className="form-check-input"
-                  id="averageCities"
-                  checked={historicalFilterState.averageCities}
-                  onChange={handleAverageCitiesChange}
-                />
-                <label
-                  className="form-check-label font-weight-bold"
-                  htmlFor="averageCities"
-                >
-                  Average over Cities
-                </label>
-              </div>
-
-              {/* Source Filter */}
-              <div className="form-group">
-                <label className="font-weight-bold">Source</label>
-                <select
-                  className="form-control"
-                  value={historicalFilterState.source}
-                  onChange={handleHistoricalSourceChange}
-                >
-                  {["USDA", "ProduceIQ"].map((source) => (
-                    <option key={source} value={source}>
-                      {source}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Date Filters */}
-              <div className="form-group">
-                <label className="font-weight-bold">Start Date</label>
-                <input
-                  type="date"
-                  className="form-control"
-                  value={historicalFilterState.startDate}
-                  onChange={(e) =>
-                    setHistoricalFilterState((prev) => ({
-                      ...prev,
-                      startDate: e.target.value,
-                    }))
-                  }
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="font-weight-bold">End Date</label>
-                <input
-                  type="date"
-                  className="form-control"
-                  value={historicalFilterState.endDate}
-                  onChange={(e) =>
-                    setHistoricalFilterState((prev) => ({
-                      ...prev,
-                      endDate: e.target.value,
-                    }))
-                  }
-                />
-              </div>
-
-              {/* Apply Filters Button */}
-              <button
-                type="button"
-                className="btn btn-primary btn-block"
-                onClick={handleApplyHistoricalFilters}
-              >
-                Apply Filters
-              </button>
-            </form>
-
-            <form
-              id="filters-shipping-point-price"
-              className={`filter-form ${filters.shippingPointPrice ? "active" : "d-none"}`}
-            >
-              {/* Commodity Filter with Checkboxes */}
-              <div className="form-group">
-                <label className="font-weight-bold">Commodity</label>
-                <div className="checkbox-container">
-                  <label className="select-all">
-                    <input
-                      type="checkbox"
-                      checked={
-                        shippingPointFilterState.commodities.length ===
-                        commoditiesList.length
-                      }
-                      onChange={(e) =>
-                        handleSelectAllShipping(e, "commodities")
-                      }
-                    />
-                    Select All
-                  </label>
-
-                  {commoditiesList.map((commodity) => (
-                    <label key={commodity} className="checkbox-item">
-                      <input
-                        type="checkbox"
-                        value={commodity}
-                        checked={shippingPointFilterState.commodities.includes(
-                          commodity,
-                        )}
-                        onChange={(e) =>
-                          handleCheckboxChangeShipping(e, "commodities")
-                        }
-                      />
-                      {commodity}
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {/* Average Commodities Checkbox */}
-              <div className="form-group form-check">
-                <input
-                  type="checkbox"
-                  className="form-check-input"
-                  id="averageShippingCommodities"
-                  checked={shippingPointFilterState.averageCommodities}
-                  onChange={handleAverageShippingCommoditiesChange}
-                />
-                <label
-                  className="form-check-label font-weight-bold"
-                  htmlFor="averageShippingCommodities"
-                >
-                  Average over Commodities
-                </label>
-              </div>
-
-              {/* Region Filter with Checkboxes */}
-              <div className="form-group">
-                <label className="font-weight-bold">Region</label>
-                <div className="checkbox-container">
-                  <label className="select-all">
-                    <input
-                      type="checkbox"
-                      checked={
-                        shippingPointFilterState.regions.length ===
-                        regionsList.length
-                      }
-                      onChange={(e) => handleSelectAllShipping(e, "regions")}
-                    />
-                    Select All
-                  </label>
-
-                  {regionsList.map((region) => (
-                    <label key={region} className="checkbox-item">
-                      <input
-                        type="checkbox"
-                        value={region}
-                        checked={shippingPointFilterState.regions.includes(
-                          region,
-                        )}
-                        onChange={(e) =>
-                          handleCheckboxChangeShipping(e, "regions")
-                        }
-                      />
-                      {region}
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {/* Average Regions Checkbox */}
-              <div className="form-group form-check">
-                <input
-                  type="checkbox"
-                  className="form-check-input"
-                  id="averageRegions"
-                  checked={shippingPointFilterState.averageRegions}
-                  onChange={handleAverageShippingRegionsChange}
-                />
-                <label
-                  className="form-check-label font-weight-bold"
-                  htmlFor="averageRegions"
-                >
-                  Average over Regions
-                </label>
-              </div>
-
-              {/* Source Filter */}
-              <div className="form-group">
-                <label className="font-weight-bold">Source</label>
-                <select
-                  className="form-control"
-                  value={shippingPointFilterState.source}
-                  onChange={handleShippingSourceChange}
-                >
-                  {["ProduceIQ", "USDA"].map((source) => (
-                    <option key={source} value={source}>
-                      {source}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Date Filters */}
-              <div className="form-group">
-                <label className="font-weight-bold">Start Date</label>
-                <input
-                  type="date"
-                  className="form-control"
-                  value={shippingPointFilterState.startDate}
-                  onChange={(e) =>
-                    setShippingPointFilterState((prev) => ({
-                      ...prev,
-                      startDate: e.target.value,
-                    }))
-                  }
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="font-weight-bold">End Date</label>
-                <input
-                  type="date"
-                  className="form-control"
-                  value={shippingPointFilterState.endDate}
-                  onChange={(e) =>
-                    setShippingPointFilterState((prev) => ({
-                      ...prev,
-                      endDate: e.target.value,
-                    }))
-                  }
-                />
-              </div>
-
-              {/* Apply Filters Button */}
-              <button
-                type="button"
-                className="btn btn-primary btn-block"
-                onClick={handleApplyShippingPointFilters}
-              >
-                Apply Filters
-              </button>
-            </form>
-          </div>
-        </div>
-
-        {/* Main Content */}
-        <div className="main-content flex-grow-1">
-          <div id="most-recent-price-section" className="section">
-            <div className="row mb-4 salesBody most-recent-container">
-              <div className="col-12 mb-4">
-                <div
-                  className="card resizable-block"
-                  id="most-recent-prices-card"
-                  data-block-title="Most Recent Prices"
-                >
-                  <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                    <h2>Most Recent Prices</h2>
-                    <button
-                      className="btn btn-sm btn-outline-light toggle-size"
-                      data-block-title="Most Recent Prices"
-                      onClick={() =>
-                        toggleBlockSize(
-                          "most-recent-prices-card",
-                          "Most Recent Prices",
-                        )
-                      }
-                    >
-                      Minimize
-                    </button>
+                {showMostRecentFilters && (
+                  <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', background: 'var(--surface-2)' }}>
+                    <form id="filters-most-recent" className="filter-form">
+                      <div className="form-group">
+                        <label htmlFor="sourceFilterMostRecent" className="font-weight-bold">Source</label>
+                        <select
+                          id="sourceFilterMostRecent"
+                          className="form-control"
+                          value={source}
+                          onChange={(e) => setSource(e.target.value)}
+                        >
+                          <option value="USDA">USDA</option>
+                          <option value="ProduceIQ">ProduceIQ</option>
+                          <option value="Both">Both</option>
+                        </select>
+                      </div>
+                      <button type="button" className="btn btn-primary btn-block" onClick={handleApplyMostRecentFilters}>
+                        Apply Filters
+                      </button>
+                    </form>
                   </div>
-                  <div className="card-body p-0">
-                    <table
-                      className="table table-striped table-hover table-bordered"
-                      id="most-recent-prices-table"
-                    >
-                      <thead className="thead-dark">
-                        <tr>
-                          <th>Commodity</th>
-                          <th>Baltimore</th>
-                          <th>Boston</th>
-                          <th>Chicago</th>
-                          <th>Columbia</th>
-                          <th>Miami</th>
-                          <th>New York</th>
-                          <th>Philadelphia</th>
-                          <th>Los Angeles</th>
-                          <th>Detroit</th>
-                          <th>Atlanta</th>
-                        </tr>
-                      </thead>
-                      <tbody>{updateMostRecentPricesTable()}</tbody>
-                    </table>
-                  </div>
+                )}
+                <div className="card-body p-0">
+                  <table
+                    className="table table-striped table-hover table-bordered"
+                    id="most-recent-prices-table"
+                  >
+                    <thead className="thead-dark">
+                      <tr>
+                        <th>Commodity</th>
+                        <th>Baltimore</th>
+                        <th>Boston</th>
+                        <th>Chicago</th>
+                        <th>Columbia</th>
+                        <th>Miami</th>
+                        <th>New York</th>
+                        <th>Philadelphia</th>
+                        <th>Los Angeles</th>
+                        <th>Detroit</th>
+                        <th>Atlanta</th>
+                      </tr>
+                    </thead>
+                    <tbody>{updateMostRecentPricesTable()}</tbody>
+                  </table>
                 </div>
               </div>
             </div>
           </div>
+        </div>
 
-          <div id="best-sell-market-section" className="section">
-            <div className="row mb-4 sales-Body">
-              {/* Best Sell Market Table */}
-              <div className="col-lg-6 mb-4">
-                <div
-                  className="card resizable-block"
-                  id="best-sell-market-card"
-                  data-block-title="Best Sell Market"
-                >
-                  <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                    <h2>Best Sell Market</h2>
-                    {/* <button
-                className="btn btn-sm btn-outline-light toggle-size"
+        {/* Best Sell Market Section */}
+        <div id="best-sell-market-section" className="section">
+          <div className="row mb-4 sales-Body">
+            {/* Filter bar for best sell market */}
+            <div className="col-12 mb-2">
+              <div style={{ border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface-2)' }}>
+                <div style={{ padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <button
+                    onClick={() => setShowBestSellFilters(f => !f)}
+                    style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-2)', display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, cursor: 'pointer' }}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+                    Filters {showBestSellFilters ? '▲' : '▼'}
+                  </button>
+                </div>
+                {showBestSellFilters && (
+                  <div style={{ padding: '16px 20px', borderTop: '1px solid var(--border)' }}>
+                    <form id="filters-best-sell-market" className="filter-form">
+                      <div className="form-group">
+                        <label htmlFor="commodityFilterBestSell" className="font-weight-bold">Commodity</label>
+                        <select
+                          id="commodityFilterBestSell"
+                          className="form-control"
+                          value={filterState.commodity}
+                          onChange={handleCommodityChange}
+                        >
+                          {["Anaheim","Cubanelles","Fresno","Habanero","Hungarian Wax","Jalapeno","Long Hot","Poblano","Serrano","Shishito"].map((item) => (
+                            <option key={item} value={item}>{item}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label htmlFor="sourceFilterBestSell" className="font-weight-bold">Source</label>
+                        <select
+                          id="sourceFilterBestSell"
+                          className="form-control"
+                          value={filterState.source}
+                          onChange={handleSourceChange}
+                        >
+                          {["USDA", "ProduceIQ"].map((sourceOption) => (
+                            <option key={sourceOption} value={sourceOption}>{sourceOption}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="form-group form-check">
+                        <input
+                          type="checkbox"
+                          className="form-check-input"
+                          id="last7DaysBestSell"
+                          checked={filterState.last7Days}
+                          onChange={handleLast7DaysChange}
+                        />
+                        <label className="form-check-label font-weight-bold" htmlFor="last7DaysBestSell">
+                          Only Last 7 Days
+                        </label>
+                      </div>
+                      <button type="button" className="btn btn-primary btn-block" onClick={handleApplyBestSellFilters}>
+                        Apply Filters
+                      </button>
+                    </form>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Best Sell Market Table */}
+            <div className="col-lg-6 mb-4">
+              <div
+                className="card resizable-block"
+                id="best-sell-market-card"
                 data-block-title="Best Sell Market"
               >
-                Minimize
-              </button> */}
-                    <button
-                      className="btn btn-sm btn-outline-light toggle-size"
-                      onClick={() =>
-                        toggleBlockSize(
-                          "best-sell-market-card",
-                          "Best Sell Market",
-                        )
-                      }
-                    >
-                      Minimize
-                    </button>
-                  </div>
-                  <div className="card-body p-0">
-                    <table
-                      className="table table-striped table-hover table-bordered"
-                      id="best-sell-market-table"
-                    >
-                      <thead className="thead-dark">
-                        <tr>
-                          <th>City</th>
-                          <th>Price</th>
-                          <th>Date</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {bestMarketData && bestMarketData.length > 0 ? (
-                          bestMarketData.map((item, index) => (
-                            <tr key={index}>
-                              <td>{item.city_name}</td>
-                              <td>
-                                {item.max_price !== "-"
-                                  ? `$${parseFloat(item.max_price).toFixed(2)}`
-                                  : "-"}
-                              </td>
-                              <td>{item.date || "-"}</td>
-                            </tr>
-                          ))
-                        ) : (
-                          <tr>
-                            <td colSpan="3" className="text-center">
-                              No data available
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
+                <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                  <h2>Best Sell Market</h2>
                 </div>
-              </div>
-              {/* Market Graph */}
-              <div className="col-lg-6 mb-4">
-                <div
-                  className="card resizable-block"
-                  id="market-graph-card"
-                  data-block-title="Market Graph"
-                >
-                  <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                    <h2>Market Graph</h2>
-                    <button
-                      className="btn btn-sm btn-outline-light toggle-size"
-                      data-block-title="Market Graph"
-                      onClick={() =>
-                        toggleBlockSize("market-graph-card", "Market Graph")
-                      }
-                    >
-                      Minimize
-                    </button>
-                  </div>
-                  <div className="card-body">
-                    {/* <canvas id="bestSellChart" width="400" height="400"></canvas> */}
-                    <canvas
-                      id="bestSellChart"
-                      ref={bestSellChartRef}
-                      width="400"
-                      height="400"
-                    ></canvas>
-                  </div>
-                </div>
-              </div>
-              {/* Row 2: Most Recent Prices Table */}
-
-              {/* Seasonal Trends */}
-              <div id="seasonal-trends-section" className="section">
-                <div className="col-lg-12 mb-4">
-                  <div
-                    className="card resizable-block"
-                    id="seasonal-trends-card"
-                    data-block-title="Seasonal Trends"
+                <div className="card-body p-0">
+                  <table
+                    className="table table-striped table-hover table-bordered"
+                    id="best-sell-market-table"
                   >
-                    <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                      <h2>Seasonal Trends</h2>
-                      <button
-                        className="btn btn-sm btn-outline-light toggle-size"
-                        data-block-title="Seasonal Trends"
-                        onClick={() =>
-                          toggleBlockSize(
-                            "seasonal-trends-card",
-                            "Seasonal Trends",
-                          )
-                        }
-                      >
-                        Minimize
-                      </button>
-                    </div>
-                    <div className="card-body seasonal-body">
-                      <canvas
-                        id="seasonalChart"
-                        ref={seasonalChartRef}
-                        width="100"
-                        height="100"
-                      ></canvas>
-                    </div>
-                  </div>
+                    <thead className="thead-dark">
+                      <tr>
+                        <th>City</th>
+                        <th>Price</th>
+                        <th>Date</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {bestMarketData && bestMarketData.length > 0 ? (
+                        bestMarketData.map((item, index) => (
+                          <tr key={index}>
+                            <td>{item.city_name}</td>
+                            <td>
+                              {item.max_price !== "-"
+                                ? `$${parseFloat(item.max_price).toFixed(2)}`
+                                : "-"}
+                            </td>
+                            <td>{item.date || "-"}</td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan="3" className="text-center">
+                            No data available
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </div>
-              {/* Row 4: Historical Data */}
-              <div id="historical-data-section" className="section">
-                <div className="row mb-4 salesBody">
-                  <div className="col-12 mb-4">
-                    <div
-                      className="card resizable-block"
-                      id="historical-data-card"
-                      data-block-title="Historical Data"
-                    >
-                      <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                        <h2>Historical Data</h2>
-                        <button
-                          className="btn btn-sm btn-outline-light toggle-size"
-                          data-block-title="Historical Data"
-                          onClick={() =>
-                            toggleBlockSize(
-                              "historical-data-card",
-                              "Historical Data",
-                            )
-                          }
-                        >
-                          Minimize
-                        </button>
-                      </div>
-                      <div className="card-body ">
-                        <canvas
-                          id="historicalChart"
-                          ref={historicalChartRef}
-                          width="400"
-                          height="400"
-                        ></canvas>
-                      </div>
-                    </div>
-                    <button
-                      className="btn btn-primary mt-3"
-                      onClick={handleDownload}
-                    >
-                      Download Chart & Data
-                    </button>
-                  </div>
-                </div>
-              </div>
-              {/* Shipping Point Price */}
-              <div id="shipping-point-price-section" className="section">
-                <div className="row mb-4 salesBody">
-                  <div className="col-12 mb-4">
-                    <div
-                      className="card resizable-block"
-                      id="shipping-point-price-card"
-                      data-block-title="Shipping Point Price"
-                    >
-                      <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                        <h2>Shipping Point Price</h2>
-                        <button
-                          className="btn btn-sm btn-outline-light toggle-size"
-                          data-block-title="Shipping Point Price"
-                          onClick={() =>
-                            toggleBlockSize(
-                              "shipping-point-price-card",
-                              "Shipping Point Price",
-                            )
-                          }
-                        >
-                          Minimize
-                        </button>
-                      </div>
-                      <div className="card-body">
-                        <canvas
-                          id="shippingPointPriceChart"
-                          ref={shippingPointPriceChartRef}
-                          width="400"
-                          height="400"
-                        ></canvas>
+            </div>
 
-                        {/* Download Buttons */}
-                      </div>
-                    </div>
-                    <button
-                      className="btn btn-primary mt-3"
-                      onClick={handleDownloadShipping} // Trigger chart download
-                    >
-                      Download Chart and Data
-                    </button>
-                  </div>
-                </div>
-              </div>
-
+            {/* Market Graph */}
+            <div className="col-lg-6 mb-4">
               <div
-                ref={rightSidebarRef}
-                id="minimized-sidebar"
-                className=" collapsed"
+                className="card resizable-block"
+                id="market-graph-card"
+                data-block-title="Market Graph"
               >
-                <div id="right-sidebar-toggle" onClick={toggleRightSidebar}>
-                  <i className="rightbar-icon">...</i>
+                <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                  <h2>Market Graph</h2>
                 </div>
-                <h2>Minimized Blocks</h2>
-                <ul id="minimized-list">
-                  {minimizedBlocks.map((blockId) => (
-                    <li
-                      key={blockId}
-                      onClick={() => toggleBlockSize(blockId, "")} // Pass blockId to restore the block
-                      className="minimized-item"
-                    >
-                      {document.getElementById(blockId)?.dataset?.blockTitle ||
-                        blockId}
-                    </li>
-                  ))}
-                </ul>
+                <div className="card-body">
+                  <canvas
+                    id="bestSellChart"
+                    ref={bestSellChartRef}
+                    width="400"
+                    height="400"
+                  ></canvas>
+                </div>
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Seasonal Trends Section */}
+        <div id="seasonal-trends-section" className="section">
+          <div className="row mb-4">
+            <div className="col-lg-12 mb-4">
+              <div
+                className="card resizable-block"
+                id="seasonal-trends-card"
+                data-block-title="Seasonal Trends"
+              >
+                <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                  <h2>Seasonal Trends</h2>
+                </div>
+                {/* Inline filter bar */}
+                <div style={{ borderBottom: '1px solid var(--border)', padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--surface-2)' }}>
+                  <button
+                    onClick={() => setShowSeasonalFilters(f => !f)}
+                    style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-2)', display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, cursor: 'pointer' }}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+                    Filters {showSeasonalFilters ? '▲' : '▼'}
+                  </button>
+                </div>
+                {showSeasonalFilters && (
+                  <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', background: 'var(--surface-2)' }}>
+                    <form id="filters-seasonal-trends" className="filter-form">
+                      {/* Commodity Filter with Checkboxes */}
+                      <div className="form-group">
+                        <label className="font-weight-bold">Commodity</label>
+                        <div className="checkbox-container">
+                          <label className="select-all">
+                            <input
+                              type="checkbox"
+                              checked={seasonalFilterState.commodities.length === commoditiesList.length}
+                              onChange={(e) => handleSelectAll(e, "commodities")}
+                            />
+                            Select All
+                          </label>
+                          {commoditiesList.map((item) => (
+                            <label key={item} className="checkbox-item">
+                              <input
+                                type="checkbox"
+                                value={item}
+                                checked={seasonalFilterState.commodities.includes(item)}
+                                onChange={(e) => handleCheckboxChange(e, "commodities")}
+                              />
+                              {item}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                      {/* City Filter with Checkboxes */}
+                      <div className="form-group">
+                        <label className="font-weight-bold">City</label>
+                        <div className="checkbox-container">
+                          <label className="select-all">
+                            <input
+                              type="checkbox"
+                              checked={seasonalFilterState.cities.length === citiesList.length}
+                              onChange={(e) => handleSelectAll(e, "cities")}
+                            />
+                            Select All
+                          </label>
+                          {citiesList.map((city) => (
+                            <label key={city} className="checkbox-item">
+                              <input
+                                type="checkbox"
+                                value={city}
+                                checked={seasonalFilterState.cities.includes(city)}
+                                onChange={(e) => handleCheckboxChange(e, "cities")}
+                              />
+                              {city}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                      {/* Date Pickers */}
+                      <div className="form-group">
+                        <label className="font-weight-bold">Start Date</label>
+                        <input
+                          type="date"
+                          className="form-control"
+                          value={seasonalFilterState.startDate}
+                          onChange={(e) =>
+                            setSeasonalFilterState((prev) => ({ ...prev, startDate: e.target.value }))
+                          }
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label className="font-weight-bold">End Date</label>
+                        <input
+                          type="date"
+                          className="form-control"
+                          value={seasonalFilterState.endDate}
+                          onChange={(e) =>
+                            setSeasonalFilterState((prev) => ({ ...prev, endDate: e.target.value }))
+                          }
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label className="font-weight-bold">Source</label>
+                        <select
+                          className="form-control"
+                          value={seasonalFilterState.source}
+                          onChange={handleSeasonalSourceChange}
+                        >
+                          {["USDA", "ProduceIQ", "Both"].map((s) => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-block"
+                        onClick={handleApplySeasonalFilters}
+                      >
+                        Apply Filters
+                      </button>
+                    </form>
+                  </div>
+                )}
+                <div className="card-body seasonal-body">
+                  <canvas
+                    id="seasonalChart"
+                    ref={seasonalChartRef}
+                    width="100"
+                    height="100"
+                  ></canvas>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Historical Data Section */}
+        <div id="historical-data-section" className="section">
+          <div className="row mb-4 salesBody">
+            <div className="col-12 mb-4">
+              <div
+                className="card resizable-block"
+                id="historical-data-card"
+                data-block-title="Historical Data"
+              >
+                <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                  <h2>Historical Data</h2>
+                </div>
+                {/* Inline filter bar */}
+                <div style={{ borderBottom: '1px solid var(--border)', padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--surface-2)' }}>
+                  <button
+                    onClick={() => setShowHistoricalFilters(f => !f)}
+                    style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-2)', display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, cursor: 'pointer' }}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+                    Filters {showHistoricalFilters ? '▲' : '▼'}
+                  </button>
+                </div>
+                {showHistoricalFilters && (
+                  <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', background: 'var(--surface-2)' }}>
+                    <form id="filters-historical-data" className="filter-form">
+                      {/* Commodity Filter with Checkboxes */}
+                      <div className="form-group">
+                        <label className="font-weight-bold">Commodity</label>
+                        <div className="checkbox-container">
+                          <label className="select-all">
+                            <input
+                              type="checkbox"
+                              checked={historicalFilterState.commodities.length === commoditiesList.length}
+                              onChange={(e) => handleSelectAllHistorical(e, "commodities")}
+                            />
+                            Select All
+                          </label>
+                          {commoditiesList.map((commodity) => (
+                            <label key={commodity} className="checkbox-item">
+                              <input
+                                type="checkbox"
+                                value={commodity}
+                                checked={historicalFilterState.commodities.includes(commodity)}
+                                onChange={(e) => handleCheckboxChangeHistorical(e, "commodities")}
+                              />
+                              {commodity}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                      {/* Average Commodities Checkbox */}
+                      <div className="form-group form-check">
+                        <input
+                          type="checkbox"
+                          className="form-check-input"
+                          id="averageCommodities"
+                          checked={historicalFilterState.averageCommodities}
+                          onChange={handleAverageCommoditiesChange}
+                        />
+                        <label className="form-check-label font-weight-bold" htmlFor="averageCommodities">
+                          Average over Commodities
+                        </label>
+                      </div>
+                      {/* City Filter with Checkboxes */}
+                      <div className="form-group">
+                        <label className="font-weight-bold">City</label>
+                        <div className="checkbox-container">
+                          <label className="select-all">
+                            <input
+                              type="checkbox"
+                              checked={historicalFilterState.cities.length === citiesList.length}
+                              onChange={(e) => handleSelectAllHistorical(e, "cities")}
+                            />
+                            Select All
+                          </label>
+                          {citiesList.map((city) => (
+                            <label key={city} className="checkbox-item">
+                              <input
+                                type="checkbox"
+                                value={city}
+                                checked={historicalFilterState.cities.includes(city)}
+                                onChange={(e) => handleCheckboxChangeHistorical(e, "cities")}
+                              />
+                              {city}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                      {/* Average Cities Checkbox */}
+                      <div className="form-group form-check">
+                        <input
+                          type="checkbox"
+                          className="form-check-input"
+                          id="averageCities"
+                          checked={historicalFilterState.averageCities}
+                          onChange={handleAverageCitiesChange}
+                        />
+                        <label className="form-check-label font-weight-bold" htmlFor="averageCities">
+                          Average over Cities
+                        </label>
+                      </div>
+                      {/* Source Filter */}
+                      <div className="form-group">
+                        <label className="font-weight-bold">Source</label>
+                        <select
+                          className="form-control"
+                          value={historicalFilterState.source}
+                          onChange={handleHistoricalSourceChange}
+                        >
+                          {["USDA", "ProduceIQ"].map((src) => (
+                            <option key={src} value={src}>{src}</option>
+                          ))}
+                        </select>
+                      </div>
+                      {/* Date Filters */}
+                      <div className="form-group">
+                        <label className="font-weight-bold">Start Date</label>
+                        <input
+                          type="date"
+                          className="form-control"
+                          value={historicalFilterState.startDate}
+                          onChange={(e) =>
+                            setHistoricalFilterState((prev) => ({ ...prev, startDate: e.target.value }))
+                          }
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label className="font-weight-bold">End Date</label>
+                        <input
+                          type="date"
+                          className="form-control"
+                          value={historicalFilterState.endDate}
+                          onChange={(e) =>
+                            setHistoricalFilterState((prev) => ({ ...prev, endDate: e.target.value }))
+                          }
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-block"
+                        onClick={handleApplyHistoricalFilters}
+                      >
+                        Apply Filters
+                      </button>
+                    </form>
+                  </div>
+                )}
+                <div className="card-body">
+                  <canvas
+                    id="historicalChart"
+                    ref={historicalChartRef}
+                    width="400"
+                    height="400"
+                  ></canvas>
+                </div>
+              </div>
+              <button
+                className="btn btn-primary mt-3"
+                onClick={handleDownload}
+              >
+                Download Chart &amp; Data
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Shipping Point Price Section */}
+        <div id="shipping-point-price-section" className="section">
+          <div className="row mb-4 salesBody">
+            <div className="col-12 mb-4">
+              <div
+                className="card resizable-block"
+                id="shipping-point-price-card"
+                data-block-title="Shipping Point Price"
+              >
+                <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                  <h2>Shipping Point Price</h2>
+                </div>
+                {/* Inline filter bar */}
+                <div style={{ borderBottom: '1px solid var(--border)', padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--surface-2)' }}>
+                  <button
+                    onClick={() => setShowShippingFilters(f => !f)}
+                    style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-2)', display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, cursor: 'pointer' }}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+                    Filters {showShippingFilters ? '▲' : '▼'}
+                  </button>
+                </div>
+                {showShippingFilters && (
+                  <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', background: 'var(--surface-2)' }}>
+                    <form id="filters-shipping-point-price" className="filter-form">
+                      {/* Commodity Filter with Checkboxes */}
+                      <div className="form-group">
+                        <label className="font-weight-bold">Commodity</label>
+                        <div className="checkbox-container">
+                          <label className="select-all">
+                            <input
+                              type="checkbox"
+                              checked={shippingPointFilterState.commodities.length === commoditiesList.length}
+                              onChange={(e) => handleSelectAllShipping(e, "commodities")}
+                            />
+                            Select All
+                          </label>
+                          {commoditiesList.map((commodity) => (
+                            <label key={commodity} className="checkbox-item">
+                              <input
+                                type="checkbox"
+                                value={commodity}
+                                checked={shippingPointFilterState.commodities.includes(commodity)}
+                                onChange={(e) => handleCheckboxChangeShipping(e, "commodities")}
+                              />
+                              {commodity}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                      {/* Average Commodities Checkbox */}
+                      <div className="form-group form-check">
+                        <input
+                          type="checkbox"
+                          className="form-check-input"
+                          id="averageShippingCommodities"
+                          checked={shippingPointFilterState.averageCommodities}
+                          onChange={handleAverageShippingCommoditiesChange}
+                        />
+                        <label className="form-check-label font-weight-bold" htmlFor="averageShippingCommodities">
+                          Average over Commodities
+                        </label>
+                      </div>
+                      {/* Region Filter with Checkboxes */}
+                      <div className="form-group">
+                        <label className="font-weight-bold">Region</label>
+                        <div className="checkbox-container">
+                          <label className="select-all">
+                            <input
+                              type="checkbox"
+                              checked={shippingPointFilterState.regions.length === regionsList.length}
+                              onChange={(e) => handleSelectAllShipping(e, "regions")}
+                            />
+                            Select All
+                          </label>
+                          {regionsList.map((region) => (
+                            <label key={region} className="checkbox-item">
+                              <input
+                                type="checkbox"
+                                value={region}
+                                checked={shippingPointFilterState.regions.includes(region)}
+                                onChange={(e) => handleCheckboxChangeShipping(e, "regions")}
+                              />
+                              {region}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                      {/* Average Regions Checkbox */}
+                      <div className="form-group form-check">
+                        <input
+                          type="checkbox"
+                          className="form-check-input"
+                          id="averageRegions"
+                          checked={shippingPointFilterState.averageRegions}
+                          onChange={handleAverageShippingRegionsChange}
+                        />
+                        <label className="form-check-label font-weight-bold" htmlFor="averageRegions">
+                          Average over Regions
+                        </label>
+                      </div>
+                      {/* Source Filter */}
+                      <div className="form-group">
+                        <label className="font-weight-bold">Source</label>
+                        <select
+                          className="form-control"
+                          value={shippingPointFilterState.source}
+                          onChange={handleShippingSourceChange}
+                        >
+                          {["ProduceIQ", "USDA"].map((src) => (
+                            <option key={src} value={src}>{src}</option>
+                          ))}
+                        </select>
+                      </div>
+                      {/* Date Filters */}
+                      <div className="form-group">
+                        <label className="font-weight-bold">Start Date</label>
+                        <input
+                          type="date"
+                          className="form-control"
+                          value={shippingPointFilterState.startDate}
+                          onChange={(e) =>
+                            setShippingPointFilterState((prev) => ({ ...prev, startDate: e.target.value }))
+                          }
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label className="font-weight-bold">End Date</label>
+                        <input
+                          type="date"
+                          className="form-control"
+                          value={shippingPointFilterState.endDate}
+                          onChange={(e) =>
+                            setShippingPointFilterState((prev) => ({ ...prev, endDate: e.target.value }))
+                          }
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-block"
+                        onClick={handleApplyShippingPointFilters}
+                      >
+                        Apply Filters
+                      </button>
+                    </form>
+                  </div>
+                )}
+                <div className="card-body">
+                  <canvas
+                    id="shippingPointPriceChart"
+                    ref={shippingPointPriceChartRef}
+                    width="400"
+                    height="400"
+                  ></canvas>
+                </div>
+              </div>
+              <button
+                className="btn btn-primary mt-3"
+                onClick={handleDownloadShipping}
+              >
+                Download Chart and Data
+              </button>
             </div>
           </div>
         </div>
