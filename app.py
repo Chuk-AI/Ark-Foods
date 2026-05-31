@@ -6699,9 +6699,6 @@ def trigger_cache_build():
         app._cache_build_finished = None
         app._cache_build_progress = {"current": 0, "total": 0, "city": "starting…"}
 
-        # Push ONE app context for the entire build — never push/pop inside the loop
-        ctx = app.app_context()
-        ctx.push()
         try:
             from scheduler_service import CITIES_TO_CACHE
             from historical_trend_forecasting import build_combined_forecasts_cache
@@ -6713,17 +6710,12 @@ def trigger_cache_build():
                 app._cache_build_progress = {"current": i, "total": total, "city": city}
                 app.logger.info(f"Cache build [{i}/{total}]: {city}")
                 try:
-                    db.session.remove()  # fresh session per city — avoids stale connection in thread
-                    build_combined_forecasts_cache(city, db, cache_set, normalize_commodity)
-                    db.session.remove()  # clean up after each city
+                    with app.app_context():
+                        build_combined_forecasts_cache(city, db, cache_set, normalize_commodity)
                     app.logger.info(f"Cache build [{i}/{total}]: {city} — done")
                 except Exception as city_err:
                     import traceback as _tb
                     app.logger.error(f"Cache build [{i}/{total}]: {city} FAILED: {city_err}\n{_tb.format_exc()}")
-                    try:
-                        db.session.remove()
-                    except Exception:
-                        pass
 
             app._cache_build_finished = datetime.now().isoformat()
             app.logger.info("Cache build: all cities complete")
@@ -6733,10 +6725,6 @@ def trigger_cache_build():
             app._cache_build_finished = datetime.now().isoformat()
             app.logger.error(f"Cache build failed: {e}\n{traceback.format_exc()}")
         finally:
-            try:
-                ctx.pop()
-            except Exception:
-                pass
             app._cache_build_running = False
 
     threading.Thread(target=_run_build, daemon=True, name="cache-builder").start()
