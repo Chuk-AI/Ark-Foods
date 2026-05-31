@@ -1,694 +1,785 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import {
-  LineChart,
-  Line,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  ComposedChart,
+  LineChart, Line, Area, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, ComposedChart,
 } from 'recharts';
 
-// ─── helpers ────────────────────────────────────────────────────────────────
+// ─── constants ────────────────────────────────────────────────────────────────
 
-const fmt = (v) => (v != null ? `$${Number(v).toFixed(2)}` : '—');
-const pct = (v) => (v != null ? `${Number(v).toFixed(1)}%` : '—');
+const CITIES = [
+  'All cities', 'Baltimore', 'Boston', 'Chicago', 'Columbia',
+  'Miami', 'New York', 'Philadelphia', 'Los Angeles', 'Detroit', 'Atlanta',
+];
 
-function TrendBadge({ badge, trend }) {
-  // backend sends trend_badge="danger/success/warning" and overall_trend="RISING/FALLING/STABLE"
-  const label = trend || badge || '';
-  const map = {
-    RISING:  { bg: '#fee2e2', color: '#dc2626' },
-    FALLING: { bg: '#dcfce7', color: '#16a34a' },
-    STABLE:  { bg: '#fef9c3', color: '#ca8a04' },
-    danger:  { bg: '#fee2e2', color: '#dc2626' },
-    success: { bg: '#dcfce7', color: '#16a34a' },
-    warning: { bg: '#fef9c3', color: '#ca8a04' },
-  };
-  const s = map[label] || { bg: '#f1f5f9', color: '#64748b' };
+const COMMODITIES = [
+  'Jalapeno', 'Hungarian Wax', 'Shishito', 'Fresno', 'Long Hot',
+  'Habanero', 'Anaheim', 'Cubanelle', 'Serrano', 'Poblano',
+];
+
+// ─── helpers ──────────────────────────────────────────────────────────────────
+
+const money = (x) => (x == null || isNaN(+x) ? '—' : `$${(+x).toFixed(2)}`);
+const pctFmt = (x) => (x == null || isNaN(+x) ? '—' : `${+x >= 0 ? '↑' : '↓'} ${Math.abs(+x).toFixed(1)}%`);
+
+function Spinner() {
   return (
-    <span style={{
-      background: s.bg, color: s.color,
-      padding: '2px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700,
-      letterSpacing: '0.04em', whiteSpace: 'nowrap',
-    }}>
-      {label || 'UNKNOWN'}
-    </span>
-  );
-}
-
-function ConfidencePill({ value }) {
-  let bg = '#fee2e2', color = '#dc2626';
-  if (value >= 0.7)       { bg = '#dcfce7'; color = '#16a34a'; }
-  else if (value >= 0.5)  { bg = '#fef9c3'; color = '#ca8a04'; }
-  return (
-    <span style={{ background: bg, color, padding: '2px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700 }}>
-      {(value * 100).toFixed(0)}%
-    </span>
-  );
-}
-
-function StatusBadge({ status }) {
-  const map = {
-    optimal:  { bg: '#dcfce7', color: '#16a34a' },
-    warning:  { bg: '#fef9c3', color: '#ca8a04' },
-    critical: { bg: '#fee2e2', color: '#dc2626' },
-    caution:  { bg: '#ffedd5', color: '#ea580c' },
-  };
-  const s = map[(status || '').toLowerCase()] || { bg: '#f1f5f9', color: '#64748b' };
-  return (
-    <span style={{ background: s.bg, color: s.color, padding: '2px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700, textTransform: 'capitalize' }}>
-      {status || 'unknown'}
-    </span>
-  );
-}
-
-function SkeletonCard({ height = 160 }) {
-  return (
-    <div style={{
-      background: 'var(--color-surface)', border: '1px solid var(--color-border)',
-      borderRadius: 8, padding: 20, height, animation: 'pulse 1.5s ease-in-out infinite',
-    }}>
-      <div style={{ height: 14, width: '60%', background: '#e2e8f0', borderRadius: 4, marginBottom: 10 }} />
-      <div style={{ height: 24, width: '40%', background: '#e2e8f0', borderRadius: 4, marginBottom: 8 }} />
-      <div style={{ height: 12, width: '30%', background: '#e2e8f0', borderRadius: 4 }} />
-      <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }`}</style>
+    <div style={{ display: 'flex', justifyContent: 'center', padding: 32 }}>
+      <div style={{ width: 36, height: 36, border: '4px solid #e2e8f0', borderTop: '4px solid #059669', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+      <style>{`@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}`}</style>
     </div>
   );
 }
 
-function ErrorBox({ message }) {
+function SectionTitle({ children, id }) {
   return (
-    <div style={{
-      background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 8,
-      padding: '16px 20px', color: '#dc2626', fontSize: 14,
-    }}>
-      <strong>Error:</strong> {message}
+    <h2 id={id} style={{ fontSize: 20, fontWeight: 700, color: '#1e293b', borderBottom: '3px solid #059669', paddingBottom: 10, marginBottom: 20 }}>
+      {children}
+    </h2>
+  );
+}
+
+function Badge({ children, type = 'info' }) {
+  const colors = {
+    success: { bg: '#d1fae5', color: '#065f46' },
+    warning: { bg: '#fef3c7', color: '#92400e' },
+    danger:  { bg: '#fee2e2', color: '#991b1b' },
+    info:    { bg: '#dbeafe', color: '#1e40af' },
+  };
+  const c = colors[type] || colors.info;
+  return (
+    <span style={{ background: c.bg, color: c.color, padding: '3px 10px', borderRadius: 10, fontSize: 12, fontWeight: 700 }}>
+      {children}
+    </span>
+  );
+}
+
+function ConfBadge({ value }) {
+  if (value == null) return <Badge type="danger">N/A</Badge>;
+  const pct = (value * 100).toFixed(0);
+  return value >= 0.75 ? <Badge type="success">{pct}%</Badge>
+    : value >= 0.5 ? <Badge type="warning">{pct}%</Badge>
+    : <Badge type="danger">{pct}%</Badge>;
+}
+
+function CitySelector({ value, onChange, label = 'City:' }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <span style={{ fontSize: 13, color: '#64748b', fontWeight: 600 }}>{label}</span>
+      <select value={value} onChange={(e) => onChange(e.target.value)}
+        style={{ fontSize: 13, padding: '8px 14px', border: '1px solid #e2e8f0', borderRadius: 8, background: '#3b82f6', color: '#fff', fontWeight: 600, cursor: 'pointer' }}>
+        {CITIES.map((c) => <option key={c} value={c}>{c === 'All cities' ? 'All Cities' : c}</option>)}
+      </select>
     </div>
   );
 }
 
-// ─── Section 1: Price Forecast Cards ────────────────────────────────────────
+// ─── 1. Terminal Market Pricing Matrix ───────────────────────────────────────
+
+function PricingMatrix() {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    axios.get('/api/terminal_market_pricing?window_days=7')
+      .then((r) => { setData(r.data.cities || {}); setLoading(false); })
+      .catch((e) => { setError(e.message); setLoading(false); });
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const cityOrder = ['Baltimore', 'Boston', 'Chicago', 'Miami', 'New York', 'Philadelphia', 'Los Angeles', 'Detroit', 'Atlanta', 'Columbia'];
+  const cities = data ? cityOrder.filter((c) => data[c]) : [];
+
+  return (
+    <div className="section" style={{ marginBottom: 40 }}>
+      <SectionTitle>💰 Terminal Market Pricing Matrix</SectionTitle>
+      {loading && <Spinner />}
+      {error && <p style={{ color: '#dc2626' }}>Error: {error}</p>}
+      {data && (
+        <>
+          <div style={{ background: '#fff', border: '2px solid #e2e8f0', borderRadius: 12, padding: 20, marginBottom: 20, lineHeight: 1.7, color: '#475569', fontSize: 13 }}>
+            <strong>USDA</strong> and <strong>ProduceIQ</strong> prices from last 7 days · <strong>FOB</strong> = best price − 26% freight · <strong>Diff</strong> = ProduceIQ − USDA
+          </div>
+          {cities.map((city) => {
+            const items = data[city]?.items || [];
+            return (
+              <div key={city} style={{ background: '#fff', border: '2px solid #e2e8f0', borderRadius: 12, padding: 20, marginBottom: 20 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <span style={{ fontSize: 16, fontWeight: 700, color: '#1e293b' }}>📍 {city}</span>
+                  <Badge type="success">ACTIVE</Badge>
+                </div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ background: 'linear-gradient(135deg,#059669,#047857)', color: '#fff' }}>
+                        {['Variety', 'USDA', 'ProduceIQ', 'Difference', 'FOB Price'].map((h) => (
+                          <th key={h} style={{ padding: '10px 12px', textAlign: h === 'Variety' ? 'left' : 'center', fontWeight: 600 }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {items.map((row, i) => {
+                        const u = row.usda;
+                        const p = row.produceiq;
+                        const d = row.diff;
+                        return (
+                          <tr key={row.variety} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                            <td style={{ padding: '10px 12px', fontWeight: 700, color: '#1e293b' }}>{row.variety}</td>
+                            <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                              {u ? <><div style={{ fontWeight: 700, color: '#1e40af' }}>{money(u.price)}</div><div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{u.date}</div></> : <span style={{ color: '#94a3b8' }}>—</span>}
+                            </td>
+                            <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                              {p ? <><div style={{ fontWeight: 700, color: '#92400e' }}>{money(p.price)}</div><div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{p.date}</div></> : <span style={{ color: '#94a3b8' }}>—</span>}
+                            </td>
+                            <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                              {d ? <><div style={{ fontWeight: 700, color: d.pct >= 0 ? '#dc2626' : '#16a34a' }}>{pctFmt(d.pct)}</div><div style={{ fontSize: 11, color: '#64748b' }}>{d.abs >= 0 ? '+' : ''}{money(d.abs)}</div></> : <span style={{ color: '#94a3b8' }}>—</span>}
+                            </td>
+                            <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: '#16a34a', fontSize: 15 }}>{money(row.fob)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── 2. Highest Prices by Variety ─────────────────────────────────────────────
+
+function HighestPrices() {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    axios.get('/api/terminal_market_pricing?window_days=7')
+      .then((r) => {
+        const cities = r.data.cities || {};
+        const best = {};
+        for (const [city, payload] of Object.entries(cities)) {
+          for (const row of (payload.items || [])) {
+            const price = (row.produceiq?.price ?? row.usda?.price) || 0;
+            if (!best[row.variety] || price > best[row.variety].price) {
+              best[row.variety] = { variety: row.variety, city, price, usda: row.usda, piq: row.produceiq, diff: row.diff, fob: row.fob };
+            }
+          }
+        }
+        setData(Object.values(best).sort((a, b) => b.price - a.price));
+        setLoading(false);
+      })
+      .catch((e) => { setError(e.message); setLoading(false); });
+  }, []);
+
+  return (
+    <div style={{ marginBottom: 40 }}>
+      <SectionTitle>🏆 Highest Prices by Variety — Where to Sell</SectionTitle>
+      {loading && <Spinner />}
+      {error && <p style={{ color: '#dc2626' }}>Error: {error}</p>}
+      {data && (
+        <div style={{ background: '#fff', border: '2px solid #e2e8f0', borderRadius: 12, overflow: 'hidden' }}>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: 'linear-gradient(135deg,#059669,#047857)', color: '#fff' }}>
+                  {['Variety', 'Best Market', 'ProduceIQ', 'USDA', 'Diff', 'FOB Price'].map((h) => (
+                    <th key={h} style={{ padding: '12px 14px', textAlign: h === 'Variety' || h === 'Best Market' ? 'left' : 'center', fontWeight: 600 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {data.map((r, i) => (
+                  <tr key={r.variety} style={{ background: i < 3 ? '#fefce8' : i % 2 === 0 ? '#fff' : '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                    <td style={{ padding: '12px 14px', fontWeight: 700 }}>{r.variety}</td>
+                    <td style={{ padding: '12px 14px', color: '#059669', fontWeight: 600 }}>{r.city}</td>
+                    <td style={{ padding: '12px 14px', textAlign: 'center', fontWeight: 700, color: '#92400e' }}>{r.piq ? money(r.piq.price) : '—'}</td>
+                    <td style={{ padding: '12px 14px', textAlign: 'center', fontWeight: 700, color: '#1e40af' }}>{r.usda ? money(r.usda.price) : '—'}</td>
+                    <td style={{ padding: '12px 14px', textAlign: 'center', color: '#64748b', fontWeight: 600 }}>{r.diff ? pctFmt(r.diff.pct) : '—'}</td>
+                    <td style={{ padding: '12px 14px', textAlign: 'center', fontWeight: 800, color: '#16a34a', fontSize: 15 }}>{money(r.fob)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── 3. 7-Day Price Forecast ──────────────────────────────────────────────────
 
 function SparkLine({ data }) {
-  if (!data || data.length === 0) return <div style={{ height: 60 }} />;
-  const prices = data.map((d) => ({ price: d.price }));
+  if (!data?.length) return null;
   return (
-    <ResponsiveContainer width="100%" height={60}>
-      <LineChart data={prices} margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
-        <Line
-          type="monotone"
-          dataKey="price"
-          stroke="#0d9488"
-          strokeWidth={2}
-          dot={false}
-          isAnimationActive={false}
-        />
+    <ResponsiveContainer width="100%" height={50}>
+      <LineChart data={data.map((d) => ({ v: d.price }))} margin={{ top: 2, right: 2, bottom: 2, left: 2 }}>
+        <Line type="monotone" dataKey="v" stroke="#059669" strokeWidth={2} dot={false} isAnimationActive={false} />
       </LineChart>
     </ResponsiveContainer>
   );
 }
 
-function PriceForecastSection() {
+function PriceForecast7Day({ city }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    const load = () =>
-      axios.get('/api/price_forecast_all?city=All+cities')
-        .then((r) => {
-          const all = r.data.forecasts || [];
-          const ok = all.filter((f) => f.success !== false && f.commodity);
-          setData(ok.length > 0 ? ok : all);
-          setLoading(false);
-          setError(null);
-        })
-        .catch((e) => {
-          if (e.response?.status === 503) {
-            setError('building');
-            setLoading(false);
-            axios.post('/api/trigger_cache_build').catch(() => {});
-            const poll = setInterval(() => {
-              axios.get('/api/price_forecast_all?city=All+cities')
-                .then((r) => {
-                  const all = r.data.forecasts || [];
-                  const ok = all.filter((f) => f.success !== false && f.commodity);
-                  setData(ok.length > 0 ? ok : all);
-                  setLoading(false); setError(null); clearInterval(poll);
-                })
-                .catch(() => {});
-            }, 8000);
-            setTimeout(() => clearInterval(poll), 300000);
-          } else {
-            setError(e.message); setLoading(false);
-          }
-        });
-    load();
-  }, []);
-
-  return (
-    <section style={{ marginBottom: 48 }}>
-      <h2 style={{ fontFamily: 'Inter, sans-serif', fontSize: 18, fontWeight: 600, color: 'var(--color-text)', marginBottom: 16 }}>
-        7-Day Price Forecast
-      </h2>
-      {loading && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
-          {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} height={180} />)}
-        </div>
-      )}
-      {error === 'building' && (
-        <div style={{ background: 'var(--warn-soft)', border: '1px solid oklch(0.7 0.14 80 / 0.3)', borderRadius: 8, padding: '20px 24px', color: 'var(--warn)', fontSize: 14, display: 'flex', alignItems: 'center', gap: 12 }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: 'spin 1s linear infinite', flexShrink: 0 }}><path d="M21 12a9 9 0 11-6.219-8.56"/></svg>
-          <div><strong>Building forecast data…</strong> This runs once and takes 1–2 minutes. The page will update automatically.</div>
-          <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
-        </div>
-      )}
-      {error && error !== 'building' && <ErrorBox message={error} />}
-      {data && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
-          {data.map((item) => {
-            const changePct = item.price_change_pct;
-            const isRising = changePct > 0;
-            const isFalling = changePct < 0;
-            return (
-              <div key={item.commodity} style={{
-                background: 'var(--color-surface)', border: '1px solid var(--color-border)',
-                borderRadius: 8, padding: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                  <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 16, fontWeight: 700, color: 'var(--color-text)' }}>
-                    {item.commodity}
-                  </span>
-                  <TrendBadge badge={item.trend_badge} trend={item.overall_trend} />
-                </div>
-                <div style={{ fontSize: 26, fontWeight: 700, color: '#0d9488', marginBottom: 4 }}>
-                  {fmt(item.current_price)}
-                </div>
-                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: isFalling ? '#16a34a' : isRising ? '#dc2626' : '#64748b' }}>
-                  {isFalling ? '▼' : isRising ? '▲' : '—'} {pct(Math.abs(changePct))} 7-day change
-                </div>
-                <SparkLine data={item.forecasts} />
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </section>
-  );
-}
-
-// ─── Section 2: 6-Week Outlook ───────────────────────────────────────────────
-
-const CustomTooltip6w = ({ active, payload, label }) => {
-  if (!active || !payload || payload.length === 0) return null;
-  const d = payload[0]?.payload || {};
-  return (
-    <div style={{
-      background: 'var(--color-surface)', border: '1px solid var(--color-border)',
-      borderRadius: 8, padding: '10px 14px', fontSize: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-    }}>
-      <div style={{ fontWeight: 700, marginBottom: 4 }}>Week {d.week} — {d.date}</div>
-      <div>Forecast: <strong>{fmt(d.price)}</strong></div>
-      <div>Historical Avg: <strong>{fmt(d.historical_avg)}</strong></div>
-      <div>Confidence: <strong>{d.confidence != null ? `${(d.confidence * 100).toFixed(0)}%` : '—'}</strong></div>
-      <div>Trend: <strong>{d.trend_pct != null ? `${Number(d.trend_pct).toFixed(1)}%` : '—'}</strong></div>
-    </div>
-  );
-};
-
-function LongTermSection() {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [selected, setSelected] = useState(null);
-
-  useEffect(() => {
-    axios.get('/api/price_forecast_long_term_all?city=All+cities')
+    setLoading(true); setData(null); setError(null);
+    axios.get(`/api/price_forecast_all?city=${encodeURIComponent(city)}`)
       .then((r) => {
-        const results = r.data.results || [];
-        setData(results);
-        if (results.length > 0) setSelected(results[0].commodity);
+        const all = r.data.forecasts || [];
+        const ok = all.filter((f) => f.success !== false && f.commodity);
+        setData(ok.length ? ok : all);
         setLoading(false);
       })
       .catch((e) => {
         if (e.response?.status === 503) {
-          setError('building');
+          setError('building'); setLoading(false);
           axios.post('/api/trigger_cache_build').catch(() => {});
           const poll = setInterval(() => {
-            axios.get('/api/price_forecast_long_term_all?city=All+cities')
+            axios.get(`/api/price_forecast_all?city=${encodeURIComponent(city)}`)
               .then((r) => {
-                const results = r.data.results || [];
-                setData(results);
-                if (results.length > 0) setSelected(results[0].commodity);
-                setLoading(false); setError(null); clearInterval(poll);
-              })
-              .catch(() => {});
+                const ok = (r.data.forecasts || []).filter((f) => f.success !== false && f.commodity);
+                setData(ok); setLoading(false); setError(null); clearInterval(poll);
+              }).catch(() => {});
           }, 8000);
-          setTimeout(() => clearInterval(poll), 300000);
-        } else {
-          setError(e.message); setLoading(false);
-        }
+          setTimeout(() => clearInterval(poll), 600000);
+        } else { setError(e.message); setLoading(false); }
       });
-  }, []);
+  }, [city]);
 
-  const item = data?.find((d) => d.commodity === selected);
-  const chartData = item?.forecasts?.map((f) => ({
-    ...f,
-    lower: f.lower,
-    upper: f.upper,
-    band: [f.lower, f.upper],
-  })) || [];
-
-  const lastForecast = item?.forecasts?.at(-1);
+  const trendIcon = (t) => t === 'RISING' ? '📈' : t === 'FALLING' ? '📉' : '➡️';
+  const trendColor = (t) => t === 'RISING' ? '#dc2626' : t === 'FALLING' ? '#22c55e' : '#64748b';
 
   return (
-    <section style={{ marginBottom: 48 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
-        <h2 style={{ fontFamily: 'Inter, sans-serif', fontSize: 18, fontWeight: 600, color: 'var(--color-text)', margin: 0 }}>
-          6-Week Price Outlook
-        </h2>
-        {data && (
-          <select
-            value={selected || ''}
-            onChange={(e) => setSelected(e.target.value)}
-            style={{
-              fontFamily: 'Inter, sans-serif', fontSize: 13, padding: '6px 12px',
-              border: '1px solid var(--color-border)', borderRadius: 6, background: 'var(--color-surface)',
-              color: 'var(--color-text)', cursor: 'pointer',
-            }}
-          >
-            {data.map((d) => (
-              <option key={d.commodity} value={d.commodity}>{d.commodity}</option>
-            ))}
-          </select>
-        )}
-      </div>
-
-      {loading && <SkeletonCard height={340} />}
+    <div style={{ marginBottom: 40 }}>
+      <SectionTitle>📈 7-Day Price Forecast</SectionTitle>
+      {loading && <Spinner />}
       {error === 'building' && (
-        <div style={{ background: 'var(--warn-soft)', border: '1px solid oklch(0.7 0.14 80 / 0.3)', borderRadius: 8, padding: '20px 24px', color: 'var(--warn)', fontSize: 14, display: 'flex', alignItems: 'center', gap: 12 }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: 'spin 1s linear infinite', flexShrink: 0 }}><path d="M21 12a9 9 0 11-6.219-8.56"/></svg>
-          <div><strong>Building forecast data…</strong> This runs once and takes 1–2 minutes. The page will update automatically.</div>
-          <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+        <div style={{ background: '#fefce8', border: '1px solid #fde68a', borderRadius: 10, padding: '18px 22px', color: '#854d0e', fontSize: 14, display: 'flex', gap: 12, alignItems: 'center' }}>
+          <div style={{ width: 18, height: 18, border: '3px solid #fde68a', borderTop: '3px solid #854d0e', borderRadius: '50%', animation: 'spin 1s linear infinite', flexShrink: 0 }} />
+          <div><strong>Building forecast cache…</strong> This takes 5–15 minutes. Will update automatically. You can also click <strong>Rebuild Cache</strong> above.</div>
+          <style>{`@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}`}</style>
         </div>
       )}
-      {error && error !== 'building' && <ErrorBox message={error} />}
-
-      {item && (
-        <div style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 8, padding: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-          {/* Summary row */}
-          <div style={{ display: 'flex', gap: 32, marginBottom: 24, flexWrap: 'wrap' }}>
-            <div>
-              <div style={{ fontSize: 11, color: 'var(--color-text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Current Price</div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: '#0d9488' }}>{fmt(item.current_price)}</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 11, color: 'var(--color-text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>6-Week Projected</div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--color-text)' }}>{fmt(lastForecast?.price)}</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 11, color: 'var(--color-text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>6-Week Change</div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: item.price_change_pct > 0 ? '#dc2626' : '#16a34a' }}>
-                {item.price_change_pct > 0 ? '▲' : item.price_change_pct < 0 ? '▼' : ''} {pct(Math.abs(item.price_change_pct))}
+      {error && error !== 'building' && <p style={{ color: '#dc2626' }}>Error: {error}</p>}
+      {data && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))', gap: 18 }}>
+          {data.map((f) => (
+            <div key={f.commodity} style={{ background: '#fff', border: '2px solid #e2e8f0', borderRadius: 12, padding: 20, transition: 'all .2s' }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#3b82f6'; e.currentTarget.style.boxShadow = '0 8px 20px rgba(59,130,246,.15)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.boxShadow = 'none'; }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <span style={{ fontSize: 15, fontWeight: 700, color: '#1e293b' }}>{f.commodity}</span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <span>{trendIcon(f.overall_trend)}</span>
+                  <Badge type={f.trend_badge || 'info'}>{f.overall_trend}</Badge>
+                </span>
+              </div>
+              <div style={{ fontSize: 28, fontWeight: 800, color: '#059669', marginBottom: 4 }}>{money(f.current_price)}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 12, marginBottom: 12 }}>
+                <div><span style={{ color: '#64748b' }}>Momentum: </span><strong style={{ color: f.momentum_pct >= 0 ? '#dc2626' : '#22c55e' }}>{f.momentum_pct >= 0 ? '+' : ''}{f.momentum_pct?.toFixed(1)}%</strong></div>
+                <div><span style={{ color: '#64748b' }}>Volatility: </span><strong>±{money(f.std_dev)}</strong></div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 3, marginBottom: 8 }}>
+                {(f.forecasts || []).map((d, i) => (
+                  <div key={i} style={{ textAlign: 'center', background: '#f8fafc', borderRadius: 6, padding: '6px 2px', fontSize: 10 }}>
+                    <div style={{ fontWeight: 600, color: '#64748b' }}>{d.day_name?.slice(0, 3)}</div>
+                    <div style={{ fontWeight: 700, color: '#1e293b', fontSize: 11 }}>${d.price?.toFixed(0)}</div>
+                    <div style={{ color: d.trend === 'up' ? '#dc2626' : d.trend === 'down' ? '#22c55e' : '#64748b' }}>
+                      {d.trend === 'up' ? '↑' : d.trend === 'down' ? '↓' : '→'}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <SparkLine data={f.forecasts} />
+              <div style={{ fontSize: 11, color: '#64748b', marginTop: 6 }}>
+                7-day change: <strong style={{ color: trendColor(f.overall_trend) }}>{f.price_change_pct >= 0 ? '+' : ''}{f.price_change_pct?.toFixed(1)}%</strong>
               </div>
             </div>
-            <div>
-              <div style={{ fontSize: 11, color: 'var(--color-text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Avg Confidence</div>
-              <div style={{ marginTop: 4 }}><ConfidencePill value={item.avg_confidence || 0} /></div>
-            </div>
-          </div>
-
-          {/* Chart */}
-          <ResponsiveContainer width="100%" height={280}>
-            <ComposedChart data={chartData} margin={{ top: 8, right: 24, bottom: 8, left: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis
-                dataKey="date"
-                tick={{ fontSize: 11, fill: '#64748b', fontFamily: 'Inter, sans-serif' }}
-                tickLine={false}
-                axisLine={{ stroke: '#e2e8f0' }}
-              />
-              <YAxis
-                tickFormatter={(v) => `$${v}`}
-                tick={{ fontSize: 11, fill: '#64748b', fontFamily: 'Inter, sans-serif' }}
-                tickLine={false}
-                axisLine={false}
-                width={50}
-              />
-              <Tooltip content={<CustomTooltip6w />} />
-              <Area
-                type="monotone"
-                dataKey="upper"
-                stroke="none"
-                fill="#ccfbf1"
-                fillOpacity={0.6}
-                isAnimationActive={false}
-              />
-              <Area
-                type="monotone"
-                dataKey="lower"
-                stroke="none"
-                fill="#f8fafc"
-                fillOpacity={1}
-                isAnimationActive={false}
-              />
-              <Line
-                type="monotone"
-                dataKey="historical_avg"
-                stroke="#94a3b8"
-                strokeWidth={1.5}
-                strokeDasharray="4 3"
-                dot={false}
-                isAnimationActive={false}
-                name="Historical Avg"
-              />
-              <Line
-                type="monotone"
-                dataKey="price"
-                stroke="#0d9488"
-                strokeWidth={2.5}
-                dot={{ r: 3, fill: '#0d9488', strokeWidth: 0 }}
-                isAnimationActive={false}
-                name="Forecast"
-              />
-            </ComposedChart>
-          </ResponsiveContainer>
-
-          {/* Table */}
-          <div style={{ overflowX: 'auto', marginTop: 20 }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, fontFamily: 'Inter, sans-serif' }}>
-              <thead>
-                <tr style={{ borderBottom: '2px solid var(--color-border)' }}>
-                  {['Week', 'Date', 'Forecast', 'Historical Avg', 'Confidence', 'Trend %'].map((h) => (
-                    <th key={h} style={{ textAlign: 'left', padding: '8px 12px', fontSize: 11, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {(item.forecasts || []).map((f, i) => (
-                  <tr key={i} style={{ background: i % 2 === 0 ? 'var(--color-surface)' : 'var(--color-surface-2)', borderBottom: '1px solid var(--color-border)' }}>
-                    <td style={{ padding: '8px 12px', fontWeight: 600 }}>W{f.week}</td>
-                    <td style={{ padding: '8px 12px', color: 'var(--color-text-muted)' }}>{f.date}</td>
-                    <td style={{ padding: '8px 12px', fontWeight: 600, color: '#0d9488' }}>{fmt(f.price)}</td>
-                    <td style={{ padding: '8px 12px' }}>{fmt(f.historical_avg)}</td>
-                    <td style={{ padding: '8px 12px' }}><ConfidencePill value={f.confidence || 0} /></td>
-                    <td style={{ padding: '8px 12px', color: f.trend_pct > 0 ? '#dc2626' : '#16a34a' }}>
-                      {f.trend_pct != null ? `${f.trend_pct > 0 ? '▲' : '▼'} ${Math.abs(f.trend_pct).toFixed(1)}%` : '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          ))}
         </div>
       )}
-    </section>
+    </div>
   );
 }
 
-// ─── Section 3: Live Weather ──────────────────────────────────────────────────
+// ─── 4. 6-Week Hybrid Market Outlook ─────────────────────────────────────────
 
-function WeatherSection() {
+const Tooltip6w = ({ active, payload }) => {
+  if (!active || !payload?.length) return null;
+  const d = payload[0]?.payload || {};
+  return (
+    <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px', fontSize: 12, boxShadow: '0 2px 8px rgba(0,0,0,.1)' }}>
+      <div style={{ fontWeight: 700, marginBottom: 4 }}>Week {d.week} — {d.date}</div>
+      <div>Forecast: <strong>{money(d.price)}</strong> ±{money(d.tolerance)}</div>
+      <div>Historical Avg: <strong>{money(d.historical_avg)}</strong></div>
+      <div>Confidence: <strong>{d.confidence != null ? `${(d.confidence * 100).toFixed(0)}%` : '—'}</strong></div>
+      {d.trend_pct != null && <div>Trend: <strong style={{ color: d.trend_pct >= 0 ? '#dc2626' : '#22c55e' }}>{d.trend_pct >= 0 ? '+' : ''}{d.trend_pct.toFixed(1)}%</strong></div>}
+    </div>
+  );
+};
+
+function LongTermCard({ commodity, city }) {
   const [data, setData] = useState(null);
-  const [regions, setRegions] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true); setData(null);
+    axios.get(`/api/price_forecast_long_term?commodity=${encodeURIComponent(commodity)}&city=${encodeURIComponent(city)}`)
+      .then((r) => { setData(r.data); setLoading(false); })
+      .catch(() => { setData({ success: false, error: 'Failed to load' }); setLoading(false); });
+  }, [commodity, city]);
+
+  if (loading) return (
+    <div style={{ background: '#f8fafc', border: '2px solid #e2e8f0', borderRadius: 12, padding: 20, display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 200 }}>
+      <div style={{ width: 28, height: 28, border: '3px solid #e2e8f0', borderTop: '3px solid #059669', borderRadius: '50%', animation: 'spin2 1s linear infinite' }} />
+      <style>{`@keyframes spin2{from{transform:rotate(0)}to{transform:rotate(360deg)}}`}</style>
+    </div>
+  );
+
+  if (!data?.success) return (
+    <div style={{ background: '#f8fafc', border: '2px solid #e2e8f0', borderRadius: 12, padding: 20 }}>
+      <div style={{ fontWeight: 700, marginBottom: 8 }}>🔮 {commodity}</div>
+      <p style={{ color: '#dc2626', fontSize: 13 }}>{data?.error || 'No current price data available'}</p>
+    </div>
+  );
+
+  const avgVariance = data.avg_variance_from_historical_pct;
+  const chartData = (data.forecasts || []).map((f) => ({ ...f }));
+
+  return (
+    <div style={{ background: '#f8fafc', border: '2px solid #e2e8f0', borderRadius: 12, padding: 20 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <span style={{ fontSize: 15, fontWeight: 700, color: '#1e293b' }}>🔮 {data.commodity}</span>
+        {avgVariance != null && (
+          <Badge type={avgVariance > 20 ? 'danger' : avgVariance > 0 ? 'warning' : 'success'}>
+            {avgVariance > 0 ? '↑' : avgVariance < 0 ? '↓' : '='} {Math.abs(avgVariance).toFixed(0)}% vs Hist
+          </Badge>
+        )}
+      </div>
+
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ fontSize: 12, color: '#64748b' }}>Current Price</div>
+        <div style={{ fontSize: 26, fontWeight: 800, color: '#059669' }}>{money(data.current_price)}</div>
+      </div>
+
+      {/* Mini chart */}
+      {chartData.length > 0 && (
+        <ResponsiveContainer width="100%" height={120}>
+          <ComposedChart data={chartData} margin={{ top: 4, right: 4, bottom: 4, left: 0 }}>
+            <XAxis dataKey="date" tick={{ fontSize: 9, fill: '#94a3b8' }} tickLine={false} axisLine={false} />
+            <YAxis hide domain={['auto', 'auto']} />
+            <Tooltip content={<Tooltip6w />} />
+            <Area type="monotone" dataKey="upper" stroke="none" fill="#ccfbf1" fillOpacity={0.4} isAnimationActive={false} />
+            <Area type="monotone" dataKey="lower" stroke="none" fill="#fff" fillOpacity={1} isAnimationActive={false} />
+            <Line type="monotone" dataKey="historical_avg" stroke="#94a3b8" strokeWidth={1} strokeDasharray="4 2" dot={false} isAnimationActive={false} />
+            <Line type="monotone" dataKey="price" stroke="#059669" strokeWidth={2} dot={{ r: 3, fill: '#059669' }} isAnimationActive={false} />
+          </ComposedChart>
+        </ResponsiveContainer>
+      )}
+
+      {/* Week rows */}
+      <div style={{ marginTop: 12 }}>
+        {(data.forecasts || []).map((w) => (
+          <div key={w.week} style={{ padding: '8px 0', borderBottom: '1px solid #e2e8f0' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <span style={{ fontWeight: 700, color: '#64748b', fontSize: 13 }}>Week {w.week}</span>
+                <span style={{ color: '#94a3b8', fontSize: 11, marginLeft: 8 }}>{w.date}</span>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <span style={{ fontWeight: 800, color: '#059669', fontSize: 14 }}>{money(w.price)}</span>
+                <span style={{ color: '#94a3b8', fontSize: 11 }}> ±{money(w.tolerance)}</span>
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4, fontSize: 11, color: '#64748b', marginTop: 4 }}>
+              {w.trend_pct != null && <div>Trend: <strong style={{ color: w.trend_pct >= 0 ? '#dc2626' : '#22c55e' }}>{w.trend_pct >= 0 ? '+' : ''}{w.trend_pct.toFixed(1)}%</strong></div>}
+              {w.historical_avg != null && <div>Hist: <strong>{money(w.historical_avg)}</strong></div>}
+              {w.variance_from_historical_pct != null && <div>vs Hist: <strong style={{ color: w.variance_from_historical_pct > 0 ? '#dc2626' : '#22c55e' }}>{w.variance_from_historical_pct > 0 ? '+' : ''}{w.variance_from_historical_pct.toFixed(0)}%</strong></div>}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ marginTop: 12, paddingTop: 10, borderTop: '2px solid #e2e8f0', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 12 }}>
+        <div><span style={{ color: '#64748b' }}>Avg Confidence: </span><strong style={{ color: '#059669' }}>{data.avg_confidence ? `${(data.avg_confidence * 100).toFixed(0)}%` : '—'}</strong></div>
+        <div><span style={{ color: '#64748b' }}>Volatility: </span><strong>±{money(data.volatility)}</strong></div>
+      </div>
+      {data.method && <div style={{ marginTop: 8, background: '#f1f5f9', borderRadius: 6, padding: '6px 10px', fontSize: 11, color: '#475569' }}>{data.method}</div>}
+    </div>
+  );
+}
+
+function LongTermOutlook({ city }) {
+  return (
+    <div style={{ marginBottom: 40 }}>
+      <SectionTitle>🔮 6-Week Hybrid Market Outlook</SectionTitle>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(380px,1fr))', gap: 18 }}>
+        {COMMODITIES.map((c) => <LongTermCard key={c} commodity={c} city={city} />)}
+      </div>
+    </div>
+  );
+}
+
+// ─── 5. Seasonal Price Projections ───────────────────────────────────────────
+
+function SeasonalForecast({ city }) {
+  const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    Promise.all([
-      axios.get('/api/live_weather'),
-      axios.get('/api/growing_regions'),
-    ])
-      .then(([w, r]) => {
-        setData(w.data.regions || []);
-        setRegions(r.data.regions || []);
-        setLoading(false);
-      })
+    setLoading(true); setData(null); setError(null);
+    const params = `commodities=${COMMODITIES.join(',')}&city=${encodeURIComponent(city)}&forecastYears=1&source=ProduceIQ`;
+    axios.get(`/api/forecast_line_data?${params}`)
+      .then((r) => { setData(r.data); setLoading(false); })
+      .catch((e) => { setError(e.message); setLoading(false); });
+  }, [city]);
+
+  return (
+    <div style={{ marginBottom: 40 }}>
+      <SectionTitle>🔮 Seasonal Price Projections</SectionTitle>
+      {loading && <Spinner />}
+      {error && <p style={{ color: '#dc2626' }}>Error: {error}</p>}
+      {data?.labels && (
+        <div style={{ background: '#fff', border: '2px solid #e2e8f0', borderRadius: 12, padding: 20, overflowX: 'auto' }}>
+          {city !== 'All cities' && <div style={{ color: '#64748b', fontSize: 13, marginBottom: 10 }}>📍 Showing seasonal forecast for <strong>{city}</strong></div>}
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <thead>
+              <tr>
+                <th style={{ background: 'linear-gradient(135deg,#059669,#047857)', color: '#fff', padding: '10px 12px', textAlign: 'left', fontWeight: 600, minWidth: 120 }}>Commodity</th>
+                {data.labels.map((l) => (
+                  <th key={l} style={{ background: 'linear-gradient(135deg,#059669,#047857)', color: '#fff', padding: '10px 8px', textAlign: 'center', fontWeight: 600, whiteSpace: 'nowrap', fontSize: 11 }}>{l}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {(data.datasets || []).map((ds, i) => (
+                <tr key={ds.label} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                  <td style={{ padding: '8px 12px', fontWeight: 700, color: '#1e293b' }}>{ds.label}</td>
+                  {(ds.data || []).map((price, j) => (
+                    <td key={j} style={{ padding: '8px 8px', textAlign: 'center', fontWeight: 600, color: price > 0 ? '#059669' : '#94a3b8' }}>
+                      {price > 0 ? `$${price.toFixed(2)}` : '—'}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── 6. Regional Weather & Growing Conditions ────────────────────────────────
+
+const WEATHER_EMOJI = { '01': '☀️', '02': '⛅', '03': '☁️', '04': '☁️', '09': '🌧️', '10': '🌦️', '11': '⛈️', '13': '❄️', '50': '🌫️' };
+const weatherEmoji = (icon) => { if (!icon) return '🌡️'; const c = icon.replace('d', '').replace('n', '').padStart(2, '0'); return WEATHER_EMOJI[c] || '🌡️'; };
+
+const STATUS_COLORS = {
+  optimal:  { bg: 'linear-gradient(135deg,#f0fdf4,#dcfce7)', border: '#22c55e' },
+  warning:  { bg: 'linear-gradient(135deg,#fffbeb,#fef3c7)', border: '#f59e0b' },
+  critical: { bg: 'linear-gradient(135deg,#fef2f2,#fee2e2)', border: '#ef4444' },
+  caution:  { bg: 'linear-gradient(135deg,#fff7ed,#ffedd5)', border: '#f97316' },
+};
+
+function WeatherCards() {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    axios.get('/api/live_weather')
+      .then((r) => { setData(r.data.regions || []); setLoading(false); })
       .catch((e) => { setError(e.message); setLoading(false); });
   }, []);
 
-  const getCrops = (regionKey) => {
-    const r = regions?.find((reg) => reg.key === regionKey);
-    return r?.crops || [];
-  };
+  const allFailed = data?.every((r) => !r.weather?.temp);
 
   return (
-    <section style={{ marginBottom: 48 }}>
-      <h2 style={{ fontFamily: 'Inter, sans-serif', fontSize: 18, fontWeight: 600, color: 'var(--color-text)', marginBottom: 16 }}>
-        Live Weather by Growing Region
-      </h2>
-      {loading && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 16 }}>
-          {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} height={180} />)}
+    <div style={{ marginBottom: 40 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, borderBottom: '3px solid #059669', paddingBottom: 10, marginBottom: 20 }}>
+        <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1e293b', margin: 0 }}>☁️ Regional Weather &amp; Growing Conditions</h2>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#22c55e', fontWeight: 700 }}>
+          <span style={{ width: 8, height: 8, background: '#22c55e', borderRadius: '50%', animation: 'pulse2 1.5s infinite' }} />
+          LIVE
+          <style>{`@keyframes pulse2{0%,100%{opacity:1}50%{opacity:.5}}`}</style>
+        </span>
+      </div>
+      {allFailed && (
+        <div style={{ background: '#fefce8', border: '1px solid #fde68a', borderRadius: 8, padding: '12px 16px', fontSize: 13, color: '#92400e', marginBottom: 16 }}>
+          ⚠️ Live weather requires <code>OPENWEATHER_API_KEY</code> in environment. Set it in <code>.env</code> and restart gunicorn.
         </div>
       )}
-      {error && <ErrorBox message={error} />}
+      {loading && <Spinner />}
+      {error && <p style={{ color: '#dc2626' }}>Error: {error}</p>}
       {data && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 18 }}>
           {data.map((region) => {
             const w = region.weather || {};
-            const analysis = region.analysis || {};
-            const crops = getCrops(region.key);
+            const a = region.analysis || {};
+            const sc = STATUS_COLORS[(a.status || 'optimal').toLowerCase()] || STATUS_COLORS.optimal;
             const hasWeather = w.temp != null;
-            const firstAlert = analysis.alerts?.[0];
             return (
-              <div key={region.key} style={{
-                background: 'var(--color-surface)', border: '1px solid var(--color-border)',
-                borderRadius: 8, padding: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+              <div key={region.key} style={{ background: sc.bg, borderLeft: `4px solid ${sc.border}`, borderRadius: 12, padding: 20, ...(a.status === 'critical' ? { animation: 'palert 2s infinite' } : {}) }}>
+                <style>{`@keyframes palert{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.4)}50%{box-shadow:0 0 0 10px rgba(239,68,68,0)}}`}</style>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                   <div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-text)' }}>{region.name}</div>
-                    <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{region.city}</div>
+                    <div style={{ fontWeight: 700, color: '#1e293b', fontSize: 14 }}>{region.name}</div>
+                    <div style={{ color: '#64748b', fontSize: 12 }}>{region.city}</div>
                   </div>
-                  <StatusBadge status={analysis.status} />
+                  {hasWeather && <img src={`https://openweathermap.org/img/wn/${w.weather_icon}@2x.png`} alt={w.weather_desc} style={{ width: 52, height: 52 }} />}
                 </div>
-
                 {hasWeather ? (
                   <>
-                    <div style={{ fontSize: 32, fontWeight: 700, color: 'var(--color-text)', marginBottom: 2 }}>
-                      {Math.round(w.temp)}°F
-                    </div>
-                    <div style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 10, textTransform: 'capitalize' }}>
-                      {w.weather_desc || w.weather_main || '—'}
-                    </div>
-                    <div style={{ display: 'flex', gap: 16, fontSize: 12, color: 'var(--color-text-muted)', marginBottom: firstAlert ? 10 : 0 }}>
-                      <span>Humidity: <strong style={{ color: 'var(--color-text)' }}>{w.humidity}%</strong></span>
-                      <span>Wind: <strong style={{ color: 'var(--color-text)' }}>{w.wind_speed} mph</strong></span>
+                    <div style={{ fontSize: 32, fontWeight: 800, color: '#1e40af', margin: '6px 0' }}>{Math.round(w.temp)}°F</div>
+                    <p style={{ color: '#64748b', textTransform: 'capitalize', fontSize: 13, marginBottom: 10 }}>{w.weather_desc}</p>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: 12, color: '#475569', marginBottom: 8 }}>
+                      <span>💧 Humidity: <strong>{w.humidity}%</strong></span>
+                      <span>💨 Wind: <strong>{w.wind_speed} mph</strong></span>
+                      <span>☁️ Clouds: <strong>{w.clouds}%</strong></span>
+                      <span>🌡️ Feels: <strong>{Math.round(w.feels_like)}°F</strong></span>
                     </div>
                   </>
                 ) : (
-                  <div style={{ fontSize: 32, fontWeight: 700, color: '#94a3b8', marginBottom: 10 }}>—</div>
+                  <div style={{ fontSize: 28, fontWeight: 700, color: '#94a3b8', margin: '10px 0' }}>—</div>
                 )}
-
-                {firstAlert && (
-                  <div style={{
-                    fontSize: 11, color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a',
-                    borderRadius: 4, padding: '4px 8px', marginBottom: 10,
-                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                  }}>
-                    {firstAlert.message}
+                {(a.alerts || []).slice(0, 2).map((alert, i) => (
+                  <div key={i} style={{ background: alert.type === 'critical' ? '#fee2e2' : '#fef3c7', borderLeft: `4px solid ${alert.type === 'critical' ? '#dc2626' : '#f59e0b'}`, padding: '8px 10px', borderRadius: 6, fontSize: 11, marginBottom: 4 }}>
+                    {alert.icon} {alert.message}
                   </div>
-                )}
-
-                {crops.length > 0 && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 8 }}>
-                    {crops.slice(0, 4).map((crop) => (
-                      <span key={crop} style={{
-                        background: '#f0fdfa', color: '#0d9488', border: '1px solid #ccfbf1',
-                        borderRadius: 999, fontSize: 10, fontWeight: 600, padding: '2px 7px',
-                      }}>
-                        {crop}
-                      </span>
-                    ))}
-                    {crops.length > 4 && (
-                      <span style={{ background: '#f1f5f9', color: '#64748b', borderRadius: 999, fontSize: 10, fontWeight: 600, padding: '2px 7px' }}>
-                        +{crops.length - 4}
-                      </span>
-                    )}
-                  </div>
-                )}
+                ))}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 10 }}>
+                  {(region.crops || []).map((crop) => (
+                    <span key={crop} style={{ background: '#e0e7ff', color: '#3730a3', padding: '2px 8px', borderRadius: 12, fontSize: 10, fontWeight: 600 }}>{crop}</span>
+                  ))}
+                </div>
               </div>
             );
           })}
         </div>
       )}
-    </section>
+    </div>
   );
 }
 
-// ─── Section 4: Growing Conditions Reference ─────────────────────────────────
+// ─── 7. 7-Day Weather Forecast ────────────────────────────────────────────────
 
-function GrowingConditionsSection() {
+function WeatherForecast7Day() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    axios.get('/api/growing_conditions')
-      .then((r) => { setData(r.data.conditions || {}); setLoading(false); })
-      .catch((e) => { setError(e.message); setLoading(false); });
+    axios.get('/api/weather_forecast_7day')
+      .then((r) => { setData(r.data.regions || []); setLoading(false); })
+      .catch((e) => {
+        if (e.response?.status === 503) {
+          setError('Cache not ready. Rebuild cache to enable 7-day weather forecast.');
+        } else {
+          setError(e.message);
+        }
+        setLoading(false);
+      });
   }, []);
 
-  const rows = data ? Object.entries(data) : [];
+  const growingColor = (s) => s === 'optimal' ? '#22c55e' : s === 'warning' ? '#f59e0b' : '#ef4444';
 
   return (
-    <section style={{ marginBottom: 48 }}>
-      <h2 style={{ fontFamily: 'Inter, sans-serif', fontSize: 18, fontWeight: 600, color: 'var(--color-text)', marginBottom: 16 }}>
-        Growing Conditions Reference
-      </h2>
-      {loading && <SkeletonCard height={200} />}
-      {error && <ErrorBox message={error} />}
+    <div style={{ marginBottom: 40 }}>
+      <SectionTitle>🌤️ 7-Day Weather Forecast</SectionTitle>
+      {loading && <Spinner />}
+      {error && <div style={{ background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 8, padding: '12px 16px', fontSize: 13, color: '#92400e' }}>ℹ️ {error}</div>}
       {data && (
-        <div style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 8, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, fontFamily: 'Inter, sans-serif' }}>
-              <thead>
-                <tr style={{ background: 'var(--color-surface-2)', borderBottom: '2px solid var(--color-border)' }}>
-                  {['Variety', 'Min Temp (°F)', 'Max Temp (°F)', 'Min Humidity (%)', 'Max Humidity (%)'].map((h) => (
-                    <th key={h} style={{ textAlign: 'left', padding: '10px 16px', fontSize: 11, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>{h}</th>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(340px,1fr))', gap: 18 }}>
+          {data.map((region) => {
+            const f = region.forecast;
+            if (!f?.success) return (
+              <div key={region.key} style={{ background: '#fff', border: '2px solid #e2e8f0', borderRadius: 12, padding: 20 }}>
+                <div style={{ fontWeight: 700, marginBottom: 6 }}>{region.name}</div>
+                <p style={{ color: '#dc2626', fontSize: 13 }}>Forecast unavailable</p>
+              </div>
+            );
+            return (
+              <div key={region.key} style={{ background: '#fff', border: '2px solid #e2e8f0', borderRadius: 12, padding: 20 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <div style={{ fontWeight: 700, color: '#1e293b', fontSize: 14 }}>{region.name}</div>
+                  <span style={{ fontSize: 11, color: '#94a3b8' }}>{f.city}, {f.country}</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 4 }}>
+                  {(f.forecasts || []).slice(0, 7).map((day, i) => (
+                    <div key={i} style={{ textAlign: 'center', padding: '8px 4px', background: '#f8fafc', borderRadius: 8, borderBottom: `3px solid ${growingColor(day.growing_status)}` }}>
+                      <div style={{ fontWeight: 600, color: '#64748b', fontSize: 10 }}>{day.day_name?.slice(0, 3)}</div>
+                      <img src={`https://openweathermap.org/img/wn/${day.icon}.png`} alt={day.condition} style={{ width: 32 }} />
+                      <div style={{ fontWeight: 700, fontSize: 12 }}>{Math.round(day.temp_high)}°</div>
+                      <div style={{ color: '#94a3b8', fontSize: 10 }}>{Math.round(day.temp_low)}°</div>
+                      <div style={{ fontSize: 9, color: '#64748b' }}>💧{day.humidity}%</div>
+                    </div>
                   ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map(([variety, c], i) => (
-                  <tr key={variety} style={{ background: i % 2 === 0 ? 'var(--color-surface)' : 'var(--color-surface-2)', borderBottom: '1px solid var(--color-border)' }}>
-                    <td style={{ padding: '10px 16px', fontWeight: 600, color: 'var(--color-text)' }}>{variety}</td>
-                    <td style={{ padding: '10px 16px', color: 'var(--color-text-muted)' }}>{c.temp_min ?? '—'}</td>
-                    <td style={{ padding: '10px 16px', color: 'var(--color-text-muted)' }}>{c.temp_max ?? '—'}</td>
-                    <td style={{ padding: '10px 16px', color: 'var(--color-text-muted)' }}>{c.humidity_min ?? '—'}</td>
-                    <td style={{ padding: '10px 16px', color: 'var(--color-text-muted)' }}>{c.humidity_max ?? '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 12 }}>
+                  {(region.crops || []).map((crop) => <span key={crop} style={{ background: '#e0e7ff', color: '#3730a3', padding: '2px 8px', borderRadius: 12, fontSize: 10, fontWeight: 600 }}>{crop}</span>)}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
-    </section>
-  );
-}
-
-// ─── Header area with Refresh Data ───────────────────────────────────────────
-
-function DashboardHeader() {
-  const [refreshing, setRefreshing] = useState(false);
-  const [cacheStatus, setCacheStatus] = useState(null);
-  const [pollTimer, setPollTimer] = useState(null);
-
-  const stopPolling = useCallback(() => {
-    setPollTimer((t) => { if (t) clearInterval(t); return null; });
-  }, []);
-
-  const pollStatus = useCallback(() => {
-    axios.get('/api/cache_build_status')
-      .then((r) => {
-        const s = r.data;
-        setCacheStatus(s);
-        if (!s.running) {
-          setRefreshing(false);
-          stopPolling();
-        }
-      })
-      .catch(() => {
-        setRefreshing(false);
-        stopPolling();
-      });
-  }, [stopPolling]);
-
-  const handleRefresh = () => {
-    if (refreshing) return;
-    setRefreshing(true);
-    axios.post('/api/trigger_cache_build')
-      .then(() => {
-        const t = setInterval(pollStatus, 5000);
-        setPollTimer(t);
-        pollStatus();
-      })
-      .catch((e) => {
-        setRefreshing(false);
-      });
-  };
-
-  useEffect(() => {
-    axios.get('/api/cache_build_status')
-      .then((r) => setCacheStatus(r.data))
-      .catch(() => {});
-    return () => stopPolling();
-  }, [stopPolling]);
-
-  const lastUpdated = cacheStatus?.cache_last_updated;
-
-  return (
-    <div style={{
-      display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
-      marginBottom: 32, flexWrap: 'wrap', gap: 12,
-    }}>
-      <div>
-        <h1 style={{ fontFamily: 'Inter, sans-serif', fontSize: 24, fontWeight: 700, color: 'var(--color-text)', margin: 0, marginBottom: 4 }}>
-          Market Intelligence Dashboard
-        </h1>
-        <p style={{ fontSize: 14, color: 'var(--color-text-muted)', margin: 0 }}>
-          Real-time prices, forecasts &amp; growing conditions
-        </p>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-        <button
-          onClick={handleRefresh}
-          disabled={refreshing}
-          style={{
-            fontFamily: 'Inter, sans-serif', fontSize: 13, fontWeight: 600,
-            background: refreshing ? '#f1f5f9' : '#0d9488',
-            color: refreshing ? '#64748b' : '#ffffff',
-            border: 'none', borderRadius: 7, padding: '9px 18px',
-            cursor: refreshing ? 'not-allowed' : 'pointer',
-            display: 'flex', alignItems: 'center', gap: 8,
-            transition: 'background 0.15s ease',
-          }}
-        >
-          {refreshing ? (
-            <>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
-                style={{ animation: 'spin 0.8s linear infinite' }}>
-                <path d="M21 12a9 9 0 11-6.219-8.56" />
-              </svg>
-              Refreshing...
-            </>
-          ) : (
-            <>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <path d="M1 4v6h6M23 20v-6h-6" />
-                <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15" />
-              </svg>
-              Refresh Data
-            </>
-          )}
-        </button>
-        {lastUpdated && (
-          <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
-            Last updated: {new Date(lastUpdated).toLocaleString()}
-          </span>
-        )}
-      </div>
-      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }
 
-// ─── Main page ────────────────────────────────────────────────────────────────
+// ─── 8. Growing Conditions Reference ─────────────────────────────────────────
+
+function GrowingConditions() {
+  const [data, setData] = useState(null);
+  useEffect(() => { axios.get('/api/growing_conditions').then((r) => setData(r.data.conditions || {})).catch(() => {}); }, []);
+  if (!data) return null;
+  return (
+    <div style={{ marginBottom: 40 }}>
+      <SectionTitle>🌱 Growing Conditions Reference</SectionTitle>
+      <div style={{ background: '#fff', border: '2px solid #e2e8f0', borderRadius: 12, overflow: 'hidden' }}>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: 'linear-gradient(135deg,#059669,#047857)', color: '#fff' }}>
+                {['Variety', 'Min Temp (°F)', 'Max Temp (°F)', 'Min Humidity (%)', 'Max Humidity (%)'].map((h) => (
+                  <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {Object.entries(data).map(([v, c], i) => (
+                <tr key={v} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                  <td style={{ padding: '10px 14px', fontWeight: 700 }}>{v}</td>
+                  <td style={{ padding: '10px 14px', color: '#64748b' }}>{c.temp_min ?? '—'}</td>
+                  <td style={{ padding: '10px 14px', color: '#64748b' }}>{c.temp_max ?? '—'}</td>
+                  <td style={{ padding: '10px 14px', color: '#64748b' }}>{c.humidity_min ?? '—'}</td>
+                  <td style={{ padding: '10px 14px', color: '#64748b' }}>{c.humidity_max ?? '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Dashboard ───────────────────────────────────────────────────────────
 
 export default function NewDashboard() {
+  const [city7Day, setCity7Day] = useState('All cities');
+  const [city6Week, setCity6Week] = useState('All cities');
+  const [citySeasonal, setCitySeasonal] = useState('All cities');
+  const [status, setStatus] = useState('');
+  const [statusType, setStatusType] = useState('');
+  const [rebuilding, setRebuilding] = useState(false);
+  const pollRef = useRef(null);
+
+  const setMsg = (msg, type = '') => { setStatus(msg); setStatusType(type); };
+
+  const rebuild = async () => {
+    if (rebuilding) return;
+    setRebuilding(true);
+    setMsg('⏳ Triggering cache rebuild…');
+    try {
+      await axios.post('/api/trigger_cache_build');
+      setMsg('⏳ Cache build started — polling for completion…');
+      const start = Date.now();
+      pollRef.current = setInterval(async () => {
+        try {
+          const r = await axios.get('/api/cache_build_status');
+          const s = r.data;
+          if (!s.running && s.finished) {
+            clearInterval(pollRef.current);
+            setRebuilding(false);
+            setMsg('✅ Cache rebuilt successfully! Refresh the page to see updated forecasts.', 'success');
+          } else if (s.running) {
+            const elapsed = Math.round((Date.now() - start) / 1000);
+            setMsg(`⏳ Building… ${s.progress?.city || ''} (${elapsed}s elapsed)`);
+          }
+        } catch { /* keep polling */ }
+      }, 4000);
+      setTimeout(() => { clearInterval(pollRef.current); setRebuilding(false); setMsg('⚠️ Build timed out.', 'error'); }, 600000);
+    } catch (e) {
+      setRebuilding(false);
+      setMsg(`❌ ${e.response?.data?.message || e.message}`, 'error');
+    }
+  };
+
+  useEffect(() => () => clearInterval(pollRef.current), []);
+
+  const statusBg = { success: '#d1fae5', error: '#fee2e2', '': '#fef3c7' }[statusType] || '#fef3c7';
+  const statusColor = { success: '#065f46', error: '#991b1b', '': '#92400e' }[statusType] || '#92400e';
+
   return (
-    <>
-      <DashboardHeader />
-      <PriceForecastSection />
-      <LongTermSection />
-      <WeatherSection />
-      <GrowingConditionsSection />
-    </>
+    <div style={{ fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif' }}>
+      {/* Header */}
+      <div style={{ background: 'linear-gradient(135deg,#059669,#047857)', color: '#fff', padding: '24px 28px', borderRadius: 12, marginBottom: 0, textAlign: 'center' }}>
+        <h1 style={{ fontSize: 26, fontWeight: 800, margin: '0 0 6px' }}>🌶️ ARK FOODS MARKET INTELLIGENCE</h1>
+        <p style={{ opacity: 0.9, fontSize: 14, margin: 0 }}>{new Date().toLocaleString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+      </div>
+
+      {/* Controls */}
+      <div style={{ background: '#f8fafc', padding: '16px 20px', display: 'flex', justifyContent: 'center', gap: 12, flexWrap: 'wrap', borderBottom: '3px solid #e2e8f0', marginBottom: 0 }}>
+        {[
+          { label: '⚙️ REBUILD CACHE', action: rebuild, disabled: rebuilding, color: '#3b82f6' },
+          { label: '🔄 UPDATE ALL DATA', action: () => window.location.reload(), color: '#059669' },
+        ].map(({ label, action, disabled, color }) => (
+          <button key={label} onClick={action} disabled={disabled}
+            style={{ padding: '10px 20px', background: color, color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1, transition: 'all .2s' }}>
+            {disabled && label.includes('REBUILD') ? '⏳ BUILDING...' : label}
+          </button>
+        ))}
+      </div>
+
+      {/* Status bar */}
+      {status && (
+        <div style={{ background: statusBg, color: statusColor, padding: '12px 20px', textAlign: 'center', fontWeight: 600, fontSize: 14 }}>
+          {status}
+        </div>
+      )}
+
+      {/* Content */}
+      <div style={{ padding: '28px 20px', maxWidth: 1600, margin: '0 auto' }}>
+        <PricingMatrix />
+        <HighestPrices />
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, borderBottom: '3px solid #059669', paddingBottom: 10 }}>
+          <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1e293b', margin: 0 }}>📈 7-Day Price Forecast</h2>
+          <CitySelector value={city7Day} onChange={setCity7Day} />
+        </div>
+        <PriceForecast7Day city={city7Day} />
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, borderBottom: '3px solid #059669', paddingBottom: 10 }}>
+          <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1e293b', margin: 0 }}>🔮 6-Week Hybrid Market Outlook</h2>
+          <CitySelector value={city6Week} onChange={setCity6Week} />
+        </div>
+        <LongTermOutlook city={city6Week} />
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, borderBottom: '3px solid #059669', paddingBottom: 10 }}>
+          <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1e293b', margin: 0 }}>📊 Seasonal Price Projections</h2>
+          <CitySelector value={citySeasonal} onChange={setCitySeasonal} />
+        </div>
+        <SeasonalForecast city={citySeasonal} />
+
+        <WeatherCards />
+        <WeatherForecast7Day />
+        <GrowingConditions />
+      </div>
+    </div>
   );
 }
