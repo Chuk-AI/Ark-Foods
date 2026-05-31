@@ -55,6 +55,7 @@
   --color-primary-dark: oklch(0.52 0.13 190);
   --color-bg: oklch(0.99 0.003 250);
   --color-surface: #ffffff;
+  --color-surface-2: oklch(0.975 0.004 250);
   --color-border: oklch(0.92 0.005 250);
   --color-text: oklch(0.22 0.01 260);
   --color-text-muted: oklch(0.6 0.008 260);

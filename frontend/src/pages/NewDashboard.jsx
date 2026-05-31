@@ -619,14 +619,12 @@ function DashboardHeader() {
 
 export default function NewDashboard() {
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--color-bg)', fontFamily: 'Inter, sans-serif' }}>
-      <main style={{ maxWidth: 1280, margin: '0 auto', padding: '32px 24px' }}>
-        <DashboardHeader />
-        <PriceForecastSection />
-        <LongTermSection />
-        <WeatherSection />
-        <GrowingConditionsSection />
-      </main>
-    </div>
+    <>
+      <DashboardHeader />
+      <PriceForecastSection />
+      <LongTermSection />
+      <WeatherSection />
+      <GrowingConditionsSection />
+    </>
   );
 }
