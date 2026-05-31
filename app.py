@@ -6822,6 +6822,93 @@ def api_forecast_diagnostics():
     })
 
 
+@app.route("/api/test_single_forecast", methods=["GET"])
+def api_test_single_forecast():
+    """Debug: run calculate_price_forecast for one commodity and return full trace."""
+    commodity = request.args.get("commodity", "Jalapeno")
+    city = request.args.get("city", "All cities")
+
+    norm = normalize_commodity(commodity)
+    variants = {norm}
+    if norm == "Cubanelle":
+        variants.add("Cubanelles")
+
+    # Step 1: what does _get_combined_current_price see?
+    today = datetime.now().date()
+    from datetime import timezone as _tz
+    raw_latest = (
+        db.session.query(PriceData.year, PriceData.day, PriceData.source, PriceData.city_name, PriceData.price)
+        .filter(
+            PriceData.commodity.in_(sorted(variants)),
+            PriceData.price > 0,
+        )
+        .order_by(PriceData.year.desc(), PriceData.day.desc())
+        .limit(5)
+        .all()
+    )
+    raw_rows = [{"year": r.year, "day": r.day, "source": r.source, "city": r.city_name, "price": float(r.price)} for r in raw_latest]
+
+    usda_piq_latest = (
+        db.session.query(PriceData.year, PriceData.day, PriceData.source, PriceData.city_name, PriceData.price)
+        .filter(
+            PriceData.commodity.in_(sorted(variants)),
+            PriceData.price > 0,
+            PriceData.source.in_(["ProduceIQ", "USDA"]),
+        )
+        .order_by(PriceData.year.desc(), PriceData.day.desc())
+        .limit(5)
+        .all()
+    )
+    piq_rows = [{"year": r.year, "day": r.day, "source": r.source, "city": r.city_name, "price": float(r.price)} for r in usda_piq_latest]
+
+    current_price = _get_combined_current_price(norm, city)
+
+    # Step 2: count daily rows for the historical query
+    now = datetime.now()
+    current_year = now.year
+    current_day = get_day_of_year(now)
+    min_day = max(current_day - 30, 1)
+
+    daily_count_piq = (
+        db.session.query(func.count())
+        .filter(
+            PriceData.commodity.in_(sorted(variants)),
+            PriceData.source.in_(["ProduceIQ", "USDA"]),
+            PriceData.price > 0,
+            PriceData.year == current_year,
+            PriceData.day >= min_day,
+        )
+        .scalar()
+    )
+    daily_count_all = (
+        db.session.query(func.count())
+        .filter(
+            PriceData.commodity.in_(sorted(variants)),
+            PriceData.source.in_(["ProduceIQ", "USDA", "Historical"]),
+            PriceData.price > 0,
+            PriceData.year >= current_year - 1,
+        )
+        .scalar()
+    )
+
+    # Step 3: run the full forecast
+    result = calculate_price_forecast(norm, city)
+
+    return jsonify({
+        "input": {"commodity": commodity, "normalized": norm, "city": city},
+        "today": today.isoformat(),
+        "current_year": current_year,
+        "current_day": current_day,
+        "min_day_for_30d": min_day,
+        "latest_5_rows_any_source": raw_rows,
+        "latest_5_rows_piq_usda_only": piq_rows,
+        "current_price_result": current_price,
+        "daily_count_piq_usda_this_year_30d": daily_count_piq,
+        "daily_count_all_sources_last_2yr": daily_count_all,
+        "forecast_result": result,
+    })
+
+
 # Run the app
 if __name__ == "__main__":
     app.run(debug=True)

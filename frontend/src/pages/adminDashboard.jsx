@@ -1295,6 +1295,8 @@ function CacheManager() {
   const [polling, setPolling] = useState(false);
   const [diag, setDiag] = useState(null);
   const [diagLoading, setDiagLoading] = useState(false);
+  const [testResult, setTestResult] = useState(null);
+  const [testLoading, setTestLoading] = useState(false);
 
   const token = () => localStorage.getItem("authToken");
 
@@ -1304,6 +1306,18 @@ function CacheManager() {
       setStatus(r.data);
       return r.data;
     } catch { return null; }
+  };
+
+  const runTest = async (commodity = "Jalapeno") => {
+    setTestLoading(true);
+    try {
+      const r = await axios.get(`/api/test_single_forecast?commodity=${commodity}&city=All+cities`, { headers: { Authorization: `Bearer ${token()}` } });
+      setTestResult(r.data);
+    } catch (e) {
+      setTestResult({ error: e.message });
+    } finally {
+      setTestLoading(false);
+    }
   };
 
   const fetchDiag = async () => {
