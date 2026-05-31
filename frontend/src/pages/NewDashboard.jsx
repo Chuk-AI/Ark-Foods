@@ -206,7 +206,7 @@ function LongTermSection() {
     band: [f.lower, f.upper],
   })) || [];
 
-  const lastForecast = item?.forecasts?.[item.forecasts.length - 1];
+  const lastForecast = item?.forecasts?.at(-1);
 
   return (
     <section style={{ marginBottom: 48 }}>
@@ -325,7 +325,7 @@ function LongTermSection() {
                 </tr>
               </thead>
               <tbody>
-                {item.forecasts.map((f, i) => (
+                {(item.forecasts || []).map((f, i) => (
                   <tr key={i} style={{ background: i % 2 === 0 ? 'var(--color-surface)' : 'var(--color-surface-2)', borderBottom: '1px solid var(--color-border)' }}>
                     <td style={{ padding: '8px 12px', fontWeight: 600 }}>W{f.week}</td>
                     <td style={{ padding: '8px 12px', color: 'var(--color-text-muted)' }}>{f.date}</td>
