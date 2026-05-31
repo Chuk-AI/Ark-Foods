@@ -17,20 +17,25 @@ import {
 const fmt = (v) => (v != null ? `$${Number(v).toFixed(2)}` : '—');
 const pct = (v) => (v != null ? `${Number(v).toFixed(1)}%` : '—');
 
-function TrendBadge({ badge }) {
+function TrendBadge({ badge, trend }) {
+  // backend sends trend_badge="danger/success/warning" and overall_trend="RISING/FALLING/STABLE"
+  const label = trend || badge || '';
   const map = {
     RISING:  { bg: '#fee2e2', color: '#dc2626' },
     FALLING: { bg: '#dcfce7', color: '#16a34a' },
     STABLE:  { bg: '#fef9c3', color: '#ca8a04' },
+    danger:  { bg: '#fee2e2', color: '#dc2626' },
+    success: { bg: '#dcfce7', color: '#16a34a' },
+    warning: { bg: '#fef9c3', color: '#ca8a04' },
   };
-  const s = map[badge] || { bg: '#f1f5f9', color: '#64748b' };
+  const s = map[label] || { bg: '#f1f5f9', color: '#64748b' };
   return (
     <span style={{
       background: s.bg, color: s.color,
       padding: '2px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700,
       letterSpacing: '0.04em', whiteSpace: 'nowrap',
     }}>
-      {badge || 'UNKNOWN'}
+      {label || 'UNKNOWN'}
     </span>
   );
 }
@@ -113,22 +118,36 @@ function PriceForecastSection() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    axios.get('/api/price_forecast_all?city=All+cities')
-      .then((r) => { setData(r.data.forecasts || []); setLoading(false); })
-      .catch((e) => {
-        if (e.response?.status === 503) {
-          setError('building');
-          axios.post('/api/trigger_cache_build').catch(() => {});
-          const poll = setInterval(() => {
-            axios.get('/api/price_forecast_all?city=All+cities')
-              .then((r) => { setData(r.data.forecasts || []); setLoading(false); setError(null); clearInterval(poll); })
-              .catch(() => {});
-          }, 8000);
-          setTimeout(() => clearInterval(poll), 300000);
-        } else {
-          setError(e.message); setLoading(false);
-        }
-      });
+    const load = () =>
+      axios.get('/api/price_forecast_all?city=All+cities')
+        .then((r) => {
+          const all = r.data.forecasts || [];
+          const ok = all.filter((f) => f.success !== false && f.commodity);
+          setData(ok.length > 0 ? ok : all);
+          setLoading(false);
+          setError(null);
+        })
+        .catch((e) => {
+          if (e.response?.status === 503) {
+            setError('building');
+            setLoading(false);
+            axios.post('/api/trigger_cache_build').catch(() => {});
+            const poll = setInterval(() => {
+              axios.get('/api/price_forecast_all?city=All+cities')
+                .then((r) => {
+                  const all = r.data.forecasts || [];
+                  const ok = all.filter((f) => f.success !== false && f.commodity);
+                  setData(ok.length > 0 ? ok : all);
+                  setLoading(false); setError(null); clearInterval(poll);
+                })
+                .catch(() => {});
+            }, 8000);
+            setTimeout(() => clearInterval(poll), 300000);
+          } else {
+            setError(e.message); setLoading(false);
+          }
+        });
+    load();
   }, []);
 
   return (
@@ -164,7 +183,7 @@ function PriceForecastSection() {
                   <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 16, fontWeight: 700, color: 'var(--color-text)' }}>
                     {item.commodity}
                   </span>
-                  <TrendBadge badge={item.trend_badge} />
+                  <TrendBadge badge={item.trend_badge} trend={item.overall_trend} />
                 </div>
                 <div style={{ fontSize: 26, fontWeight: 700, color: '#0d9488', marginBottom: 4 }}>
                   {fmt(item.current_price)}

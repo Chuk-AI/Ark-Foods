@@ -6695,33 +6695,40 @@ def trigger_cache_build():
         app._cache_build_error = None
         app._cache_build_started = datetime.now().isoformat()
         app._cache_build_finished = None
-        app._cache_build_progress = {"current": 0, "total": 0, "city": ""}
-        try:
-            from scheduler_service import CITIES_TO_CACHE, build_all_caches
-            app._cache_build_progress["total"] = len(CITIES_TO_CACHE)
-            # Patch scheduler_service to report progress back
-            import scheduler_service as _ss
-            original = _ss.build_combined_forecasts_cache if hasattr(_ss, "build_combined_forecasts_cache") else None
+        app._cache_build_progress = {"current": 0, "total": 0, "city": "starting…"}
 
-            from historical_trend_forecasting import build_combined_forecasts_cache as _bcfc
-            from app import db as _db, cache_set as _cs, normalize_commodity as _nc
+        # Push ONE app context for the entire build — never push/pop inside the loop
+        ctx = app.app_context()
+        ctx.push()
+        try:
+            from scheduler_service import CITIES_TO_CACHE
+            from historical_trend_forecasting import build_combined_forecasts_cache
+
+            total = len(CITIES_TO_CACHE)
+            app._cache_build_progress["total"] = total
 
             for i, city in enumerate(CITIES_TO_CACHE, 1):
-                app._cache_build_progress = {"current": i, "total": len(CITIES_TO_CACHE), "city": city}
-                app.logger.info(f"Cache build [{i}/{len(CITIES_TO_CACHE)}]: {city}")
+                app._cache_build_progress = {"current": i, "total": total, "city": city}
+                app.logger.info(f"Cache build [{i}/{total}]: {city}")
                 try:
-                    with app.app_context():
-                        _bcfc(city, _db, _cs, _nc)
+                    build_combined_forecasts_cache(city, db, cache_set, normalize_commodity)
+                    app.logger.info(f"Cache build [{i}/{total}]: {city} — done")
                 except Exception as city_err:
-                    app.logger.error(f"Cache build failed for {city}: {city_err}")
+                    import traceback as _tb
+                    app.logger.error(f"Cache build [{i}/{total}]: {city} FAILED: {city_err}\n{_tb.format_exc()}")
 
             app._cache_build_finished = datetime.now().isoformat()
+            app.logger.info("Cache build: all cities complete")
         except Exception as e:
             import traceback
             app._cache_build_error = str(e)
             app._cache_build_finished = datetime.now().isoformat()
             app.logger.error(f"Cache build failed: {e}\n{traceback.format_exc()}")
         finally:
+            try:
+                ctx.pop()
+            except Exception:
+                pass
             app._cache_build_running = False
 
     threading.Thread(target=_run_build, daemon=True, name="cache-builder").start()
