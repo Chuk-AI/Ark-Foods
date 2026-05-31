@@ -101,7 +101,7 @@ function PricingMatrix() {
       {data && (
         <>
           <div style={{ background: '#fff', border: '2px solid #e2e8f0', borderRadius: 12, padding: 20, marginBottom: 20, lineHeight: 1.7, color: '#475569', fontSize: 13 }}>
-            <strong>USDA</strong> and <strong>ProduceIQ</strong> prices from last 7 days · <strong>FOB</strong> = best price − 26% freight · <strong>Diff</strong> = ProduceIQ − USDA
+            <strong>USDA</strong> and <strong>ProduceIQ</strong> prices from last 7 days · <strong>FOB</strong> = best price − 26% freight · <strong>Diff</strong> = ProduceIQ − USDA · Prices stored as $/bu after conversion
           </div>
           {cities.map((city) => {
             const items = data[city]?.items || [];
@@ -115,8 +115,8 @@ function PricingMatrix() {
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                     <thead>
                       <tr style={{ background: 'linear-gradient(135deg,#059669,#047857)', color: '#fff' }}>
-                        {['Variety', 'USDA', 'ProduceIQ', 'Difference', 'FOB Price'].map((h) => (
-                          <th key={h} style={{ padding: '10px 12px', textAlign: h === 'Variety' ? 'left' : 'center', fontWeight: 600 }}>{h}</th>
+                        {['Variety', 'Package Size', 'ProduceIQ Raw', 'USDA Raw', 'USDA $/bu', 'ProduceIQ $/bu', 'Difference', 'FOB Price'].map((h) => (
+                          <th key={h} style={{ padding: '10px 12px', textAlign: h === 'Variety' || h === 'Package Size' ? 'left' : 'center', fontWeight: 600 }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -125,14 +125,36 @@ function PricingMatrix() {
                         const u = row.usda;
                         const p = row.produceiq;
                         const d = row.diff;
+                        const unitLabel = row.unit || '$/bu';
                         return (
                           <tr key={row.variety} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
                             <td style={{ padding: '10px 12px', fontWeight: 700, color: '#1e293b' }}>{row.variety}</td>
-                            <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                              {u ? <><div style={{ fontWeight: 700, color: '#1e40af' }}>{money(u.price)}</div><div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{u.date}</div></> : <span style={{ color: '#94a3b8' }}>—</span>}
+                            <td style={{ padding: '10px 12px', color: '#475569', fontSize: 12 }}>
+                              {row.package ? <span title={row.package}>{row.package}</span> : <span style={{ color: '#94a3b8' }}>—</span>}
                             </td>
                             <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                              {p ? <><div style={{ fontWeight: 700, color: '#92400e' }}>{money(p.price)}</div><div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{p.date}</div></> : <span style={{ color: '#94a3b8' }}>—</span>}
+                              {p ? (
+                                <>
+                                  <div style={{ fontWeight: 700, color: '#92400e' }}>{money(p.price)}</div>
+                                  <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>{p.package || unitLabel}</div>
+                                  <div style={{ fontSize: 10, color: '#94a3b8' }}>{p.date}</div>
+                                </>
+                              ) : <span style={{ color: '#94a3b8' }}>—</span>}
+                            </td>
+                            <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                              {u ? (
+                                <>
+                                  <div style={{ fontWeight: 700, color: '#1e40af' }}>{money(u.price)}</div>
+                                  <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>{u.package || unitLabel}</div>
+                                  <div style={{ fontSize: 10, color: '#94a3b8' }}>{u.date}</div>
+                                </>
+                              ) : <span style={{ color: '#94a3b8' }}>—</span>}
+                            </td>
+                            <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                              {u ? <><div style={{ fontWeight: 700, color: '#1e40af' }}>{money(u.price)}</div><div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>{unitLabel}</div></> : <span style={{ color: '#94a3b8' }}>—</span>}
+                            </td>
+                            <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                              {p ? <><div style={{ fontWeight: 700, color: '#92400e' }}>{money(p.price)}</div><div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>{unitLabel}</div></> : <span style={{ color: '#94a3b8' }}>—</span>}
                             </td>
                             <td style={{ padding: '10px 12px', textAlign: 'center' }}>
                               {d ? <><div style={{ fontWeight: 700, color: d.pct >= 0 ? '#dc2626' : '#16a34a' }}>{pctFmt(d.pct)}</div><div style={{ fontSize: 11, color: '#64748b' }}>{d.abs >= 0 ? '+' : ''}{money(d.abs)}</div></> : <span style={{ color: '#94a3b8' }}>—</span>}

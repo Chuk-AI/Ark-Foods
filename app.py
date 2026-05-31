@@ -2282,21 +2282,45 @@ def api_terminal_market_pricing():
                     .first()
                 )
 
+            def _get_package(source_name, year, day, v=variants, c=city):
+                if year is None:
+                    return None
+                row = (
+                    db.session.query(PriceData.package, func.count().label("cnt"))
+                    .filter(
+                        PriceData.commodity.in_(sorted(v)),
+                        PriceData.source == source_name,
+                        PriceData.price > 0,
+                        func.upper(PriceData.city_name) == c.upper(),
+                        PriceData.year == year,
+                        PriceData.day == day,
+                        PriceData.package.isnot(None),
+                    )
+                    .group_by(PriceData.package)
+                    .order_by(func.count().desc())
+                    .first()
+                )
+                return row.package if row else None
+
             usda_row = _latest("USDA")
             piq_row = _latest("ProduceIQ")
 
             if not usda_row and not piq_row:
                 continue
 
-            def _fmt_row(row):
+            lbs_per_bu = BUSHEL_LBS.get(commodity.lower())
+            unit_label = f"$/bu ({lbs_per_bu} lbs/bu)" if lbs_per_bu else "$/bu"
+
+            def _fmt_row(row, source_name, lbs=lbs_per_bu):
                 if not row:
                     return None
                 price = float(row.price)
                 date_str = (datetime(int(row.year), 1, 1) + timedelta(days=int(row.day) - 1)).strftime("%Y-%m-%d")
-                return {"price": round(price, 2), "date": date_str}
+                pkg = _get_package(source_name, row.year, row.day)
+                return {"price": round(price, 2), "date": date_str, "package": pkg, "unit": unit_label}
 
-            usda_obj = _fmt_row(usda_row)
-            piq_obj = _fmt_row(piq_row)
+            usda_obj = _fmt_row(usda_row, "USDA")
+            piq_obj = _fmt_row(piq_row, "ProduceIQ")
             best_price = (piq_obj or usda_obj)["price"]
             fob = round(best_price * 0.74, 2)
 
@@ -2306,7 +2330,9 @@ def api_terminal_market_pricing():
                 diff_pct = round((diff_abs / usda_obj["price"]) * 100, 1)
                 diff = {"abs": diff_abs, "pct": diff_pct}
 
-            items.append({"variety": commodity, "usda": usda_obj, "produceiq": piq_obj, "diff": diff, "fob": fob})
+            items.append({"variety": commodity, "usda": usda_obj, "produceiq": piq_obj, "diff": diff, "fob": fob,
+                          "package": piq_obj["package"] if piq_obj and piq_obj["package"] else (usda_obj["package"] if usda_obj else None),
+                          "unit": unit_label})
 
         if items:
             result[city] = {"items": items}
