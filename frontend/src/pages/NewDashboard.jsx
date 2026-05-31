@@ -115,7 +115,20 @@ function PriceForecastSection() {
   useEffect(() => {
     axios.get('/api/price_forecast_all?city=All+cities')
       .then((r) => { setData(r.data.forecasts || []); setLoading(false); })
-      .catch((e) => { setError(e.message); setLoading(false); });
+      .catch((e) => {
+        if (e.response?.status === 503) {
+          setError('building');
+          axios.post('/api/trigger_cache_build').catch(() => {});
+          const poll = setInterval(() => {
+            axios.get('/api/price_forecast_all?city=All+cities')
+              .then((r) => { setData(r.data.forecasts || []); setLoading(false); setError(null); clearInterval(poll); })
+              .catch(() => {});
+          }, 8000);
+          setTimeout(() => clearInterval(poll), 300000);
+        } else {
+          setError(e.message); setLoading(false);
+        }
+      });
   }, []);
 
   return (
@@ -128,7 +141,14 @@ function PriceForecastSection() {
           {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} height={180} />)}
         </div>
       )}
-      {error && <ErrorBox message={error} />}
+      {error === 'building' && (
+        <div style={{ background: 'var(--warn-soft)', border: '1px solid oklch(0.7 0.14 80 / 0.3)', borderRadius: 8, padding: '20px 24px', color: 'var(--warn)', fontSize: 14, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: 'spin 1s linear infinite', flexShrink: 0 }}><path d="M21 12a9 9 0 11-6.219-8.56"/></svg>
+          <div><strong>Building forecast data…</strong> This runs once and takes 1–2 minutes. The page will update automatically.</div>
+          <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+        </div>
+      )}
+      {error && error !== 'building' && <ErrorBox message={error} />}
       {data && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
           {data.map((item) => {
@@ -195,7 +215,25 @@ function LongTermSection() {
         if (results.length > 0) setSelected(results[0].commodity);
         setLoading(false);
       })
-      .catch((e) => { setError(e.message); setLoading(false); });
+      .catch((e) => {
+        if (e.response?.status === 503) {
+          setError('building');
+          axios.post('/api/trigger_cache_build').catch(() => {});
+          const poll = setInterval(() => {
+            axios.get('/api/price_forecast_long_term_all?city=All+cities')
+              .then((r) => {
+                const results = r.data.results || [];
+                setData(results);
+                if (results.length > 0) setSelected(results[0].commodity);
+                setLoading(false); setError(null); clearInterval(poll);
+              })
+              .catch(() => {});
+          }, 8000);
+          setTimeout(() => clearInterval(poll), 300000);
+        } else {
+          setError(e.message); setLoading(false);
+        }
+      });
   }, []);
 
   const item = data?.find((d) => d.commodity === selected);
@@ -232,7 +270,14 @@ function LongTermSection() {
       </div>
 
       {loading && <SkeletonCard height={340} />}
-      {error && <ErrorBox message={error} />}
+      {error === 'building' && (
+        <div style={{ background: 'var(--warn-soft)', border: '1px solid oklch(0.7 0.14 80 / 0.3)', borderRadius: 8, padding: '20px 24px', color: 'var(--warn)', fontSize: 14, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: 'spin 1s linear infinite', flexShrink: 0 }}><path d="M21 12a9 9 0 11-6.219-8.56"/></svg>
+          <div><strong>Building forecast data…</strong> This runs once and takes 1–2 minutes. The page will update automatically.</div>
+          <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+        </div>
+      )}
+      {error && error !== 'building' && <ErrorBox message={error} />}
 
       {item && (
         <div style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 8, padding: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>

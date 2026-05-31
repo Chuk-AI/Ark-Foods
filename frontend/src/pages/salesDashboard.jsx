@@ -402,18 +402,38 @@ function SalesDashboard() {
           {
             label: "Max Price",
             data: maxPrices,
-            backgroundColor: "rgba(54, 162, 235, 0.6)",
-            borderColor: "rgba(54, 162, 235, 1)",
+            backgroundColor: "oklch(0.62 0.12 190 / 0.8)",
+            borderColor: "oklch(0.62 0.12 190)",
             borderWidth: 1,
           },
         ],
       },
       options: {
         indexAxis: "y",
-        plugins: { legend: { display: false } },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: "#ffffff",
+            titleColor: "#0f172a",
+            bodyColor: "#475569",
+            borderColor: "#e2e8f0",
+            borderWidth: 1,
+            padding: 10,
+            cornerRadius: 6,
+          },
+        },
         scales: {
-          x: { title: { display: true, text: "Price" }, beginAtZero: true },
-          y: { title: { display: true, text: "City" } },
+          x: {
+            title: { display: true, text: "Price" },
+            beginAtZero: true,
+            grid: { color: "rgba(0,0,0,0.04)", drawBorder: false },
+            ticks: { font: { family: "'Inter', sans-serif", size: 11 }, color: "#64748b" },
+          },
+          y: {
+            title: { display: true, text: "City" },
+            grid: { color: "rgba(0,0,0,0.04)", drawBorder: false },
+            ticks: { font: { family: "'Inter', sans-serif", size: 11 }, color: "#64748b" },
+          },
         },
       },
     });
@@ -607,7 +627,7 @@ function SalesDashboard() {
                 data.Autumn || 0,
                 data.Winter || 0,
               ],
-              backgroundColor: ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0"],
+              backgroundColor: ["oklch(0.62 0.12 190)", "oklch(0.62 0.12 260)", "oklch(0.62 0.12 30)", "oklch(0.62 0.12 140)"],
               borderWidth: 0.3,
               barPercentage: 0.4,
               categoryPercentage: 1,
@@ -619,49 +639,50 @@ function SalesDashboard() {
           scales: {
             x: {
               ticks: {
-                font: {
-                  size: 16, // Adjust font size here
-                },
+                font: { family: "'Inter', sans-serif", size: 11 },
+                color: "#64748b",
               },
               title: {
                 display: true,
-                text: "Seasons", // X-axis title
-                font: {
-                  size: 18, // Title font size
-                },
+                text: "Seasons",
+                font: { size: 18 },
               },
+              grid: { color: "rgba(0,0,0,0.04)", drawBorder: false },
             },
             y: {
               ticks: {
-                font: {
-                  size: 16, // Adjust font size here
-                },
+                font: { family: "'Inter', sans-serif", size: 11 },
+                color: "#64748b",
               },
               title: {
                 display: true,
-                text: "Price", // Y-axis title
-                font: {
-                  size: 18, // Title font size
-                },
+                text: "Price",
+                font: { size: 18 },
               },
+              grid: { color: "rgba(0,0,0,0.04)", drawBorder: false },
             },
           },
           plugins: {
             datalabels: {
-              display: true, // show numbers
-              color: "#000", // label colour
-              font: {
-                size: 18, //  <<—  increase this value
-              },
-              formatter: (v) => v.toFixed(0), // optional formatting
+              display: true,
+              color: "#000",
+              font: { size: 18 },
+              formatter: (v) => v.toFixed(0),
             },
             legend: {
               labels: {
-                color: "black", // Color of the legend labels
-                font: {
-                  size: 15, // Legend font size
-                },
+                color: "black",
+                font: { size: 15 },
               },
+            },
+            tooltip: {
+              backgroundColor: "#ffffff",
+              titleColor: "#0f172a",
+              bodyColor: "#475569",
+              borderColor: "#e2e8f0",
+              borderWidth: 1,
+              padding: 10,
+              cornerRadius: 6,
             },
           },
         },
@@ -692,14 +713,12 @@ function SalesDashboard() {
 
   const getColor = (index) => {
     const colors = [
-      "#FF6384",
-      "#36A2EB",
-      "#FFCE56",
-      "#4BC0C0",
-      "#9966FF",
-      "#FF9F40",
-      "#FF6384",
-      "#4BC0C0",
+      "oklch(0.62 0.12 190)",
+      "oklch(0.62 0.12 260)",
+      "oklch(0.62 0.12 30)",
+      "oklch(0.62 0.12 140)",
+      "oklch(0.62 0.12 330)",
+      "oklch(0.62 0.12 80)",
     ];
     return colors[index % colors.length];
   };
@@ -748,15 +767,16 @@ function SalesDashboard() {
           x: {
             display: true,
             type: "category",
-            grid: { display: true, drawBorder: true, color: "#E0E0E0" },
+            grid: { color: "rgba(0,0,0,0.04)", drawBorder: false },
             ticks: {
               display: true,
               maxTicksLimit: 10,
-              color: "#666666",
+              color: "#64748b",
               padding: 10,
               autoSkip: true,
               maxRotation: 45,
               minRotation: 45,
+              font: { family: "'Inter', sans-serif", size: 11 },
             },
 
             title: {
@@ -769,11 +789,12 @@ function SalesDashboard() {
           y: {
             display: true,
             position: "left",
-            grid: { display: true, drawBorder: true, color: "#E0E0E0" },
+            grid: { color: "rgba(0,0,0,0.04)", drawBorder: false },
             ticks: {
               display: true,
-              color: "#666666",
+              color: "#64748b",
               padding: 10,
+              font: { family: "'Inter', sans-serif", size: 11 },
               callback: (value) => `$${value.toFixed(2)}`,
             },
             title: {
@@ -789,12 +810,13 @@ function SalesDashboard() {
             enabled: true,
             mode: "index",
             intersect: false,
-            backgroundColor: "rgba(255, 255, 255, 0.9)",
-            titleColor: "#666666",
-            bodyColor: "#666666",
-            borderColor: "#E0E0E0",
+            backgroundColor: "#ffffff",
+            titleColor: "#0f172a",
+            bodyColor: "#475569",
+            borderColor: "#e2e8f0",
             borderWidth: 1,
             padding: 10,
+            cornerRadius: 6,
             callbacks: {
               title: (context) =>
                 DateTime.fromISO(context[0].label).toFormat("MMM d, yyyy"),
@@ -964,15 +986,16 @@ function SalesDashboard() {
           x: {
             display: true,
             type: "category",
-            grid: { display: true, drawBorder: true, color: "#E0E0E0" },
+            grid: { color: "rgba(0,0,0,0.04)", drawBorder: false },
             ticks: {
               display: true,
               maxTicksLimit: 10,
-              color: "#666666",
+              color: "#64748b",
               padding: 10,
               autoSkip: true,
               maxRotation: 45,
               minRotation: 45,
+              font: { family: "'Inter', sans-serif", size: 11 },
             },
             title: {
               display: true,
@@ -984,11 +1007,12 @@ function SalesDashboard() {
           y: {
             display: true,
             position: "left",
-            grid: { display: true, drawBorder: true, color: "#E0E0E0" },
+            grid: { color: "rgba(0,0,0,0.04)", drawBorder: false },
             ticks: {
               display: true,
-              color: "#666666",
+              color: "#64748b",
               padding: 10,
+              font: { family: "'Inter', sans-serif", size: 11 },
               callback: (value) => `$${value.toFixed(2)}`,
             },
             title: {
@@ -1004,12 +1028,13 @@ function SalesDashboard() {
             enabled: true,
             mode: "index",
             intersect: false,
-            backgroundColor: "rgba(255, 255, 255, 0.9)",
-            titleColor: "#666666",
-            bodyColor: "#666666",
-            borderColor: "#E0E0E0",
+            backgroundColor: "#ffffff",
+            titleColor: "#0f172a",
+            bodyColor: "#475569",
+            borderColor: "#e2e8f0",
             borderWidth: 1,
             padding: 10,
+            cornerRadius: 6,
             callbacks: {
               title: (context) =>
                 DateTime.fromISO(context[0].label).toFormat("MMM d, yyyy"),
@@ -1768,6 +1793,54 @@ function SalesDashboard() {
               >
                 Download Chart and Data
               </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Market Opportunity Analysis */}
+        <div id="market-opportunity-section" className="section">
+          <div className="section-head" style={{ marginTop: 32 }}>
+            <h2>Market Opportunity</h2>
+          </div>
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+            <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 13.5 }}>Best sell market by commodity</div>
+                <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>Top-priced city for each pepper variety · last 7 days</div>
+              </div>
+            </div>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ background: 'var(--surface-2)' }}>
+                    {['Commodity', 'Best Market', 'Max Price', 'Avg Price', 'Min Price', 'Spread', 'Recommendation'].map(h => (
+                      <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {bestMarketData.map((row, i) => {
+                    const spread = row.max_price != null && row.min_price != null ? (row.max_price - row.min_price).toFixed(2) : '—';
+                    const spreadNum = parseFloat(spread);
+                    const rec = spreadNum > 8 ? { text: 'High opportunity', color: 'var(--up)', bg: 'var(--up-soft)' }
+                              : spreadNum > 4 ? { text: 'Moderate', color: 'var(--warn)', bg: 'var(--warn-soft)' }
+                              : { text: 'Low spread', color: 'var(--text-3)', bg: 'var(--surface-2)' };
+                    return (
+                      <tr key={i} style={{ borderBottom: '1px solid var(--border)', background: i % 2 === 0 ? 'var(--surface)' : 'var(--surface-2)' }}>
+                        <td style={{ padding: '10px 16px', fontWeight: 600 }}>{row.commodity}</td>
+                        <td style={{ padding: '10px 16px', fontWeight: 500, color: 'var(--accent)' }}>{row.best_city || '—'}</td>
+                        <td style={{ padding: '10px 16px', fontFamily: 'var(--mono)', fontWeight: 600, color: 'var(--up)' }}>{row.max_price != null ? `$${Number(row.max_price).toFixed(2)}` : '—'}</td>
+                        <td style={{ padding: '10px 16px', fontFamily: 'var(--mono)' }}>{row.avg_price != null ? `$${Number(row.avg_price).toFixed(2)}` : '—'}</td>
+                        <td style={{ padding: '10px 16px', fontFamily: 'var(--mono)', color: 'var(--down)' }}>{row.min_price != null ? `$${Number(row.min_price).toFixed(2)}` : '—'}</td>
+                        <td style={{ padding: '10px 16px', fontFamily: 'var(--mono)', fontWeight: 600 }}>{spread !== '—' ? `$${spread}` : '—'}</td>
+                        <td style={{ padding: '10px 16px' }}>
+                          <span style={{ background: rec.bg, color: rec.color, padding: '2px 10px', borderRadius: 999, fontSize: 11, fontWeight: 600 }}>{rec.text}</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
