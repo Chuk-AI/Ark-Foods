@@ -741,7 +741,9 @@ def calculate_price_forecast(commodity, city=None, source="ProduceIQ", forecast_
             "std_dev": round(float(std_dev), 2) if std_dev > 0 else 0.0,
         }
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        import traceback as _tb
+        logger.error(f"calculate_price_forecast({commodity!r}, {city!r}) raised: {e}\n{_tb.format_exc()}")
+        return {"success": False, "commodity": commodity, "error": str(e)}
 
 
 def fetch_current_weather(lat, lon):
@@ -6711,11 +6713,17 @@ def trigger_cache_build():
                 app._cache_build_progress = {"current": i, "total": total, "city": city}
                 app.logger.info(f"Cache build [{i}/{total}]: {city}")
                 try:
+                    db.session.remove()  # fresh session per city — avoids stale connection in thread
                     build_combined_forecasts_cache(city, db, cache_set, normalize_commodity)
+                    db.session.remove()  # clean up after each city
                     app.logger.info(f"Cache build [{i}/{total}]: {city} — done")
                 except Exception as city_err:
                     import traceback as _tb
                     app.logger.error(f"Cache build [{i}/{total}]: {city} FAILED: {city_err}\n{_tb.format_exc()}")
+                    try:
+                        db.session.remove()
+                    except Exception:
+                        pass
 
             app._cache_build_finished = datetime.now().isoformat()
             app.logger.info("Cache build: all cities complete")
