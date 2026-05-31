@@ -2176,6 +2176,64 @@ def api_best_sell_market():
     return jsonify({"best_market": best_market_data})
 
 
+@app.route("/api/market_opportunity", methods=["GET"])
+def api_market_opportunity():
+    """Return best market (city) for each commodity — max/avg/min price, last 7 days."""
+    source = request.args.get("source", "USDA")
+    commodities_list = [
+        "Anaheim", "Cubanelles", "Fresno", "Habanero", "Hungarian Wax",
+        "Jalapeno", "Long Hot", "Poblano", "Serrano", "Shishito",
+    ]
+    cities = [
+        "Baltimore", "Boston", "Chicago", "Columbia", "Miami",
+        "New York", "Philadelphia", "Los Angeles", "Atlanta", "Detroit",
+    ]
+    us_time = datetime.now(timezone("US/Eastern"))
+    seven_days_ago = us_time - timedelta(days=7)
+
+    result = []
+    for commodity in commodities_list:
+        db_commodity = "Cubanelle" if commodity == "Cubanelles" and source == "USDA" else commodity
+
+        best_city = None
+        best_max = None
+        best_avg = None
+        best_min = None
+
+        for city in cities:
+            row = (
+                db.session.query(
+                    func.max(PriceData.price).label("max_price"),
+                    func.avg(PriceData.price).label("avg_price"),
+                    func.min(PriceData.price).label("min_price"),
+                )
+                .filter(
+                    func.upper(PriceData.city_name) == city.upper(),
+                    PriceData.commodity == db_commodity,
+                    PriceData.source.in_(["Historical", source]),
+                    PriceData.year >= seven_days_ago.year,
+                    PriceData.day >= seven_days_ago.timetuple().tm_yday,
+                )
+                .first()
+            )
+            if row and row.max_price is not None:
+                if best_max is None or row.max_price > best_max:
+                    best_max = float(row.max_price)
+                    best_avg = float(row.avg_price) if row.avg_price else None
+                    best_min = float(row.min_price) if row.min_price else None
+                    best_city = city
+
+        result.append({
+            "commodity": commodity,
+            "best_city": best_city,
+            "max_price": best_max,
+            "avg_price": round(best_avg, 2) if best_avg else None,
+            "min_price": best_min,
+        })
+
+    return jsonify({"opportunities": result})
+
+
 from datetime import datetime, timedelta
 from flask import Flask, request, jsonify
 from sqlalchemy import func, or_, and_, true, select, over
