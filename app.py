@@ -2244,6 +2244,75 @@ from pytz import timezone
 # Assume your app, SQLAlchemy (db), and PriceData model are already configured
 
 
+@app.route("/api/terminal_market_pricing", methods=["GET"])
+def api_terminal_market_pricing():
+    """Per-city, per-commodity USDA vs ProduceIQ prices for the last window_days days."""
+    window_days = int(request.args.get("window_days", 7))
+    us_time = datetime.now(timezone("US/Eastern"))
+    cutoff = us_time - timedelta(days=window_days)
+    cutoff_year = cutoff.year
+    cutoff_day = cutoff.timetuple().tm_yday
+
+    cities = ["Baltimore", "Boston", "Chicago", "Columbia", "Miami",
+              "New York", "Philadelphia", "Los Angeles", "Atlanta", "Detroit"]
+
+    result = {}
+    for city in cities:
+        items = []
+        for commodity in PEPPER_VARIETIES:
+            variants = {commodity}
+            if commodity == "Cubanelle":
+                variants.add("Cubanelles")
+
+            def _latest(source_name, v=variants, c=city):
+                return (
+                    db.session.query(func.avg(PriceData.price).label("price"), PriceData.year, PriceData.day)
+                    .filter(
+                        PriceData.commodity.in_(sorted(v)),
+                        PriceData.source == source_name,
+                        PriceData.price > 0,
+                        func.upper(PriceData.city_name) == c.upper(),
+                        or_(
+                            PriceData.year > cutoff_year,
+                            and_(PriceData.year == cutoff_year, PriceData.day >= cutoff_day)
+                        )
+                    )
+                    .group_by(PriceData.year, PriceData.day)
+                    .order_by(PriceData.year.desc(), PriceData.day.desc())
+                    .first()
+                )
+
+            usda_row = _latest("USDA")
+            piq_row = _latest("ProduceIQ")
+
+            if not usda_row and not piq_row:
+                continue
+
+            def _fmt_row(row):
+                if not row:
+                    return None
+                price = float(row.price)
+                date_str = (datetime(int(row.year), 1, 1) + timedelta(days=int(row.day) - 1)).strftime("%Y-%m-%d")
+                return {"price": round(price, 2), "date": date_str}
+
+            usda_obj = _fmt_row(usda_row)
+            piq_obj = _fmt_row(piq_row)
+            best_price = (piq_obj or usda_obj)["price"]
+            fob = round(best_price * 0.74, 2)
+
+            diff = None
+            if usda_obj and piq_obj and usda_obj["price"]:
+                diff_abs = round(piq_obj["price"] - usda_obj["price"], 2)
+                diff_pct = round((diff_abs / usda_obj["price"]) * 100, 1)
+                diff = {"abs": diff_abs, "pct": diff_pct}
+
+            items.append({"variety": commodity, "usda": usda_obj, "produceiq": piq_obj, "diff": diff, "fob": fob})
+
+        if items:
+            result[city] = {"items": items}
+
+    return jsonify({"success": True, "cities": result, "window_days": window_days})
+
 @app.route("/api/most_recent_prices", methods=["GET"])
 def api_most_recent_prices():
     # Define cities and commodities
