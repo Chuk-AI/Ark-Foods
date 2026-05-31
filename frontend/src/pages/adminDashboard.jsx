@@ -1475,10 +1475,46 @@ function CacheManager() {
             </div>
           )}
 
-          <div style={{ marginTop: 14, fontSize: 12, color: "#94a3b8", display: "flex", gap: 12 }}>
+          <div style={{ marginTop: 14, fontSize: 12, color: "#94a3b8", display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
             <button onClick={() => { fetchStatus(); fetchDiag(); }} style={{ background: "none", border: "none", color: "#0d9488", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>↻ Refresh</button>
+            <button onClick={() => runTest("Jalapeno")} disabled={testLoading}
+              style={{ background: "#6366f1", color: "#fff", border: "none", borderRadius: 6, padding: "5px 14px", fontSize: 12, fontWeight: 600, cursor: testLoading ? "not-allowed" : "pointer", opacity: testLoading ? 0.7 : 1 }}>
+              {testLoading ? "Running…" : "🔬 Run Diagnostic Test"}
+            </button>
             <span>Builds cache for All Cities + 10 individual cities · forecasts use last 30 days of price data</span>
           </div>
+
+          {/* Test result */}
+          {testResult && (
+            <div style={{ marginTop: 14, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "14px 16px" }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#0f172a", marginBottom: 8 }}>
+                🔬 Diagnostic: {testResult.input?.commodity} / {testResult.input?.city}
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
+                {[
+                  ["Current year / day", `${testResult.current_year} / day ${testResult.current_day}`],
+                  ["30-day window start", `day ${testResult.min_day_for_30d}`],
+                  ["current_price result", testResult.current_price_result != null ? `$${testResult.current_price_result}` : "NULL ⚠"],
+                  ["PIQ/USDA rows (this year, 30d)", testResult.daily_count_piq_usda_this_year_30d],
+                  ["All-source rows (last 2yr)", testResult.daily_count_all_sources_last_2yr],
+                  ["Forecast success", testResult.forecast_result?.success === false ? `❌ ${testResult.forecast_result?.error}` : "✅"],
+                ].map(([k, v]) => (
+                  <div key={k} style={{ fontSize: 11 }}>
+                    <span style={{ color: "#64748b", fontWeight: 600 }}>{k}: </span>
+                    <span style={{ fontFamily: "monospace", color: "#0f172a" }}>{String(v)}</span>
+                  </div>
+                ))}
+              </div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", marginBottom: 4 }}>Latest 5 rows (any source):</div>
+              <pre style={{ fontSize: 10, background: "#0f172a", color: "#e2e8f0", borderRadius: 6, padding: "8px 12px", overflowX: "auto", margin: 0 }}>
+                {JSON.stringify(testResult.latest_5_rows_any_source, null, 2)}
+              </pre>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", margin: "8px 0 4px" }}>Latest 5 rows (ProduceIQ/USDA only):</div>
+              <pre style={{ fontSize: 10, background: "#0f172a", color: "#e2e8f0", borderRadius: 6, padding: "8px 12px", overflowX: "auto", margin: 0 }}>
+                {JSON.stringify(testResult.latest_5_rows_piq_usda_only, null, 2)}
+              </pre>
+            </div>
+          )}
         </div>
       </div>
     </div>
