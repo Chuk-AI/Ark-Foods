@@ -663,7 +663,10 @@ function AdminDashboard() {
         <h1 className="mt-4">Admin Dashboard</h1>
         <p>Welcome, Admin! You have Admin privileges.</p>
 
-        <ul className="nav nav-tabs">
+        {/* ── Forecast Cache Management — always visible at top ── */}
+        <CacheManager />
+
+        <ul className="nav nav-tabs" style={{ marginTop: 32 }}>
           <li className="nav-item">
             <a className="nav-link active" data-toggle="tab">
               Yield Calculator
@@ -1279,11 +1282,6 @@ function AdminDashboard() {
                 <canvas id="seasonPriceChart"></canvas>
               </div>
             </div>
-
-            <hr />
-
-            {/* ── Cache Management ───────────────────────────────── */}
-            <CacheManager />
 
           </div>
         </div>
