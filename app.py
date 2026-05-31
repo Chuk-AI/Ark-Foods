@@ -6694,10 +6694,27 @@ def trigger_cache_build():
         app._cache_build_running = True
         app._cache_build_error = None
         app._cache_build_started = datetime.now().isoformat()
+        app._cache_build_finished = None
+        app._cache_build_progress = {"current": 0, "total": 0, "city": ""}
         try:
-            from scheduler_service import build_all_caches
-            with app.app_context():
-                build_all_caches()
+            from scheduler_service import CITIES_TO_CACHE, build_all_caches
+            app._cache_build_progress["total"] = len(CITIES_TO_CACHE)
+            # Patch scheduler_service to report progress back
+            import scheduler_service as _ss
+            original = _ss.build_combined_forecasts_cache if hasattr(_ss, "build_combined_forecasts_cache") else None
+
+            from historical_trend_forecasting import build_combined_forecasts_cache as _bcfc
+            from app import db as _db, cache_set as _cs, normalize_commodity as _nc
+
+            for i, city in enumerate(CITIES_TO_CACHE, 1):
+                app._cache_build_progress = {"current": i, "total": len(CITIES_TO_CACHE), "city": city}
+                app.logger.info(f"Cache build [{i}/{len(CITIES_TO_CACHE)}]: {city}")
+                try:
+                    with app.app_context():
+                        _bcfc(city, _db, _cs, _nc)
+                except Exception as city_err:
+                    app.logger.error(f"Cache build failed for {city}: {city_err}")
+
             app._cache_build_finished = datetime.now().isoformat()
         except Exception as e:
             import traceback
@@ -6713,15 +6730,21 @@ def trigger_cache_build():
 
 @app.route("/api/cache_build_status", methods=["GET"])
 def api_cache_build_status():
+    cache_keys = [
+        "price_forecast_all_combined_all_cities",
+        "long_term_all_combined_all_cities",
+    ]
     cache_times = {}
-    for ck in ["terminal_market_pricing_7", "most_recent_prices_produceiq", "price_forecast_all_combined_all_cities"]:
+    for ck in cache_keys:
         row = db.session.query(DashboardCache.updated_at).filter_by(cache_key=ck).first()
         cache_times[ck] = row.updated_at.isoformat() if row else None
+    progress = getattr(app, "_cache_build_progress", {"current": 0, "total": 0, "city": ""})
     return jsonify({
         "running": getattr(app, "_cache_build_running", False),
         "error": getattr(app, "_cache_build_error", None),
         "started": getattr(app, "_cache_build_started", None),
         "finished": getattr(app, "_cache_build_finished", None),
+        "progress": progress,
         "cache_last_updated": cache_times,
     })
 

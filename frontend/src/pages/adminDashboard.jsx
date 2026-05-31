@@ -1279,6 +1279,120 @@ function AdminDashboard() {
                 <canvas id="seasonPriceChart"></canvas>
               </div>
             </div>
+
+            <hr />
+
+            {/* ── Cache Management ───────────────────────────────── */}
+            <CacheManager />
+
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CacheManager() {
+  const [status, setStatus] = useState(null);
+  const [polling, setPolling] = useState(false);
+
+  const fetchStatus = async () => {
+    try {
+      const token = localStorage.getItem("authToken");
+      const r = await axios.get("/api/cache_build_status", { headers: { Authorization: `Bearer ${token}` } });
+      setStatus(r.data);
+      return r.data;
+    } catch { return null; }
+  };
+
+  useEffect(() => { fetchStatus(); }, []);
+
+  useEffect(() => {
+    if (!polling) return;
+    const interval = setInterval(async () => {
+      const s = await fetchStatus();
+      if (s && !s.running) {
+        setPolling(false);
+        clearInterval(interval);
+      }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [polling]);
+
+  const handleTrigger = async () => {
+    try {
+      const token = localStorage.getItem("authToken");
+      await axios.post("/api/trigger_cache_build", {}, { headers: { Authorization: `Bearer ${token}` } });
+      setPolling(true);
+      fetchStatus();
+    } catch (e) {
+      alert(e.response?.data?.message || "Failed to start build");
+    }
+  };
+
+  const prog = status?.progress;
+  const pct = prog?.total > 0 ? Math.round((prog.current / prog.total) * 100) : 0;
+  const isRunning = status?.running;
+
+  const cacheUpdated = status?.cache_last_updated?.["price_forecast_all_combined_all_cities"];
+
+  return (
+    <div className="row mt-4">
+      <div className="col-md-12">
+        <div style={{ border: "1px solid var(--border, #e2e8f0)", borderRadius: 10, background: "var(--surface, #fff)", padding: "24px 28px" }}>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 20 }}>
+            <div>
+              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Forecast Cache Manager</h2>
+              <p style={{ margin: "6px 0 0", color: "#64748b", fontSize: 13 }}>
+                The Forecasts dashboard requires pre-computed data. Click <strong>Build Now</strong> to run the forecast algorithm for all cities and cache the results. This typically takes <strong>5–15 minutes</strong>.
+              </p>
+            </div>
+            <button
+              onClick={handleTrigger}
+              disabled={isRunning}
+              style={{ padding: "9px 22px", background: isRunning ? "#94a3b8" : "#0d9488", color: "#fff", border: "none", borderRadius: 7, fontWeight: 700, fontSize: 13, cursor: isRunning ? "not-allowed" : "pointer", whiteSpace: "nowrap", marginLeft: 20 }}
+            >
+              {isRunning ? "Building…" : "Build Now"}
+            </button>
+          </div>
+
+          {/* Progress bar */}
+          {isRunning && prog && (
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#64748b", marginBottom: 6 }}>
+                <span>Building city: <strong>{prog.city || "…"}</strong></span>
+                <span>{prog.current}/{prog.total} ({pct}%)</span>
+              </div>
+              <div style={{ background: "#e2e8f0", borderRadius: 999, height: 8, overflow: "hidden" }}>
+                <div style={{ width: `${pct}%`, background: "#0d9488", height: "100%", borderRadius: 999, transition: "width 0.4s ease" }} />
+              </div>
+            </div>
+          )}
+
+          {/* Status rows */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 12, marginTop: 8 }}>
+            {[
+              { label: "Status", value: isRunning ? "🟡 Running" : status?.error ? "🔴 Failed" : status?.finished ? "🟢 Complete" : "⚪ Idle" },
+              { label: "Last built", value: cacheUpdated ? new Date(cacheUpdated).toLocaleString() : "Never" },
+              { label: "Started", value: status?.started ? new Date(status.started).toLocaleString() : "—" },
+              { label: "Finished", value: status?.finished ? new Date(status.finished).toLocaleString() : "—" },
+            ].map(({ label, value }) => (
+              <div key={label} style={{ background: "#f8fafc", borderRadius: 7, padding: "10px 14px" }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>{label}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "#0f172a" }}>{value}</div>
+              </div>
+            ))}
+          </div>
+
+          {status?.error && (
+            <div style={{ marginTop: 14, padding: "10px 14px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 7, fontSize: 12, color: "#dc2626", fontFamily: "monospace" }}>
+              Error: {status.error}
+            </div>
+          )}
+
+          <div style={{ marginTop: 14, fontSize: 12, color: "#94a3b8" }}>
+            <button onClick={fetchStatus} style={{ background: "none", border: "none", color: "#0d9488", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>↻ Refresh status</button>
+            {" · "}This builds caches for All Cities + 10 individual city views.
           </div>
         </div>
       </div>
