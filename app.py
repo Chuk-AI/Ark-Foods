@@ -742,7 +742,7 @@ def calculate_price_forecast(commodity, city=None, source="ProduceIQ", forecast_
         }
     except Exception as e:
         import traceback as _tb
-        logger.error(f"calculate_price_forecast({commodity!r}, {city!r}) raised: {e}\n{_tb.format_exc()}")
+        app.logger.error(f"calculate_price_forecast({commodity!r}, {city!r}) raised: {e}\n{_tb.format_exc()}")
         return {"success": False, "commodity": commodity, "error": str(e)}
 
 

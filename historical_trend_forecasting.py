@@ -346,7 +346,7 @@ def calculate_hybrid_6week_forecast(db_session, commodity: str, city: str) -> Di
 
 
 def build_combined_forecasts_cache(city: str = "All cities", db=None, cache_set_func=None, normalize_func=None):
-    from app import PEPPER_VARIETIES, logger, calculate_price_forecast
+    from app import PEPPER_VARIETIES, calculate_price_forecast
 
     if db is None or cache_set_func is None:
         logger.error("db and cache_set_func must be provided")
