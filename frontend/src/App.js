@@ -13,6 +13,7 @@ import DashAnalytics from './pages/analytics';
 import DynamicAnalytics from './pages/dynamicAnalytics';
 import Alerts from './pages/Alerts';
 import NewDashboard from './pages/NewDashboard';
+import PricingDashboard from './pages/PricingDashboard';
 import Layout from './components/layout';
 
 axios.defaults.baseURL = 'https://arkfoods.klicksai.com';
@@ -71,6 +72,11 @@ const App = () => {
             <Route path="/new_dashboard" element={
               <ProtectedRoute roles={['sales', 'owner', 'admin']}>
                 <NewDashboard />
+              </ProtectedRoute>
+            }/>
+            <Route path="/pricing" element={
+              <ProtectedRoute roles={['sales', 'owner', 'admin']}>
+                <PricingDashboard />
               </ProtectedRoute>
             }/>
           </Routes>

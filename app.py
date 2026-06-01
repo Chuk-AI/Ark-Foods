@@ -553,7 +553,7 @@ PEPPER_CONDITIONS = {
     "Poblano": {"temp_min": 60, "temp_max": 80, "humidity_min": 20, "humidity_max": 40},
 }
 
-OPENWEATHER_API_KEY = os.environ.get("OPENWEATHER_API_KEY", "")
+OPENWEATHER_API_KEY = os.environ.get("OPENWEATHER_API_KEY", "70dda5aad7b938fbdc226c3436e0c1b9")
 
 _PEPPER_ALIASES = {
     "jalapeño": "Jalapeno", "jalapeno": "Jalapeno", "cubanelles": "Cubanelle",

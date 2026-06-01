@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import {
   LineChart, Line, Area, XAxis, YAxis, CartesianGrid,
@@ -299,7 +299,7 @@ function PriceForecast7Day({ city }) {
       {error === 'building' && (
         <div style={{ background: '#fefce8', border: '1px solid #fde68a', borderRadius: 10, padding: '18px 22px', color: '#854d0e', fontSize: 14, display: 'flex', gap: 12, alignItems: 'center' }}>
           <div style={{ width: 18, height: 18, border: '3px solid #fde68a', borderTop: '3px solid #854d0e', borderRadius: '50%', animation: 'spin 1s linear infinite', flexShrink: 0 }} />
-          <div><strong>Building forecast cache…</strong> This takes 5–15 minutes. Will update automatically. You can also click <strong>Rebuild Cache</strong> above.</div>
+          <div><strong>Building forecast cache…</strong> This takes 5–15 minutes. Will update automatically.</div>
           <style>{`@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}`}</style>
         </div>
       )}
@@ -715,102 +715,30 @@ export default function NewDashboard() {
   const [city7Day, setCity7Day] = useState('All cities');
   const [city6Week, setCity6Week] = useState('All cities');
   const [citySeasonal, setCitySeasonal] = useState('All cities');
-  const [status, setStatus] = useState('');
-  const [statusType, setStatusType] = useState('');
-  const [rebuilding, setRebuilding] = useState(false);
-  const pollRef = useRef(null);
-
-  const setMsg = (msg, type = '') => { setStatus(msg); setStatusType(type); };
-
-  const rebuild = async () => {
-    if (rebuilding) return;
-    setRebuilding(true);
-    setMsg('⏳ Triggering cache rebuild…');
-    try {
-      await axios.post('/api/trigger_cache_build');
-      setMsg('⏳ Cache build started — polling for completion…');
-      const start = Date.now();
-      pollRef.current = setInterval(async () => {
-        try {
-          const r = await axios.get('/api/cache_build_status');
-          const s = r.data;
-          if (!s.running && s.finished) {
-            clearInterval(pollRef.current);
-            setRebuilding(false);
-            setMsg('✅ Cache rebuilt successfully! Refresh the page to see updated forecasts.', 'success');
-          } else if (s.running) {
-            const elapsed = Math.round((Date.now() - start) / 1000);
-            setMsg(`⏳ Building… ${s.progress?.city || ''} (${elapsed}s elapsed)`);
-          }
-        } catch { /* keep polling */ }
-      }, 4000);
-      setTimeout(() => { clearInterval(pollRef.current); setRebuilding(false); setMsg('⚠️ Build timed out.', 'error'); }, 600000);
-    } catch (e) {
-      setRebuilding(false);
-      setMsg(`❌ ${e.response?.data?.message || e.message}`, 'error');
-    }
-  };
-
-  useEffect(() => () => clearInterval(pollRef.current), []);
-
-  const statusBg = { success: '#d1fae5', error: '#fee2e2', '': '#fef3c7' }[statusType] || '#fef3c7';
-  const statusColor = { success: '#065f46', error: '#991b1b', '': '#92400e' }[statusType] || '#92400e';
 
   return (
-    <div style={{ fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif' }}>
-      {/* Header */}
-      <div style={{ background: 'linear-gradient(135deg,#059669,#047857)', color: '#fff', padding: '24px 28px', borderRadius: 12, marginBottom: 0, textAlign: 'center' }}>
-        <h1 style={{ fontSize: 26, fontWeight: 800, margin: '0 0 6px' }}>🌶️ ARK FOODS MARKET INTELLIGENCE</h1>
-        <p style={{ opacity: 0.9, fontSize: 14, margin: 0 }}>{new Date().toLocaleString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+    <div style={{ padding: '28px 20px', maxWidth: 1600, margin: '0 auto', fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, borderBottom: '3px solid #059669', paddingBottom: 10 }}>
+        <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1e293b', margin: 0 }}>📈 7-Day Price Forecast</h2>
+        <CitySelector value={city7Day} onChange={setCity7Day} />
       </div>
+      <PriceForecast7Day city={city7Day} />
 
-      {/* Controls */}
-      <div style={{ background: '#f8fafc', padding: '16px 20px', display: 'flex', justifyContent: 'center', gap: 12, flexWrap: 'wrap', borderBottom: '3px solid #e2e8f0', marginBottom: 0 }}>
-        {[
-          { label: '⚙️ REBUILD CACHE', action: rebuild, disabled: rebuilding, color: '#3b82f6' },
-          { label: '🔄 UPDATE ALL DATA', action: () => window.location.reload(), color: '#059669' },
-        ].map(({ label, action, disabled, color }) => (
-          <button key={label} onClick={action} disabled={disabled}
-            style={{ padding: '10px 20px', background: color, color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1, transition: 'all .2s' }}>
-            {disabled && label.includes('REBUILD') ? '⏳ BUILDING...' : label}
-          </button>
-        ))}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, borderBottom: '3px solid #059669', paddingBottom: 10 }}>
+        <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1e293b', margin: 0 }}>🔮 6-Week Hybrid Market Outlook</h2>
+        <CitySelector value={city6Week} onChange={setCity6Week} />
       </div>
+      <LongTermOutlook city={city6Week} />
 
-      {/* Status bar */}
-      {status && (
-        <div style={{ background: statusBg, color: statusColor, padding: '12px 20px', textAlign: 'center', fontWeight: 600, fontSize: 14 }}>
-          {status}
-        </div>
-      )}
-
-      {/* Content */}
-      <div style={{ padding: '28px 20px', maxWidth: 1600, margin: '0 auto' }}>
-        <PricingMatrix />
-        <HighestPrices />
-
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, borderBottom: '3px solid #059669', paddingBottom: 10 }}>
-          <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1e293b', margin: 0 }}>📈 7-Day Price Forecast</h2>
-          <CitySelector value={city7Day} onChange={setCity7Day} />
-        </div>
-        <PriceForecast7Day city={city7Day} />
-
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, borderBottom: '3px solid #059669', paddingBottom: 10 }}>
-          <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1e293b', margin: 0 }}>🔮 6-Week Hybrid Market Outlook</h2>
-          <CitySelector value={city6Week} onChange={setCity6Week} />
-        </div>
-        <LongTermOutlook city={city6Week} />
-
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, borderBottom: '3px solid #059669', paddingBottom: 10 }}>
-          <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1e293b', margin: 0 }}>📊 Seasonal Price Projections</h2>
-          <CitySelector value={citySeasonal} onChange={setCitySeasonal} />
-        </div>
-        <SeasonalForecast city={citySeasonal} />
-
-        <WeatherCards />
-        <WeatherForecast7Day />
-        <GrowingConditions />
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, borderBottom: '3px solid #059669', paddingBottom: 10 }}>
+        <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1e293b', margin: 0 }}>📊 Seasonal Price Projections</h2>
+        <CitySelector value={citySeasonal} onChange={setCitySeasonal} />
       </div>
+      <SeasonalForecast city={citySeasonal} />
+
+      <WeatherCards />
+      <WeatherForecast7Day />
+      <GrowingConditions />
     </div>
   );
 }

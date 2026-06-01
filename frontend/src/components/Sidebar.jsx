@@ -65,6 +65,13 @@ function Sidebar({ unreadAlerts = 0 }) {
           </Link>
         )}
 
+        {has([UserRole.SALES, UserRole.OWNER, UserRole.ADMIN]) && (
+          <Link to="/pricing" className={`sb-item ${isActive('/pricing') ? 'active' : ''}`}>
+            <Icon.Chart />
+            <span>Pricing</span>
+          </Link>
+        )}
+
         {has([UserRole.ADMIN, UserRole.OWNER]) && (
           <Link to="/admin_dashboard" className={`sb-item ${isActive('/admin_dashboard') ? 'active' : ''}`}>
             <Icon.Settings />
