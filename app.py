@@ -913,6 +913,23 @@ BUSHEL_LBS = {
 }
 
 
+HALF_BUSHEL_COMMODITIES = {"fresno", "shishito"}
+HALF_BUSHEL_LBS = 10  # lbs per ½ bushel
+
+
+def effective_lbs_per_unit(commodity_lower: str, city_name: str) -> "int | None":
+    if commodity_lower in HALF_BUSHEL_COMMODITIES and city_name.upper() != "CHICAGO":
+        return HALF_BUSHEL_LBS
+    return BUSHEL_LBS.get(commodity_lower)
+
+
+def effective_unit_label(commodity_lower: str, city_name: str) -> str:
+    if commodity_lower in HALF_BUSHEL_COMMODITIES and city_name.upper() != "CHICAGO":
+        return f"$/½bu ({HALF_BUSHEL_LBS} lbs)"
+    lbs = BUSHEL_LBS.get(commodity_lower)
+    return f"$/bu ({lbs} lbs)" if lbs else "$/bu"
+
+
 _KG_TO_LBS = 2.20462
  
  
@@ -1277,16 +1294,17 @@ def fetch_usda_daily_data():
                     origin    = item.get("origin", None)
                     item_size = item.get("item_size", None)
 
-                    # ✅ FIX 6: Use BUSHEL_LBS (lowercase key) + parse_package_lbs
-                    lbs_per_bu = BUSHEL_LBS.get(stripped_commodity)
+                    # Use BUSHEL_LBS for physical package weight; city-aware unit for price
+                    actual_lbs_per_bu = BUSHEL_LBS.get(stripped_commodity)
+                    unit_lbs = effective_lbs_per_unit(stripped_commodity, first_city)
                     package_lbs = (
-                        parse_package_lbs(package, lbs_per_bu)
-                        if lbs_per_bu and package
+                        parse_package_lbs(package, actual_lbs_per_bu)
+                        if actual_lbs_per_bu and package
                         else None
                     )
 
                     if package_lbs and package_lbs > 0:
-                        price = round((raw_price / package_lbs) * lbs_per_bu, 2)
+                        price = round((raw_price / package_lbs) * unit_lbs, 2)
                     else:
                         logging.warning(
                             f"Cannot parse package '{package}' for "
@@ -1626,20 +1644,20 @@ def fetch_daily_data():
                     origin = None  # not provided by ProduceIQ
                     item_size = item.get("itemSizeName", None)  # e.g. "extra large"
 
-                    # ── NEW: convert raw price to per-bushel ───────────────────
+                    # ── NEW: convert raw price to per-unit (city-aware) ────────
                     variety_key = variety_to_bushel_key.get(
                         variety_name.lower(), variety_name.lower()
                     )
-                    lbs_per_bu = BUSHEL_LBS.get(variety_key)
+                    actual_lbs_per_bu = BUSHEL_LBS.get(variety_key)
+                    unit_lbs = effective_lbs_per_unit(variety_key, city_name)
                     package_lbs = (
-                        parse_package_lbs(package, lbs_per_bu)
-                        if lbs_per_bu and package
+                        parse_package_lbs(package, actual_lbs_per_bu)
+                        if actual_lbs_per_bu and package
                         else None
                     )
 
                     if package_lbs and package_lbs > 0:
-                        # price_per_bu = (raw_price / package_lbs) * lbs_per_bu
-                        price = round((raw_price / package_lbs) * lbs_per_bu, 2)
+                        price = round((raw_price / package_lbs) * unit_lbs, 2)
                     else:
                         logging.warning(
                             f"Cannot parse package '{package}' for "
@@ -2360,31 +2378,32 @@ def api_terminal_market_pricing():
             if not usda_row and not piq_row:
                 continue
 
-            lbs_per_bu = BUSHEL_LBS.get(commodity.lower())
-            # Converted unit: everything in DB is $/bu
-            converted_unit = f"$/bu ({lbs_per_bu} lbs)" if lbs_per_bu else "$/bu"
+            commodity_key = commodity.lower()
+            actual_lbs_per_bu = BUSHEL_LBS.get(commodity_key)
+            unit_lbs = effective_lbs_per_unit(commodity_key, city)
+            converted_unit = effective_unit_label(commodity_key, city)
 
-            def _fmt_row(row, source_name, lbs=lbs_per_bu):
+            def _fmt_row(row, source_name, actual_lbs=actual_lbs_per_bu, u_lbs=unit_lbs):
                 if not row:
                     return None
-                price_per_bu = float(row.price)
+                price_per_unit = float(row.price)
                 date_str = (datetime(int(row.year), 1, 1) + timedelta(days=int(row.day) - 1)).strftime("%Y-%m-%d")
                 pkg = _get_package(source_name, row.year, row.day)
 
                 # Back-calculate raw price (what USDA/ProduceIQ originally reported)
                 raw_price = None
                 raw_unit = None
-                if pkg and lbs:
-                    pkg_lbs = parse_package_lbs(pkg, lbs)
+                if pkg and actual_lbs:
+                    pkg_lbs = parse_package_lbs(pkg, actual_lbs)
                     if pkg_lbs and pkg_lbs > 0:
-                        raw_price = round(price_per_bu * pkg_lbs / lbs, 2)
+                        raw_price = round(price_per_unit * pkg_lbs / u_lbs, 2)
                         raw_unit = f"$/{package_raw_unit(pkg)}"
 
                 return {
-                    "price": round(price_per_bu, 2),       # $/bu (converted)
+                    "price": round(price_per_unit, 2),
                     "unit": converted_unit,
-                    "raw_price": raw_price,                 # original source price
-                    "raw_unit": raw_unit,                   # original package unit
+                    "raw_price": raw_price,
+                    "raw_unit": raw_unit,
                     "package": pkg,
                     "date": date_str,
                 }
@@ -2603,18 +2622,20 @@ def api_most_recent_prices():
         if row.year and row.day:
             date_str = (datetime(int(row.year), 1, 1) + timedelta(days=int(row.day) - 1)).strftime("%Y-%m-%d")
 
-        lbs_per_bu = BUSHEL_LBS.get(orig_comm.lower())
-        unit = f"$/bu ({lbs_per_bu} lbs)" if lbs_per_bu else "$/bu"
+        commodity_key = orig_comm.lower()
+        actual_lbs = BUSHEL_LBS.get(commodity_key)
+        unit_lbs = effective_lbs_per_unit(commodity_key, orig_city)
+        unit = effective_unit_label(commodity_key, orig_city)
 
         db_comm = commodity_map.get(orig_comm, orig_comm)
         pkg = _best_package(db_comm, orig_city.lower(), row.year, row.day)
 
         raw_price = None
         raw_unit = None
-        if pkg and lbs_per_bu:
-            pkg_lbs = parse_package_lbs(pkg, lbs_per_bu)
+        if pkg and actual_lbs:
+            pkg_lbs = parse_package_lbs(pkg, actual_lbs)
             if pkg_lbs and pkg_lbs > 0:
-                raw_price = round(price_per_bu * pkg_lbs / lbs_per_bu, 2)
+                raw_price = round(price_per_bu * pkg_lbs / unit_lbs, 2)
                 raw_unit = f"$/{package_raw_unit(pkg)}"
 
         recent_prices[orig_comm][orig_city] = {

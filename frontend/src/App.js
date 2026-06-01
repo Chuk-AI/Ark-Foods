@@ -15,6 +15,7 @@ import Alerts from './pages/Alerts';
 import NewDashboard from './pages/NewDashboard';
 import PricingDashboard from './pages/PricingDashboard';
 import WeatherDashboard from './pages/WeatherDashboard';
+import HistoricalPrices from './pages/HistoricalPrices';
 import Layout from './components/layout';
 
 axios.defaults.baseURL = 'https://arkfoods.klicksai.com';
@@ -83,6 +84,11 @@ const App = () => {
             <Route path="/weather" element={
               <ProtectedRoute roles={['sales', 'owner', 'admin']}>
                 <WeatherDashboard />
+              </ProtectedRoute>
+            }/>
+            <Route path="/historical_prices" element={
+              <ProtectedRoute roles={['sales', 'owner', 'admin']}>
+                <HistoricalPrices />
               </ProtectedRoute>
             }/>
           </Routes>
