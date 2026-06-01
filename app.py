@@ -96,6 +96,15 @@ CSV_DIRECTORY = "data/"
 # Initialize Flask app
 app = Flask(__name__, static_folder="frontend/build", static_url_path="/")
 
+# Load .env so JWT_SECRET_KEY is consistent across all gunicorn workers
+_env_path = os.path.join(os.path.dirname(__file__), ".env")
+if os.path.exists(_env_path):
+    with open(_env_path) as _f:
+        for _line in _f:
+            _line = _line.strip()
+            if _line and not _line.startswith("#") and "=" in _line:
+                _k, _v = _line.split("=", 1)
+                os.environ.setdefault(_k.strip(), _v.strip())
 
 if "JWT_SECRET_KEY" not in os.environ:
     os.environ["JWT_SECRET_KEY"] = secrets.token_hex(32)
