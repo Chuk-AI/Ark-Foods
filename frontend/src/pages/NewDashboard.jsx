@@ -101,7 +101,9 @@ function PricingMatrix() {
       {data && (
         <>
           <div style={{ background: '#fff', border: '2px solid #e2e8f0', borderRadius: 12, padding: 20, marginBottom: 20, lineHeight: 1.7, color: '#475569', fontSize: 13 }}>
-            <strong>USDA</strong> and <strong>ProduceIQ</strong> prices from last 7 days · <strong>FOB</strong> = best price − 26% freight · <strong>Diff</strong> = ProduceIQ − USDA · Prices stored as $/bu after conversion
+            <strong>Raw</strong> = price as reported by USDA/ProduceIQ in original package units ·
+            <strong> $/bu</strong> = normalized to per-bushel (used in forecasting) ·
+            <strong> FOB</strong> = best $/bu − 26% freight · <strong>Diff</strong> = ProduceIQ − USDA ($/bu)
           </div>
           {cities.map((city) => {
             const items = data[city]?.items || [];
@@ -115,9 +117,14 @@ function PricingMatrix() {
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                     <thead>
                       <tr style={{ background: 'linear-gradient(135deg,#059669,#047857)', color: '#fff' }}>
-                        {['Variety', 'Package Size', 'ProduceIQ Raw', 'USDA Raw', 'USDA $/bu', 'ProduceIQ $/bu', 'Difference', 'FOB Price'].map((h) => (
-                          <th key={h} style={{ padding: '10px 12px', textAlign: h === 'Variety' || h === 'Package Size' ? 'left' : 'center', fontWeight: 600 }}>{h}</th>
-                        ))}
+                        <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 600 }}>Variety</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 600 }}>Package</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600 }}>PIQ Raw</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600 }}>USDA Raw</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600 }}>PIQ $/bu</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600 }}>USDA $/bu</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600 }}>Difference</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600 }}>FOB</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -125,36 +132,38 @@ function PricingMatrix() {
                         const u = row.usda;
                         const p = row.produceiq;
                         const d = row.diff;
-                        const unitLabel = row.unit || '$/bu';
                         return (
                           <tr key={row.variety} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
                             <td style={{ padding: '10px 12px', fontWeight: 700, color: '#1e293b' }}>{row.variety}</td>
-                            <td style={{ padding: '10px 12px', color: '#475569', fontSize: 12 }}>
-                              {row.package ? <span title={row.package}>{row.package}</span> : <span style={{ color: '#94a3b8' }}>—</span>}
+                            {/* Package column — show PIQ package or USDA package */}
+                            <td style={{ padding: '10px 12px', color: '#475569', fontSize: 11, maxWidth: 140 }}>
+                              {(p?.package || u?.package)
+                                ? <span title={p?.package || u?.package}>{p?.package || u?.package}</span>
+                                : <span style={{ color: '#94a3b8' }}>—</span>}
                             </td>
+                            {/* PIQ Raw: original price before conversion */}
                             <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                              {p ? (
-                                <>
-                                  <div style={{ fontWeight: 700, color: '#92400e' }}>{money(p.price)}</div>
-                                  <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>{p.package || unitLabel}</div>
-                                  <div style={{ fontSize: 10, color: '#94a3b8' }}>{p.date}</div>
-                                </>
-                              ) : <span style={{ color: '#94a3b8' }}>—</span>}
+                              {p?.raw_price != null
+                                ? <><div style={{ fontWeight: 700, color: '#92400e' }}>{money(p.raw_price)}</div><div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>{p.raw_unit || p.unit}</div></>
+                                : <span style={{ color: '#94a3b8' }}>—</span>}
                             </td>
+                            {/* USDA Raw: original price before conversion */}
                             <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                              {u ? (
-                                <>
-                                  <div style={{ fontWeight: 700, color: '#1e40af' }}>{money(u.price)}</div>
-                                  <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>{u.package || unitLabel}</div>
-                                  <div style={{ fontSize: 10, color: '#94a3b8' }}>{u.date}</div>
-                                </>
-                              ) : <span style={{ color: '#94a3b8' }}>—</span>}
+                              {u?.raw_price != null
+                                ? <><div style={{ fontWeight: 700, color: '#1e40af' }}>{money(u.raw_price)}</div><div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>{u.raw_unit || u.unit}</div></>
+                                : <span style={{ color: '#94a3b8' }}>—</span>}
                             </td>
+                            {/* PIQ normalized $/bu */}
                             <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                              {u ? <><div style={{ fontWeight: 700, color: '#1e40af' }}>{money(u.price)}</div><div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>{unitLabel}</div></> : <span style={{ color: '#94a3b8' }}>—</span>}
+                              {p
+                                ? <><div style={{ fontWeight: 700, color: '#92400e' }}>{money(p.price)}</div><div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>{p.unit}</div><div style={{ fontSize: 10, color: '#94a3b8' }}>{p.date}</div></>
+                                : <span style={{ color: '#94a3b8' }}>—</span>}
                             </td>
+                            {/* USDA normalized $/bu */}
                             <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                              {p ? <><div style={{ fontWeight: 700, color: '#92400e' }}>{money(p.price)}</div><div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>{unitLabel}</div></> : <span style={{ color: '#94a3b8' }}>—</span>}
+                              {u
+                                ? <><div style={{ fontWeight: 700, color: '#1e40af' }}>{money(u.price)}</div><div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>{u.unit}</div><div style={{ fontSize: 10, color: '#94a3b8' }}>{u.date}</div></>
+                                : <span style={{ color: '#94a3b8' }}>—</span>}
                             </td>
                             <td style={{ padding: '10px 12px', textAlign: 'center' }}>
                               {d ? <><div style={{ fontWeight: 700, color: d.pct >= 0 ? '#dc2626' : '#16a34a' }}>{pctFmt(d.pct)}</div><div style={{ fontSize: 11, color: '#64748b' }}>{d.abs >= 0 ? '+' : ''}{money(d.abs)}</div></> : <span style={{ color: '#94a3b8' }}>—</span>}

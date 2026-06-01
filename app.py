@@ -1023,6 +1023,56 @@ def parse_package_lbs(package: str, lbs_per_bu: float) -> "float | None":
     return None
 
 
+def package_raw_unit(package: str) -> str:
+    """
+    Return a short human-readable unit string for the original package.
+    Examples:
+      "1 1/9 bushel cartons"   -> "1 1/9 bu"
+      "1/2 bushel cartons"     -> "1/2 bu"
+      "5/9 bushel cartons"     -> "5/9 bu"
+      "1 bushel cartons"       -> "1 bu"
+      "1/2 and 5/9 bushel"     -> "1/2-5/9 bu"
+      "20 lb cartons"          -> "20 lb"
+      "5 kg cartons"           -> "5 kg"
+    """
+    if not package:
+        return "pkg"
+    p = package.strip().lower()
+    bu_pat = r"bus?h?e?l?s?\b|bu\b"
+    if re.search(bu_pat, p):
+        # "1 1/9 bushel"
+        m = re.search(r"(\d+)\s+(\d+)\s*/\s*(\d+)\s*(?:" + bu_pat + r")", p)
+        if m:
+            return f"{m.group(1)} {m.group(2)}/{m.group(3)} bu"
+        # "1/2 and 5/9 bushel"
+        m = re.search(r"(\d+)\s*/\s*(\d+)\s+and\s+(\d+)\s*/\s*(\d+)\s*(?:" + bu_pat + r")", p)
+        if m:
+            return f"{m.group(1)}/{m.group(2)}-{m.group(3)}/{m.group(4)} bu"
+        # "5/9 bushel", "1/2 bushel"
+        m = re.search(r"(\d+)\s*/\s*(\d+)\s*(?:" + bu_pat + r")", p)
+        if m:
+            return f"{m.group(1)}/{m.group(2)} bu"
+        # "1 bushel", "1.5 bu"
+        m = re.search(r"(\d+(?:\.\d+)?)\s*(?:" + bu_pat + r")", p)
+        if m:
+            return f"{m.group(1)} bu"
+        return "bu"
+    # multi-bag: "12 1-lb film bags"
+    m = re.search(r"(\d+)\s+(\d+(?:\.\d+)?)\s*-?\s*lb", p)
+    if m:
+        total = float(m.group(1)) * float(m.group(2))
+        return f"{total:.0f} lb"
+    # kg
+    m = re.search(r"(\d+(?:\.\d+)?)\s*kg\b", p)
+    if m:
+        return f"{m.group(1)} kg"
+    # lb
+    m = re.search(r"(\d+(?:\.\d+)?)\s*(?:lbs?|pounds?)\b", p)
+    if m:
+        return f"{m.group(1)} lb"
+    return "pkg"
+
+
 @app.route("/api/fetch-data", methods=["GET"])
 def fetch_data():
     try:
@@ -2309,15 +2359,33 @@ def api_terminal_market_pricing():
                 continue
 
             lbs_per_bu = BUSHEL_LBS.get(commodity.lower())
-            unit_label = f"$/bu ({lbs_per_bu} lbs/bu)" if lbs_per_bu else "$/bu"
+            # Converted unit: everything in DB is $/bu
+            converted_unit = f"$/bu ({lbs_per_bu} lbs)" if lbs_per_bu else "$/bu"
 
             def _fmt_row(row, source_name, lbs=lbs_per_bu):
                 if not row:
                     return None
-                price = float(row.price)
+                price_per_bu = float(row.price)
                 date_str = (datetime(int(row.year), 1, 1) + timedelta(days=int(row.day) - 1)).strftime("%Y-%m-%d")
                 pkg = _get_package(source_name, row.year, row.day)
-                return {"price": round(price, 2), "date": date_str, "package": pkg, "unit": unit_label}
+
+                # Back-calculate raw price (what USDA/ProduceIQ originally reported)
+                raw_price = None
+                raw_unit = None
+                if pkg and lbs:
+                    pkg_lbs = parse_package_lbs(pkg, lbs)
+                    if pkg_lbs and pkg_lbs > 0:
+                        raw_price = round(price_per_bu * pkg_lbs / lbs, 2)
+                        raw_unit = f"$/{package_raw_unit(pkg)}"
+
+                return {
+                    "price": round(price_per_bu, 2),       # $/bu (converted)
+                    "unit": converted_unit,
+                    "raw_price": raw_price,                 # original source price
+                    "raw_unit": raw_unit,                   # original package unit
+                    "package": pkg,
+                    "date": date_str,
+                }
 
             usda_obj = _fmt_row(usda_row, "USDA")
             piq_obj = _fmt_row(piq_row, "ProduceIQ")
