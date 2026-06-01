@@ -2400,7 +2400,7 @@ def api_terminal_market_pricing():
 
             items.append({"variety": commodity, "usda": usda_obj, "produceiq": piq_obj, "diff": diff, "fob": fob,
                           "package": piq_obj["package"] if piq_obj and piq_obj["package"] else (usda_obj["package"] if usda_obj else None),
-                          "unit": unit_label})
+                          "unit": converted_unit})
 
         if items:
             result[city] = {"items": items}
