@@ -5401,7 +5401,7 @@ def update_notification(notification_id):
 
         # Update read status
         if "read" in data:
-            notification.read = bool(data["read"])
+            notification.is_read = bool(data["read"])
 
         db.session.commit()
 

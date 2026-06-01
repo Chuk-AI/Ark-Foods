@@ -1,535 +1,417 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect, useContext, useRef, useCallback } from "react";
 import { UserContext } from "../components/userContext";
 import axios from "axios";
 import "../styles/alerts.css";
+import "../styles/sales_styles.css";
+
+const COMMODITIES = [
+  "Anaheim", "Cubanelles", "Fresno", "Habanero", "Hungarian Wax",
+  "Jalapeno", "Long Hot", "Poblano", "Serrano", "Shishito",
+];
+const CITIES = [
+  "Baltimore", "Boston", "Chicago", "Columbia", "Los Angeles",
+  "Miami", "New York", "Philadelphia", "Detroit", "Atlanta",
+];
+
+const BellIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>
+  </svg>
+);
+const TrashIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+  </svg>
+);
+const CheckIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="20 6 9 17 4 12"/>
+  </svg>
+);
+const PlusIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+  </svg>
+);
+
+function useDebounce(fn, delay) {
+  const timer = useRef(null);
+  return useCallback((...args) => {
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => fn(...args), delay);
+  }, [fn, delay]);
+}
+
+function AlertRow({ alert, onUpdate, onDelete }) {
+  const [localThreshold, setLocalThreshold] = useState(String(alert.threshold));
+  const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const handleThresholdChange = (e) => {
+    setLocalThreshold(e.target.value);
+    setDirty(true);
+  };
+
+  const saveThreshold = async () => {
+    const val = parseFloat(localThreshold);
+    if (isNaN(val)) return;
+    setSaving(true);
+    await onUpdate(alert.id, { threshold: val });
+    setDirty(false);
+    setSaving(false);
+  };
+
+  return (
+    <tr>
+      <td style={{ fontWeight: 500 }}>{alert.commodity}</td>
+      <td style={{ color: "var(--text-2)" }}>{alert.city}</td>
+      <td>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <input
+            type="number"
+            className="al-input"
+            style={{ width: 72 }}
+            value={localThreshold}
+            onChange={handleThresholdChange}
+            min="-100"
+            max="100"
+            step="0.5"
+          />
+          <span style={{ fontSize: 12, color: "var(--text-3)" }}>%</span>
+          {dirty && (
+            <button className="al-save-btn" onClick={saveThreshold} disabled={saving}>
+              {saving ? "…" : <CheckIcon />}
+            </button>
+          )}
+        </div>
+      </td>
+      <td>
+        <button
+          className={`al-toggle ${alert.isActive ? "active" : "paused"}`}
+          onClick={() => onUpdate(alert.id, { isActive: !alert.isActive })}
+        >
+          {alert.isActive ? "Active" : "Paused"}
+        </button>
+      </td>
+      <td>
+        <button className="al-icon-btn danger" onClick={() => onDelete(alert)}>
+          <TrashIcon />
+        </button>
+      </td>
+    </tr>
+  );
+}
+
+function NotificationItem({ notif, onRead, onDelete }) {
+  const isIncrease = notif.title?.toLowerCase().includes("increase");
+  const isDecrease = notif.title?.toLowerCase().includes("decrease");
+  const borderColor = isIncrease ? "var(--down)" : isDecrease ? "var(--up)" : "var(--accent)";
+  const badgeBg = isIncrease ? "var(--down-soft)" : isDecrease ? "var(--up-soft)" : "var(--accent-soft)";
+  const badgeColor = isIncrease ? "var(--down)" : isDecrease ? "var(--up)" : "var(--accent)";
+  const badgeLabel = isIncrease ? "↑ Price Up" : isDecrease ? "↓ Price Down" : "Alert";
+
+  const formatDate = (iso) => {
+    const d = new Date(iso);
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+      + " · " + d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  };
+
+  return (
+    <div
+      className={`al-notif-item${notif.is_read ? "" : " unread"}`}
+      style={{ borderLeftColor: borderColor }}
+      onClick={() => !notif.is_read && onRead(notif.id)}
+    >
+      <div className="al-notif-header">
+        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+          {!notif.is_read && <span className="al-unread-dot" />}
+          <span className="al-badge" style={{ background: badgeBg, color: badgeColor }}>{badgeLabel}</span>
+          <span className="al-notif-title">{notif.title}</span>
+        </div>
+        <button
+          className="al-icon-btn"
+          onClick={(e) => { e.stopPropagation(); onDelete(notif.id); }}
+          title="Dismiss"
+        >
+          <TrashIcon />
+        </button>
+      </div>
+      <p className="al-notif-message">{notif.message}</p>
+      <div className="al-notif-meta">{formatDate(notif.created_at)}</div>
+    </div>
+  );
+}
 
 const Alerts = () => {
   const { isAuthenticated } = useContext(UserContext);
 
-  // States for alert settings
-  const [commodities, setCommodities] = useState([]);
   const [alertSettings, setAlertSettings] = useState([]);
   const [notifications, setNotifications] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-
-  // State for new alert form
-  const [newAlert, setNewAlert] = useState({
-    commodity: "",
-    city: "Boston",
-    threshold: 5, // Default to 5%
-    isActive: true,
-  });
-
-  // Tab state
   const [activeTab, setActiveTab] = useState("notifications");
 
-  // Fetch commodities, user's alert settings, and notifications on component mount
+  const [newAlert, setNewAlert] = useState({
+    commodity: "Anaheim",
+    city: "New York",
+    threshold: 5,
+  });
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState("");
+
+  const unreadCount = notifications.filter((n) => !n.is_read).length;
+
+  const token = () => localStorage.getItem("authToken");
+  const headers = () => ({ Authorization: `Bearer ${token()}` });
+
   useEffect(() => {
     if (isAuthenticated) {
-      fetchCommodities();
       fetchAlertSettings();
       fetchNotifications();
     }
   }, [isAuthenticated]);
 
-  // Update unread count when notifications change
-  useEffect(() => {
-    console.log("All notifications:", notifications);
-
-    // Log detailed information about each notification
-    notifications.forEach((notif) => {
-      console.log(
-        `Notification ID: ${notif.id}, is_read status: ${notif.is_read}, Full notification:`,
-        notif,
-      );
-    });
-
-    const count = notifications.filter((n) => !n.is_read).length;
-    console.log("Calculated unread count:", count);
-
-    setUnreadCount(count);
-
-    // Update notification badge in header
-    if (window.updateNotificationBadge) {
-      window.updateNotificationBadge(count);
-    }
-  }, [notifications]);
-
-  // Fetch available commodities from API
-  const fetchCommodities = async () => {
-    try {
-      const token = localStorage.getItem("authToken");
-      const response = await axios.get("/api/commodities", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setCommodities(response.data);
-    } catch (error) {
-      console.error("Error fetching commodities:", error);
-    }
-  };
-
-  // Fetch user's alert settings
   const fetchAlertSettings = async () => {
     try {
-      console.log("Fetching alert settings at:", new Date().toISOString());
-
-      const token = localStorage.getItem("authToken");
-      const response = await axios.get("/api/alert-entries-fresh", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Cache-Control": "no-cache",
-          Pragma: "no-cache",
-          Expires: "0",
-        },
-        params: {
-          _: new Date().getTime(), // Add timestamp to force new request
-        },
+      const r = await axios.get("/api/alert-entries-fresh", {
+        headers: { ...headers(), "Cache-Control": "no-cache" },
+        params: { _: Date.now() },
       });
-
-      console.log("Received alert settings:", response.data);
-      setAlertSettings(response.data);
-    } catch (error) {
-      console.error("Error fetching alert settings:", error);
-      console.error("Error details:", error.response?.data);
-    }
+      setAlertSettings(r.data);
+    } catch {}
   };
 
-  // Fetch user notifications
   const fetchNotifications = async () => {
     try {
-      const token = localStorage.getItem("authToken");
-      const response = await axios.get("/api/notifications", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      console.log("Raw notifications response:", response.data);
-
-      // Additional logging to check data structure
-      response.data.forEach((notif) => {
-        console.log("Individual notification:", {
-          id: notif.id,
-          is_read: notif.is_read,
-          full_notification: notif,
-        });
-      });
-
-      setNotifications(response.data);
-    } catch (error) {
-      console.error("Error fetching notifications:", error);
-      console.error("Error details:", error.response?.data);
-    }
+      const r = await axios.get("/api/notifications", { headers: headers() });
+      setNotifications(r.data);
+    } catch {}
   };
 
-  // Handle creating a new alert setting
   const handleCreateAlert = async (e) => {
     e.preventDefault();
+    setCreateError("");
+    setCreating(true);
     try {
-      const token = localStorage.getItem("authToken");
-      const response = await axios.post("/api/alert-settings", newAlert, {
-        headers: { Authorization: `Bearer ${token}` }, // Use token from your app's context or elsewhere
-      });
-
-      // Add the new alert to the list
-      setAlertSettings([...alertSettings, response.data]);
-
-      // Reset form
-      setNewAlert({
-        commodity: "",
-        city: "Boston",
-        threshold: 5,
-        isActive: true,
-      });
-    } catch (error) {
-      console.error("Error creating alert:", error);
-      alert("Failed to create alert. Please try again.");
+      const r = await axios.post("/api/alert-settings", { ...newAlert, isActive: true }, { headers: headers() });
+      setAlertSettings((prev) => [...prev, r.data]);
+    } catch (err) {
+      setCreateError(err.response?.data?.error || "Failed to create alert.");
+    } finally {
+      setCreating(false);
     }
   };
 
-  // Handle updating an existing alert setting
   const handleUpdateAlert = async (id, updates) => {
     try {
-      const token = localStorage.getItem("authToken");
-      await axios.patch(`/api/alert-settings/${id}`, updates, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      // Update local state
-      setAlertSettings(
-        alertSettings.map((alert) =>
-          alert.id === id ? { ...alert, ...updates } : alert,
-        ),
+      await axios.patch(`/api/alert-settings/${id}`, updates, { headers: headers() });
+      setAlertSettings((prev) =>
+        prev.map((a) => (a.id === id ? { ...a, ...updates } : a))
       );
-    } catch (error) {
-      console.error("Error updating alert:", error);
-      alert("Failed to update alert. Please try again.");
-    }
+    } catch {}
   };
 
-  // Add console logging to see what's being sent
   const handleDeleteAlert = async (alertItem) => {
-    if (window.confirm("Are you sure you want to delete this alert?")) {
-      try {
-        console.log("Deleting alert for commodity:", alertItem.id);
-
-        const token = localStorage.getItem("authToken");
-
-        // Use the commodity-based endpoint
-        const response = await axios.post(
-          "/api/delete-alert-by-id",
-          {
-            id: alertItem.id,
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Cache-Control": "no-cache",
-            },
-          },
-        );
-
-        console.log("Delete response:", response.data);
-
-        // Remove this item from the local state
-        setAlertSettings(
-          alertSettings.filter((alert) => alert.id !== alertItem.id),
-        );
-      } catch (error) {
-        console.error("Error deleting alert:", error);
-        window.alert(
-          "Failed to delete alert: " +
-            (error.response?.data?.error || error.message),
-        );
-      }
+    if (!window.confirm(`Delete alert for ${alertItem.commodity} in ${alertItem.city}?`)) return;
+    try {
+      await axios.post("/api/delete-alert-by-id", { id: alertItem.id }, { headers: headers() });
+      setAlertSettings((prev) => prev.filter((a) => a.id !== alertItem.id));
+    } catch (err) {
+      alert("Failed to delete: " + (err.response?.data?.error || err.message));
     }
   };
 
-  // Mark a notification as read
   const markAsRead = async (id) => {
     try {
-      const token = localStorage.getItem("authToken");
-      await axios.patch(
-        `/api/notifications/${id}`,
-        { read: true },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        },
+      await axios.patch(`/api/notifications/${id}`, { read: true }, { headers: headers() });
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
       );
-
-      // Update local state
-      setNotifications(
-        notifications.map((notif) =>
-          notif.id === id ? { ...notif, read: true } : notif,
-        ),
-      );
-    } catch (error) {
-      console.error("Error marking notification as read:", error);
-    }
+    } catch {}
   };
 
-  // Mark all notifications as read
   const markAllAsRead = async () => {
     try {
-      const token = localStorage.getItem("authToken");
-      await axios.post(
-        `/api/notifications/mark-all-read`,
-        {},
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      );
-
-      // Update local state
-      setNotifications(
-        notifications.map((notif) => ({ ...notif, read: true })),
-      );
-    } catch (error) {
-      console.error("Error marking all notifications as read:", error);
-    }
+      await axios.post("/api/notifications/mark-all-read", {}, { headers: headers() });
+      setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+    } catch {}
   };
 
-  // Delete a notification
   const deleteNotification = async (id) => {
     try {
-      const token = localStorage.getItem("authToken");
-      await axios.delete(`/api/notifications/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      // Update local state
-      setNotifications(notifications.filter((notif) => notif.id !== id));
-    } catch (error) {
-      console.error("Error deleting notification:", error);
-    }
-  };
-
-  // Format date for display
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString() + " " + date.toLocaleTimeString();
-  };
-
-  // Handle form input changes
-  const handleInputChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setNewAlert({
-      ...newAlert,
-      [name]: type === "checkbox" ? checked : value,
-    });
+      await axios.delete(`/api/notifications/${id}`, { headers: headers() });
+      setNotifications((prev) => prev.filter((n) => n.id !== id));
+    } catch {}
   };
 
   return (
-    <div>
-      <div className="container mt-5 pt-4">
-        <div className="row">
-          <div className="col-md-12">
-            <div className="card">
-              <div className="card-header bg-primary text-white">
-                <h2>Price Alert System</h2>
-                <ul className="nav nav-tabs card-header-tabs mt-2">
-                  <li className="nav-item">
-                    <button
-                      className={`nav-link ${activeTab === "notifications" ? "active text-primary" : "text-white"}`}
-                      onClick={() => setActiveTab("notifications")}
-                    >
-                      Notifications
-                      {unreadCount > 0 && (
-                        <span className="badge bg-danger ms-2">
-                          {unreadCount}
-                        </span>
-                      )}
-                    </button>
-                  </li>
-                  <li className="nav-item">
-                    <button
-                      className={`nav-link ${activeTab === "settings" ? "active text-primary" : "text-white"}`}
-                      onClick={() => setActiveTab("settings")}
-                    >
-                      Alert Settings
-                    </button>
-                  </li>
-                </ul>
-              </div>
-              <div className="card-body">
-                {activeTab === "notifications" ? (
-                  <div id="notifications-tab">
-                    <div className="d-flex justify-content-between mb-3">
-                      <h3>Price Alerts</h3>
-                      {notifications.length > 0 && (
-                        <button
-                          className="btn btn-outline-secondary"
-                          onClick={markAllAsRead}
-                        >
-                          Mark All as Read
-                        </button>
-                      )}
-                    </div>
+    <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 0 }}>
 
-                    {notifications.length === 0 ? (
-                      <div className="alert alert-info">
-                        You don't have any price alerts yet. They will appear
-                        here when commodity prices cross your set thresholds.
-                      </div>
-                    ) : (
-                      <div className="notification-list">
-                        {notifications.map((notification) => (
-                          <div
-                            key={notification.id}
-                            className={`notification-item ${notification.read ? "" : "unread"}`}
-                            onClick={() => markAsRead(notification.id)}
-                          >
-                            <div className="notification-content">
-                              <div className="notification-header">
-                                <h5 className="notification-title">
-                                  <span className="badge bg-danger me-2">
-                                    Price Alert
-                                  </span>
-                                  {notification.title}
-                                </h5>
-                                <div className="notification-actions">
-                                  <button
-                                    className="btn btn-sm btn-outline-danger"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      deleteNotification(notification.id);
-                                    }}
-                                  >
-                                    <i className="bi bi-trash"></i>
-                                  </button>
-                                </div>
-                              </div>
-                              <p className="notification-message">
-                                {notification.message}
-                              </p>
-                              <div className="notification-meta">
-                                <small className="text-muted">
-                                  {formatDate(notification.created_at)}
-                                </small>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div id="settings-tab">
-                    <h3 className="mb-3">Alert Settings</h3>
+      {/* ── Tab header ──────────────────────────────────────── */}
+      <div className="al-tab-bar">
+        <button
+          className={`al-tab${activeTab === "notifications" ? " active" : ""}`}
+          onClick={() => setActiveTab("notifications")}
+        >
+          <BellIcon />
+          Notifications
+          {unreadCount > 0 && <span className="al-count-badge">{unreadCount}</span>}
+        </button>
+        <button
+          className={`al-tab${activeTab === "settings" ? " active" : ""}`}
+          onClick={() => setActiveTab("settings")}
+        >
+          Alert Settings
+        </button>
+      </div>
 
-                    <div className="create-alert-form mb-4">
-                      <h4>Create New Price Alert</h4>
-                      <form onSubmit={handleCreateAlert}>
-                        <div className="row g-3">
-                          <div className="col-md-3">
-                            <label htmlFor="commodity" className="form-label">
-                              Commodity
-                            </label>
-                            <select
-                              className="form-select"
-                              id="commodity"
-                              name="commodity"
-                              value={newAlert.commodity}
-                              onChange={handleInputChange}
-                              required
-                            >
-                              <option value="">Select a commodity</option>
-                              {commodities.map((commodity) => (
-                                <option key={commodity} value={commodity}>
-                                  {commodity}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          <div className="col-md-3">
-                            <label htmlFor="city" className="form-label">
-                              City
-                            </label>
-                            <select
-                              className="form-select"
-                              id="city"
-                              name="city"
-                              value={newAlert.city}
-                              onChange={handleInputChange}
-                              required
-                            >
-                              <option value="">Select a city</option>
-                              <option value="Baltimore">Baltimore</option>
-                              <option value="Boston">Boston</option>
-                              <option value="Chicago">Chicago</option>
-                              <option value="Columbia">Columbia</option>
-                              <option value="Los Angeles">Los Angeles</option>
-                              <option value="Miami">Miami</option>
-                              <option value="New York">New York</option>
-                              <option value="Philadelphia">Philadelphia</option>
-                              <option value="Detroit">Detroit</option>
-                              <option value="Atlanta">Atlanta</option>
-                            </select>
-                          </div>
-                          <div className="col-md-3">
-                            <label htmlFor="threshold" className="form-label">
-                              Price Increase Threshold (%)
-                            </label>
-                            <input
-                              type="number"
-                              className="form-control"
-                              id="threshold"
-                              name="threshold"
-                              min="-100" // Allow negative values down to -100%
-                              max="100"
-                              value={newAlert.threshold}
-                              onChange={handleInputChange}
-                              required
-                            />
-                          </div>
-                          <div className="col-md-3 d-flex align-items-end">
-                            <button
-                              type="submit"
-                              className="btn btn-primary w-100"
-                            >
-                              Create Alert
-                            </button>
-                          </div>
-                        </div>
-                      </form>
-                    </div>
+      {/* ── Notifications tab ────────────────────────────────── */}
+      {activeTab === "notifications" && (
+        <div className="sd-card">
+          <div className="sd-card-head">
+            <h2>
+              Price Notifications
+              {unreadCount > 0 && (
+                <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, color: "var(--down)",
+                  background: "var(--down-soft)", borderRadius: 10, padding: "2px 7px" }}>
+                  {unreadCount} unread
+                </span>
+              )}
+            </h2>
+            {unreadCount > 0 && (
+              <button className="al-text-btn" onClick={markAllAsRead}>
+                Mark all read
+              </button>
+            )}
+          </div>
 
-                    <h4>Your Price Alerts</h4>
-                    {alertSettings.length === 0 ? (
-                      <div className="alert alert-info">
-                        You haven't set up any price alerts yet. Create one
-                        using the form above.
-                      </div>
-                    ) : (
-                      <div className="table-responsive">
-                        <table className="table table-hover">
-                          <thead>
-                            <tr>
-                              <th>Commodity</th>
-                              <th>City</th>
-                              <th>Threshold (%)</th>
-                              <th>Status</th>
-                              <th>Actions</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {alertSettings.map((alert) => (
-                              <tr key={alert.id}>
-                                <td>{alert.commodity}</td>
-                                <td>{alert.city}</td>
-                                <td>
-                                  <div className="input-group input-group-sm">
-                                    <input
-                                      type="number"
-                                      className="form-control"
-                                      value={alert.threshold}
-                                      onChange={(e) =>
-                                        handleUpdateAlert(alert.id, {
-                                          threshold: e.target.value,
-                                        })
-                                      }
-                                      min="1"
-                                      max="100"
-                                    />
-                                    <span className="input-group-text">%</span>
-                                  </div>
-                                </td>
-                                <td>
-                                  <div className="form-check form-switch">
-                                    <input
-                                      className="form-check-input"
-                                      type="checkbox"
-                                      checked={alert.isActive}
-                                      onChange={(e) =>
-                                        handleUpdateAlert(alert.id, {
-                                          isActive: e.target.checked,
-                                        })
-                                      }
-                                    />
-                                    <label className="form-check-label">
-                                      {alert.isActive ? "Active" : "Paused"}
-                                    </label>
-                                  </div>
-                                </td>
-                                <td>
-                                  <button
-                                    className="btn btn-sm btn-outline-danger"
-                                    onClick={() => handleDeleteAlert(alert)}
-                                  >
-                                    Delete
-                                  </button>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                )}
+          {notifications.length === 0 ? (
+            <div className="al-empty">
+              <BellIcon />
+              <div>No notifications yet</div>
+              <div style={{ fontSize: 12, color: "var(--text-3)", marginTop: 4 }}>
+                Alerts will appear here when prices cross your thresholds
               </div>
             </div>
-          </div>
+          ) : (
+            <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+              {notifications.map((n) => (
+                <NotificationItem
+                  key={n.id}
+                  notif={n}
+                  onRead={markAsRead}
+                  onDelete={deleteNotification}
+                />
+              ))}
+            </div>
+          )}
         </div>
-      </div>
+      )}
+
+      {/* ── Alert Settings tab ───────────────────────────────── */}
+      {activeTab === "settings" && (
+        <>
+          {/* Create form */}
+          <div className="sd-card">
+            <div className="sd-card-head">
+              <h2>Create New Alert</h2>
+            </div>
+            <form onSubmit={handleCreateAlert} style={{ padding: "16px 20px" }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  <label className="al-label">Commodity</label>
+                  <select
+                    className="al-select"
+                    value={newAlert.commodity}
+                    onChange={(e) => setNewAlert((p) => ({ ...p, commodity: e.target.value }))}
+                    required
+                  >
+                    {COMMODITIES.map((c) => <option key={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  <label className="al-label">City</label>
+                  <select
+                    className="al-select"
+                    value={newAlert.city}
+                    onChange={(e) => setNewAlert((p) => ({ ...p, city: e.target.value }))}
+                    required
+                  >
+                    {CITIES.map((c) => <option key={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  <label className="al-label">
+                    Threshold (%)
+                    <span style={{ fontSize: 10, color: "var(--text-3)", marginLeft: 4 }}>
+                      positive = price up · negative = price down
+                    </span>
+                  </label>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <input
+                      type="number"
+                      className="al-input"
+                      style={{ width: 80 }}
+                      value={newAlert.threshold}
+                      onChange={(e) => setNewAlert((p) => ({ ...p, threshold: e.target.value }))}
+                      min="-100"
+                      max="100"
+                      step="0.5"
+                      required
+                    />
+                    <span style={{ fontSize: 12, color: "var(--text-3)" }}>%</span>
+                  </div>
+                </div>
+                <button type="submit" className="al-create-btn" disabled={creating}>
+                  <PlusIcon />
+                  {creating ? "Creating…" : "Create Alert"}
+                </button>
+              </div>
+              {createError && (
+                <div style={{ marginTop: 10, fontSize: 12, color: "var(--down)" }}>{createError}</div>
+              )}
+            </form>
+          </div>
+
+          {/* Existing alerts */}
+          <div className="sd-card">
+            <div className="sd-card-head">
+              <h2>Your Alerts ({alertSettings.length})</h2>
+            </div>
+            {alertSettings.length === 0 ? (
+              <div className="al-empty">
+                <div>No alerts configured</div>
+                <div style={{ fontSize: 12, color: "var(--text-3)", marginTop: 4 }}>
+                  Create one above to start tracking price changes
+                </div>
+              </div>
+            ) : (
+              <div style={{ overflowX: "auto" }}>
+                <table className="al-table">
+                  <thead>
+                    <tr>
+                      <th>Commodity</th>
+                      <th>City</th>
+                      <th>Threshold</th>
+                      <th>Status</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {alertSettings.map((alert) => (
+                      <AlertRow
+                        key={alert.id}
+                        alert={alert}
+                        onUpdate={handleUpdateAlert}
+                        onDelete={handleDeleteAlert}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
     </div>
   );
 };
