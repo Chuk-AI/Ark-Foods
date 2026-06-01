@@ -413,7 +413,7 @@ function ScatterTab() {
                   formatter={(v, n) => [`$${Number(v).toFixed(2)}`, n]}
                 />
                 <Scatter
-                  data={(plotData.data || []).map((pt) => ({ x: pt[0], y: pt[1] }))}
+                  data={(() => { const t = plotData?.data?.[0]; return t ? t.x.map((x,i) => ({x, y:t.y[i]})).filter(p=>p.x!=null&&p.y!=null) : []; })()}
                   fill="var(--accent)"
                   opacity={0.65}
                 />
@@ -462,9 +462,9 @@ function RollingTab() {
     setLoading(false);
   };
 
-  const linePoints = chartData
-    ? chartData.dates.map((d, i) => ({ date: d, correlation: chartData.values[i] }))
-    : [];
+  const linePoints = (chartData?.dates || [])
+    .map((d, i) => ({ date: d, correlation: chartData.values[i] }))
+    .filter((p) => p.correlation != null && !isNaN(p.correlation));
 
   return (
     <div className="sd-card">
