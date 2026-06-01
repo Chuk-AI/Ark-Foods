@@ -4818,6 +4818,49 @@ def get_break_even_chart_data():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/search", methods=["GET"])
+def global_search():
+    """Global search across commodities, cities, and pages."""
+    q = (request.args.get("q") or "").strip().lower()
+    if not q or len(q) < 1:
+        return jsonify({"commodities": [], "cities": [], "pages": []})
+
+    try:
+        # Commodities
+        raw_commodities = db.session.query(PriceData.commodity).distinct().all()
+        commodities = sorted(set(
+            ("Cubanelles" if c[0].lower() in ("cubanelle", "cubanelles") else c[0])
+            for c in raw_commodities
+        ))
+        matched_commodities = [c for c in commodities if q in c.lower()][:10]
+
+        # Cities
+        raw_cities = db.session.query(PriceData.city_name).distinct().all()
+        cities = sorted(set(c[0] for c in raw_cities if c[0]))
+        matched_cities = [c for c in cities if q in c.lower()][:8]
+
+        # Pages (static)
+        all_pages = [
+            {"label": "Sales Dashboard", "path": "/sales_dashboard"},
+            {"label": "Price Analytics", "path": "/analytics"},
+            {"label": "Dynamic Analytics", "path": "/dynamic_analytics"},
+            {"label": "Forecasts", "path": "/new_dashboard"},
+            {"label": "Alerts", "path": "/alerts"},
+            {"label": "Upload Data", "path": "/upload_historical"},
+            {"label": "Approve Users", "path": "/approve_users"},
+        ]
+        matched_pages = [p for p in all_pages if q in p["label"].lower()]
+
+        return jsonify({
+            "commodities": matched_commodities,
+            "cities": matched_cities,
+            "pages": matched_pages,
+        })
+    except Exception as e:
+        app.logger.error(f"Search error: {e}")
+        return jsonify({"commodities": [], "cities": [], "pages": []}), 500
+
+
 @app.route("/api/commodities", methods=["GET"])
 # @jwt_required()
 def get_commodities():
