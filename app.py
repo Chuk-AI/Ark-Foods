@@ -2536,41 +2536,56 @@ def api_most_recent_prices():
 
     results = db.session.execute(final_query).all()
 
-    # Collect (commodity, city, year, day) keys to batch-fetch package strings
+    # Map results by (original_commodity, original_city)
     key_to_row = {}
     for row in results:
         original_commodity = reverse_commodity_map.get(row.commodity, row.commodity)
         normalized_city = row.city_name.lower()
         original_city = city_lower_map.get(normalized_city)
-        if original_city and original_commodity in {c: None for c in commodities}:
+        if original_city and original_commodity in set(commodities):
             key_to_row[(original_commodity, original_city)] = row
 
-    # Batch-fetch most common package string per (commodity, city, year, day)
-    package_map = {}
-    for (orig_comm, orig_city), row in key_to_row.items():
-        if row.year is None or row.day is None:
-            continue
-        db_commodity = commodity_map.get(orig_comm, orig_comm)
-        variants = {db_commodity}
-        if db_commodity == "Cubanelle":
-            variants.add("Cubanelles")
-        pkg_row = (
-            db.session.query(PriceData.package, func.count().label("cnt"))
-            .filter(
-                PriceData.commodity.in_(sorted(variants)),
-                PriceData.source.in_(valid_sources),
-                PriceData.city_name.ilike(orig_city),
-                PriceData.year == row.year,
-                PriceData.day == row.day,
-                PriceData.package.isnot(None),
-            )
-            .group_by(PriceData.package)
-            .order_by(func.count().desc())
-            .first()
+    # Single batch query for all package strings covering the full 7-day window
+    pkg_rows = (
+        db.session.query(
+            PriceData.commodity,
+            func.lower(PriceData.city_name).label("city_lower"),
+            PriceData.year,
+            PriceData.day,
+            PriceData.package,
+            func.count().label("cnt"),
         )
-        package_map[(orig_comm, orig_city)] = pkg_row.package if pkg_row else None
+        .filter(
+            PriceData.commodity.in_(adjusted_commodities + ["Cubanelles"]),
+            city_filter_conditions,
+            date_filter_conditions,
+            PriceData.source.in_(valid_sources),
+            PriceData.package.isnot(None),
+        )
+        .group_by(PriceData.commodity, func.lower(PriceData.city_name), PriceData.year, PriceData.day, PriceData.package)
+        .all()
+    )
 
-    # Build the dictionary for recent prices — now includes date, unit, raw_price
+    # Build package lookup: (db_commodity, city_lower, year, day) -> most common package
+    from collections import defaultdict
+    pkg_counts = defaultdict(dict)
+    for pr in pkg_rows:
+        key = (pr.commodity, pr.city_lower, pr.year, pr.day)
+        pkg_counts[key][pr.package] = pr.cnt
+
+    def _best_package(db_comm, city_lower, year, day):
+        variants = [db_comm]
+        if db_comm == "Cubanelle":
+            variants.append("Cubanelles")
+        best_pkg, best_cnt = None, 0
+        for v in variants:
+            pkgs = pkg_counts.get((v, city_lower, year, day), {})
+            for pkg, cnt in pkgs.items():
+                if cnt > best_cnt:
+                    best_pkg, best_cnt = pkg, cnt
+        return best_pkg
+
+    # Build the response — includes date, unit ($/bu), raw_price, raw_unit
     recent_prices = {
         commodity: {city: "-" for city in cities} for commodity in commodities
     }
@@ -2589,7 +2604,9 @@ def api_most_recent_prices():
         lbs_per_bu = BUSHEL_LBS.get(orig_comm.lower())
         unit = f"$/bu ({lbs_per_bu} lbs)" if lbs_per_bu else "$/bu"
 
-        pkg = package_map.get((orig_comm, orig_city))
+        db_comm = commodity_map.get(orig_comm, orig_comm)
+        pkg = _best_package(db_comm, orig_city.lower(), row.year, row.day)
+
         raw_price = None
         raw_unit = None
         if pkg and lbs_per_bu:
