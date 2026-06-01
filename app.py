@@ -2513,6 +2513,8 @@ def api_most_recent_prices():
             price_subquery_cte.c.commodity,
             price_subquery_cte.c.city_name,
             price_subquery_cte.c.avg_price,
+            price_subquery_cte.c.year,
+            price_subquery_cte.c.day,
             window.label("rn"),
         )
     ).cte("ranked_prices")
@@ -2525,6 +2527,8 @@ def api_most_recent_prices():
             ranked_prices_cte.c.commodity,
             ranked_prices_cte.c.city_name,
             ranked_prices_cte.c.avg_price,
+            ranked_prices_cte.c.year,
+            ranked_prices_cte.c.day,
         )
         .select_from(ranked_prices_cte)
         .where(ranked_prices_cte.c.rn == 1)
@@ -2532,19 +2536,77 @@ def api_most_recent_prices():
 
     results = db.session.execute(final_query).all()
 
-    # Build the dictionary for recent prices
-    recent_prices = {
-        commodity: {city: "-" for city in cities} for commodity in commodities
-    }
-
+    # Collect (commodity, city, year, day) keys to batch-fetch package strings
+    key_to_row = {}
     for row in results:
         original_commodity = reverse_commodity_map.get(row.commodity, row.commodity)
         normalized_city = row.city_name.lower()
         original_city = city_lower_map.get(normalized_city)
-        if original_city and original_commodity in recent_prices:
-            recent_prices[original_commodity][original_city] = (
-                float(row.avg_price) if row.avg_price is not None else "-"
+        if original_city and original_commodity in {c: None for c in commodities}:
+            key_to_row[(original_commodity, original_city)] = row
+
+    # Batch-fetch most common package string per (commodity, city, year, day)
+    package_map = {}
+    for (orig_comm, orig_city), row in key_to_row.items():
+        if row.year is None or row.day is None:
+            continue
+        db_commodity = commodity_map.get(orig_comm, orig_comm)
+        variants = {db_commodity}
+        if db_commodity == "Cubanelle":
+            variants.add("Cubanelles")
+        pkg_row = (
+            db.session.query(PriceData.package, func.count().label("cnt"))
+            .filter(
+                PriceData.commodity.in_(sorted(variants)),
+                PriceData.source.in_(valid_sources),
+                PriceData.city_name.ilike(orig_city),
+                PriceData.year == row.year,
+                PriceData.day == row.day,
+                PriceData.package.isnot(None),
             )
+            .group_by(PriceData.package)
+            .order_by(func.count().desc())
+            .first()
+        )
+        package_map[(orig_comm, orig_city)] = pkg_row.package if pkg_row else None
+
+    # Build the dictionary for recent prices — now includes date, unit, raw_price
+    recent_prices = {
+        commodity: {city: "-" for city in cities} for commodity in commodities
+    }
+
+    for (orig_comm, orig_city), row in key_to_row.items():
+        if orig_city not in cities or orig_comm not in recent_prices:
+            continue
+        price_per_bu = float(row.avg_price) if row.avg_price is not None else None
+        if price_per_bu is None:
+            continue
+
+        date_str = None
+        if row.year and row.day:
+            date_str = (datetime(int(row.year), 1, 1) + timedelta(days=int(row.day) - 1)).strftime("%Y-%m-%d")
+
+        lbs_per_bu = BUSHEL_LBS.get(orig_comm.lower())
+        unit = f"$/bu ({lbs_per_bu} lbs)" if lbs_per_bu else "$/bu"
+
+        pkg = package_map.get((orig_comm, orig_city))
+        raw_price = None
+        raw_unit = None
+        if pkg and lbs_per_bu:
+            pkg_lbs = parse_package_lbs(pkg, lbs_per_bu)
+            if pkg_lbs and pkg_lbs > 0:
+                raw_price = round(price_per_bu * pkg_lbs / lbs_per_bu, 2)
+                raw_unit = f"$/{package_raw_unit(pkg)}"
+
+        recent_prices[orig_comm][orig_city] = {
+            "price": round(price_per_bu, 2),
+            "date": date_str,
+            "unit": unit,
+            "package": pkg,
+            "raw_price": raw_price,
+            "raw_unit": raw_unit,
+        }
+
     return jsonify({"prices": recent_prices})
 
 

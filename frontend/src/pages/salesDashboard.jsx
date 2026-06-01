@@ -138,16 +138,35 @@ function SalesDashboard() {
     return COMMODITIES.map((commodity) => {
       let maxPrice = -Infinity, maxCity = null;
       cityCols.forEach((city) => {
-        const p = parseFloat(prices[commodity]?.[city]);
+        const cell = prices[commodity]?.[city];
+        const p = typeof cell === "object" ? cell?.price : parseFloat(cell);
         if (!isNaN(p) && p > maxPrice) { maxPrice = p; maxCity = city; }
       });
       return (
         <tr key={commodity}>
-          <td>{commodity}</td>
+          <td style={{ fontWeight: 600 }}>{commodity}</td>
           {cityCols.map((city) => {
-            const p = prices[commodity]?.[city];
-            const fmt = p !== undefined && !isNaN(parseFloat(p)) ? `$${parseFloat(p).toFixed(2)}` : "-";
-            return <td key={city} className={city === maxCity ? "highlight-max" : ""}>{fmt}</td>;
+            const cell = prices[commodity]?.[city];
+            if (!cell || cell === "-" || typeof cell !== "object") {
+              return <td key={city}>-</td>;
+            }
+            const isMax = city === maxCity;
+            return (
+              <td key={city} className={isMax ? "highlight-max" : ""} style={{ verticalAlign: "top", minWidth: 90 }}>
+                <div style={{ fontWeight: 700, fontFamily: "var(--mono)", color: isMax ? undefined : "var(--up)" }}>
+                  ${cell.price.toFixed(2)}
+                </div>
+                <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 2 }}>
+                  {cell.unit}
+                </div>
+                {cell.raw_price != null && (
+                  <div style={{ fontSize: 10, color: "var(--text-3)" }}>
+                    raw: ${cell.raw_price.toFixed(2)} <span style={{ opacity: 0.7 }}>{cell.raw_unit}</span>
+                  </div>
+                )}
+                <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 1 }}>{cell.date}</div>
+              </td>
+            );
           })}
         </tr>
       );
