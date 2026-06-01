@@ -541,16 +541,18 @@ GROWING_REGIONS = {
 }
 
 PEPPER_CONDITIONS = {
-    "Jalapeno": {"temp_min": 60, "temp_max": 80, "humidity_min": 20, "humidity_max": 40},
-    "Hungarian Wax": {"temp_min": 60, "temp_max": 80, "humidity_min": 20, "humidity_max": 40},
-    "Shishito": {"temp_min": 60, "temp_max": 80, "humidity_min": 20, "humidity_max": 40},
-    "Fresno": {"temp_min": 60, "temp_max": 80, "humidity_min": 20, "humidity_max": 40},
-    "Long Hot": {"temp_min": 60, "temp_max": 80, "humidity_min": 20, "humidity_max": 40},
-    "Habanero": {"temp_min": 60, "temp_max": 80, "humidity_min": 20, "humidity_max": 40},
-    "Anaheim": {"temp_min": 60, "temp_max": 80, "humidity_min": 20, "humidity_max": 40},
-    "Cubanelle": {"temp_min": 60, "temp_max": 80, "humidity_min": 20, "humidity_max": 40},
-    "Serrano": {"temp_min": 60, "temp_max": 80, "humidity_min": 20, "humidity_max": 40},
-    "Poblano": {"temp_min": 60, "temp_max": 80, "humidity_min": 20, "humidity_max": 40},
+    # Optimal temp for fruit set: 65-80°F day; growth slows below 55°F, blossom drop above 90°F
+    # Humidity: most peppers prefer 40-70%; below 30% causes drought stress, above 80% → fungal risk
+    "Jalapeno":      {"temp_min": 65, "temp_max": 85, "humidity_min": 40, "humidity_max": 70},
+    "Hungarian Wax": {"temp_min": 60, "temp_max": 85, "humidity_min": 35, "humidity_max": 70},
+    "Shishito":      {"temp_min": 65, "temp_max": 85, "humidity_min": 50, "humidity_max": 75},
+    "Fresno":        {"temp_min": 65, "temp_max": 90, "humidity_min": 30, "humidity_max": 60},
+    "Long Hot":      {"temp_min": 60, "temp_max": 85, "humidity_min": 40, "humidity_max": 70},
+    "Habanero":      {"temp_min": 70, "temp_max": 90, "humidity_min": 50, "humidity_max": 75},
+    "Anaheim":       {"temp_min": 65, "temp_max": 90, "humidity_min": 30, "humidity_max": 65},
+    "Cubanelle":     {"temp_min": 60, "temp_max": 85, "humidity_min": 40, "humidity_max": 70},
+    "Serrano":       {"temp_min": 65, "temp_max": 90, "humidity_min": 40, "humidity_max": 70},
+    "Poblano":       {"temp_min": 60, "temp_max": 85, "humidity_min": 40, "humidity_max": 70},
 }
 
 OPENWEATHER_API_KEY = os.environ.get("OPENWEATHER_API_KEY", "70dda5aad7b938fbdc226c3436e0c1b9")
@@ -6850,7 +6852,22 @@ def api_weather_forecast_7day():
     cached = cache_get("weather_forecast_7day")
     if cached:
         return jsonify(cached)
-    return jsonify({"success": False, "error": "Cache not built yet. Trigger /api/trigger_cache_build"}), 503
+    # Cache not built — fetch live for all regions
+    regions_out = []
+    for region_key, region_info in GROWING_REGIONS.items():
+        forecast = fetch_7day_forecast(region_info["lat"], region_info["lon"])
+        if forecast.get("success"):
+            for day in forecast["forecasts"]:
+                weather_snap = {"temp": day["temp_avg"], "humidity": day["humidity"], "success": True}
+                day["growing_status"] = analyze_growing_conditions(weather_snap, region_info["crops"])["status"]
+            forecast["city"] = region_info["city"]
+            forecast["country"] = "US" if not region_info["city"].endswith("Mexico") else "MX"
+        regions_out.append({
+            "key": region_key, "name": region_info["name"],
+            "city": region_info["city"], "crops": region_info["crops"],
+            "forecast": forecast,
+        })
+    return jsonify({"success": True, "regions": regions_out, "source": "live"})
 
 
 @app.route("/api/weather_forecast_7day/<region_key>", methods=["GET"])
