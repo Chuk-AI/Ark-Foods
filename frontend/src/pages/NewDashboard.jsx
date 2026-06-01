@@ -361,30 +361,26 @@ const Tooltip6w = ({ active, payload }) => {
   );
 };
 
-function LongTermCard({ commodity, city }) {
+function LongTermCard({ commodity, city, onResult }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true); setData(null);
     axios.get(`/api/price_forecast_long_term?commodity=${encodeURIComponent(commodity)}&city=${encodeURIComponent(city)}`)
-      .then((r) => { setData(r.data); setLoading(false); })
-      .catch(() => { setData({ success: false, error: 'Failed to load' }); setLoading(false); });
+      .then((r) => { setData(r.data); setLoading(false); onResult?.(r.data?.success === true); })
+      .catch(() => { setData({ success: false }); setLoading(false); onResult?.(false); });
   }, [commodity, city]);
 
   if (loading) return (
-    <div style={{ background: '#f8fafc', border: '2px solid #e2e8f0', borderRadius: 12, padding: 20, display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 200 }}>
-      <div style={{ width: 28, height: 28, border: '3px solid #e2e8f0', borderTop: '3px solid #059669', borderRadius: '50%', animation: 'spin2 1s linear infinite' }} />
+    <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 12, padding: 20, display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 120 }}>
+      <div style={{ width: 24, height: 24, border: '3px solid var(--border)', borderTop: '3px solid #059669', borderRadius: '50%', animation: 'spin2 1s linear infinite' }} />
       <style>{`@keyframes spin2{from{transform:rotate(0)}to{transform:rotate(360deg)}}`}</style>
     </div>
   );
 
-  if (!data?.success) return (
-    <div style={{ background: '#f8fafc', border: '2px solid #e2e8f0', borderRadius: 12, padding: 20 }}>
-      <div style={{ fontWeight: 700, marginBottom: 8 }}>🔮 {commodity}</div>
-      <p style={{ color: '#dc2626', fontSize: 13 }}>{data?.error || 'No current price data available'}</p>
-    </div>
-  );
+  // No data — render nothing so the grid doesn't show empty slots
+  if (!data?.success) return null;
 
   const avgVariance = data.avg_variance_from_historical_pct;
   const chartData = (data.forecasts || []).map((f) => ({ ...f }));
@@ -453,12 +449,28 @@ function LongTermCard({ commodity, city }) {
 }
 
 function LongTermOutlook({ city }) {
+  const [loaded, setLoaded] = useState(0);
+  const [hasAny, setHasAny] = useState(false);
+  const total = COMMODITIES.length;
+
+  const onResult = (hasData) => {
+    setLoaded((n) => n + 1);
+    if (hasData) setHasAny(true);
+  };
+
+  // Reset when city changes
+  useEffect(() => { setLoaded(0); setHasAny(false); }, [city]);
+
   return (
     <div style={{ marginBottom: 40 }}>
-      <SectionTitle>🔮 6-Week Hybrid Market Outlook</SectionTitle>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(380px,1fr))', gap: 18 }}>
-        {COMMODITIES.map((c) => <LongTermCard key={c} commodity={c} city={city} />)}
+        {COMMODITIES.map((c) => <LongTermCard key={`${c}-${city}`} commodity={c} city={city} onResult={onResult} />)}
       </div>
+      {loaded === total && !hasAny && (
+        <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 12, padding: '32px 20px', textAlign: 'center', color: 'var(--text-3)', fontSize: 13 }}>
+          No 6-week forecast data available for <strong>{city}</strong> — price data must be within the last 7 days.
+        </div>
+      )}
     </div>
   );
 }
@@ -472,35 +484,61 @@ function SeasonalForecast({ city }) {
 
   useEffect(() => {
     setLoading(true); setData(null); setError(null);
-    const params = `commodities=${COMMODITIES.join(',')}&city=${encodeURIComponent(city)}&forecastYears=1&source=ProduceIQ`;
+    const isAll = city === 'All cities';
+    const params = new URLSearchParams({
+      commodities: COMMODITIES.join(','),
+      forecastYears: '1',
+      source: 'Both',
+      ...(isAll
+        ? { averageCities: 'true' }
+        : { cities: city }),
+    });
     axios.get(`/api/forecast_line_data?${params}`)
-      .then((r) => { setData(r.data); setLoading(false); })
-      .catch((e) => { setError(e.message); setLoading(false); });
+      .then((r) => {
+        if (r.data?.error) { setError(r.data.error); setLoading(false); return; }
+        setData(r.data); setLoading(false);
+      })
+      .catch((e) => { setError(e.response?.data?.error || e.message); setLoading(false); });
   }, [city]);
+
+  // Strip trailing source label from dataset labels for cleaner display
+  const cleanLabel = (label) => label.replace(/ \(.*\)$/, '').replace(/ – .*$/, (m) => m.replace(/ \(.*\)$/, ''));
+
+  const hasData = data?.datasets?.some((ds) => ds.data?.some((v) => v > 0));
 
   return (
     <div style={{ marginBottom: 40 }}>
-      <SectionTitle>🔮 Seasonal Price Projections</SectionTitle>
       {loading && <Spinner />}
-      {error && <p style={{ color: '#dc2626' }}>Error: {error}</p>}
-      {data?.labels && (
-        <div style={{ background: '#fff', border: '2px solid #e2e8f0', borderRadius: 12, padding: 20, overflowX: 'auto' }}>
-          {city !== 'All cities' && <div style={{ color: '#64748b', fontSize: 13, marginBottom: 10 }}>📍 Showing seasonal forecast for <strong>{city}</strong></div>}
+      {error && <div style={{ color: '#dc2626', fontSize: 13, padding: 12 }}>Error: {error}</div>}
+      {data && !hasData && (
+        <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 12, padding: '32px 20px', textAlign: 'center', color: 'var(--text-3)', fontSize: 13 }}>
+          No seasonal data available for <strong>{city}</strong>.
+        </div>
+      )}
+      {data?.labels && hasData && (
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 20, overflowX: 'auto' }}>
+          {city !== 'All cities' && (
+            <div style={{ color: 'var(--text-2)', fontSize: 12, marginBottom: 10 }}>
+              📍 Seasonal averages for <strong>{city}</strong>
+            </div>
+          )}
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
               <tr>
-                <th style={{ background: 'linear-gradient(135deg,#059669,#047857)', color: '#fff', padding: '10px 12px', textAlign: 'left', fontWeight: 600, minWidth: 120 }}>Commodity</th>
+                <th style={{ background: 'linear-gradient(135deg,#059669,#047857)', color: '#fff', padding: '10px 12px', textAlign: 'left', fontWeight: 600, minWidth: 120, borderRadius: '8px 0 0 0' }}>Commodity</th>
                 {data.labels.map((l) => (
                   <th key={l} style={{ background: 'linear-gradient(135deg,#059669,#047857)', color: '#fff', padding: '10px 8px', textAlign: 'center', fontWeight: 600, whiteSpace: 'nowrap', fontSize: 11 }}>{l}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {(data.datasets || []).map((ds, i) => (
-                <tr key={ds.label} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                  <td style={{ padding: '8px 12px', fontWeight: 700, color: '#1e293b' }}>{ds.label}</td>
+              {(data.datasets || []).filter((ds) => ds.data?.some((v) => v > 0)).map((ds, i) => (
+                <tr key={ds.label} style={{ background: i % 2 === 0 ? 'var(--surface)' : 'var(--surface-2)', borderBottom: '1px solid var(--border)' }}>
+                  <td style={{ padding: '8px 12px', fontWeight: 600, color: 'var(--text)', fontSize: 12 }}>
+                    {ds.label.split(' – ')[0]}
+                  </td>
                   {(ds.data || []).map((price, j) => (
-                    <td key={j} style={{ padding: '8px 8px', textAlign: 'center', fontWeight: 600, color: price > 0 ? '#059669' : '#94a3b8' }}>
+                    <td key={j} style={{ padding: '8px 8px', textAlign: 'center', fontWeight: 600, color: price > 0 ? '#059669' : 'var(--text-4)' }}>
                       {price > 0 ? `$${price.toFixed(2)}` : '—'}
                     </td>
                   ))}

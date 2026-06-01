@@ -3744,11 +3744,9 @@ def get_forecast_line_data():
         ]
 
         # Handle source filtering
-        if data_source == "ProduceIQ,USDA" or data_source == "USDA,ProduceIQ":
-            # Include both sources
+        if data_source in ("Both", "ProduceIQ,USDA", "USDA,ProduceIQ"):
             filters.append(PriceData.source.in_(["ProduceIQ", "USDA"]))
         else:
-            # Use specified source
             filters.append(PriceData.source == data_source)
 
         if not avg_cities:
@@ -3814,7 +3812,7 @@ def get_forecast_line_data():
                     prices.append(round(total / cnt, 2) if cnt else 0)
 
                 # Include the data source in the label
-                source_label = "ProduceIQ & USDA" if "," in data_source else data_source
+                source_label = "ProduceIQ & USDA" if ("," in data_source or data_source == "Both") else data_source
                 result["datasets"].append(
                     {
                         "label": f"{commodity} – Avg Across Cities ({source_label})",
