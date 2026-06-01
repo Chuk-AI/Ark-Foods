@@ -5093,8 +5093,7 @@ def get_alert_settings_fresh():
         settings = AlertSetting.query.filter_by(user_id=current_user_id).all()
         result = [alert.to_dict() for alert in settings]
 
-        # Completely remove any cached data
-        cache.delete(f"alert_settings:{current_user_id}")
+        # (no in-memory cache to invalidate)
 
         # Create response with aggressive no-cache headers
         response = jsonify(result)
@@ -5217,11 +5216,6 @@ def create_alert_setting():
         db.session.add(new_alert)
         db.session.commit()
 
-        # Update the user-specific cache
-        settings = AlertSetting.query.filter_by(user_id=current_user_id).all()
-        result = [alert.to_dict() for alert in settings]
-        cache.set(f"alert_settings:{current_user_id}", result, timeout=300)
-
         # Log successful creation
         app.logger.info(
             f"Alert setting created for user {current_user_id}: City={city}, Commodity={commodity}, Threshold={threshold}"
@@ -5321,8 +5315,7 @@ def delete_alert_by_id():
         db.session.delete(alert)
         db.session.commit()
 
-        # Update user's cache
-        cache.delete(f"alert_settings:{current_user_id}")
+        # (no in-memory cache to invalidate)
 
         response = jsonify(
             {
