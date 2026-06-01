@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useRef, useCallback } from "react";
+import React, { useState, useEffect, useContext } from "react";
 import { UserContext } from "../components/userContext";
 import axios from "axios";
 import "../styles/alerts.css";
@@ -33,14 +33,6 @@ const PlusIcon = () => (
     <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
   </svg>
 );
-
-function useDebounce(fn, delay) {
-  const timer = useRef(null);
-  return useCallback((...args) => {
-    clearTimeout(timer.current);
-    timer.current = setTimeout(() => fn(...args), delay);
-  }, [fn, delay]);
-}
 
 function AlertRow({ alert, onUpdate, onDelete }) {
   const [localThreshold, setLocalThreshold] = useState(String(alert.threshold));
@@ -159,9 +151,6 @@ const Alerts = () => {
 
   const unreadCount = notifications.filter((n) => !n.is_read).length;
 
-  const token = () => localStorage.getItem("authToken");
-  const headers = () => ({ Authorization: `Bearer ${token()}` });
-
   useEffect(() => {
     if (isAuthenticated) {
       fetchAlertSettings();
@@ -172,7 +161,6 @@ const Alerts = () => {
   const fetchAlertSettings = async () => {
     try {
       const r = await axios.get("/api/alert-entries-fresh", {
-        headers: { ...headers(), "Cache-Control": "no-cache" },
         params: { _: Date.now() },
       });
       setAlertSettings(r.data);
@@ -181,7 +169,7 @@ const Alerts = () => {
 
   const fetchNotifications = async () => {
     try {
-      const r = await axios.get("/api/notifications", { headers: headers() });
+      const r = await axios.get("/api/notifications");
       setNotifications(r.data);
     } catch {}
   };
@@ -191,7 +179,7 @@ const Alerts = () => {
     setCreateError("");
     setCreating(true);
     try {
-      const r = await axios.post("/api/alert-settings", { ...newAlert, isActive: true }, { headers: headers() });
+      const r = await axios.post("/api/alert-settings", { ...newAlert, isActive: true });
       setAlertSettings((prev) => [...prev, r.data]);
     } catch (err) {
       setCreateError(err.response?.data?.error || "Failed to create alert.");
@@ -202,7 +190,7 @@ const Alerts = () => {
 
   const handleUpdateAlert = async (id, updates) => {
     try {
-      await axios.patch(`/api/alert-settings/${id}`, updates, { headers: headers() });
+      await axios.patch(`/api/alert-settings/${id}`, updates);
       setAlertSettings((prev) =>
         prev.map((a) => (a.id === id ? { ...a, ...updates } : a))
       );
@@ -212,7 +200,7 @@ const Alerts = () => {
   const handleDeleteAlert = async (alertItem) => {
     if (!window.confirm(`Delete alert for ${alertItem.commodity} in ${alertItem.city}?`)) return;
     try {
-      await axios.post("/api/delete-alert-by-id", { id: alertItem.id }, { headers: headers() });
+      await axios.post("/api/delete-alert-by-id", { id: alertItem.id });
       setAlertSettings((prev) => prev.filter((a) => a.id !== alertItem.id));
     } catch (err) {
       alert("Failed to delete: " + (err.response?.data?.error || err.message));
@@ -221,7 +209,7 @@ const Alerts = () => {
 
   const markAsRead = async (id) => {
     try {
-      await axios.patch(`/api/notifications/${id}`, { read: true }, { headers: headers() });
+      await axios.patch(`/api/notifications/${id}`, { read: true });
       setNotifications((prev) =>
         prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
       );
@@ -230,14 +218,14 @@ const Alerts = () => {
 
   const markAllAsRead = async () => {
     try {
-      await axios.post("/api/notifications/mark-all-read", {}, { headers: headers() });
+      await axios.post("/api/notifications/mark-all-read", {});
       setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
     } catch {}
   };
 
   const deleteNotification = async (id) => {
     try {
-      await axios.delete(`/api/notifications/${id}`, { headers: headers() });
+      await axios.delete(`/api/notifications/${id}`);
       setNotifications((prev) => prev.filter((n) => n.id !== id));
     } catch {}
   };
