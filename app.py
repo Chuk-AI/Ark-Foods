@@ -6452,6 +6452,14 @@ def get_terminal_scatterplot_matrix():
             return jsonify(scatter_plot), 200
 
         # Generate scatter plot JSON
+        MAX_SCATTER_POINTS = 2000
+        if min_length > MAX_SCATTER_POINTS:
+            import random
+            indices = sorted(random.sample(range(min_length), MAX_SCATTER_POINTS))
+            x_data = [x_data[i] for i in indices]
+            y_data = [y_data[i] for i in indices]
+            min_length = MAX_SCATTER_POINTS
+
         scatter_plot = {
             "data": [
                 {
@@ -6472,9 +6480,6 @@ def get_terminal_scatterplot_matrix():
             },
         }
 
-        # Debug logs
-        app.logger.info(f"{commodity_x} data (first 5): {x_data[:5]}")
-        app.logger.info(f"{commodity_y} data (first 5): {y_data[:5]}")
         app.logger.info(f"Total points being plotted: {min_length}")
 
         return jsonify(scatter_plot), 200
@@ -6546,6 +6551,14 @@ def get_shipping_scatterplot_matrix():
             return jsonify(scatter_plot), 200
 
         # Generate scatter plot JSON
+        MAX_SCATTER_POINTS = 2000
+        if min_length > MAX_SCATTER_POINTS:
+            import random
+            indices = sorted(random.sample(range(min_length), MAX_SCATTER_POINTS))
+            x_data = [x_data[i] for i in indices]
+            y_data = [y_data[i] for i in indices]
+            min_length = MAX_SCATTER_POINTS
+
         scatter_plot = {
             "data": [
                 {
@@ -6566,9 +6579,6 @@ def get_shipping_scatterplot_matrix():
             },
         }
 
-        # Debug logs
-        app.logger.info(f"{commodity_x} data (first 5): {x_data[:5]}")
-        app.logger.info(f"{commodity_y} data (first 5): {y_data[:5]}")
         app.logger.info(f"Total points being plotted: {min_length}")
 
         return jsonify(scatter_plot), 200
