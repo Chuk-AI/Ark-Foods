@@ -1,140 +1,276 @@
-/* Analytics Styles */
+/* ── Tab bar ─────────────────────────────────────────────────── */
+.an-tab-bar {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
 
-/* Chart Option Cards */
-.chart-option-card {
-  transition: all 0.3s ease;
-  cursor: pointer;
+.an-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-2);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background-color: var(--color-surface);
-  border: 1px solid var(--color-border);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.an-tab:hover { background: var(--surface-2); }
+.an-tab.active {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: transparent;
+}
+
+/* ── Time-frame pills ────────────────────────────────────────── */
+.an-pill-row {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.an-pill {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-2);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.an-pill:hover { background: var(--surface-2); }
+.an-pill.active {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: transparent;
+}
+
+/* ── Source / Market toggles ─────────────────────────────────── */
+.an-source-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
   overflow: hidden;
 }
 
-.chart-option-card:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--shadow-md);
+.an-source-btn {
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-2);
+  background: var(--surface);
+  border: none;
+  cursor: pointer;
+  transition: all 0.12s;
+  border-right: 1px solid var(--border);
+}
+.an-source-btn:last-child { border-right: none; }
+.an-source-btn:hover { background: var(--surface-2); }
+.an-source-btn.active {
+  color: #fff;
+  background: var(--accent);
 }
 
-.chart-option-card.active {
-  border-color: var(--color-primary);
-  box-shadow: 0 5px 15px rgba(13, 148, 136, 0.2);
+/* ── Controls row ────────────────────────────────────────────── */
+.an-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: flex-end;
+  margin-bottom: 8px;
 }
 
-.chart-icon {
-  font-size: 2rem;
-  color: var(--color-primary);
-  margin-bottom: 1rem;
+.an-control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-/* Filter Sidebar */
-.filter-sidebar {
-  height: 100%;
-  overflow-y: auto;
-}
-
-/* Make sure filters are always visible on desktop */
-@media (min-width: 992px) {
-  .filter-sidebar {
-    display: block !important;
-  }
-}
-
-/* On mobile, make the filter panel overlay the content */
-@media (max-width: 991.98px) {
-  .filter-sidebar.show {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    z-index: 1050;
-    background-color: rgba(0, 0, 0, 0.5);
-    display: flex !important;
-    justify-content: center;
-    align-items: center;
-    padding: 15px;
-  }
-
-  .filter-sidebar.show .card {
-    width: 100%;
-    max-width: 500px;
-    max-height: 90vh;
-    overflow-y: auto;
-  }
-}
-
-.scrollable-checkboxes {
-  max-height: 250px;
-  overflow-y: auto;
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  padding: 8px;
-  margin-bottom: 10px;
-}
-
-/* Chart container */
-.chart-container {
-  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.03);
-  border-radius: 4px;
-  padding: 10px;
-  background-color: var(--color-surface-2);
-}
-
-/* Row height for dashboard */
-.analytics-row {
-  min-height: 70vh;
-}
-
-/* Ensure consistent card heights */
-.chart-card,
-.filter-card {
-  height: 100%;
-}
-
-.card-body {
-  overflow-y: auto;
-  max-height: 80vh;
-}
-
-/* Chart toolbar */
-.chart-toolbar {
-  padding: 10px 15px;
-  background-color: var(--color-surface-2);
-  border-radius: 8px;
-  margin-bottom: 20px;
-}
-
-/* Analytics Dashboard Title */
-.analytics-header {
-  margin-bottom: 2rem;
-  border-bottom: 1px solid var(--color-border);
-  padding-bottom: 1rem;
-}
-
-.analytics-header h1 {
+.an-label {
+  font-size: 11px;
   font-weight: 600;
-  color: var(--color-text);
+  color: var(--text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
-.analytics-subtitle {
-  color: var(--color-text-muted);
-  font-weight: 400;
+.an-select,
+.an-input {
+  padding: 6px 10px;
+  font-size: 13px;
+  font-family: var(--sans);
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.an-select:focus,
+.an-input:focus { border-color: var(--accent); }
+.an-select { padding-right: 28px; }
+
+.an-run-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--accent);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  height: 34px;
+}
+.an-run-btn:hover:not(:disabled) { opacity: 0.88; }
+.an-run-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Layout helpers ──────────────────────────────────────────── */
+.an-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+@media (max-width: 720px) {
+  .an-two-col { grid-template-columns: 1fr; }
 }
 
-.card-body::-webkit-scrollbar {
-  width: 8px;
+.an-divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 20px 0;
 }
 
-.card-body::-webkit-scrollbar-track {
-  background: var(--color-bg);
-  border-radius: 4px;
+.an-chart-block { margin-bottom: 8px; }
+
+.an-chart-subtitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.card-body::-webkit-scrollbar-thumb {
-  background: var(--color-border);
-  border-radius: 4px;
+/* ── Empirical grid ──────────────────────────────────────────── */
+.an-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
 }
 
-.card-body::-webkit-scrollbar-thumb:hover {
-  background: var(--color-text-muted);
+.an-grid-item {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.an-stats-row {
+  display: flex;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--text-2);
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+/* ── Correlation heatmap ──────────────────────────────────────── */
+.an-heatmap {
+  border-collapse: collapse;
+  font-size: 11px;
+  font-family: var(--sans);
+  white-space: nowrap;
+}
+.an-heatmap th {
+  padding: 6px 10px;
+  font-weight: 600;
+  font-size: 11px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  text-align: center;
+}
+.an-heatmap td {
+  padding: 6px 10px;
+  text-align: center;
+  border: 1px solid var(--border);
+  transition: filter 0.1s;
+  cursor: default;
+  font-size: 11px;
+}
+
+/* ── Correlation badge (scatter) ─────────────────────────────── */
+.an-corr-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-radius: 10px;
+}
+
+/* ── Tooltip ─────────────────────────────────────────────────── */
+.an-tooltip {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 12px;
+  min-width: 140px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+.an-tooltip-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+.an-tooltip-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--text-2);
+  margin-bottom: 4px;
+}
+.an-tooltip-meta {
+  font-size: 11px;
+  color: var(--text-3);
+  margin-top: 6px;
+}
+
+/* ── States ──────────────────────────────────────────────────── */
+.an-loading {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--text-3);
+  font-size: 13px;
+}
+
+.an-empty {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--text-3);
+  font-size: 13px;
+}
+
+.an-error {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--down);
+  background: var(--down-soft);
+  border-radius: 6px;
+  padding: 8px 12px;
 }

@@ -6590,7 +6590,7 @@ def calculate_rolling_price_correlations(window, source_df, series1, series2):
         source_df = source_df.sort_index()
 
         # Forward fill missing values (up to 7 days)
-        source_df = source_df.fillna(method="ffill", limit=7)
+        source_df = source_df.ffill(limit=7)
 
         # Calculate rolling correlation
         roll_corr = (
