@@ -6703,7 +6703,7 @@ def terminal_rolling_correlations():
         roll_corr_df["date"] = pd.to_datetime(roll_corr_df["date"])
         return jsonify({
             "dates": roll_corr_df["date"].dt.strftime("%Y-%m-%d").tolist(),
-            "values": [round(v, 4) for v in roll_corr_df["correlation"].tolist()],
+            "values": [None if v != v else round(v, 4) for v in roll_corr_df["correlation"].tolist()],
             "series1": series1,
             "series2": series2,
             "window": window
@@ -6837,7 +6837,7 @@ def shipping_rolling_correlations():
         roll_corr_df["date"] = pd.to_datetime(roll_corr_df["date"])
         return jsonify({
             "dates": roll_corr_df["date"].dt.strftime("%Y-%m-%d").tolist(),
-            "values": [round(v, 4) for v in roll_corr_df["correlation"].tolist()],
+            "values": [None if v != v else round(v, 4) for v in roll_corr_df["correlation"].tolist()],
             "series1": series1,
             "series2": series2,
             "window": window
