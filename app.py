@@ -686,17 +686,22 @@ def _get_combined_current_price(commodity: str, city: str, max_age_days: int = 3
 
 
 def calculate_price_forecast(commodity, city=None, source="ProduceIQ", forecast_days=7):
+    """
+    Forecast prices per unit. Since prices are now stored raw (no conversion),
+    each distinct package unit (e.g. "1 bu", "10 lb") needs its own forecast.
+    We return the dominant unit's 7-day forecast in the standard shape, plus a
+    per-unit breakdown in `forecasts_by_unit`.
+    """
     try:
         commodity = normalize_commodity(commodity)
         now = datetime.now()
         current_year = now.year
         current_day = get_day_of_year(now)
-        current_price = _get_combined_current_price(commodity, city)
-        if not current_price or current_price <= 0:
-            return {"success": False, "error": "Insufficient current price data"}
+
         commodity_variants = {commodity}
         if commodity == "Cubanelle":
             commodity_variants.add("Cubanelles")
+
         base_filters = [
             PriceData.commodity.in_(sorted(commodity_variants)),
             PriceData.source.in_(["ProduceIQ", "USDA"]),
@@ -705,51 +710,109 @@ def calculate_price_forecast(commodity, city=None, source="ProduceIQ", forecast_
         ]
         if city and city != "All cities":
             base_filters.append(PriceData.city_name == city.strip())
+
         min_day = max(current_day - 30, 1)
-        daily = (
-            db.session.query(PriceData.day, func.avg(PriceData.price).label("avg_price"))
+
+        # Fetch all recent rows with their unit label (stored in package column)
+        rows = (
+            db.session.query(PriceData.day, PriceData.price, PriceData.package)
             .filter(*base_filters, PriceData.day >= min_day)
-            .group_by(PriceData.day)
             .order_by(PriceData.day)
             .all()
         )
-        if not daily or len(daily) < 5:
+
+        if not rows:
             return {"success": False, "error": "Insufficient historical data for forecast"}
-        series = [float(r.avg_price) for r in daily if r.avg_price and r.avg_price > 0]
-        recent = series[-14:] if len(series) >= 14 else series
-        momentum_pct = 0.0
-        std_dev = 0.0
-        if len(recent) >= 7:
-            slope = _linear_trend(recent)
-            avg_recent = float(np.mean(recent))
-            std_dev = float(np.std(recent))
-            momentum_pct = (slope / avg_recent * 100.0) if avg_recent > 0 else 0.0
-        forecasts = []
-        prev_price = float(current_price)
-        for day_offset in range(1, 8):
-            forecast_price = prev_price * (1.0 + momentum_pct / 100.0)
-            prev_price = forecast_price
-            forecast_date = now + timedelta(days=day_offset)
-            if day_offset == 1:
-                trend = "stable"
+
+        # Group rows by unit label, computing daily average per unit
+        from collections import defaultdict
+        unit_days: dict[str, dict[int, list]] = defaultdict(lambda: defaultdict(list))
+        for r in rows:
+            unit = r.package or "pkg"
+            unit_days[unit][int(r.day)].append(float(r.price))
+
+        # Build daily series per unit
+        unit_series: dict[str, list[float]] = {}
+        for unit, day_map in unit_days.items():
+            series = [
+                sum(prices) / len(prices)
+                for day, prices in sorted(day_map.items())
+                if prices
+            ]
+            if len(series) >= 5:
+                unit_series[unit] = series
+
+        if not unit_series:
+            return {"success": False, "error": "Insufficient data per unit for forecast"}
+
+        def _build_unit_forecast(unit_label: str, series: list[float]) -> dict:
+            recent = series[-14:] if len(series) >= 14 else series
+            momentum_pct = 0.0
+            std_dev = 0.0
+            if len(recent) >= 7:
+                slope = _linear_trend(recent)
+                avg_recent = float(np.mean(recent))
+                std_dev = float(np.std(recent))
+                momentum_pct = (slope / avg_recent * 100.0) if avg_recent > 0 else 0.0
+            current_price = series[-1]
+            forecasts = []
+            prev_price = current_price
+            for day_offset in range(1, 8):
+                forecast_price = prev_price * (1.0 + momentum_pct / 100.0)
+                prev_price = forecast_price
+                forecast_date = now + timedelta(days=day_offset)
+                if day_offset == 1:
+                    trend = "stable"
+                else:
+                    prior = forecasts[-1]["price"]
+                    trend = "up" if forecast_price > prior * 1.01 else ("down" if forecast_price < prior * 0.99 else "stable")
+                forecasts.append({
+                    "date": forecast_date.strftime("%Y-%m-%d"),
+                    "day_name": forecast_date.strftime("%A"),
+                    "price": round(float(forecast_price), 2),
+                    "trend": trend,
+                })
+            price_change = forecasts[-1]["price"] - forecasts[0]["price"]
+            price_change_pct = (price_change / forecasts[0]["price"]) * 100 if forecasts[0]["price"] else 0.0
+            if price_change_pct > 3:
+                overall_trend, trend_badge = "RISING", "danger"
+            elif price_change_pct < -3:
+                overall_trend, trend_badge = "FALLING", "success"
             else:
-                prior = forecasts[-1]["price"]
-                trend = "up" if forecast_price > prior * 1.01 else ("down" if forecast_price < prior * 0.99 else "stable")
-            forecasts.append({"date": forecast_date.strftime("%Y-%m-%d"), "day_name": forecast_date.strftime("%A"), "price": round(float(forecast_price), 2), "trend": trend})
-        price_change = forecasts[-1]["price"] - forecasts[0]["price"]
-        price_change_pct = (price_change / forecasts[0]["price"]) * 100 if forecasts[0]["price"] else 0.0
-        if price_change_pct > 3:
-            overall_trend, trend_badge = "RISING", "danger"
-        elif price_change_pct < -3:
-            overall_trend, trend_badge = "FALLING", "success"
-        else:
-            overall_trend, trend_badge = "STABLE", "warning"
+                overall_trend, trend_badge = "STABLE", "warning"
+            return {
+                "unit": unit_label,
+                "current_price": round(current_price, 2),
+                "forecasts": forecasts,
+                "overall_trend": overall_trend,
+                "trend_badge": trend_badge,
+                "price_change_pct": round(float(price_change_pct), 2),
+                "momentum_pct": round(float(momentum_pct), 2),
+                "std_dev": round(float(std_dev), 2) if std_dev > 0 else 0.0,
+            }
+
+        # Build per-unit forecasts; pick dominant unit (most data points) as default
+        forecasts_by_unit = {u: _build_unit_forecast(u, s) for u, s in unit_series.items()}
+        dominant_unit = max(unit_series, key=lambda u: len(unit_series[u]))
+        dominant = forecasts_by_unit[dominant_unit]
+
         return {
-            "success": True, "commodity": commodity, "city": city or "All cities",
-            "source": "Combined (ProduceIQ + USDA)", "current_price": round(float(current_price), 2),
-            "forecasts": forecasts, "overall_trend": overall_trend, "trend_badge": trend_badge,
-            "price_change_pct": round(float(price_change_pct), 2), "momentum_pct": round(float(momentum_pct), 2),
-            "std_dev": round(float(std_dev), 2) if std_dev > 0 else 0.0,
+            "success": True,
+            "commodity": commodity,
+            "city": city or "All cities",
+            "source": "Combined (ProduceIQ + USDA)",
+            # Top-level keys mirror old shape (dominant unit) for backward compat
+            "unit": dominant["unit"],
+            "current_price": dominant["current_price"],
+            "forecasts": dominant["forecasts"],
+            "overall_trend": dominant["overall_trend"],
+            "trend_badge": dominant["trend_badge"],
+            "price_change_pct": dominant["price_change_pct"],
+            "momentum_pct": dominant["momentum_pct"],
+            "std_dev": dominant["std_dev"],
+            # Per-unit breakdown for any consumer that wants all units
+            "forecasts_by_unit": forecasts_by_unit,
+            "units_available": sorted(forecasts_by_unit.keys()),
         }
     except Exception as e:
         import traceback as _tb
@@ -1101,6 +1164,31 @@ def package_raw_unit(package: str) -> str:
     return "pkg"
 
 
+def normalize_unit_label(package: str) -> str:
+    """
+    Normalize a raw package string to a canonical unit label for grouping.
+
+    Rules
+    -----
+    - "1 1/9 bushel*"  →  "1 bu"   (standard terminal-market carton ≈ 1 bu)
+    - "20 lb*"         →  "1 bu"   (common ProduceIQ carton treated as 1-bu equivalent)
+    - everything else  →  package_raw_unit(package)
+    """
+    if not package:
+        return "pkg"
+    p = package.strip().lower()
+    # 1 1/9 bushel cartons (standard terminal-market unit)
+    if re.search(r"1\s+1\s*/\s*9\s*(?:bus?h?e?l?s?\b|bu\b)", p):
+        return "1 bu"
+    # plain "1 bushel" or "bushel cartons" with no other qualifier
+    if re.search(r"^(?:1\s+)?(?:bus?h?e?l?s?\b|bu\b)", p):
+        return "1 bu"
+    # 20 lb cartons (ProduceIQ standard carton — treated as 1-bu equivalent)
+    if re.match(r"20\s*(?:lbs?|pounds?)\b", p):
+        return "1 bu"
+    return package_raw_unit(package)
+
+
 @app.route("/api/fetch-data", methods=["GET"])
 def fetch_data():
     try:
@@ -1299,28 +1387,13 @@ def fetch_usda_daily_data():
                     except ValueError:
                         raw_price = 0.0
 
-                    package   = item.get("package", None)
-                    origin    = item.get("origin", None)
-                    item_size = item.get("item_size", None)
+                    raw_package = item.get("package", None)
+                    origin      = item.get("origin", None)
+                    item_size   = item.get("item_size", None)
 
-                    # Use BUSHEL_LBS for physical package weight; city-aware unit for price
-                    actual_lbs_per_bu = BUSHEL_LBS.get(stripped_commodity)
-                    unit_lbs = effective_lbs_per_unit(stripped_commodity, first_city)
-                    package_lbs = (
-                        parse_package_lbs(package, actual_lbs_per_bu)
-                        if actual_lbs_per_bu and package
-                        else None
-                    )
-
-                    if package_lbs and package_lbs > 0:
-                        price = round((raw_price / package_lbs) * unit_lbs, 2)
-                    else:
-                        logging.warning(
-                            f"Cannot parse package '{package}' for "
-                            f"{standardized_commodity} on {current_date_formatted}"
-                            f" — row skipped."
-                        )
-                        continue
+                    # Store price as-is (no bushel conversion); normalize unit label
+                    price = round(raw_price, 2)
+                    unit_label = normalize_unit_label(raw_package)
 
                     price_data = PriceData(
                         city_name=first_city,
@@ -1330,7 +1403,7 @@ def fetch_usda_daily_data():
                         price=price,
                         source="USDA",
                         season=season,
-                        package=package,
+                        package=unit_label,
                         origin=origin,
                         item_size=item_size,
                     )
@@ -1648,43 +1721,23 @@ def fetch_daily_data():
                     else:
                         season = "Winter"
 
-                    # ── NEW: extract the three additional fields ───────────────
-                    package = item.get("packageTypeName", None)  # e.g. "20 lb cartons"
-                    origin = None  # not provided by ProduceIQ
+                    # Extract fields; store price as-is (no unit conversion)
+                    raw_package = item.get("packageTypeName", None)  # e.g. "20 lb cartons"
+                    origin    = None  # not provided by ProduceIQ
                     item_size = item.get("itemSizeName", None)  # e.g. "extra large"
 
-                    # ── NEW: convert raw price to per-unit (city-aware) ────────
-                    variety_key = variety_to_bushel_key.get(
-                        variety_name.lower(), variety_name.lower()
-                    )
-                    actual_lbs_per_bu = BUSHEL_LBS.get(variety_key)
-                    unit_lbs = effective_lbs_per_unit(variety_key, city_name)
-                    package_lbs = (
-                        parse_package_lbs(package, actual_lbs_per_bu)
-                        if actual_lbs_per_bu and package
-                        else None
-                    )
-
-                    if package_lbs and package_lbs > 0:
-                        price = round((raw_price / package_lbs) * unit_lbs, 2)
-                    else:
-                        logging.warning(
-                            f"Cannot parse package '{package}' for "
-                            f"{variety_name} on {current_dt.date()} — row skipped."
-                        )
-                        continue
-                    # ──────────────────────────────────────────────────────────
+                    price = round(raw_price, 2)
+                    unit_label = normalize_unit_label(raw_package)
 
                     price_data = PriceData(
                         city_name=city_name,
                         commodity=variety_name,
                         year=year,
                         day=day_of_year,
-                        price=price,  # now always $/bushel
+                        price=price,
                         source=source,
                         season=season,
-                        # ── NEW columns ──
-                        package=package,  # raw string kept for reference
+                        package=unit_label,
                         origin=origin,
                         item_size=item_size,
                     )
@@ -1692,7 +1745,7 @@ def fetch_daily_data():
                     db.session.add(price_data)
                     logging.info(
                         f"Added {variety_name} for {current_dt.strftime('%Y-%m-%d')} "
-                        f"in {city_name} @ ${price}/bu (package: {package})"
+                        f"in {city_name} @ ${price} ({unit_label})"
                     )
 
             db.session.commit()
@@ -3262,7 +3315,7 @@ def calculate_forecasted_price(
     start_day = start_date.timetuple().tm_yday
 
     # Step 3: Start building the query
-    query = db.session.query(PriceData.price).filter(
+    query = db.session.query(PriceData.price, PriceData.package).filter(
         PriceData.commodity == variety,
         PriceData.season == season,
         PriceData.year >= start_year,
@@ -3282,10 +3335,18 @@ def calculate_forecasted_price(
     # Execute the query
     historical_data = query.all()
 
-    # Step 4: Calculate the average price from the historical data
+    # Group by unit (package column) and return the dominant unit's average.
+    # Prices are stored raw (no unit conversion), so mixing units would be meaningless.
     if historical_data:
-        total_price = sum(entry.price for entry in historical_data)
-        average_price = total_price / len(historical_data)
+        from collections import defaultdict
+        unit_groups: dict = defaultdict(list)
+        for entry in historical_data:
+            unit = entry.package or "pkg"
+            unit_groups[unit].append(entry.price)
+        # Pick the unit with the most records
+        dominant_unit = max(unit_groups, key=lambda u: len(unit_groups[u]))
+        prices = unit_groups[dominant_unit]
+        average_price = sum(prices) / len(prices)
     else:
         average_price = 0.0
 
