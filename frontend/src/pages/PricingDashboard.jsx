@@ -183,8 +183,12 @@ function HighestPrices() {
                   <tr key={r.variety} style={{ background: i < 3 ? '#fefce8' : i % 2 === 0 ? '#fff' : '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
                     <td style={{ padding: '12px 14px', fontWeight: 700 }}>{r.variety}</td>
                     <td style={{ padding: '12px 14px', color: '#059669', fontWeight: 600 }}>{r.city}</td>
-                    <td style={{ padding: '12px 14px', textAlign: 'center', fontWeight: 700, color: '#92400e' }}>{r.piq ? money(r.piq.price) : '—'}</td>
-                    <td style={{ padding: '12px 14px', textAlign: 'center', fontWeight: 700, color: '#1e40af' }}>{r.usda ? money(r.usda.price) : '—'}</td>
+                    <td style={{ padding: '12px 14px', textAlign: 'center', verticalAlign: 'top' }}>
+                      {r.piq ? <><div style={{ fontWeight: 700, color: '#92400e' }}>{money(r.piq.price)}</div><div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>{r.piq.unit}</div></> : '—'}
+                    </td>
+                    <td style={{ padding: '12px 14px', textAlign: 'center', verticalAlign: 'top' }}>
+                      {r.usda ? <><div style={{ fontWeight: 700, color: '#1e40af' }}>{money(r.usda.price)}</div><div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>{r.usda.unit}</div></> : '—'}
+                    </td>
                     <td style={{ padding: '12px 14px', textAlign: 'center', color: '#64748b', fontWeight: 600 }}>{r.diff ? pctFmt(r.diff.pct) : '—'}</td>
                     <td style={{ padding: '12px 14px', textAlign: 'center', fontWeight: 800, color: '#16a34a', fontSize: 15 }}>{money(r.fob)}</td>
                   </tr>

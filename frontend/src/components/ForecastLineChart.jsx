@@ -227,8 +227,12 @@ const ForecastLineChart = () => {
             padding: 10,
             callbacks: {
               title: (context) => context[0].label,
-              label: (context) =>
-                `${context.dataset.label}: $${context.parsed.y.toFixed(2)}`,
+              label: (context) => {
+                const u = context.dataset.unit;
+                return u
+                  ? `${context.dataset.label}: $${context.parsed.y.toFixed(2)} / ${u}`
+                  : `${context.dataset.label}: $${context.parsed.y.toFixed(2)}`;
+              },
               footer: (context) => {
                 const label = context[0].label;
                 // Check if this is a forecasted value (any season after current)

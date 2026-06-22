@@ -127,7 +127,7 @@ function HistoricalPrices() {
         plugins: {
           tooltip: { ...CHART_TOOLTIP, mode: "index", intersect: false, callbacks: {
             title: (ctx) => DateTime.fromISO(ctx[0].label).toFormat("MMM d, yyyy"),
-            label: (ctx) => `${ctx.dataset.label}: $${ctx.parsed.y.toFixed(2)}`,
+            label: (ctx) => { const u = ctx.dataset.unit; return u ? `${ctx.dataset.label}: $${ctx.parsed.y.toFixed(2)} / ${u}` : `${ctx.dataset.label}: $${ctx.parsed.y.toFixed(2)}`; },
           }},
           legend: { position: "top", labels: { boxWidth: 12, padding: 15, color: "#64748b", font: { size: 11 } } },
           datalabels: { display: false },
@@ -173,7 +173,7 @@ function HistoricalPrices() {
         plugins: {
           tooltip: { ...CHART_TOOLTIP, mode: "index", intersect: false, callbacks: {
             title: (ctx) => DateTime.fromISO(ctx[0].label).toFormat("MMM d, yyyy"),
-            label: (ctx) => `${ctx.dataset.label}: $${ctx.parsed.y.toFixed(2)}`,
+            label: (ctx) => { const u = ctx.dataset.unit; return u ? `${ctx.dataset.label}: $${ctx.parsed.y.toFixed(2)} / ${u}` : `${ctx.dataset.label}: $${ctx.parsed.y.toFixed(2)}`; },
           }},
           legend: { position: "top", labels: { boxWidth: 12, padding: 15, color: "#64748b", font: { size: 11 } } },
           datalabels: { display: false },

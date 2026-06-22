@@ -1104,7 +1104,12 @@ const VolatilityChart = () => {
                         fontWeight: "bold",
                       }}
                     >
-                      ${latestPrice.price}{" "}
+                      ${latestPrice.price}
+                      {latestPrice.unit && (
+                        <span style={{ fontSize: 11, fontWeight: "normal", marginLeft: 4, opacity: 0.85 }}>
+                          / {latestPrice.unit}
+                        </span>
+                      )}{" "}
                       {latestPrice.date && (
                         <span className="text-white ml-1">
                           ({latestPrice.date})

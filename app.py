@@ -2894,9 +2894,11 @@ def historical_data():
 
         # For each series, pick the dominant unit (most data points)
         price_series = {}
+        series_dominant_unit = {}
         for series_key, unit_map in series_unit_dates.items():
             dominant_unit = max(unit_map, key=lambda u: sum(v["count"] for v in unit_map[u].values()))
             price_series[series_key] = unit_map[dominant_unit]
+            series_dominant_unit[series_key] = dominant_unit
 
         sorted_dates = sorted(list(all_dates))
         colors = ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40"]
@@ -2917,6 +2919,7 @@ def historical_data():
                     "data": series_data,
                     "borderColor": colors[idx % len(colors)],
                     "backgroundColor": colors[idx % len(colors)],
+                    "unit": series_dominant_unit.get(series_name),
                 }
             )
 
@@ -3781,11 +3784,13 @@ def get_forecast_line_data():
 
         # Pick dominant unit per key (most total data points), then build season_stats
         data = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+        key_dominant_unit = {}
         for key, unit_map in raw.items():
             dominant_unit = max(unit_map, key=lambda u: sum(
                 len(prices) for season_dict in unit_map[u].values()
                 for prices in season_dict.values()
             ))
+            key_dominant_unit[key] = dominant_unit
             for season, year_map in unit_map[dominant_unit].items():
                 for year, prices in year_map.items():
                     data[key][season][year] = prices
@@ -3827,6 +3832,9 @@ def get_forecast_line_data():
 
                 # Include the data source in the label
                 source_label = "ProduceIQ & USDA" if ("," in data_source or data_source == "Both") else data_source
+                # Dominant unit: most common across all cities for this commodity
+                _all_units = [key_dominant_unit.get(f"{commodity}_{c}") for c in all_cities_in_db if key_dominant_unit.get(f"{commodity}_{c}")]
+                _dom_unit = max(set(_all_units), key=_all_units.count) if _all_units else None
                 result["datasets"].append(
                     {
                         "label": f"{commodity} – Avg Across Cities ({source_label})",
@@ -3834,6 +3842,7 @@ def get_forecast_line_data():
                         "borderColor": COLORS[ds_idx % len(COLORS)],
                         "backgroundColor": COLORS[ds_idx % len(COLORS)],
                         "borderDash": [5, 5],
+                        "unit": _dom_unit,
                     }
                 )
                 ds_idx += 1
@@ -3865,6 +3874,7 @@ def get_forecast_line_data():
                             "borderColor": COLORS[ds_idx % len(COLORS)],
                             "backgroundColor": COLORS[ds_idx % len(COLORS)],
                             "borderDash": [5, 5],
+                            "unit": key_dominant_unit.get(f"{commodity}_{city}"),
                         }
                     )
                     ds_idx += 1
@@ -4340,9 +4350,9 @@ def get_latest_price(commodity, cities, data_source="ProduceIQ"):
             # Use specified source
             source_filter = PriceData.source == data_source
 
-        # Simple query to get the latest price
-        latest_price_query = (
-            db.session.query(PriceData.price, PriceData.year, PriceData.day)
+        # Get the most recent date first, then pick dominant unit on that date
+        latest_date_query = (
+            db.session.query(PriceData.year, PriceData.day)
             .filter(
                 PriceData.commodity == commodity,
                 PriceData.city_name.in_(cities),
@@ -4352,21 +4362,39 @@ def get_latest_price(commodity, cities, data_source="ProduceIQ"):
             .first()
         )
 
-        if not latest_price_query:
-            return {"price": 0, "date": None}
+        if not latest_date_query:
+            return {"price": 0, "date": None, "unit": None}
 
-        # Calculate the date
-        latest_date = datetime(latest_price_query.year, 1, 1) + timedelta(
-            days=latest_price_query.day - 1
+        unit_rows = (
+            db.session.query(
+                PriceData.package,
+                func.avg(PriceData.price).label("avg_price"),
+                func.count().label("cnt"),
+            )
+            .filter(
+                PriceData.commodity == commodity,
+                PriceData.city_name.in_(cities),
+                source_filter,
+                PriceData.year == latest_date_query.year,
+                PriceData.day == latest_date_query.day,
+            )
+            .group_by(PriceData.package)
+            .all()
         )
 
-        # Format the result
-        result = {
-            "price": round(latest_price_query.price, 2),
-            "date": latest_date.strftime("%b %d, %Y"),
-        }
+        if not unit_rows:
+            return {"price": 0, "date": None, "unit": None}
 
-        return result
+        dominant = max(unit_rows, key=lambda r: r.cnt)
+        latest_date = datetime(latest_date_query.year, 1, 1) + timedelta(
+            days=latest_date_query.day - 1
+        )
+
+        return {
+            "price": round(float(dominant.avg_price), 2),
+            "date": latest_date.strftime("%b %d, %Y"),
+            "unit": dominant.package or "pkg",
+        }
 
     except Exception as e:
         app.logger.error(f"Error getting latest price: {str(e)}")
@@ -4989,10 +5017,12 @@ def harvest_planning():
 
             # Pick dominant unit per key
             data = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+            hp_dominant_units = {}
             for key, unit_map in raw_hp.items():
                 dom_unit = max(unit_map, key=lambda u: sum(
                     len(p) for sd in unit_map[u].values() for p in sd.values()
                 ))
+                hp_dominant_units[key] = dom_unit
                 for season, year_map in unit_map[dom_unit].items():
                     for year, prices in year_map.items():
                         data[key][season][year] = prices
@@ -5110,6 +5140,13 @@ def harvest_planning():
                 expected_price = 0
                 price_description = "No price data available"
 
+            # Determine dominant unit for this variety/market combo
+            if avg_cities:
+                _hp_units = [hp_dominant_units.get(f"{commodity}_{c}") for c in {r.city_name for r in rows} if hp_dominant_units.get(f"{commodity}_{c}")]
+            else:
+                _hp_units = [hp_dominant_units.get(f"{commodity}_{cities[0]}")]
+            _hp_unit = max(set([u for u in _hp_units if u]), key=[u for u in _hp_units if u].count) if any(_hp_units) else None
+
             result.append(
                 {
                     "name": commodity,
@@ -5122,6 +5159,7 @@ def harvest_planning():
                     "harvestPeriod": harvest_period,
                     "sellingPeriod": selling_period,
                     "source": source,
+                    "unit": _hp_unit,
                     "bestSellingTime": {
                         "season": best_season,
                         "year": best_year,

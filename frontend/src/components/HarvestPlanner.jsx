@@ -1453,6 +1453,11 @@ const HarvestPlanningChart = () => {
                                     <Typography variant="h5" sx={{ mt: 1 }}>
                                       ${variety.expectedSellingPrice.toFixed(2)}
                                     </Typography>
+                                    {variety.unit && (
+                                      <Typography variant="caption" color="text.secondary" display="block">
+                                        per {variety.unit}
+                                      </Typography>
+                                    )}
                                     {variety.priceDescription && (
                                       <Tooltip
                                         title={variety.priceDescription}
@@ -1498,6 +1503,11 @@ const HarvestPlanningChart = () => {
                                       $
                                       {variety.bestSellingTime.price.toFixed(2)}
                                     </Typography>
+                                    {variety.unit && (
+                                      <Typography variant="caption" color="text.secondary" display="block">
+                                        per {variety.unit}
+                                      </Typography>
+                                    )}
                                   </Box>
                                 </Grid>
 
@@ -1529,7 +1539,7 @@ const HarvestPlanningChart = () => {
                                       variant="caption"
                                       color="text.secondary"
                                     >
-                                      per unit (
+                                      per {variety.unit || "unit"} (
                                       {potentialIncrease > 0 ? "+" : ""}$
                                       {potentialIncrease.toFixed(2)} per 100
                                       units)
