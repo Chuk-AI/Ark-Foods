@@ -2286,19 +2286,20 @@ def api_best_sell_market():
                 {
                     "city_name": city,
                     "price_range": price_range,
-                    "max_price": latest_prices.max_price,  # This will be used for sorting
+                    "max_price": latest_prices.max_price,
                     "date": actual_date,
+                    "unit": latest_prices.package or "pkg",
                 }
             )
 
         else:
-            # If no data is found for this city, return 'N/A'
             best_market_data.append(
                 {
                     "city_name": city,
                     "price_range": "-",
-                    "max_price": 0,  # Sorting placeholder
+                    "max_price": 0,
                     "date": "-",
+                    "unit": None,
                 }
             )
 
@@ -2338,6 +2339,7 @@ def api_market_opportunity():
         best_max = None
         best_avg = None
         best_min = None
+        best_unit = None
 
         for city in cities:
             # Group by unit so we don't mix prices from different package sizes;
@@ -2370,6 +2372,7 @@ def api_market_opportunity():
                     best_avg = float(dominant.avg_price) if dominant.avg_price else None
                     best_min = float(dominant.min_price) if dominant.min_price else None
                     best_city = city
+                    best_unit = dominant.package or "pkg"
 
         result.append({
             "commodity": commodity,
@@ -2377,6 +2380,7 @@ def api_market_opportunity():
             "max_price": best_max,
             "avg_price": round(best_avg, 2) if best_avg else None,
             "min_price": best_min,
+            "unit": best_unit,
         })
 
     return jsonify({"opportunities": result})
@@ -2761,21 +2765,21 @@ def get_sales_seasonal_prices():
         season_unit_prices[season][pkg or "pkg"].append(price)
 
     seasonal_prices = {}
+    seasonal_units = {}
     for season in ["Spring", "Summer", "Autumn", "Winter"]:
         unit_map = season_unit_prices.get(season, {})
         if unit_map:
             dominant_unit = max(unit_map, key=lambda u: len(unit_map[u]))
             prices = unit_map[dominant_unit]
             seasonal_prices[season] = round(sum(prices) / len(prices), 2)
+            seasonal_units[season] = dominant_unit
         else:
             seasonal_prices[season] = 0.0
+            seasonal_units[season] = None
 
     app.logger.info(f"Seasonal prices (dominant unit per season): {seasonal_prices}")
 
-    # Log final seasonal prices
-    app.logger.info(f"Final seasonal prices: {seasonal_prices}")
-
-    return jsonify(seasonal_prices)
+    return jsonify({**seasonal_prices, "units": seasonal_units})
 
 
 @app.route("/api/historical_data", methods=["GET"])

@@ -127,11 +127,6 @@ function SalesDashboard() {
                 <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 2 }}>
                   {cell.unit}
                 </div>
-                {cell.raw_price != null && (
-                  <div style={{ fontSize: 10, color: "var(--text-3)" }}>
-                    raw: ${cell.raw_price.toFixed(2)} <span style={{ opacity: 0.7 }}>{cell.raw_unit}</span>
-                  </div>
-                )}
                 <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 1 }}>{cell.date}</div>
               </td>
             );
@@ -212,6 +207,7 @@ function SalesDashboard() {
       const r = await fetch(`/api/sales_seasonal_prices?${params}`);
       if (!r.ok) throw new Error();
       const data = await r.json();
+      const units = data.units || {};
       if (!seasonalChartRef.current) return;
       if (seasonalChartRef.current.chart) seasonalChartRef.current.chart.destroy();
       const ctx = seasonalChartRef.current.getContext("2d");
@@ -233,7 +229,11 @@ function SalesDashboard() {
           maintainAspectRatio: false,
           plugins: {
             legend: { display: false },
-            tooltip: { ...CHART_TOOLTIP, callbacks: { label: (ctx) => `$${ctx.parsed.y.toFixed(2)}` } },
+            tooltip: { ...CHART_TOOLTIP, callbacks: { label: (ctx) => {
+              const season = ["Spring","Summer","Autumn","Winter"][ctx.dataIndex];
+              const unit = units[season];
+              return unit ? `$${ctx.parsed.y.toFixed(2)} / ${unit}` : `$${ctx.parsed.y.toFixed(2)}`;
+            } } },
             datalabels: {
               display: true,
               color: "#0f172a",
@@ -357,16 +357,17 @@ function SalesDashboard() {
             <div className="sd-card-body" style={{ overflowX: "auto" }}>
               <table className="sd-table">
                 <thead>
-                  <tr><th>City</th><th>Price</th><th>Date</th></tr>
+                  <tr><th>City</th><th>Price</th><th>Unit</th><th>Date</th></tr>
                 </thead>
                 <tbody>
                   {bestMarketData.length > 0 ? bestMarketData.map((row, i) => (
                     <tr key={i}>
                       <td style={{ fontWeight: 500 }}>{row.city_name}</td>
                       <td style={{ fontFamily: "var(--mono)", color: "var(--up)", fontWeight: 600 }}>{row.max_price !== "-" ? `$${parseFloat(row.max_price).toFixed(2)}` : "-"}</td>
+                      <td style={{ fontSize: 11, color: "var(--text-3)" }}>{row.unit || "—"}</td>
                       <td style={{ color: "var(--text-3)", fontSize: 12 }}>{row.date || "-"}</td>
                     </tr>
-                  )) : <tr><td colSpan="3" style={{ textAlign: "center", color: "var(--text-3)", padding: 24 }}>No data</td></tr>}
+                  )) : <tr><td colSpan="4" style={{ textAlign: "center", color: "var(--text-3)", padding: 24 }}>No data</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -455,7 +456,7 @@ function SalesDashboard() {
           <table className="sd-table">
             <thead>
               <tr>
-                {["Commodity", "Best Market", "Max Price", "Avg Price", "Min Price", "Spread", "Signal"].map((h) => <th key={h}>{h}</th>)}
+                {["Commodity", "Best Market", "Unit", "Max Price", "Avg Price", "Min Price", "Spread", "Signal"].map((h) => <th key={h}>{h}</th>)}
               </tr>
             </thead>
             <tbody>
@@ -469,6 +470,7 @@ function SalesDashboard() {
                   <tr key={i}>
                     <td style={{ fontWeight: 600 }}>{row.commodity}</td>
                     <td style={{ fontWeight: 500, color: "var(--accent)" }}>{row.best_city || "—"}</td>
+                    <td style={{ fontSize: 11, color: "var(--text-3)" }}>{row.unit || "—"}</td>
                     <td style={{ fontFamily: "var(--mono)", fontWeight: 600, color: "#059669" }}>{row.max_price != null ? `$${row.max_price.toFixed(2)}` : "—"}</td>
                     <td style={{ fontFamily: "var(--mono)" }}>{row.avg_price != null ? `$${row.avg_price.toFixed(2)}` : "—"}</td>
                     <td style={{ fontFamily: "var(--mono)", color: "#dc2626" }}>{row.min_price != null ? `$${row.min_price.toFixed(2)}` : "—"}</td>
@@ -477,7 +479,7 @@ function SalesDashboard() {
                   </tr>
                 );
               }) : (
-                <tr><td colSpan="7" style={{ textAlign: "center", color: "var(--text-3)", padding: 32 }}>Loading market opportunity data…</td></tr>
+                <tr><td colSpan="8" style={{ textAlign: "center", color: "var(--text-3)", padding: 32 }}>Loading market opportunity data…</td></tr>
               )}
             </tbody>
           </table>
