@@ -101,9 +101,8 @@ function PricingMatrix() {
       {data && (
         <>
           <div style={{ background: '#fff', border: '2px solid #e2e8f0', borderRadius: 12, padding: 20, marginBottom: 20, lineHeight: 1.7, color: '#475569', fontSize: 13 }}>
-            <strong>Raw</strong> = price as reported by USDA/ProduceIQ in original package units ·
-            <strong> $/bu</strong> = normalized to per-bushel (used in forecasting) ·
-            <strong> FOB</strong> = best $/bu − 26% freight · <strong>Diff</strong> = ProduceIQ − USDA ($/bu)
+            <strong>Price</strong> = as reported by USDA/ProduceIQ in original package units (no conversion) ·
+            <strong> FOB</strong> = terminal price − 26% freight · <strong>Diff</strong> = ProduceIQ − USDA
           </div>
           {cities.map((city) => {
             const items = data[city]?.items || [];
@@ -317,7 +316,8 @@ function PriceForecast7Day({ city }) {
                   <Badge type={f.trend_badge || 'info'}>{f.overall_trend}</Badge>
                 </span>
               </div>
-              <div style={{ fontSize: 28, fontWeight: 800, color: '#059669', marginBottom: 4 }}>{money(f.current_price)}</div>
+              <div style={{ fontSize: 28, fontWeight: 800, color: '#059669', marginBottom: 2 }}>{money(f.current_price)}</div>
+              {f.unit && <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 6 }}>per {f.unit}</div>}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 12, marginBottom: 12 }}>
                 <div><span style={{ color: '#64748b' }}>Momentum: </span><strong style={{ color: f.momentum_pct >= 0 ? '#dc2626' : '#22c55e' }}>{f.momentum_pct >= 0 ? '+' : ''}{f.momentum_pct?.toFixed(1)}%</strong></div>
                 <div><span style={{ color: '#64748b' }}>Volatility: </span><strong>±{money(f.std_dev)}</strong></div>
@@ -399,6 +399,7 @@ function LongTermCard({ commodity, city, onResult }) {
       <div style={{ marginBottom: 14 }}>
         <div style={{ fontSize: 12, color: '#64748b' }}>Current Price</div>
         <div style={{ fontSize: 26, fontWeight: 800, color: '#059669' }}>{money(data.current_price)}</div>
+        {data.unit && <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>per {data.unit}</div>}
       </div>
 
       {/* Mini chart */}

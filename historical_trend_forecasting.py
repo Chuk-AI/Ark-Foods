@@ -291,9 +291,29 @@ def calculate_hybrid_6week_forecast(db_session, commodity: str, city: str) -> Di
         commodity = normalize_commodity(commodity)
         today = datetime.now().date()
 
+        from app import PriceData  # noqa: F811 — needed for unit lookup
         current_price = _get_combined_current_price(commodity, city)
         if not current_price or current_price <= 0:
             return {"success": False, "commodity": commodity, "city": city, "error": "No current price available (must be within 7 days)"}
+
+        # Determine dominant unit label for display
+        commodity_variants = {commodity}
+        if commodity == "Cubanelle":
+            commodity_variants.add("Cubanelles")
+        _unit_filters = [
+            PriceData.commodity.in_(sorted(commodity_variants)),
+            PriceData.source.in_(["ProduceIQ", "USDA"]),
+            PriceData.price > 0,
+        ]
+        if city and city != "All cities":
+            _unit_filters.append(PriceData.city_name == city.strip())
+        _unit_rows = (
+            db_session.query(PriceData.package, func.count().label("cnt"))
+            .filter(*_unit_filters)
+            .group_by(PriceData.package)
+            .all()
+        )
+        dominant_unit = max(_unit_rows, key=lambda r: r.cnt).package if _unit_rows else None
 
         prev_week_avg = get_previous_week_average(db_session, commodity, city)
         baseline_price = prev_week_avg if prev_week_avg else current_price
@@ -345,6 +365,7 @@ def calculate_hybrid_6week_forecast(db_session, commodity: str, city: str) -> Di
             "commodity": commodity,
             "city": city,
             "source": "Combined (ProduceIQ + USDA)",
+            "unit": dominant_unit,
             "current_price": round(float(current_price), 2),
             "baseline_price": round(float(baseline_price), 2),
             "forecasts": forecasts,

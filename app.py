@@ -3478,6 +3478,7 @@ def get_price_averages():
                     "commodity": row.normalized_commodity,
                     "source": row.source,
                     "avg_price": round(row.avg_price, 2),
+                    "unit": row.package,
                 }
             )
 
@@ -3583,6 +3584,7 @@ def get_price_averages():
                             "city_name": item["city"],
                             "source": item["source"],
                             "avg_price": item["avg_price"],
+                            "unit": item.get("unit"),
                         }
                     )
 

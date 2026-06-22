@@ -1250,6 +1250,7 @@ function AdminDashboard() {
                     <tr>
                       <th>Commodity</th>
                       <th>Source</th>
+                      <th>Unit</th>
                       <th>Average Price ($)</th>
                     </tr>
                   </thead>
@@ -1259,6 +1260,7 @@ function AdminDashboard() {
                         <tr key={index}>
                           <td>{item.commodity}</td>
                           <td>{item.source}</td>
+                          <td>{item.unit || '—'}</td>
                           <td>${item.avg_price.toFixed(2)}</td>
                         </tr>
                       ))
