@@ -190,10 +190,12 @@ const MonthlyAveragePrices = () => {
               const minPrice = Number(monthData.min_price);
               const maxPrice = Number(monthData.max_price);
               
+              const unit = monthData.unit;
+              const unitSuffix = unit ? ` / ${unit}` : '';
               const tooltipLines = [
-                `Avg Price: $${isNaN(avgPrice) ? '0.00' : avgPrice.toFixed(2)}`,
-                `Min Price: $${isNaN(minPrice) ? '0.00' : minPrice.toFixed(2)}`,
-                `Max Price: $${isNaN(maxPrice) ? '0.00' : maxPrice.toFixed(2)}`,
+                `Avg Price: $${isNaN(avgPrice) ? '0.00' : avgPrice.toFixed(2)}${unitSuffix}`,
+                `Min Price: $${isNaN(minPrice) ? '0.00' : minPrice.toFixed(2)}${unitSuffix}`,
+                `Max Price: $${isNaN(maxPrice) ? '0.00' : maxPrice.toFixed(2)}${unitSuffix}`,
               ];
               
               // Add yearly breakdown if available

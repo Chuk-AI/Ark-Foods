@@ -427,7 +427,10 @@ const BreakEvenEstimator = () => {
                 if (context.dataset.label === "Background Range") {
                   return null;
                 }
-                return `${context.dataset.label}: $${context.parsed.y.toFixed(2)}`;
+                const u = context.dataset.unit;
+                return u
+                  ? `${context.dataset.label}: $${context.parsed.y.toFixed(2)} / ${u}`
+                  : `${context.dataset.label}: $${context.parsed.y.toFixed(2)}`;
               },
               footer: (context) => {
                 const forecastValue = context[0].raw;

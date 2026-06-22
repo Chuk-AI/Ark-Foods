@@ -4822,6 +4822,20 @@ def get_break_even_chart_data():
             )
             prices.append(round(price, 2))
 
+        # Determine dominant unit for display
+        _unit_q = db.session.query(PriceData.package, func.count().label("cnt")).filter(
+            PriceData.commodity == variety,
+            PriceData.price > 0,
+        )
+        if city and city != "All cities":
+            _unit_q = _unit_q.filter(PriceData.city_name == city)
+        if data_source in ("ProduceIQ,USDA", "USDA,ProduceIQ"):
+            _unit_q = _unit_q.filter(PriceData.source.in_(["ProduceIQ", "USDA"]))
+        else:
+            _unit_q = _unit_q.filter(PriceData.source == data_source)
+        _unit_rows = _unit_q.group_by(PriceData.package).all()
+        dominant_unit = max(_unit_rows, key=lambda r: r.cnt).package if _unit_rows else None
+
         # Add dataset for the variety
         source_label = "ProduceIQ & USDA" if "," in data_source else data_source
         result["datasets"] = [
@@ -4836,6 +4850,7 @@ def get_break_even_chart_data():
                 "tension": 0.1,
                 "fill": "false",
                 "borderDash": [5, 5],
+                "unit": dominant_unit,
             }
         ]
 
@@ -5845,7 +5860,8 @@ def get_monthly_average_prices():
                 ROUND(AVG(avg_price)::numeric, 2) AS avg_price,
                 ROUND(MIN(min_price)::numeric, 2) AS min_price,
                 ROUND(MAX(max_price)::numeric, 2) AS max_price,
-                SUM(record_count) AS total_records
+                SUM(record_count) AS total_records,
+                MAX(package) AS dominant_package
             FROM
                 monthly_stats_dominant
             GROUP BY
@@ -5865,6 +5881,7 @@ def get_monthly_average_prices():
             a.min_price,
             a.max_price,
             a.total_records,
+            a.dominant_package,
             (
                 SELECT json_agg(
                     json_build_object(
@@ -5915,6 +5932,7 @@ def get_monthly_average_prices():
                     "max_price": (
                         float(row.max_price) if row.max_price is not None else 0
                     ),
+                    "unit": getattr(row, "dominant_package", None),
                     "years_data": years_data,
                 }
             )
@@ -6049,47 +6067,34 @@ from flask import jsonify
 @app.route("/api/terminal_price_violin", methods=["GET"])
 def terminal_price_violin():
     try:
-        app.logger.info(
-            "Generating terminal violin plots for USDA and ProduceIQ without downsampling..."
-        )
-
-        # Get the time frame from query parameters (default to '7d')
         time_frame = request.args.get("timeFrame", "7d")
+        time_intervals = {"3d": 3, "7d": 7, "1m": 30, "3m": 90, "1y": 365}
+        days = time_intervals.get(time_frame.lower(), 7)
+        cutoff = datetime.now() - timedelta(days=days)
+        cutoff_year = cutoff.year
+        cutoff_day = cutoff.timetuple().tm_yday
 
-        # Map timeFrame to PostgreSQL-compatible intervals
-        time_intervals = {
-            "3d": "3 days",
-            "7d": "7 days",
-            "1m": "1 month",
-            "3m": "3 months",
-            "1y": "1 year",
-        }
-
-        # Get the corresponding PostgreSQL interval for the time frame
-        postgres_interval = time_intervals.get(time_frame.lower(), "7 days")
-
-        # PostgreSQL-compatible query to fetch data filtered by source and time range
-        query = text(
-            f"""
-            SELECT commodity, price, source
-            FROM price_data
-            WHERE source IN ('USDA', 'ProduceIQ')
-            AND make_date(year, 1, 1) + (day - 1) * INTERVAL '1 day' >= NOW() - INTERVAL '{postgres_interval}'
-            AND price > 2
-        """
+        from collections import defaultdict
+        rows = (
+            db.session.query(PriceData.commodity, PriceData.price, PriceData.source, PriceData.package)
+            .filter(
+                PriceData.source.in_(["USDA", "ProduceIQ"]),
+                PriceData.price > 2,
+                or_(PriceData.year > cutoff_year, and_(PriceData.year == cutoff_year, PriceData.day >= cutoff_day)),
+            )
+            .all()
         )
-        result = db.session.execute(query).fetchall()
 
-        # Group data by source and commodity
-        grouped_data = {"USDA": {}, "ProduceIQ": {}}
-        for row in result:
-            commodity, price, source = row
-            if source in grouped_data:
-                grouped_data[source].setdefault(commodity, []).append(price)
+        grouped = {"USDA": defaultdict(lambda: defaultdict(list)), "ProduceIQ": defaultdict(lambda: defaultdict(list))}
+        for row in rows:
+            if row.source in grouped:
+                grouped[row.source][row.commodity][row.package or "pkg"].append(row.price)
 
-        def compute_stats(prices_dict):
+        def compute_stats(source_map):
             stats = []
-            for commodity, prices in prices_dict.items():
+            for commodity, unit_map in source_map.items():
+                dominant_unit = max(unit_map, key=lambda u: len(unit_map[u]))
+                prices = unit_map[dominant_unit]
                 arr = np.array(prices)
                 stats.append({
                     "name": commodity,
@@ -6099,14 +6104,12 @@ def terminal_price_violin():
                     "mean": float(np.mean(arr)),
                     "q3": float(np.percentile(arr, 75)),
                     "max": float(np.max(arr)),
-                    "count": len(prices)
+                    "count": len(prices),
+                    "unit": dominant_unit,
                 })
             return sorted(stats, key=lambda x: x["name"])
 
-        return jsonify({
-            "usda": compute_stats(grouped_data["USDA"]),
-            "produceiq": compute_stats(grouped_data["ProduceIQ"])
-        }), 200
+        return jsonify({"usda": compute_stats(grouped["USDA"]), "produceiq": compute_stats(grouped["ProduceIQ"])}), 200
 
     except Exception as e:
         app.logger.error(f"Error generating terminal violin plots: {str(e)}")
@@ -6198,7 +6201,7 @@ def get_terminal_empricial_probability():
         # Query to get mean and standard deviation directly from the database
         query = text(
             f"""
-            SELECT commodity, price, source
+            SELECT commodity, price, source, package
             FROM price_data
             WHERE source = 'USDA'
             AND make_date(year, 1, 1) + (day - 1) * INTERVAL '1 day' >= NOW() - INTERVAL '{postgres_interval}'
@@ -6210,16 +6213,16 @@ def get_terminal_empricial_probability():
         if not result:
             return jsonify([])
 
-        # Group data by commodity
-        grouped_data = {}
+        from collections import defaultdict
+        grouped_data = defaultdict(lambda: defaultdict(list))
         for row in result:
-            commodity, price, source = row
-            if commodity not in grouped_data:
-                grouped_data[commodity] = []
-            grouped_data[commodity].append(price)
+            commodity, price, source, package = row
+            grouped_data[commodity][package or "pkg"].append(price)
 
         charts = []
-        for commodity, prices in grouped_data.items():
+        for commodity, unit_map in grouped_data.items():
+            dominant_unit = max(unit_map, key=lambda u: len(unit_map[u]))
+            prices = unit_map[dominant_unit]
             arr = np.array(prices)
             hist, bin_edges = np.histogram(arr, bins=20)
             charts.append({
@@ -6227,7 +6230,8 @@ def get_terminal_empricial_probability():
                 "bins": [{"x": float(bin_edges[i]), "y": int(hist[i])} for i in range(len(hist))],
                 "mean": float(np.mean(arr)),
                 "stdDev": float(np.std(arr)),
-                "median": float(np.median(arr))
+                "median": float(np.median(arr)),
+                "unit": dominant_unit,
             })
 
         return jsonify(charts), 200
@@ -6517,7 +6521,7 @@ def get_terminal_scatterplot_matrix():
 
         # Query data for the selected commodities from PriceData where source is 'USDA'
         result = (
-            db.session.query(PriceData.commodity, PriceData.price)
+            db.session.query(PriceData.commodity, PriceData.price, PriceData.package)
             .filter(
                 PriceData.commodity.in_([commodity_x, commodity_y]),
                 PriceData.source == source,
@@ -6528,15 +6532,20 @@ def get_terminal_scatterplot_matrix():
         if not result:
             return jsonify({"error": "No data found for the selected commodities"}), 404
 
-        # Create a DataFrame
-        df = pd.DataFrame(result, columns=["commodity", "price"]).dropna()
+        from collections import defaultdict as _dd
+        _unit_groups = {commodity_x: _dd(list), commodity_y: _dd(list)}
+        for row in result:
+            if row.commodity in _unit_groups:
+                _unit_groups[row.commodity][row.package or "pkg"].append(row.price)
 
-        if df.empty:
-            return jsonify({"error": "No valid data available"}), 404
+        def _dominant_prices(unit_map):
+            if not unit_map:
+                return [], None
+            dom = max(unit_map, key=lambda u: len(unit_map[u]))
+            return unit_map[dom], dom
 
-        # Separate data for each commodity
-        x_data = df[df["commodity"] == commodity_x]["price"].tolist()
-        y_data = df[df["commodity"] == commodity_y]["price"].tolist()
+        x_data, unit_x = _dominant_prices(_unit_groups[commodity_x])
+        y_data, unit_y = _dominant_prices(_unit_groups[commodity_y])
 
         # Get the minimum length to ensure equal pairs
         min_length = min(len(x_data), len(y_data))
@@ -6584,8 +6593,8 @@ def get_terminal_scatterplot_matrix():
             ],
             "layout": {
                 "title": f"Scatter Plot: {commodity_x} vs {commodity_y}",
-                "xaxis": {"title": f"{commodity_x} Prices"},
-                "yaxis": {"title": f"{commodity_y} Prices"},
+                "xaxis": {"title": f"{commodity_x} Price ({unit_x or 'pkg'})"},
+                "yaxis": {"title": f"{commodity_y} Price ({unit_y or 'pkg'})"},
                 "height": 600,
                 "width": 600,
                 "font": {"family": "Arial"},
@@ -6593,6 +6602,9 @@ def get_terminal_scatterplot_matrix():
         }
 
         app.logger.info(f"Total points being plotted: {min_length}")
+
+        scatter_plot["unit_x"] = unit_x
+        scatter_plot["unit_y"] = unit_y
 
         return jsonify(scatter_plot), 200
 

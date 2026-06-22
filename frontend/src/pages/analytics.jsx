@@ -99,6 +99,7 @@ function BoxTooltip({ active, payload }) {
           </div>
         )
       )}
+      {d.unit && <div className="an-tooltip-meta">per {d.unit}</div>}
       {d.count != null && <div className="an-tooltip-meta">n = {d.count}</div>}
     </div>
   );
@@ -206,6 +207,7 @@ function EmpiricalTab() {
                   <span>Mean <strong>${chart.mean?.toFixed(2)}</strong></span>
                   <span>Std <strong>${chart.stdDev?.toFixed(2)}</strong></span>
                   <span>Median <strong>${chart.median?.toFixed(2)}</strong></span>
+                  {chart.unit && <span style={{ color: 'var(--text-3)', fontSize: 11 }}>per {chart.unit}</span>}
                 </div>
                 <ResponsiveContainer width="100%" height={200}>
                   <BarChart data={chart.bins} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
