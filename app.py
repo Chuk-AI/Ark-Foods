@@ -649,6 +649,7 @@ def cache_set(key: str, payload: dict):
 
 
 def _get_combined_current_price(commodity: str, city: str, max_age_days: int = 30):
+    """Return current price for the dominant unit on the most recent date."""
     commodity = normalize_commodity(commodity)
     today = datetime.now().date()
     cutoff_date = today - timedelta(days=max_age_days)
@@ -673,16 +674,21 @@ def _get_combined_current_price(commodity: str, city: str, max_age_days: int = 3
     latest_date = datetime(int(latest.year), 1, 1).date() + timedelta(days=int(latest.day) - 1)
     if latest_date < cutoff_date:
         return None
-    source_averages = (
-        db.session.query(PriceData.source, func.avg(PriceData.price).label("avg_price"))
+    # Group by unit (package) on the latest date; pick the dominant unit
+    unit_rows = (
+        db.session.query(
+            PriceData.package,
+            func.avg(PriceData.price).label("avg_price"),
+            func.count().label("cnt"),
+        )
         .filter(*base_filters, PriceData.year == latest.year, PriceData.day == latest.day)
-        .group_by(PriceData.source)
+        .group_by(PriceData.package)
         .all()
     )
-    if not source_averages:
+    if not unit_rows:
         return None
-    prices = [float(r.avg_price) for r in source_averages if r.avg_price and r.avg_price > 0]
-    return float(sum(prices) / len(prices)) if prices else None
+    dominant = max(unit_rows, key=lambda r: r.cnt)
+    return float(dominant.avg_price) if dominant.avg_price else None
 
 
 def calculate_price_forecast(commodity, city=None, source="ProduceIQ", forecast_days=7):
@@ -2335,11 +2341,15 @@ def api_market_opportunity():
         best_min = None
 
         for city in cities:
-            row = (
+            # Group by unit so we don't mix prices from different package sizes;
+            # pick the dominant unit (highest count) for this city.
+            unit_rows = (
                 db.session.query(
+                    PriceData.package,
                     func.max(PriceData.price).label("max_price"),
                     func.avg(PriceData.price).label("avg_price"),
                     func.min(PriceData.price).label("min_price"),
+                    func.count().label("cnt"),
                 )
                 .filter(
                     func.upper(PriceData.city_name) == city.upper(),
@@ -2348,13 +2358,18 @@ def api_market_opportunity():
                     PriceData.year >= seven_days_ago.year,
                     PriceData.day >= seven_days_ago.timetuple().tm_yday,
                 )
-                .first()
+                .group_by(PriceData.package)
+                .all()
             )
-            if row and row.max_price is not None:
-                if best_max is None or row.max_price > best_max:
-                    best_max = float(row.max_price)
-                    best_avg = float(row.avg_price) if row.avg_price else None
-                    best_min = float(row.min_price) if row.min_price else None
+            if not unit_rows:
+                continue
+            # Use the dominant unit (most data points)
+            dominant = max(unit_rows, key=lambda r: r.cnt)
+            if dominant.max_price is not None:
+                if best_max is None or dominant.max_price > best_max:
+                    best_max = float(dominant.max_price)
+                    best_avg = float(dominant.avg_price) if dominant.avg_price else None
+                    best_min = float(dominant.min_price) if dominant.min_price else None
                     best_city = city
 
         result.append({
@@ -2397,8 +2412,16 @@ def api_terminal_market_pricing():
                 variants.add("Cubanelles")
 
             def _latest(source_name, v=variants, c=city):
+                # Group by unit (package) so we don't mix prices across different package sizes.
+                # Order by most recent date then highest count to surface the dominant unit.
                 return (
-                    db.session.query(func.avg(PriceData.price).label("price"), PriceData.year, PriceData.day)
+                    db.session.query(
+                        PriceData.package,
+                        func.avg(PriceData.price).label("price"),
+                        PriceData.year,
+                        PriceData.day,
+                        func.count().label("cnt"),
+                    )
                     .filter(
                         PriceData.commodity.in_(sorted(v)),
                         PriceData.source == source_name,
@@ -2409,30 +2432,10 @@ def api_terminal_market_pricing():
                             and_(PriceData.year == cutoff_year, PriceData.day >= cutoff_day)
                         )
                     )
-                    .group_by(PriceData.year, PriceData.day)
+                    .group_by(PriceData.package, PriceData.year, PriceData.day)
                     .order_by(PriceData.year.desc(), PriceData.day.desc())
                     .first()
                 )
-
-            def _get_package(source_name, year, day, v=variants, c=city):
-                if year is None:
-                    return None
-                row = (
-                    db.session.query(PriceData.package, func.count().label("cnt"))
-                    .filter(
-                        PriceData.commodity.in_(sorted(v)),
-                        PriceData.source == source_name,
-                        PriceData.price > 0,
-                        func.upper(PriceData.city_name) == c.upper(),
-                        PriceData.year == year,
-                        PriceData.day == day,
-                        PriceData.package.isnot(None),
-                    )
-                    .group_by(PriceData.package)
-                    .order_by(func.count().desc())
-                    .first()
-                )
-                return row.package if row else None
 
             usda_row = _latest("USDA")
             piq_row = _latest("ProduceIQ")
@@ -2440,33 +2443,15 @@ def api_terminal_market_pricing():
             if not usda_row and not piq_row:
                 continue
 
-            commodity_key = commodity.lower()
-            actual_lbs_per_bu = BUSHEL_LBS.get(commodity_key)
-            unit_lbs = effective_lbs_per_unit(commodity_key, city)
-            converted_unit = effective_unit_label(commodity_key, city)
-
-            def _fmt_row(row, source_name, actual_lbs=actual_lbs_per_bu, u_lbs=unit_lbs):
+            def _fmt_row(row, source_name):
                 if not row:
                     return None
-                price_per_unit = float(row.price)
                 date_str = (datetime(int(row.year), 1, 1) + timedelta(days=int(row.day) - 1)).strftime("%Y-%m-%d")
-                pkg = _get_package(source_name, row.year, row.day)
-
-                # Back-calculate raw price (what USDA/ProduceIQ originally reported)
-                raw_price = None
-                raw_unit = None
-                if pkg and actual_lbs:
-                    pkg_lbs = parse_package_lbs(pkg, actual_lbs)
-                    if pkg_lbs and pkg_lbs > 0:
-                        raw_price = round(price_per_unit * pkg_lbs / u_lbs, 2)
-                        raw_unit = f"$/{package_raw_unit(pkg)}"
-
+                unit_label = row.package or "pkg"
                 return {
-                    "price": round(price_per_unit, 2),
-                    "unit": converted_unit,
-                    "raw_price": raw_price,
-                    "raw_unit": raw_unit,
-                    "package": pkg,
+                    "price": round(float(row.price), 2),
+                    "unit": f"$/{unit_label}",
+                    "package": unit_label,
                     "date": date_str,
                 }
 
@@ -2481,9 +2466,16 @@ def api_terminal_market_pricing():
                 diff_pct = round((diff_abs / usda_obj["price"]) * 100, 1)
                 diff = {"abs": diff_abs, "pct": diff_pct}
 
-            items.append({"variety": commodity, "usda": usda_obj, "produceiq": piq_obj, "diff": diff, "fob": fob,
-                          "package": piq_obj["package"] if piq_obj and piq_obj["package"] else (usda_obj["package"] if usda_obj else None),
-                          "unit": converted_unit})
+            dominant_obj = piq_obj or usda_obj
+            items.append({
+                "variety": commodity,
+                "usda": usda_obj,
+                "produceiq": piq_obj,
+                "diff": diff,
+                "fob": fob,
+                "package": dominant_obj["package"] if dominant_obj else None,
+                "unit": dominant_obj["unit"] if dominant_obj else None,
+            })
 
         if items:
             result[city] = {"items": items}
@@ -2560,14 +2552,17 @@ def api_most_recent_prices():
     else:
         date_filter_conditions = true()
 
-    # --- First CTE: Aggregate average prices ---
+    # Group by unit (package) so we never average across different package sizes.
+    # CTE1: avg price per (commodity, city, year, day, package)
     price_subquery_cte = (
         db.session.query(
             PriceData.commodity,
             PriceData.city_name,
             PriceData.year,
             PriceData.day,
+            PriceData.package,
             func.avg(func.nullif(PriceData.price, 0)).label("avg_price"),
+            func.count().label("cnt"),
         )
         .filter(
             PriceData.commodity.in_(adjusted_commodities),
@@ -2581,14 +2576,19 @@ def api_most_recent_prices():
             PriceData.city_name,
             PriceData.year,
             PriceData.day,
+            PriceData.package,
         )
     ).cte("price_subquery")
 
-    # --- Second CTE: Apply window function to rank prices ---
+    # CTE2: rank by most recent date, then by highest count (dominant unit first)
     window = over(
         func.row_number(),
         partition_by=[price_subquery_cte.c.commodity, price_subquery_cte.c.city_name],
-        order_by=[price_subquery_cte.c.year.desc(), price_subquery_cte.c.day.desc()],
+        order_by=[
+            price_subquery_cte.c.year.desc(),
+            price_subquery_cte.c.day.desc(),
+            price_subquery_cte.c.cnt.desc(),
+        ],
     )
 
     ranked_prices_cte = (
@@ -2598,13 +2598,11 @@ def api_most_recent_prices():
             price_subquery_cte.c.avg_price,
             price_subquery_cte.c.year,
             price_subquery_cte.c.day,
+            price_subquery_cte.c.package,
             window.label("rn"),
         )
     ).cte("ranked_prices")
 
-    # --- Final Query ---
-    # Explicitly select from the ranked_prices_cte. Since that CTE
-    # was built on price_subquery_cte, both will be included.
     final_query = (
         select(
             ranked_prices_cte.c.commodity,
@@ -2612,6 +2610,7 @@ def api_most_recent_prices():
             ranked_prices_cte.c.avg_price,
             ranked_prices_cte.c.year,
             ranked_prices_cte.c.day,
+            ranked_prices_cte.c.package,
         )
         .select_from(ranked_prices_cte)
         .where(ranked_prices_cte.c.rn == 1)
@@ -2628,47 +2627,7 @@ def api_most_recent_prices():
         if original_city and original_commodity in set(commodities):
             key_to_row[(original_commodity, original_city)] = row
 
-    # Single batch query for all package strings covering the full 7-day window
-    pkg_rows = (
-        db.session.query(
-            PriceData.commodity,
-            func.lower(PriceData.city_name).label("city_lower"),
-            PriceData.year,
-            PriceData.day,
-            PriceData.package,
-            func.count().label("cnt"),
-        )
-        .filter(
-            PriceData.commodity.in_(adjusted_commodities + ["Cubanelles"]),
-            city_filter_conditions,
-            date_filter_conditions,
-            PriceData.source.in_(valid_sources),
-            PriceData.package.isnot(None),
-        )
-        .group_by(PriceData.commodity, func.lower(PriceData.city_name), PriceData.year, PriceData.day, PriceData.package)
-        .all()
-    )
-
-    # Build package lookup: (db_commodity, city_lower, year, day) -> most common package
-    from collections import defaultdict
-    pkg_counts = defaultdict(dict)
-    for pr in pkg_rows:
-        key = (pr.commodity, pr.city_lower, pr.year, pr.day)
-        pkg_counts[key][pr.package] = pr.cnt
-
-    def _best_package(db_comm, city_lower, year, day):
-        variants = [db_comm]
-        if db_comm == "Cubanelle":
-            variants.append("Cubanelles")
-        best_pkg, best_cnt = None, 0
-        for v in variants:
-            pkgs = pkg_counts.get((v, city_lower, year, day), {})
-            for pkg, cnt in pkgs.items():
-                if cnt > best_cnt:
-                    best_pkg, best_cnt = pkg, cnt
-        return best_pkg
-
-    # Build the response — includes date, unit ($/bu), raw_price, raw_unit
+    # Build the response
     recent_prices = {
         commodity: {city: "-" for city in cities} for commodity in commodities
     }
@@ -2676,37 +2635,20 @@ def api_most_recent_prices():
     for (orig_comm, orig_city), row in key_to_row.items():
         if orig_city not in cities or orig_comm not in recent_prices:
             continue
-        price_per_bu = float(row.avg_price) if row.avg_price is not None else None
-        if price_per_bu is None:
+        price = float(row.avg_price) if row.avg_price is not None else None
+        if price is None:
             continue
 
         date_str = None
         if row.year and row.day:
             date_str = (datetime(int(row.year), 1, 1) + timedelta(days=int(row.day) - 1)).strftime("%Y-%m-%d")
 
-        commodity_key = orig_comm.lower()
-        actual_lbs = BUSHEL_LBS.get(commodity_key)
-        unit_lbs = effective_lbs_per_unit(commodity_key, orig_city)
-        unit = effective_unit_label(commodity_key, orig_city)
-
-        db_comm = commodity_map.get(orig_comm, orig_comm)
-        pkg = _best_package(db_comm, orig_city.lower(), row.year, row.day)
-
-        raw_price = None
-        raw_unit = None
-        if pkg and actual_lbs:
-            pkg_lbs = parse_package_lbs(pkg, actual_lbs)
-            if pkg_lbs and pkg_lbs > 0:
-                raw_price = round(price_per_bu * pkg_lbs / unit_lbs, 2)
-                raw_unit = f"$/{package_raw_unit(pkg)}"
-
+        unit_label = row.package or "pkg"
         recent_prices[orig_comm][orig_city] = {
-            "price": round(price_per_bu, 2),
+            "price": round(price, 2),
             "date": date_str,
-            "unit": unit,
-            "package": pkg,
-            "raw_price": raw_price,
-            "raw_unit": raw_unit,
+            "unit": f"$/{unit_label}",
+            "package": unit_label,
         }
 
     return jsonify({"prices": recent_prices})
