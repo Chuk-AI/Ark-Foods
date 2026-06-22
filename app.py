@@ -4968,18 +4968,30 @@ def harvest_planning():
                     PriceData.season,
                     PriceData.price,
                     PriceData.source,
+                    PriceData.package,
                 )
                 .filter(*filters)
                 .all()
             )
 
-            # Group data exactly like forecast_line_data
-            data = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+            # Group by (key, unit, season, year) — pick dominant unit per key
+            raw_hp = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(list))))
             for r in rows:
                 key = f"{r.commodity}_{r.city_name}"
-                data[key][r.season][r.year].append(r.price)
+                unit = r.package or "pkg"
+                raw_hp[key][unit][r.season][r.year].append(r.price)
 
-            # Calculate seasonal averages exactly like forecast_line_data
+            # Pick dominant unit per key
+            data = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+            for key, unit_map in raw_hp.items():
+                dom_unit = max(unit_map, key=lambda u: sum(
+                    len(p) for sd in unit_map[u].values() for p in sd.values()
+                ))
+                for season, year_map in unit_map[dom_unit].items():
+                    for year, prices in year_map.items():
+                        data[key][season][year] = prices
+
+            # Calculate seasonal averages
             season_stats = {}
             for key, season_dict in data.items():
                 season_stats[key] = {}
