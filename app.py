@@ -2250,17 +2250,16 @@ def api_best_sell_market():
                 func.max(PriceData.price).label("max_price"),
                 PriceData.year,
                 PriceData.day,
+                PriceData.package,
+                func.count().label("cnt"),
             )
             .filter(
-                func.upper(PriceData.city_name)
-                == city.upper(),  # Convert to uppercase for case-insensitive comparison
+                func.upper(PriceData.city_name) == city.upper(),
                 PriceData.commodity == selected_commodity,
-                PriceData.source.in_(
-                    ["Historical", selected_source]
-                ),  # Either Historical or selected source
+                PriceData.source.in_(["Historical", selected_source]),
             )
-            .group_by(PriceData.year, PriceData.day)
-            .order_by(PriceData.year.desc(), PriceData.day.desc())
+            .group_by(PriceData.year, PriceData.day, PriceData.package)
+            .order_by(PriceData.year.desc(), PriceData.day.desc(), func.count().desc())
         )
 
         if last7Days:
@@ -2708,14 +2707,8 @@ def get_sales_seasonal_prices():
     # Log the dates
     app.logger.info(f"Start Date: {start_date}, End Date: {end_date}")
 
-    # Prepare the query
-    query = db.session.query(PriceData.season, PriceData.price).filter(
-        PriceData.commodity.in_(commodities),
-        func.lower(PriceData.city_name).in_([city.lower() for city in cities]),
-        PriceData.source.in_(["ProduceIQ"]),
-    )
-    # Base query
-    query = db.session.query(PriceData.season, PriceData.price).filter(
+    # Prepare the query — fetch package so we can group by unit
+    query = db.session.query(PriceData.season, PriceData.price, PriceData.package).filter(
         PriceData.commodity.in_(commodities),
         func.lower(PriceData.city_name).in_([city.lower() for city in cities]),
     )
@@ -2723,7 +2716,7 @@ def get_sales_seasonal_prices():
     # ► dynamic source filter
     if source_str and source_str != "Both":
         query = query.filter(PriceData.source == source_str)
-    else:  # "Both" or not supplied ⇒ allow both major sources
+    else:
         query = query.filter(PriceData.source.in_(["USDA", "ProduceIQ"]))
 
     # Apply date filters if both start_date and end_date are provided
@@ -2761,26 +2754,23 @@ def get_sales_seasonal_prices():
         app.logger.error(f"Error during query execution: {str(e)}")
         return jsonify({"error": "Error retrieving data from the database."}), 500
 
-    # Calculate average prices per season
+    # Group by (season, unit) — never average across different package sizes
+    from collections import defaultdict
+    season_unit_prices = defaultdict(lambda: defaultdict(list))
+    for season, price, pkg in data:
+        season_unit_prices[season][pkg or "pkg"].append(price)
+
     seasonal_prices = {}
-    season_price_data = {}
-
-    for season, price in data:
-        if season not in season_price_data:
-            season_price_data[season] = []
-        season_price_data[season].append(price)
-
-    # Log the seasonal price data
-    app.logger.info(f"Seasonal price data: {season_price_data}")
-
-    # Calculate average price for each season
     for season in ["Spring", "Summer", "Autumn", "Winter"]:
-        prices = season_price_data.get(season, [])
-        if prices:
-            average_price = sum(prices) / len(prices)
-            seasonal_prices[season] = round(average_price, 2)
+        unit_map = season_unit_prices.get(season, {})
+        if unit_map:
+            dominant_unit = max(unit_map, key=lambda u: len(unit_map[u]))
+            prices = unit_map[dominant_unit]
+            seasonal_prices[season] = round(sum(prices) / len(prices), 2)
         else:
             seasonal_prices[season] = 0.0
+
+    app.logger.info(f"Seasonal prices (dominant unit per season): {seasonal_prices}")
 
     # Log final seasonal prices
     app.logger.info(f"Final seasonal prices: {seasonal_prices}")
@@ -2866,16 +2856,18 @@ def historical_data():
         if not data:
             return jsonify({"labels": [], "datasets": []}), 200
 
-        # Process and group data by date and commodity/city
-        price_series = {}
+        # Group by (series_key, unit, date) so we never average across package sizes.
+        # Then pick the dominant unit per series_key before building the chart series.
+        from collections import defaultdict
         all_dates = set()
+        # series_unit_dates[series_key][unit][date_str] -> {"sum", "count"}
+        series_unit_dates = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: {"sum": 0, "count": 0})))
 
         for entry in data:
             entry_date = datetime(entry.year, 1, 1) + timedelta(days=entry.day - 1)
             date_str = entry_date.strftime("%Y-%m-%d")
             all_dates.add(date_str)
 
-            # Standardize commodity name for display - always show as "Cubanelles"
             display_commodity = (
                 "Cubanelles"
                 if entry.commodity.lower().startswith("cubanelle")
@@ -2883,7 +2875,6 @@ def historical_data():
             )
             display_city = entry.city_name.strip().lower().title()
 
-            # Group data based on averaging preferences
             if avg_commodities and avg_cities:
                 series_key = "Average Price"
             elif avg_commodities:
@@ -2893,21 +2884,20 @@ def historical_data():
             else:
                 series_key = f"{display_commodity} - {display_city}"
 
-            if series_key not in price_series:
-                price_series[series_key] = {}
+            unit = entry.package or "pkg"
+            series_unit_dates[series_key][unit][date_str]["sum"] += entry.price
+            series_unit_dates[series_key][unit][date_str]["count"] += 1
 
-            if date_str not in price_series[series_key]:
-                price_series[series_key][date_str] = {"sum": 0, "count": 0}
+        # For each series, pick the dominant unit (most data points)
+        price_series = {}
+        for series_key, unit_map in series_unit_dates.items():
+            dominant_unit = max(unit_map, key=lambda u: sum(v["count"] for v in unit_map[u].values()))
+            price_series[series_key] = unit_map[dominant_unit]
 
-            price_series[series_key][date_str]["sum"] += entry.price
-            price_series[series_key][date_str]["count"] += 1
-
-        # Sort the dates
         sorted_dates = sorted(list(all_dates))
         colors = ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40"]
         datasets = []
 
-        # Create datasets for each series
         for idx, (series_name, date_data) in enumerate(price_series.items()):
             series_data = []
             for date in sorted_dates:
@@ -3441,11 +3431,14 @@ def get_price_averages():
         )
 
         # Build basic query filtering by date range
+        # Group by unit (package) to avoid averaging across different package sizes
         query = db.session.query(
             normalized_city,
             normalized_commodity,
             PriceData.source,
+            PriceData.package,
             func.avg(PriceData.price).label("avg_price"),
+            func.count().label("cnt"),
         ).filter(
             or_(
                 and_(PriceData.year == start_year, PriceData.day >= start_day),
@@ -3454,29 +3447,31 @@ def get_price_averages():
             )
         )
 
-        # Apply city filter if not "All cities"
         if city.lower() != "all cities":
             query = query.filter(normalized_city == city)
 
-        # Apply source filter if not "both"
         if source == "usda":
             query = query.filter(PriceData.source == "USDA")
         elif source == "produceiq":
             query = query.filter(PriceData.source == "ProduceIQ")
 
-        # Group by city, commodity, and source
-        query = query.group_by(normalized_city, normalized_commodity, PriceData.source)
+        query = query.group_by(normalized_city, normalized_commodity, PriceData.source, PriceData.package)
         query = query.order_by(normalized_commodity)
 
         results = query.all()
 
-        # Convert query results to dictionary format for easier manipulation
-        raw_data = []
+        # Pick the dominant unit per (city, commodity, source) — highest row count
+        from collections import defaultdict
+        dominant_map = {}  # (city, commodity, source) -> best row
         for row in results:
-            # Skip if no data (shouldn't happen with avg, but just in case)
             if row.avg_price is None:
                 continue
+            key = (row.normalized_city, row.normalized_commodity, row.source)
+            if key not in dominant_map or row.cnt > dominant_map[key].cnt:
+                dominant_map[key] = row
 
+        raw_data = []
+        for row in dominant_map.values():
             raw_data.append(
                 {
                     "city": row.normalized_city,
@@ -3641,33 +3636,31 @@ def get_seasonal_prices():
     # Loop through each season and calculate the average price
     for season in seasonal_prices.keys():
         # Create a query similar to calculate_forecasted_price
-        query = db.session.query(PriceData.price).filter(
-            PriceData.commodity == variety,  # Match the commodity (variety)
-            PriceData.season == season,  # Match the season
+        query = db.session.query(PriceData.price, PriceData.package).filter(
+            PriceData.commodity == variety,
+            PriceData.season == season,
             PriceData.source == "ProduceIQ",
         )
 
-        # Add date filters if start date is provided
         if start_date:
             query = query.filter(
-                PriceData.year
-                >= start_year,  # Consider data from the start year onward
-                PriceData.day
-                >= start_day,  # Ensure data is after the start date in the year
+                PriceData.year >= start_year,
+                PriceData.day >= start_day,
             )
 
-        # Add city filter if provided and not "All cities"
         if city and city != "All cities":
             query = query.filter(PriceData.city_name == city)
 
-        # Execute the query
         historical_data = query.all()
 
-        # Calculate the average price from the historical data
         if historical_data:
-            total_price = sum([entry.price for entry in historical_data])
-            average_price = total_price / len(historical_data)
-            seasonal_prices[season] = round(average_price, 2)
+            from collections import defaultdict
+            unit_prices = defaultdict(list)
+            for entry in historical_data:
+                unit_prices[entry.package or "pkg"].append(entry.price)
+            dominant_unit = max(unit_prices, key=lambda u: len(unit_prices[u]))
+            prices = unit_prices[dominant_unit]
+            seasonal_prices[season] = round(sum(prices) / len(prices), 2)
         else:
             seasonal_prices[season] = 0.0
 
@@ -3762,25 +3755,38 @@ def get_forecast_line_data():
                 PriceData.year,
                 PriceData.season,
                 PriceData.price,
-                PriceData.source,  # Also fetch the source for potential filtering
+                PriceData.source,
+                PriceData.package,
             )
             .filter(*filters)
             .all()
         )
 
-        # If we're averaging across cities, remember which cities actually came back
         if avg_cities:
             all_cities_in_db = sorted({r.city_name for r in rows})
 
-        # group: data[key][season][year] = [prices…]
-        data = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+        # group: raw[key][unit][season][year] = [prices…]
+        # We track unit so we can pick the dominant unit per key before computing averages.
+        raw = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(list))))
         for r in rows:
             key = f"{r.commodity}_{r.city_name}"
-            data[key][r.season][r.year].append(r.price)
+            unit = r.package or "pkg"
+            raw[key][unit][r.season][r.year].append(r.price)
 
-        # ────────── 4. Seasonal averages (without trend factors) ──────────
-        season_stats = {}  # season_stats[key][season] = {avg_price}
-        seasons_list = seasons  # alias for clarity
+        # Pick dominant unit per key (most total data points), then build season_stats
+        data = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+        for key, unit_map in raw.items():
+            dominant_unit = max(unit_map, key=lambda u: sum(
+                len(prices) for season_dict in unit_map[u].values()
+                for prices in season_dict.values()
+            ))
+            for season, year_map in unit_map[dominant_unit].items():
+                for year, prices in year_map.items():
+                    data[key][season][year] = prices
+
+        # ────────── 4. Seasonal averages (dominant unit only) ──────────
+        season_stats = {}
+        seasons_list = seasons
         for key, season_dict in data.items():
             season_stats[key] = {}
             for season in seasons_list:
@@ -3788,7 +3794,6 @@ def get_forecast_line_data():
                 for yr, prices in season_dict[season].items():
                     if prices:
                         yearly_avgs.append(sum(prices) / len(prices))
-
                 overall_avg = sum(yearly_avgs) / len(yearly_avgs) if yearly_avgs else 0
                 season_stats[key][season] = {"avg": overall_avg}
 
@@ -4128,27 +4133,21 @@ def calculate_price_range_for_timeframe(
 
             all_data = (
                 db.session.query(
-                    PriceData.day, PriceData.price, PriceData.year, PriceData.city_name
+                    PriceData.day, PriceData.price, PriceData.year, PriceData.city_name, PriceData.package
                 )
                 .filter(*query_conditions)
                 .all()
             )
 
         else:
-            # Multi-year query (need to handle each year separately)
-            # First year: from start_day to end of year
             first_year_conditions = query_conditions.copy()
             first_year_conditions.extend(
                 [PriceData.year == start_year, PriceData.day >= start_day_of_year]
             )
-
-            # Last year: from beginning of year to end_day
             last_year_conditions = query_conditions.copy()
             last_year_conditions.extend(
                 [PriceData.year == end_year, PriceData.day <= end_day_of_year]
             )
-
-            # Middle years (if any): entire years
             middle_years = list(range(start_year + 1, end_year))
             middle_year_data = []
 
@@ -4157,19 +4156,15 @@ def calculate_price_range_for_timeframe(
                 middle_year_conditions.append(PriceData.year.in_(middle_years))
                 middle_year_data = (
                     db.session.query(
-                        PriceData.day,
-                        PriceData.price,
-                        PriceData.year,
-                        PriceData.city_name,
+                        PriceData.day, PriceData.price, PriceData.year, PriceData.city_name, PriceData.package
                     )
                     .filter(*middle_year_conditions)
                     .all()
                 )
 
-            # Query for first and last year data
             first_year_data = (
                 db.session.query(
-                    PriceData.day, PriceData.price, PriceData.year, PriceData.city_name
+                    PriceData.day, PriceData.price, PriceData.year, PriceData.city_name, PriceData.package
                 )
                 .filter(*first_year_conditions)
                 .all()
@@ -4177,39 +4172,35 @@ def calculate_price_range_for_timeframe(
 
             last_year_data = (
                 db.session.query(
-                    PriceData.day, PriceData.price, PriceData.year, PriceData.city_name
+                    PriceData.day, PriceData.price, PriceData.year, PriceData.city_name, PriceData.package
                 )
                 .filter(*last_year_conditions)
                 .all()
             )
 
-            # Combine all the data
             all_data = first_year_data + middle_year_data + last_year_data
 
-        # First, average data by day and city (just like in historical_data)
-        daily_city_data = {}
+        # Group by (date, city, unit) — pick dominant unit per (date, city) before averaging
+        from collections import defaultdict
+        daily_city_unit = defaultdict(lambda: defaultdict(lambda: {"sum": 0, "count": 0, "date": None, "city": None}))
 
         for row in all_data:
-            # Create a date object for this data point
             row_date = datetime(row.year, 1, 1) + timedelta(days=row.day - 1)
             date_key = row_date.strftime("%Y-%m-%d")
             city_key = row.city_name
-
-            # Create compound key for date+city
+            unit = row.package or "pkg"
             compound_key = f"{date_key}_{city_key}"
+            bucket = daily_city_unit[compound_key][unit]
+            bucket["sum"] += row.price
+            bucket["count"] += 1
+            bucket["date"] = row_date
+            bucket["city"] = city_key
 
-            # Initialize the structure for this date+city if it doesn't exist
-            if compound_key not in daily_city_data:
-                daily_city_data[compound_key] = {
-                    "sum": 0,
-                    "count": 0,
-                    "date": row_date,
-                    "city": city_key,
-                }
-
-            # Sum up prices and count entries for this date+city
-            daily_city_data[compound_key]["sum"] += row.price
-            daily_city_data[compound_key]["count"] += 1
+        # Pick dominant unit per (date, city)
+        daily_city_data = {}
+        for compound_key, unit_map in daily_city_unit.items():
+            dominant_unit = max(unit_map, key=lambda u: unit_map[u]["count"])
+            daily_city_data[compound_key] = unit_map[dominant_unit]
 
         # Then average across cities for each day
         daily_avg_data = {}
@@ -5748,6 +5739,7 @@ def get_monthly_average_prices():
                 mr.month_name,
                 mr.month_num,
                 mr.year,
+                pd.package,
                 ROUND(AVG(pd.price)::numeric, 2) AS avg_price,
                 ROUND(MIN(pd.price)::numeric, 2) AS min_price,
                 ROUND(MAX(pd.price)::numeric, 2) AS max_price,
@@ -5765,7 +5757,25 @@ def get_monthly_average_prices():
             + source_filter
             + """
             GROUP BY
-                mr.month_name, mr.month_num, mr.year
+                mr.month_name, mr.month_num, mr.year, pd.package
+        ),
+        dominant_packages AS (
+            SELECT month_name, month_num, year, package
+            FROM (
+                SELECT month_name, month_num, year, package,
+                       ROW_NUMBER() OVER (PARTITION BY month_name, month_num, year
+                                          ORDER BY record_count DESC) AS rn
+                FROM monthly_stats
+            ) ranked WHERE rn = 1
+        ),
+        monthly_stats_dominant AS (
+            SELECT ms.*
+            FROM monthly_stats ms
+            JOIN dominant_packages dp
+              ON ms.month_name = dp.month_name
+             AND ms.month_num  = dp.month_num
+             AND ms.year       = dp.year
+             AND ms.package    = dp.package
         ),
         """
         )
@@ -5781,7 +5791,7 @@ def get_monthly_average_prices():
                 ROUND(MAX(max_price)::numeric, 2) AS max_price,
                 SUM(record_count) AS total_records
             FROM
-                monthly_stats
+                monthly_stats_dominant
             GROUP BY
                 month_name, month_num
         )
@@ -5808,7 +5818,7 @@ def get_monthly_average_prices():
                         'max_price', ms.max_price
                     )
                 )
-                FROM monthly_stats ms
+                FROM monthly_stats_dominant ms
                 WHERE ms.month_name = a.month_name
             ) AS years_data
         FROM

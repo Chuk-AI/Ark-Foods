@@ -101,22 +101,25 @@ def get_previous_week_average(db_session, commodity: str, city: str) -> Optional
     if city and city != "All cities":
         base_filters.append(PriceData.city_name == city.strip())
 
+    def _dominant_avg(extra_filters):
+        rows = (
+            db_session.query(PriceData.package, func.avg(PriceData.price).label("avg_price"), func.count().label("cnt"))
+            .filter(*base_filters, *extra_filters)
+            .group_by(PriceData.package)
+            .all()
+        )
+        if not rows:
+            return None
+        dominant = max(rows, key=lambda r: r.cnt)
+        return float(dominant.avg_price) if dominant.avg_price and dominant.avg_price > 0 else None
+
     start_day = max(current_day - 7, 1)
-    avg_7day = (
-        db_session.query(func.avg(PriceData.price))
-        .filter(*base_filters, PriceData.year == current_year, PriceData.day >= start_day, PriceData.day <= current_day)
-        .scalar()
-    )
+    avg_7day = _dominant_avg([PriceData.year == current_year, PriceData.day >= start_day, PriceData.day <= current_day])
     if avg_7day and avg_7day > 0:
-        return float(avg_7day)
+        return avg_7day
 
     start_day = max(current_day - 14, 1)
-    avg_14day = (
-        db_session.query(func.avg(PriceData.price))
-        .filter(*base_filters, PriceData.year == current_year, PriceData.day >= start_day, PriceData.day <= current_day)
-        .scalar()
-    )
-    return float(avg_14day) if avg_14day and avg_14day > 0 else None
+    return _dominant_avg([PriceData.year == current_year, PriceData.day >= start_day, PriceData.day <= current_day])
 
 
 def get_historical_weekly_average(db_session, commodity: str, city: str, target_week: int, years_back: int = 3) -> Optional[float]:
@@ -141,23 +144,33 @@ def get_historical_weekly_average(db_session, commodity: str, city: str, target_
     if city and city != "All cities":
         base_filters.append(PriceData.city_name == city.strip())
 
+    # Group by (package, year, day) — pick dominant unit before computing weekly averages
     rows = (
-        db_session.query(PriceData.year, PriceData.day, func.avg(PriceData.price).label("avg_price"))
+        db_session.query(PriceData.package, PriceData.year, PriceData.day, func.avg(PriceData.price).label("avg_price"), func.count().label("cnt"))
         .filter(*base_filters)
-        .group_by(PriceData.year, PriceData.day)
+        .group_by(PriceData.package, PriceData.year, PriceData.day)
         .all()
     )
     if not rows:
         return None
 
+    from collections import defaultdict
+    # Pick dominant unit overall (most rows across all dates)
+    unit_counts: dict = defaultdict(int)
+    for r in rows:
+        unit_counts[r.package or "pkg"] += r.cnt
+    dominant_unit = max(unit_counts, key=lambda u: unit_counts[u])
+
     prices_by_year = {}
-    for year, day, avg_price in rows:
-        if not avg_price or avg_price <= 0:
+    for r in rows:
+        if (r.package or "pkg") != dominant_unit:
             continue
-        date_obj = datetime(int(year), 1, 1).date() + timedelta(days=int(day) - 1)
+        if not r.avg_price or r.avg_price <= 0:
+            continue
+        date_obj = datetime(int(r.year), 1, 1).date() + timedelta(days=int(r.day) - 1)
         week_num, _ = get_week_number_and_year(date_obj)
         if week_num == target_week:
-            prices_by_year.setdefault(int(year), []).append(float(avg_price))
+            prices_by_year.setdefault(int(r.year), []).append(float(r.avg_price))
 
     if not prices_by_year:
         return None
@@ -202,11 +215,19 @@ def get_historical_trend_pattern(db_session, commodity: str, city: str, from_wee
         base_filters.append(PriceData.city_name == city.strip())
 
     rows = (
-        db_session.query(PriceData.year, PriceData.day, func.avg(PriceData.price).label("avg_price"))
+        db_session.query(PriceData.package, PriceData.year, PriceData.day, func.avg(PriceData.price).label("avg_price"), func.count().label("cnt"))
         .filter(*base_filters)
-        .group_by(PriceData.year, PriceData.day)
+        .group_by(PriceData.package, PriceData.year, PriceData.day)
         .all()
     )
+
+    # Pick dominant unit (most records) before computing trend
+    from collections import defaultdict as _dd
+    _unit_counts: dict = _dd(int)
+    for r in rows:
+        _unit_counts[r.package or "pkg"] += r.cnt
+    _dominant_unit = max(_unit_counts, key=lambda u: _unit_counts[u]) if _unit_counts else "pkg"
+    rows = [r for r in rows if (r.package or "pkg") == _dominant_unit]
     if not rows:
         return None
 
@@ -216,12 +237,12 @@ def get_historical_trend_pattern(db_session, commodity: str, city: str, from_wee
     to_week, _ = get_week_number_and_year(to_date)
 
     weekly_avgs = {}
-    for year, day, avg_price in rows:
-        if not avg_price or avg_price <= 0:
+    for r in rows:
+        if not r.avg_price or r.avg_price <= 0:
             continue
-        date_obj = datetime(int(year), 1, 1).date() + timedelta(days=int(day) - 1)
+        date_obj = datetime(int(r.year), 1, 1).date() + timedelta(days=int(r.day) - 1)
         week_num, _ = get_week_number_and_year(date_obj)
-        weekly_avgs.setdefault((int(year), week_num), []).append(float(avg_price))
+        weekly_avgs.setdefault((int(r.year), week_num), []).append(float(r.avg_price))
 
     trends = []
     for year in range(current_year - years_back, current_year):
