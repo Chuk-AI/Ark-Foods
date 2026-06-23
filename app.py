@@ -1599,7 +1599,7 @@ def get_last_fetched_date():
 # Fetching data from Produce IQ
 def fetch_daily_data():
     with app.app_context():
-        base_url = "http://api.produceiq.com/index/v2/trends/"
+        base_url = "https://api.produceiq.com/index/v2/trends/"
         headers = {"Api-Subscription-Key": "5aa11f87fed04300b05addd031c56ffa"}
 
         wanted_commodities = [
@@ -1673,21 +1673,26 @@ def fetch_daily_data():
                 "to": current_dt.strftime("%Y-%m-%d"),
             }
 
-            try:
-                response = requests.get(
-                    f"{base_url}terminal-market-trends",
-                    headers=headers,
-                    params=params,
-                    timeout=30,
-                )
-            except requests.exceptions.Timeout:
-                logging.warning(
-                    f"Timeout fetching {current_dt.strftime('%Y-%m-%d')}, skipping."
-                )
-                current_dt += pd.Timedelta(days=1)
-                continue
-            except requests.exceptions.RequestException as e:
-                logging.warning(f"Request error for {current_dt.strftime('%Y-%m-%d')}: {e}, skipping.")
+            response = None
+            for _attempt in range(3):
+                try:
+                    response = requests.get(
+                        f"{base_url}terminal-market-trends",
+                        headers=headers,
+                        params=params,
+                        verify=False,
+                        timeout=60,
+                    )
+                    break
+                except requests.exceptions.Timeout:
+                    logging.warning(
+                        f"Timeout fetching {current_dt.strftime('%Y-%m-%d')} (attempt {_attempt+1}/3)"
+                    )
+                except requests.exceptions.RequestException as e:
+                    logging.warning(f"Request error for {current_dt.strftime('%Y-%m-%d')}: {e}")
+                    break
+            if response is None:
+                logging.error(f"All retries failed for {current_dt.strftime('%Y-%m-%d')}, skipping.")
                 current_dt += pd.Timedelta(days=1)
                 continue
 
