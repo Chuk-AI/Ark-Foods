@@ -1678,6 +1678,7 @@ def fetch_daily_data():
                 headers=headers,
                 params=params,
                 verify=False,
+                timeout=30,
             )
 
             logging.info(f"API Response for {current_dt.strftime('%Y-%m-%d')}")
