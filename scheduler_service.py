@@ -6,7 +6,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 CITIES_TO_CACHE = [
-    "All cities",
     "New York",
     "Chicago",
     "Los Angeles",

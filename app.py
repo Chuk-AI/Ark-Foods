@@ -7201,8 +7201,8 @@ def trigger_cache_build():
 @app.route("/api/cache_build_status", methods=["GET"])
 def api_cache_build_status():
     cache_keys = [
-        "price_forecast_all_combined_all_cities",
-        "long_term_all_combined_all_cities",
+        "price_forecast_all_combined_baltimore",
+        "long_term_all_combined_baltimore",
     ]
     cache_times = {}
     for ck in cache_keys:
@@ -7256,7 +7256,7 @@ def api_forecast_diagnostics():
 
     # Cache summary
     cache_summary = {}
-    for key in ["price_forecast_all_combined_all_cities", "long_term_all_combined_all_cities"]:
+    for key in ["price_forecast_all_combined_baltimore", "long_term_all_combined_baltimore"]:
         cache_row = db.session.query(DashboardCache).filter_by(cache_key=key).first()
         if cache_row:
             try:
