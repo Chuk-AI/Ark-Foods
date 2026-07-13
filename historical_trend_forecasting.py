@@ -296,44 +296,66 @@ def calculate_hybrid_6week_forecast(db_session, commodity: str, city: str) -> Di
         if not current_price or current_price <= 0:
             return {"success": False, "commodity": commodity, "city": city, "error": "No current price available (must be within 7 days)"}
 
-        # Determine unit groupings
+        # Determine which units are RECENT (last 14 days) for this commodity+city
         commodity_variants = {commodity}
         if commodity == "Cubanelle":
             commodity_variants.add("Cubanelles")
-        _unit_filters = [
+
+        now_dt = datetime.now()
+        current_day_of_year = int(now_dt.strftime("%j"))
+        recent_min_day = max(current_day_of_year - 14, 1)
+        current_year = now_dt.year
+
+        _base_filters = [
             PriceData.commodity.in_(sorted(commodity_variants)),
             PriceData.source.in_(["ProduceIQ", "USDA"]),
             PriceData.price > 0,
+            PriceData.year == current_year,
         ]
-        if city and city != "All cities" and city != "":
-            _unit_filters.append(PriceData.city_name == city.strip())
-        _unit_rows = (
+        if city and city != "":
+            _base_filters.append(PriceData.city_name == city.strip())
+
+        # Only units seen in the last 14 days
+        recent_pkg_rows = (
             db_session.query(PriceData.package, func.count().label("cnt"))
-            .filter(*_unit_filters)
+            .filter(*_base_filters, PriceData.day >= recent_min_day)
             .group_by(PriceData.package)
             .all()
         )
 
-        # Build raw→norm and norm→raws mappings
         raw_to_norm: dict = {}
         norm_to_raws: dict = {}
-        for r in _unit_rows:
+        norm_counts: dict = {}
+        for r in recent_pkg_rows:
             raw = r.package or ""
-            norm = normalize_unit_for_grouping(raw) if raw else raw
+            norm = normalize_unit_for_grouping(raw) if raw else "pkg"
             raw_to_norm[raw] = norm
             norm_to_raws.setdefault(norm, []).append(raw)
-
-        # Pick dominant unit by count
-        norm_counts: dict = {}
-        for r in _unit_rows:
-            norm = raw_to_norm.get(r.package or "", r.package or "")
             norm_counts[norm] = norm_counts.get(norm, 0) + r.cnt
-        dominant_unit = max(norm_counts, key=lambda k: norm_counts[k]) if norm_counts else None
 
-        def _run_6week_forecast_for_unit(unit_label: str, unit_current_price: float) -> dict:
-            """Run the 6-week forecast logic for a specific normalized unit."""
-            prev_week_avg = get_previous_week_average(db_session, commodity, city)
-            baseline_price = prev_week_avg if prev_week_avg else unit_current_price
+        if not norm_to_raws:
+            return {"success": False, "commodity": commodity, "city": city, "error": "No recent price data (last 14 days) for this commodity/city"}
+
+        dominant_unit = max(norm_counts, key=lambda k: norm_counts[k])
+
+        def _get_unit_price(norm_unit: str, days_back_lo: int, days_back_hi: int) -> float:
+            raws = norm_to_raws.get(norm_unit, [])
+            lo = max(current_day_of_year - days_back_hi, 1)
+            hi = max(current_day_of_year - days_back_lo, 1)
+            rows = (
+                db_session.query(PriceData.price)
+                .filter(*_base_filters, PriceData.day >= lo, PriceData.day <= hi,
+                        PriceData.package.in_(raws))
+                .all()
+            )
+            prices = [r.price for r in rows if r.price and r.price > 0]
+            return float(np.mean(prices)) if prices else current_price
+
+        def _run_6week_forecast_for_unit(unit_label: str) -> dict:
+            unit_current = _get_unit_price(unit_label, 0, 7)
+            prev_avg = _get_unit_price(unit_label, 7, 14)
+            unit_current_price = unit_current
+            baseline_price = prev_avg if prev_avg > 0 else unit_current
             data_avail = calculate_data_availability(db_session, commodity, city, weeks_ahead=6)
 
             wk_forecasts = []
@@ -384,10 +406,10 @@ def calculate_hybrid_6week_forecast(db_session, commodity: str, city: str) -> Di
                 "avg_variance_from_historical_pct": round(float(np.mean(variances)), 1) if variances else None,
             }
 
-        # Build per-unit forecasts
+        # Build per-unit forecasts (recent units only)
         forecasts_by_unit: dict = {}
         for norm_unit in norm_to_raws:
-            forecasts_by_unit[norm_unit] = _run_6week_forecast_for_unit(norm_unit, current_price)
+            forecasts_by_unit[norm_unit] = _run_6week_forecast_for_unit(norm_unit)
 
         dominant_result = forecasts_by_unit.get(dominant_unit) if dominant_unit and forecasts_by_unit else None
         if dominant_result is None and forecasts_by_unit:
@@ -408,7 +430,7 @@ def calculate_hybrid_6week_forecast(db_session, commodity: str, city: str) -> Di
             "city": city,
             "source": "Combined (ProduceIQ + USDA)",
             "unit": dominant_unit,
-            "current_price": round(float(current_price), 2),
+            "current_price": dominant_result["current_price"] if dominant_result else round(float(current_price), 2),
             "baseline_price": dominant_result["baseline_price"] if dominant_result else round(float(current_price), 2),
             "forecasts": forecasts,
             "data_availability": dominant_result["data_availability"] if dominant_result else 0,

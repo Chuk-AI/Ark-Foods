@@ -693,12 +693,12 @@ def _get_combined_current_price(commodity: str, city: str, max_age_days: int = 3
 
 def calculate_price_forecast(commodity, city=None, source="ProduceIQ", forecast_days=7):
     """
-    Forecast prices per unit. Since prices are now stored raw (no conversion),
-    each distinct package unit (e.g. "1 bu", "10 lb") needs its own forecast.
-    We return the dominant unit's 7-day forecast in the standard shape, plus a
-    per-unit breakdown in `forecasts_by_unit`.
+    Per-unit 7-day forecast. Only units seen in the last 14 days are shown
+    (recent = currently traded quality tiers). Each unit gets its own
+    independent forecast using only that unit's price history.
     """
     try:
+        from collections import defaultdict
         commodity = normalize_commodity(commodity)
         now = datetime.now()
         current_year = now.year
@@ -708,70 +708,81 @@ def calculate_price_forecast(commodity, city=None, source="ProduceIQ", forecast_
         if commodity == "Cubanelle":
             commodity_variants.add("Cubanelles")
 
-        base_filters = [
+        city_filter = []
+        if city:
+            city_filter.append(PriceData.city_name == city.strip())
+
+        base_q = [
             PriceData.commodity.in_(sorted(commodity_variants)),
             PriceData.source.in_(["ProduceIQ", "USDA"]),
             PriceData.price > 0,
             PriceData.year == current_year,
+            *city_filter,
         ]
-        if city:
-            base_filters.append(PriceData.city_name == city.strip())
 
-        min_day = max(current_day - 30, 1)
+        # Step 1: find which normalized units have data in the last 14 days (recent)
+        recent_min_day = max(current_day - 14, 1)
+        recent_rows = (
+            db.session.query(PriceData.package)
+            .filter(*base_q, PriceData.day >= recent_min_day)
+            .all()
+        )
+        if not recent_rows:
+            return {"success": False, "error": "No price data in the last 14 days for this commodity/city"}
 
-        # Fetch all recent rows with their unit label (stored in package column)
-        rows = (
+        recent_units = {normalize_unit_for_grouping(r.package or "pkg") for r in recent_rows}
+
+        # Step 2: for each recent unit, fetch up to 60 days of history for trend calc
+        history_min_day = max(current_day - 60, 1)
+        all_rows = (
             db.session.query(PriceData.day, PriceData.price, PriceData.package)
-            .filter(*base_filters, PriceData.day >= min_day)
+            .filter(*base_q, PriceData.day >= history_min_day)
             .order_by(PriceData.day)
             .all()
         )
 
-        if not rows:
-            return {"success": False, "error": "Insufficient historical data for forecast"}
-
-        # Group rows by unit label, computing daily average per unit
-        from collections import defaultdict
+        # Group into per-unit daily averages, keeping only recent units
         unit_days: dict[str, dict[int, list]] = defaultdict(lambda: defaultdict(list))
-        for r in rows:
-            unit = normalize_unit_for_grouping(r.package or "pkg")
-            unit_days[unit][int(r.day)].append(float(r.price))
+        for r in all_rows:
+            norm = normalize_unit_for_grouping(r.package or "pkg")
+            if norm in recent_units:
+                unit_days[norm][int(r.day)].append(float(r.price))
 
-        # Build daily series per unit
+        # Build ordered daily price series per unit (need ≥3 points)
         unit_series: dict[str, list[float]] = {}
         for unit, day_map in unit_days.items():
             series = [
                 sum(prices) / len(prices)
-                for day, prices in sorted(day_map.items())
-                if prices
+                for _, prices in sorted(day_map.items())
             ]
-            if len(series) >= 5:
+            if len(series) >= 3:
                 unit_series[unit] = series
 
         if not unit_series:
             return {"success": False, "error": "Insufficient data per unit for forecast"}
 
         def _build_unit_forecast(unit_label: str, series: list[float]) -> dict:
-            recent = series[-14:] if len(series) >= 14 else series
+            trend_window = series[-14:] if len(series) >= 14 else series
             momentum_pct = 0.0
-            std_dev = 0.0
-            if len(recent) >= 7:
-                slope = _linear_trend(recent)
-                avg_recent = float(np.mean(recent))
-                std_dev = float(np.std(recent))
-                momentum_pct = (slope / avg_recent * 100.0) if avg_recent > 0 else 0.0
+            std_dev = float(np.std(series)) if len(series) > 1 else 0.0
+            if len(trend_window) >= 4:
+                slope = _linear_trend(trend_window)
+                avg_w = float(np.mean(trend_window))
+                raw_mom = (slope / avg_w * 100.0) if avg_w > 0 else 0.0
+                momentum_pct = max(-3.0, min(3.0, raw_mom))
             current_price = series[-1]
             forecasts = []
             prev_price = current_price
             for day_offset in range(1, 8):
-                forecast_price = prev_price * (1.0 + momentum_pct / 100.0)
+                decay = 1.0 - (day_offset - 1) / 7.0
+                forecast_price = max(prev_price * (1.0 + momentum_pct * decay / 100.0), 0.01)
                 prev_price = forecast_price
                 forecast_date = now + timedelta(days=day_offset)
                 if day_offset == 1:
                     trend = "stable"
                 else:
                     prior = forecasts[-1]["price"]
-                    trend = "up" if forecast_price > prior * 1.01 else ("down" if forecast_price < prior * 0.99 else "stable")
+                    trend = "up" if forecast_price > prior * 1.005 else ("down" if forecast_price < prior * 0.995 else "stable")
                 forecasts.append({
                     "date": forecast_date.strftime("%Y-%m-%d"),
                     "day_name": forecast_date.strftime("%A"),
@@ -794,20 +805,19 @@ def calculate_price_forecast(commodity, city=None, source="ProduceIQ", forecast_
                 "trend_badge": trend_badge,
                 "price_change_pct": round(float(price_change_pct), 2),
                 "momentum_pct": round(float(momentum_pct), 2),
-                "std_dev": round(float(std_dev), 2) if std_dev > 0 else 0.0,
+                "std_dev": round(float(std_dev), 2),
             }
 
-        # Build per-unit forecasts; pick dominant unit (most data points) as default
         forecasts_by_unit = {u: _build_unit_forecast(u, s) for u, s in unit_series.items()}
         dominant_unit = max(unit_series, key=lambda u: len(unit_series[u]))
         dominant = forecasts_by_unit[dominant_unit]
+        units_available = sorted(forecasts_by_unit.keys())
 
         return {
             "success": True,
             "commodity": commodity,
             "city": city or "",
             "source": "Combined (ProduceIQ + USDA)",
-            # Top-level keys mirror old shape (dominant unit) for backward compat
             "unit": dominant["unit"],
             "current_price": dominant["current_price"],
             "forecasts": dominant["forecasts"],
@@ -816,9 +826,8 @@ def calculate_price_forecast(commodity, city=None, source="ProduceIQ", forecast_
             "price_change_pct": dominant["price_change_pct"],
             "momentum_pct": dominant["momentum_pct"],
             "std_dev": dominant["std_dev"],
-            # Per-unit breakdown for any consumer that wants all units
             "forecasts_by_unit": forecasts_by_unit,
-            "units_available": sorted(forecasts_by_unit.keys()),
+            "units_available": units_available,
         }
     except Exception as e:
         import traceback as _tb
