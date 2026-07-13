@@ -8,7 +8,7 @@ import {
 // ─── constants ────────────────────────────────────────────────────────────────
 
 const CITIES = [
-  'All cities', 'Baltimore', 'Boston', 'Chicago', 'Columbia',
+  'Baltimore', 'Boston', 'Chicago', 'Columbia',
   'Miami', 'New York', 'Philadelphia', 'Los Angeles', 'Detroit', 'Atlanta',
 ];
 
@@ -68,7 +68,7 @@ function CitySelector({ value, onChange, label = 'City:' }) {
       <span style={{ fontSize: 13, color: '#64748b', fontWeight: 600 }}>{label}</span>
       <select value={value} onChange={(e) => onChange(e.target.value)}
         style={{ fontSize: 13, padding: '8px 14px', border: '1px solid #e2e8f0', borderRadius: 8, background: '#3b82f6', color: '#fff', fontWeight: 600, cursor: 'pointer' }}>
-        {CITIES.map((c) => <option key={c} value={c}>{c === 'All cities' ? 'All Cities' : c}</option>)}
+        {CITIES.map((c) => <option key={c} value={c}>{c}</option>)}
       </select>
     </div>
   );
@@ -532,14 +532,11 @@ function SeasonalForecast({ city }) {
 
   useEffect(() => {
     setLoading(true); setData(null); setError(null);
-    const isAll = city === 'All cities';
     const params = new URLSearchParams({
       commodities: COMMODITIES.join(','),
       forecastYears: '1',
       source: 'Both',
-      ...(isAll
-        ? { averageCities: 'true' }
-        : { cities: city }),
+      cities: city,
     });
     axios.get(`/api/forecast_line_data?${params}`)
       .then((r) => {
@@ -565,11 +562,9 @@ function SeasonalForecast({ city }) {
       )}
       {data?.labels && hasData && (
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 20, overflowX: 'auto' }}>
-          {city !== 'All cities' && (
-            <div style={{ color: 'var(--text-2)', fontSize: 12, marginBottom: 10 }}>
-              📍 Seasonal averages for <strong>{city}</strong>
-            </div>
-          )}
+          <div style={{ color: 'var(--text-2)', fontSize: 12, marginBottom: 10 }}>
+            📍 Seasonal averages for <strong>{city}</strong>
+          </div>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
               <tr>
@@ -603,9 +598,9 @@ function SeasonalForecast({ city }) {
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
 export default function NewDashboard() {
-  const [city7Day, setCity7Day] = useState('All cities');
-  const [city6Week, setCity6Week] = useState('All cities');
-  const [citySeasonal, setCitySeasonal] = useState('All cities');
+  const [city7Day, setCity7Day] = useState('Baltimore');
+  const [city6Week, setCity6Week] = useState('Baltimore');
+  const [citySeasonal, setCitySeasonal] = useState('Baltimore');
 
   return (
     <div style={{ padding: '28px 20px', maxWidth: 1600, margin: '0 auto', fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif' }}>

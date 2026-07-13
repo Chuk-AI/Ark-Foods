@@ -714,7 +714,7 @@ def calculate_price_forecast(commodity, city=None, source="ProduceIQ", forecast_
             PriceData.price > 0,
             PriceData.year == current_year,
         ]
-        if city and city != "All cities":
+        if city:
             base_filters.append(PriceData.city_name == city.strip())
 
         min_day = max(current_day - 30, 1)
@@ -805,7 +805,7 @@ def calculate_price_forecast(commodity, city=None, source="ProduceIQ", forecast_
         return {
             "success": True,
             "commodity": commodity,
-            "city": city or "All cities",
+            "city": city or "",
             "source": "Combined (ProduceIQ + USDA)",
             # Top-level keys mirror old shape (dominant unit) for backward compat
             "unit": dominant["unit"],

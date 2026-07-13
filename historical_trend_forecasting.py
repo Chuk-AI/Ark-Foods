@@ -51,7 +51,7 @@ def calculate_data_availability(
         PriceData.year < current_year,
     ]
 
-    if city and city != "All cities":
+    if city and city != "All cities" and city != "":
         base_filters.append(PriceData.city_name == city.strip())
 
     target_weeks = set()
@@ -98,7 +98,7 @@ def get_previous_week_average(db_session, commodity: str, city: str) -> Optional
         PriceData.price > 0,
     ]
 
-    if city and city != "All cities":
+    if city and city != "All cities" and city != "":
         base_filters.append(PriceData.city_name == city.strip())
 
     def _dominant_avg(extra_filters):
@@ -141,7 +141,7 @@ def get_historical_weekly_average(db_session, commodity: str, city: str, target_
         PriceData.year < current_year,
     ]
 
-    if city and city != "All cities":
+    if city and city != "All cities" and city != "":
         base_filters.append(PriceData.city_name == city.strip())
 
     # Group by (package, year, day) — pick dominant unit before computing weekly averages
@@ -211,7 +211,7 @@ def get_historical_trend_pattern(db_session, commodity: str, city: str, from_wee
         PriceData.year < current_year,
     ]
 
-    if city and city != "All cities":
+    if city and city != "All cities" and city != "":
         base_filters.append(PriceData.city_name == city.strip())
 
     rows = (
@@ -305,7 +305,7 @@ def calculate_hybrid_6week_forecast(db_session, commodity: str, city: str) -> Di
             PriceData.source.in_(["ProduceIQ", "USDA"]),
             PriceData.price > 0,
         ]
-        if city and city != "All cities":
+        if city and city != "All cities" and city != "":
             _unit_filters.append(PriceData.city_name == city.strip())
         _unit_rows = (
             db_session.query(PriceData.package, func.count().label("cnt"))
