@@ -258,6 +258,74 @@ function SparkLine({ data }) {
   );
 }
 
+function UnitPills({ units, selected, onSelect }) {
+  if (!units || units.length <= 1) return null;
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
+      {units.map((u) => (
+        <button key={u} onClick={() => onSelect(u)} style={{
+          padding: '2px 8px', borderRadius: 12, border: 'none', cursor: 'pointer', fontSize: 10, fontWeight: 600,
+          background: selected === u ? '#059669' : '#f1f5f9',
+          color: selected === u ? '#fff' : '#64748b',
+          transition: 'all .15s',
+        }}>{u}</button>
+      ))}
+    </div>
+  );
+}
+
+function ForecastCard({ f, trendIcon, trendColor }) {
+  const [selectedUnit, setSelectedUnit] = useState(f.unit);
+  const units = f.units_available || [];
+  const multiUnit = units.length > 1;
+  // Resolve display data from selected unit or fall back to top-level
+  const unitData = (multiUnit && selectedUnit && f.forecasts_by_unit?.[selectedUnit]) ? f.forecasts_by_unit[selectedUnit] : null;
+  const currentPrice = unitData ? unitData.current_price : f.current_price;
+  const unitLabel = unitData ? unitData.unit : f.unit;
+  const forecasts = unitData ? unitData.forecasts : f.forecasts;
+  const momentumPct = unitData ? unitData.momentum_pct : f.momentum_pct;
+  const stdDev = unitData ? unitData.std_dev : f.std_dev;
+  const overallTrend = unitData ? unitData.overall_trend : f.overall_trend;
+  const trendBadge = unitData ? unitData.trend_badge : f.trend_badge;
+  const priceChangePct = unitData ? unitData.price_change_pct : f.price_change_pct;
+
+  return (
+    <div style={{ background: '#fff', border: '2px solid #e2e8f0', borderRadius: 12, padding: 20, transition: 'all .2s' }}
+      onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#3b82f6'; e.currentTarget.style.boxShadow = '0 8px 20px rgba(59,130,246,.15)'; }}
+      onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.boxShadow = 'none'; }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <span style={{ fontSize: 15, fontWeight: 700, color: '#1e293b' }}>{f.commodity}</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          <span>{trendIcon(overallTrend)}</span>
+          <Badge type={trendBadge || 'info'}>{overallTrend}</Badge>
+        </span>
+      </div>
+      <UnitPills units={units} selected={selectedUnit} onSelect={setSelectedUnit} />
+      <div style={{ fontSize: 28, fontWeight: 800, color: '#059669', marginBottom: 2 }}>{money(currentPrice)}</div>
+      {unitLabel && <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 6 }}>per {unitLabel}</div>}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 12, marginBottom: 12 }}>
+        <div><span style={{ color: '#64748b' }}>Momentum: </span><strong style={{ color: momentumPct >= 0 ? '#dc2626' : '#22c55e' }}>{momentumPct >= 0 ? '+' : ''}{momentumPct?.toFixed(1)}%</strong></div>
+        <div><span style={{ color: '#64748b' }}>Volatility: </span><strong>±{money(stdDev)}</strong></div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 3, marginBottom: 8 }}>
+        {(forecasts || []).map((d, i) => (
+          <div key={i} style={{ textAlign: 'center', background: '#f8fafc', borderRadius: 6, padding: '6px 2px', fontSize: 10 }}>
+            <div style={{ fontWeight: 600, color: '#64748b' }}>{d.day_name?.slice(0, 3)}</div>
+            <div style={{ fontWeight: 700, color: '#1e293b', fontSize: 11 }}>${d.price?.toFixed(0)}</div>
+            <div style={{ color: d.trend === 'up' ? '#dc2626' : d.trend === 'down' ? '#22c55e' : '#64748b' }}>
+              {d.trend === 'up' ? '↑' : d.trend === 'down' ? '↓' : '→'}
+            </div>
+          </div>
+        ))}
+      </div>
+      <SparkLine data={forecasts} />
+      <div style={{ fontSize: 11, color: '#64748b', marginTop: 6 }}>
+        7-day change: <strong style={{ color: trendColor(overallTrend) }}>{priceChangePct >= 0 ? '+' : ''}{priceChangePct?.toFixed(1)}%</strong>
+      </div>
+    </div>
+  );
+}
+
 function PriceForecast7Day({ city }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -305,40 +373,7 @@ function PriceForecast7Day({ city }) {
       {error && error !== 'building' && <p style={{ color: '#dc2626' }}>Error: {error}</p>}
       {data && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))', gap: 18 }}>
-          {data.map((f) => (
-            <div key={f.commodity} style={{ background: '#fff', border: '2px solid #e2e8f0', borderRadius: 12, padding: 20, transition: 'all .2s' }}
-              onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#3b82f6'; e.currentTarget.style.boxShadow = '0 8px 20px rgba(59,130,246,.15)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.boxShadow = 'none'; }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                <span style={{ fontSize: 15, fontWeight: 700, color: '#1e293b' }}>{f.commodity}</span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <span>{trendIcon(f.overall_trend)}</span>
-                  <Badge type={f.trend_badge || 'info'}>{f.overall_trend}</Badge>
-                </span>
-              </div>
-              <div style={{ fontSize: 28, fontWeight: 800, color: '#059669', marginBottom: 2 }}>{money(f.current_price)}</div>
-              {f.unit && <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 6 }}>per {f.unit}</div>}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 12, marginBottom: 12 }}>
-                <div><span style={{ color: '#64748b' }}>Momentum: </span><strong style={{ color: f.momentum_pct >= 0 ? '#dc2626' : '#22c55e' }}>{f.momentum_pct >= 0 ? '+' : ''}{f.momentum_pct?.toFixed(1)}%</strong></div>
-                <div><span style={{ color: '#64748b' }}>Volatility: </span><strong>±{money(f.std_dev)}</strong></div>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 3, marginBottom: 8 }}>
-                {(f.forecasts || []).map((d, i) => (
-                  <div key={i} style={{ textAlign: 'center', background: '#f8fafc', borderRadius: 6, padding: '6px 2px', fontSize: 10 }}>
-                    <div style={{ fontWeight: 600, color: '#64748b' }}>{d.day_name?.slice(0, 3)}</div>
-                    <div style={{ fontWeight: 700, color: '#1e293b', fontSize: 11 }}>${d.price?.toFixed(0)}</div>
-                    <div style={{ color: d.trend === 'up' ? '#dc2626' : d.trend === 'down' ? '#22c55e' : '#64748b' }}>
-                      {d.trend === 'up' ? '↑' : d.trend === 'down' ? '↓' : '→'}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <SparkLine data={f.forecasts} />
-              <div style={{ fontSize: 11, color: '#64748b', marginTop: 6 }}>
-                7-day change: <strong style={{ color: trendColor(f.overall_trend) }}>{f.price_change_pct >= 0 ? '+' : ''}{f.price_change_pct?.toFixed(1)}%</strong>
-              </div>
-            </div>
-          ))}
+          {data.map((f) => <ForecastCard key={f.commodity} f={f} trendIcon={trendIcon} trendColor={trendColor} />)}
         </div>
       )}
     </div>
@@ -364,11 +399,12 @@ const Tooltip6w = ({ active, payload }) => {
 function LongTermCard({ commodity, city, onResult }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [selectedUnit, setSelectedUnit] = useState(null);
 
   useEffect(() => {
-    setLoading(true); setData(null);
+    setLoading(true); setData(null); setSelectedUnit(null);
     axios.get(`/api/price_forecast_long_term?commodity=${encodeURIComponent(commodity)}&city=${encodeURIComponent(city)}`)
-      .then((r) => { setData(r.data); setLoading(false); onResult?.(r.data?.success === true); })
+      .then((r) => { setData(r.data); setSelectedUnit(r.data?.unit || null); setLoading(false); onResult?.(r.data?.success === true); })
       .catch(() => { setData({ success: false }); setLoading(false); onResult?.(false); });
   }, [commodity, city]);
 
@@ -382,12 +418,22 @@ function LongTermCard({ commodity, city, onResult }) {
   // No data — render nothing so the grid doesn't show empty slots
   if (!data?.success) return null;
 
-  const avgVariance = data.avg_variance_from_historical_pct;
-  const chartData = (data.forecasts || []).map((f) => ({ ...f }));
+  const units = data.units_available || [];
+  const multiUnit = units.length > 1;
+  const unitData = (multiUnit && selectedUnit && data.forecasts_by_unit?.[selectedUnit]) ? data.forecasts_by_unit[selectedUnit] : null;
+
+  const currentPrice = unitData ? unitData.current_price : data.current_price;
+  const unitLabel = unitData ? unitData.unit : data.unit;
+  const forecasts = unitData ? unitData.forecasts : data.forecasts;
+  const avgVariance = unitData ? unitData.avg_variance_from_historical_pct : data.avg_variance_from_historical_pct;
+  const avgConfidence = unitData ? unitData.avg_confidence : data.avg_confidence;
+  const volatility = unitData ? unitData.volatility : data.volatility;
+
+  const chartData = (forecasts || []).map((f) => ({ ...f }));
 
   return (
     <div style={{ background: '#f8fafc', border: '2px solid #e2e8f0', borderRadius: 12, padding: 20 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
         <span style={{ fontSize: 15, fontWeight: 700, color: '#1e293b' }}>🔮 {data.commodity}</span>
         {avgVariance != null && (
           <Badge type={avgVariance > 20 ? 'danger' : avgVariance > 0 ? 'warning' : 'success'}>
@@ -395,11 +441,12 @@ function LongTermCard({ commodity, city, onResult }) {
           </Badge>
         )}
       </div>
+      <UnitPills units={units} selected={selectedUnit} onSelect={setSelectedUnit} />
 
       <div style={{ marginBottom: 14 }}>
         <div style={{ fontSize: 12, color: '#64748b' }}>Current Price</div>
-        <div style={{ fontSize: 26, fontWeight: 800, color: '#059669' }}>{money(data.current_price)}</div>
-        {data.unit && <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>per {data.unit}</div>}
+        <div style={{ fontSize: 26, fontWeight: 800, color: '#059669' }}>{money(currentPrice)}</div>
+        {unitLabel && <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>per {unitLabel}</div>}
       </div>
 
       {/* Mini chart */}
@@ -419,7 +466,7 @@ function LongTermCard({ commodity, city, onResult }) {
 
       {/* Week rows */}
       <div style={{ marginTop: 12 }}>
-        {(data.forecasts || []).map((w) => (
+        {(forecasts || []).map((w) => (
           <div key={w.week} style={{ padding: '8px 0', borderBottom: '1px solid #e2e8f0' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
@@ -441,8 +488,8 @@ function LongTermCard({ commodity, city, onResult }) {
       </div>
 
       <div style={{ marginTop: 12, paddingTop: 10, borderTop: '2px solid #e2e8f0', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 12 }}>
-        <div><span style={{ color: '#64748b' }}>Avg Confidence: </span><strong style={{ color: '#059669' }}>{data.avg_confidence ? `${(data.avg_confidence * 100).toFixed(0)}%` : '—'}</strong></div>
-        <div><span style={{ color: '#64748b' }}>Volatility: </span><strong>±{money(data.volatility)}</strong></div>
+        <div><span style={{ color: '#64748b' }}>Avg Confidence: </span><strong style={{ color: '#059669' }}>{avgConfidence ? `${(avgConfidence * 100).toFixed(0)}%` : '—'}</strong></div>
+        <div><span style={{ color: '#64748b' }}>Volatility: </span><strong>±{money(volatility)}</strong></div>
       </div>
       {data.method && <div style={{ marginTop: 8, background: '#f1f5f9', borderRadius: 6, padding: '6px 10px', fontSize: 11, color: '#475569' }}>{data.method}</div>}
     </div>

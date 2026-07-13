@@ -734,7 +734,7 @@ def calculate_price_forecast(commodity, city=None, source="ProduceIQ", forecast_
         from collections import defaultdict
         unit_days: dict[str, dict[int, list]] = defaultdict(lambda: defaultdict(list))
         for r in rows:
-            unit = r.package or "pkg"
+            unit = normalize_unit_for_grouping(r.package or "pkg")
             unit_days[unit][int(r.day)].append(float(r.price))
 
         # Build daily series per unit
@@ -1168,6 +1168,34 @@ def package_raw_unit(package: str) -> str:
     if m:
         return f"{m.group(1)} lb"
     return "pkg"
+
+
+def normalize_unit_for_grouping(unit_label: str) -> str:
+    """
+    Group near-equivalent unit strings for forecast aggregation.
+
+    Mapping rules
+    -------------
+    - "1 1/9 bu", "1.1 bu", "9/8 bu", "11/9 bu", "1 bu"  →  "1 bu"
+    - "1/2 bu", "0.5 bu"                                   →  "1/2 bu"
+    - "10 lb", "11 lb" (no bushel equivalent present)      →  "10 lb"
+    - Everything else stays as-is.
+    """
+    if not unit_label:
+        return unit_label
+    s = unit_label.strip().lower()
+    # Near-1-bushel variants
+    if re.search(r"(?:1\s+1\s*/\s*9|1\.1|9\s*/\s*8|11\s*/\s*9)\s*bu", s):
+        return "1 bu"
+    if re.search(r"^1\s*bu\b", s):
+        return "1 bu"
+    # Half-bushel variants
+    if re.search(r"(?:1\s*/\s*2|0\.5)\s*bu", s):
+        return "1/2 bu"
+    # 10-11 lb → "10 lb"
+    if re.match(r"1[01]\s*lb", s):
+        return "10 lb"
+    return unit_label
 
 
 def normalize_unit_label(package: str) -> str:

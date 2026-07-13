@@ -286,7 +286,7 @@ def calculate_forecast_confidence(forecast_price: float, historical_avg: Optiona
 def calculate_hybrid_6week_forecast(db_session, commodity: str, city: str) -> Dict:
     try:
         logger.info(f"Starting 6-week trend forecast for {commodity} in {city}")
-        from app import normalize_commodity, _get_combined_current_price
+        from app import normalize_commodity, _get_combined_current_price, normalize_unit_for_grouping
 
         commodity = normalize_commodity(commodity)
         today = datetime.now().date()
@@ -296,7 +296,7 @@ def calculate_hybrid_6week_forecast(db_session, commodity: str, city: str) -> Di
         if not current_price or current_price <= 0:
             return {"success": False, "commodity": commodity, "city": city, "error": "No current price available (must be within 7 days)"}
 
-        # Determine dominant unit label for display
+        # Determine unit groupings
         commodity_variants = {commodity}
         if commodity == "Cubanelle":
             commodity_variants.add("Cubanelles")
@@ -313,52 +313,94 @@ def calculate_hybrid_6week_forecast(db_session, commodity: str, city: str) -> Di
             .group_by(PriceData.package)
             .all()
         )
-        dominant_unit = max(_unit_rows, key=lambda r: r.cnt).package if _unit_rows else None
 
-        prev_week_avg = get_previous_week_average(db_session, commodity, city)
-        baseline_price = prev_week_avg if prev_week_avg else current_price
-        data_availability = calculate_data_availability(db_session, commodity, city, weeks_ahead=6)
+        # Build raw→norm and norm→raws mappings
+        raw_to_norm: dict = {}
+        norm_to_raws: dict = {}
+        for r in _unit_rows:
+            raw = r.package or ""
+            norm = normalize_unit_for_grouping(raw) if raw else raw
+            raw_to_norm[raw] = norm
+            norm_to_raws.setdefault(norm, []).append(raw)
 
-        forecasts = []
-        rolling_baseline = baseline_price
+        # Pick dominant unit by count
+        norm_counts: dict = {}
+        for r in _unit_rows:
+            norm = raw_to_norm.get(r.package or "", r.package or "")
+            norm_counts[norm] = norm_counts.get(norm, 0) + r.cnt
+        dominant_unit = max(norm_counts, key=lambda k: norm_counts[k]) if norm_counts else None
 
-        for week_num in range(1, 7):
-            forecast_date = today + timedelta(days=week_num * 7)
-            target_week, _ = get_week_number_and_year(forecast_date)
+        def _run_6week_forecast_for_unit(unit_label: str, unit_current_price: float) -> dict:
+            """Run the 6-week forecast logic for a specific normalized unit."""
+            prev_week_avg = get_previous_week_average(db_session, commodity, city)
+            baseline_price = prev_week_avg if prev_week_avg else unit_current_price
+            data_avail = calculate_data_availability(db_session, commodity, city, weeks_ahead=6)
 
-            historical_avg = get_historical_weekly_average(db_session, commodity, city, target_week, years_back=3)
-            trend = get_historical_trend_pattern(db_session, commodity, city, from_week_offset=week_num - 1, to_week_offset=week_num, years_back=3)
+            wk_forecasts = []
+            rolling_baseline = baseline_price
+            for week_num in range(1, 7):
+                forecast_date = today + timedelta(days=week_num * 7)
+                target_week, _ = get_week_number_and_year(forecast_date)
+                historical_avg = get_historical_weekly_average(db_session, commodity, city, target_week, years_back=3)
+                trend = get_historical_trend_pattern(db_session, commodity, city, from_week_offset=week_num - 1, to_week_offset=week_num, years_back=3)
+                if trend is not None:
+                    forecast_price = rolling_baseline * (1 + trend)
+                    confidence_base = 0.85
+                else:
+                    forecast_price = rolling_baseline
+                    confidence_base = 0.60
+                confidence = calculate_forecast_confidence(forecast_price, historical_avg, data_avail, base_confidence=confidence_base)
+                tolerance = forecast_price * (0.05 + (1 - confidence) * 0.10)
+                variance_pct = ((forecast_price - historical_avg) / historical_avg * 100) if historical_avg and historical_avg > 0 else None
+                wk_forecasts.append({
+                    "week": week_num,
+                    "date": forecast_date.strftime("%b %d"),
+                    "price": round(float(forecast_price), 2),
+                    "tolerance": round(float(tolerance), 2),
+                    "lower": round(float(forecast_price - tolerance), 2),
+                    "upper": round(float(forecast_price + tolerance), 2),
+                    "confidence": round(float(confidence), 3),
+                    "historical_avg": round(float(historical_avg), 2) if historical_avg else None,
+                    "trend_pct": round(float(trend * 100), 2) if trend is not None else None,
+                    "variance_from_historical_pct": round(float(variance_pct), 1) if variance_pct is not None else None,
+                })
+                rolling_baseline = forecast_price
 
-            if trend is not None:
-                forecast_price = rolling_baseline * (1 + trend)
-                confidence_base = 0.85
-            else:
-                forecast_price = rolling_baseline
-                confidence_base = 0.60
+            price_change = wk_forecasts[-1]["price"] - wk_forecasts[0]["price"]
+            price_change_pct = (price_change / wk_forecasts[0]["price"]) * 100 if wk_forecasts[0]["price"] else 0.0
+            avg_conf = float(np.mean([f["confidence"] for f in wk_forecasts]))
+            med_tol = float(np.median([f["tolerance"] for f in wk_forecasts]))
+            variances = [f["variance_from_historical_pct"] for f in wk_forecasts if f["variance_from_historical_pct"] is not None]
+            return {
+                "unit": unit_label,
+                "current_price": round(float(unit_current_price), 2),
+                "baseline_price": round(float(baseline_price), 2),
+                "forecasts": wk_forecasts,
+                "data_availability": round(float(data_avail), 3),
+                "avg_confidence": round(float(avg_conf), 3),
+                "volatility": round(float(med_tol), 2),
+                "price_change_6week": round(float(price_change), 2),
+                "price_change_pct": round(float(price_change_pct), 2),
+                "avg_variance_from_historical_pct": round(float(np.mean(variances)), 1) if variances else None,
+            }
 
-            confidence = calculate_forecast_confidence(forecast_price, historical_avg, data_availability, base_confidence=confidence_base)
-            tolerance = forecast_price * (0.05 + (1 - confidence) * 0.10)
-            variance_pct = ((forecast_price - historical_avg) / historical_avg * 100) if historical_avg and historical_avg > 0 else None
+        # Build per-unit forecasts
+        forecasts_by_unit: dict = {}
+        for norm_unit in norm_to_raws:
+            forecasts_by_unit[norm_unit] = _run_6week_forecast_for_unit(norm_unit, current_price)
 
-            forecasts.append({
-                "week": week_num,
-                "date": forecast_date.strftime("%b %d"),
-                "price": round(float(forecast_price), 2),
-                "tolerance": round(float(tolerance), 2),
-                "lower": round(float(forecast_price - tolerance), 2),
-                "upper": round(float(forecast_price + tolerance), 2),
-                "confidence": round(float(confidence), 3),
-                "historical_avg": round(float(historical_avg), 2) if historical_avg else None,
-                "trend_pct": round(float(trend * 100), 2) if trend is not None else None,
-                "variance_from_historical_pct": round(float(variance_pct), 1) if variance_pct is not None else None,
-            })
-            rolling_baseline = forecast_price
+        dominant_result = forecasts_by_unit.get(dominant_unit) if dominant_unit and forecasts_by_unit else None
+        if dominant_result is None and forecasts_by_unit:
+            dominant_unit = next(iter(forecasts_by_unit))
+            dominant_result = forecasts_by_unit[dominant_unit]
 
-        price_change = forecasts[-1]["price"] - forecasts[0]["price"]
-        price_change_pct = (price_change / forecasts[0]["price"]) * 100
-        avg_confidence = np.mean([f["confidence"] for f in forecasts])
-        median_tolerance = np.median([f["tolerance"] for f in forecasts])
-        variances = [f["variance_from_historical_pct"] for f in forecasts if f["variance_from_historical_pct"] is not None]
+        # Use dominant unit's values for top-level backward-compat keys
+        forecasts = dominant_result["forecasts"] if dominant_result else []
+        price_change = dominant_result["price_change_6week"] if dominant_result else 0
+        price_change_pct = dominant_result["price_change_pct"] if dominant_result else 0
+        avg_confidence = dominant_result["avg_confidence"] if dominant_result else 0
+        median_tolerance = dominant_result["volatility"] if dominant_result else 0
+        avg_variance = dominant_result["avg_variance_from_historical_pct"] if dominant_result else None
 
         return {
             "success": True,
@@ -367,15 +409,18 @@ def calculate_hybrid_6week_forecast(db_session, commodity: str, city: str) -> Di
             "source": "Combined (ProduceIQ + USDA)",
             "unit": dominant_unit,
             "current_price": round(float(current_price), 2),
-            "baseline_price": round(float(baseline_price), 2),
+            "baseline_price": dominant_result["baseline_price"] if dominant_result else round(float(current_price), 2),
             "forecasts": forecasts,
-            "data_availability": round(float(data_availability), 3),
-            "avg_confidence": round(float(avg_confidence), 3),
-            "volatility": round(float(median_tolerance), 2),
-            "price_change_6week": round(float(price_change), 2),
-            "price_change_pct": round(float(price_change_pct), 2),
-            "avg_variance_from_historical_pct": round(float(np.mean(variances)), 1) if variances else None,
+            "data_availability": dominant_result["data_availability"] if dominant_result else 0,
+            "avg_confidence": avg_confidence,
+            "volatility": median_tolerance,
+            "price_change_6week": price_change,
+            "price_change_pct": price_change_pct,
+            "avg_variance_from_historical_pct": avg_variance,
             "method": "Trend-Based Forecast with Historical Reference (Shifting Baseline)",
+            # Per-unit breakdown
+            "forecasts_by_unit": forecasts_by_unit,
+            "units_available": sorted(forecasts_by_unit.keys()),
         }
     except Exception as e:
         logger.error(f"ERROR in forecast for {commodity}: {e}", exc_info=True)
