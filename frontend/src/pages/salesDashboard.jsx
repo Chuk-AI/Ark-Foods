@@ -51,8 +51,8 @@ function SalesDashboard() {
 
   // Best sell market
   const [bestMarketData, setBestMarketData] = useState([]);
-  const [filterState, setFilterState] = useState({ commodity: "Anaheim", source: "USDA", last7Days: false });
-  const [appliedFilters, setAppliedFilters] = useState({ commodity: "Anaheim", source: "USDA", last7Days: false });
+  const [filterState, setFilterState] = useState({ commodity: "Anaheim", source: "USDA", last7Days: true });
+  const [appliedFilters, setAppliedFilters] = useState({ commodity: "Anaheim", source: "USDA", last7Days: true });
 
   // Market opportunity
   const [marketOpportunityData, setMarketOpportunityData] = useState([]);

@@ -2848,6 +2848,7 @@ def historical_data():
             request.args.get("averageCommodities", "false").lower() == "true"
         )
         avg_cities = request.args.get("averageCities", "false").lower() == "true"
+        unit_filter = request.args.get("unit", None)
 
         app.logger.info(f"Source: {source}")
 
@@ -2945,13 +2946,19 @@ def historical_data():
             series_unit_dates[series_key][unit][date_str]["sum"] += entry.price
             series_unit_dates[series_key][unit][date_str]["count"] += 1
 
-        # For each series, pick the dominant unit (most data points)
+        # Collect all available units across all series
+        all_available_units = sorted({u for unit_map in series_unit_dates.values() for u in unit_map})
+
+        # For each series, pick the requested unit (or dominant if not available)
         price_series = {}
         series_dominant_unit = {}
         for series_key, unit_map in series_unit_dates.items():
-            dominant_unit = max(unit_map, key=lambda u: sum(v["count"] for v in unit_map[u].values()))
-            price_series[series_key] = unit_map[dominant_unit]
-            series_dominant_unit[series_key] = dominant_unit
+            if unit_filter and unit_filter in unit_map:
+                chosen_unit = unit_filter
+            else:
+                chosen_unit = max(unit_map, key=lambda u: sum(v["count"] for v in unit_map[u].values()))
+            price_series[series_key] = unit_map[chosen_unit]
+            series_dominant_unit[series_key] = chosen_unit
 
         sorted_dates = sorted(list(all_dates))
         colors = ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40"]
@@ -2977,7 +2984,7 @@ def historical_data():
             )
 
         # Prepare the final result
-        result = {"labels": sorted_dates, "datasets": datasets}
+        result = {"labels": sorted_dates, "datasets": datasets, "available_units": all_available_units}
 
         # Return the result as JSON
         return jsonify(result)
@@ -3320,22 +3327,33 @@ def calculate_forecasted_price(
     else:
         query = query.filter(PriceData.source == source)
 
-    # Add city filter if provided
-    if city and city != "All cities":
+    # Add city filter if provided (case-insensitive check for "All Cities" variants)
+    use_city_filter = city and city.lower() not in ("all cities", "all", "")
+    if use_city_filter:
         query = query.filter(PriceData.city_name == city)
 
-    # Execute the query
     historical_data = query.all()
 
-    # Group by unit (package column) and return the dominant unit's average.
-    # Prices are stored raw (no unit conversion), so mixing units would be meaningless.
+    # If specific city returned no data, retry without city filter
+    if not historical_data and use_city_filter:
+        query_fallback = db.session.query(PriceData.price, PriceData.package).filter(
+            PriceData.commodity == variety,
+            PriceData.season == season,
+            PriceData.year >= start_year,
+        )
+        if source == "ProduceIQ,USDA" or source == "USDA,ProduceIQ":
+            query_fallback = query_fallback.filter(PriceData.source.in_(["ProduceIQ", "USDA"]))
+        else:
+            query_fallback = query_fallback.filter(PriceData.source == source)
+        historical_data = query_fallback.all()
+
+    # Group by unit and return dominant unit's average
     if historical_data:
         from collections import defaultdict
         unit_groups: dict = defaultdict(list)
         for entry in historical_data:
             unit = entry.package or "pkg"
             unit_groups[unit].append(entry.price)
-        # Pick the unit with the most records
         dominant_unit = max(unit_groups, key=lambda u: len(unit_groups[u]))
         prices = unit_groups[dominant_unit]
         average_price = sum(prices) / len(prices)
@@ -5046,8 +5064,13 @@ def harvest_planning():
                 avg_cities = False
 
             # Build filters exactly like forecast_line_data
+            # Handle Cubanelles/Cubanelle name variation
+            commodity_variants = [commodity]
+            if commodity.lower().startswith("cubanelle"):
+                commodity_variants = ["Cubanelle", "Cubanelles"]
+
             filters = [
-                PriceData.commodity == commodity,
+                PriceData.commodity.in_(commodity_variants),
                 PriceData.year >= current_year - 5,
             ]
 
@@ -5207,6 +5230,29 @@ def harvest_planning():
             else:
                 expected_price = 0
                 price_description = "No price data available"
+
+            # Fallback: if no best season found looking forward, use best historical season
+            if best_season is None:
+                for season in seasons:
+                    if avg_cities:
+                        all_cities_in_db = sorted({r.city_name for r in rows})
+                        total, cnt = 0, 0
+                        for city in all_cities_in_db:
+                            key = f"{commodity}_{city}"
+                            st = season_stats.get(key, {}).get(season)
+                            if st and st["avg"] > 0:
+                                total += st["avg"]
+                                cnt += 1
+                        avg_price = total / cnt if cnt else 0
+                    else:
+                        key = f"{commodity}_{cities[0]}"
+                        st = season_stats.get(key, {}).get(season)
+                        avg_price = st["avg"] if st and st["avg"] > 0 else 0
+                    if avg_price > highest_price:
+                        highest_price = avg_price
+                        best_season = season
+                        best_year = current_year + 1
+                        best_date = datetime(current_year + 1, season_month_map[season], 15)
 
             # Determine dominant unit for this variety/market combo
             if avg_cities:
@@ -5776,6 +5822,7 @@ def get_monthly_average_prices():
         start_year = int(request.args.get("start_year"))
         end_year = int(request.args.get("end_year"))
         data_source = request.args.get("source", "ProduceIQ")  # Default to ProduceIQ
+        city_filter = request.args.get("city", "").strip()
 
         # Validate required parameters
         if not commodity or not start_year or not end_year:
@@ -5855,6 +5902,12 @@ def get_monthly_average_prices():
         else:
             source_filter = f"AND pd.source = '{data_source}'"
 
+        # Build city filter
+        city_sql_filter = ""
+        if city_filter and city_filter.lower() not in ("all cities", "all", ""):
+            safe_city = city_filter.replace("'", "''")
+            city_sql_filter = f"AND pd.city_name = '{safe_city}'"
+
         # Build monthly stats query
         monthly_stats_sql = (
             """
@@ -5879,6 +5932,7 @@ def get_monthly_average_prices():
                 AND pd.price > 0
                 """
             + source_filter
+            + city_sql_filter
             + """
             GROUP BY
                 mr.month_name, mr.month_num, mr.year, pd.package

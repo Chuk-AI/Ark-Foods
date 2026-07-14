@@ -70,6 +70,9 @@ function HistoricalPrices() {
     averageCommodities: false, averageRegions: false,
   });
 
+  const [availableUnits, setAvailableUnits] = useState([]);
+  const [selectedUnit, setSelectedUnit] = useState(null);
+
   const [showHistoricalFilters, setShowHistoricalFilters] = useState(false);
   const [showShippingFilters, setShowShippingFilters] = useState(false);
 
@@ -138,16 +141,16 @@ function HistoricalPrices() {
     setHistoricalChart(newChart);
   };
 
-  const fetchHistoricalData = async (filters) => {
+  const fetchHistoricalData = async (filters, unit = null) => {
     const { commodities, cities, source: src, startDate, endDate, averageCommodities, averageCities } = filters;
     try {
-      const r = await fetch(
-        `/api/historical_data?commodities=${commodities.join(",")}&cities=${cities.join(",")}&source=${src}&start_date=${startDate}&end_date=${endDate}&averageCommodities=${averageCommodities}&averageCities=${averageCities}`,
-        { headers: { Authorization: `Bearer ${token()}` } }
-      );
+      let url = `/api/historical_data?commodities=${commodities.join(",")}&cities=${cities.join(",")}&source=${src}&start_date=${startDate}&end_date=${endDate}&averageCommodities=${averageCommodities}&averageCities=${averageCities}`;
+      if (unit) url += `&unit=${encodeURIComponent(unit)}`;
+      const r = await fetch(url, { headers: { Authorization: `Bearer ${token()}` } });
       if (!r.ok) throw new Error();
       const data = await r.json();
       setHistoricalData(data);
+      if (data.available_units) setAvailableUnits(data.available_units);
       updateHistoricalChart(data);
     } catch {}
   };
@@ -262,7 +265,27 @@ function HistoricalPrices() {
               <label>End Date</label>
               <input type="date" className="form-control" value={historicalFilterState.endDate} onChange={(e) => setHistoricalFilterState((p) => ({ ...p, endDate: e.target.value }))} />
             </div>
-            <button className="filter-apply-btn" onClick={() => { setAppliedHistoricalFilters(historicalFilterState); fetchHistoricalData(historicalFilterState); }}>Apply</button>
+            <button className="filter-apply-btn" onClick={() => { setSelectedUnit(null); setAvailableUnits([]); setAppliedHistoricalFilters(historicalFilterState); fetchHistoricalData(historicalFilterState, null); }}>Apply</button>
+          </div>
+        )}
+        {availableUnits.length > 1 && (
+          <div style={{ padding: "8px 20px 4px", display: "flex", alignItems: "center", gap: 8 }}>
+            <label style={{ fontSize: 12, color: "var(--text-2)", fontWeight: 500, whiteSpace: "nowrap" }}>Unit:</label>
+            <select
+              className="form-control"
+              style={{ width: "auto", fontSize: 12, padding: "4px 8px", maxWidth: 200 }}
+              value={selectedUnit || ""}
+              onChange={(e) => {
+                const u = e.target.value || null;
+                setSelectedUnit(u);
+                fetchHistoricalData(appliedHistoricalFilters, u);
+              }}
+            >
+              <option value="">Auto (dominant)</option>
+              {availableUnits.map((u) => (
+                <option key={u} value={u}>{u}</option>
+              ))}
+            </select>
           </div>
         )}
         <div style={{ padding: "16px 20px 20px", height: 420 }}>

@@ -78,8 +78,6 @@ function PricingMatrix() {
                       <tr style={{ background: 'linear-gradient(135deg,#059669,#047857)', color: '#fff' }}>
                         <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 600 }}>Variety</th>
                         <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 600 }}>Package</th>
-                        <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600 }}>PIQ Raw</th>
-                        <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600 }}>USDA Raw</th>
                         <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600 }}>PIQ $/bu</th>
                         <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600 }}>USDA $/bu</th>
                         <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600 }}>Difference</th>
@@ -97,16 +95,6 @@ function PricingMatrix() {
                             <td style={{ padding: '10px 12px', color: '#475569', fontSize: 11, maxWidth: 140 }}>
                               {(p?.package || u?.package)
                                 ? <span title={p?.package || u?.package}>{p?.package || u?.package}</span>
-                                : <span style={{ color: '#94a3b8' }}>—</span>}
-                            </td>
-                            <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                              {p?.raw_price != null
-                                ? <><div style={{ fontWeight: 700, color: '#92400e' }}>{money(p.raw_price)}</div><div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>{p.raw_unit || p.unit}</div></>
-                                : <span style={{ color: '#94a3b8' }}>—</span>}
-                            </td>
-                            <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                              {u?.raw_price != null
-                                ? <><div style={{ fontWeight: 700, color: '#1e40af' }}>{money(u.raw_price)}</div><div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>{u.raw_unit || u.unit}</div></>
                                 : <span style={{ color: '#94a3b8' }}>—</span>}
                             </td>
                             <td style={{ padding: '10px 12px', textAlign: 'center' }}>

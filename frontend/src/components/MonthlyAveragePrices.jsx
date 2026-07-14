@@ -11,7 +11,8 @@ const MonthlyAveragePrices = () => {
     endMonth: 9,    // September
     startYear: 2019,
     endYear: 2022,
-    source: 'ProduceIQ'  // Default data source
+    source: 'ProduceIQ',
+    city: '',
   });
 
   // State for chart and data
@@ -25,8 +26,15 @@ const MonthlyAveragePrices = () => {
 
   // Predefined lists
   const commodities = [
-    'Shishito', 'Anaheim', 'Cubanelles', 'Jalapeno', 
-    'Poblano', 'Serrano', 'Habanero', 'Fresno'
+    'Anaheim', 'Cubanelles', 'Fresno', 'Habanero',
+    'Hungarian Wax', 'Jalapeno', 'Long Hot', 'Poblano',
+    'Serrano', 'Shishito',
+  ];
+
+  const cities = [
+    'New York', 'Chicago', 'Los Angeles', 'Miami',
+    'Philadelphia', 'Boston', 'Baltimore', 'Columbia',
+    'Detroit', 'Atlanta',
   ];
 
   // Month options
@@ -40,8 +48,8 @@ const MonthlyAveragePrices = () => {
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     
-    // Special handling for source since it's a string
-    if (name === 'source') {
+    // Special handling for string fields
+    if (name === 'source' || name === 'city') {
       setFormState(prev => ({
         ...prev,
         [name]: value
@@ -84,16 +92,17 @@ const MonthlyAveragePrices = () => {
       });
       
       // Make the API call
-      const response = await axios.get('/api/monthly-average-prices', {
-        params: {
-          commodity: formState.commodity,
-          start_month: formState.startMonth,
-          end_month: formState.endMonth,
-          start_year: formState.startYear,
-          end_year: formState.endYear,
-          source: formState.source  // Ensure source parameter is passed correctly
-        }
-      });
+      const params = {
+        commodity: formState.commodity,
+        start_month: formState.startMonth,
+        end_month: formState.endMonth,
+        start_year: formState.startYear,
+        end_year: formState.endYear,
+        source: formState.source,
+      };
+      if (formState.city) params.city = formState.city;
+
+      const response = await axios.get('/api/monthly-average-prices', { params });
       
       console.log('API Response:', response.data);
       
@@ -379,6 +388,22 @@ const MonthlyAveragePrices = () => {
                   <option value="ProduceIQ">ProduceIQ</option>
                   <option value="USDA">USDA</option>
                   <option value="ProduceIQ,USDA">Both Sources</option>
+                </select>
+              </div>
+
+              {/* City Filter */}
+              <div className="form-group mb-3">
+                <label>City</label>
+                <select
+                  name="city"
+                  value={formState.city}
+                  onChange={handleInputChange}
+                  className="form-control"
+                >
+                  <option value="">All Cities</option>
+                  {cities.map(city => (
+                    <option key={city} value={city}>{city}</option>
+                  ))}
                 </select>
               </div>
 
