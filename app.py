@@ -7355,9 +7355,9 @@ def wt360_forecast_all():
         except Exception as e:
             return key, {**loc, "key": key, "forecast": [], "error": str(e)}
 
-    cache_key = "wt360_forecast_all"
+    cache_key = "wt360_forecast_all_v2"
     cached = cache_get(cache_key, max_age_seconds=7200)
-    if cached:
+    if cached and any(len(loc.get("forecast", [])) > 0 for loc in cached.get("locations", [])):
         return jsonify(cached)
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
@@ -7373,9 +7373,9 @@ def wt360_forecast_single(loc_id):
     if loc_id not in WT360_LOCATIONS:
         return jsonify({"error": "Unknown location"}), 404
     loc = WT360_LOCATIONS[loc_id]
-    cache_key = f"wt360_forecast_{loc_id}"
+    cache_key = f"wt360_forecast_v2_{loc_id}"
     cached = cache_get(cache_key, max_age_seconds=7200)
-    if cached:
+    if cached and len(cached.get("forecast", [])) > 0:
         return jsonify(cached)
     try:
         days = _wt360_fetch_forecast(loc["wt360_id"])
