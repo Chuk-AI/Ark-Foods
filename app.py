@@ -7216,12 +7216,30 @@ def api_growing_regions():
 
 # ─── WeatherTrends360 helpers ─────────────────────────────────────────────────
 
+def _wt360_data_get(path, wt360_id, qs_params):
+    """Fetch from api.wt360business.com, keeping literal {id} in path via urllib."""
+    import urllib.request as _urlreq
+    from urllib.parse import urlencode
+    base_params = {"apiKey": WT360_API_KEY, "calendar": "julian", "fmt": "json",
+                   "func": "getSummaryInfo", "units": "f"}
+    base_params.update(qs_params)
+    qs = urlencode(base_params)
+    full_url = f"{WT360_DATA_BASE}/{path}/{{{wt360_id}}}?{qs}"
+    with _urlreq.urlopen(full_url, timeout=20) as resp:
+        return json.loads(resp.read())
+
+
+def _fields_to_params(fields_str):
+    """Convert 'avgTemp,maxTemp,gdd' → {'avgTemp': 1, 'maxTemp': 1, 'gdd': 1}."""
+    return {f.strip(): 1 for f in fields_str.split(",") if f.strip()}
+
+
 def _wt360_fetch_forecast(wt360_id):
-    url = f"{WT360_FORECAST_BASE}/forecast/{wt360_id}"
-    r = requests.get(url, params={"key": WT360_API_KEY}, timeout=15)
+    # Correct endpoint: /forecast/daily-14day?key=...&l={loc_id}
+    url = f"{WT360_FORECAST_BASE}/forecast/daily-14day"
+    r = requests.get(url, params={"key": WT360_API_KEY, "l": wt360_id}, timeout=15)
     r.raise_for_status()
     data = r.json()
-    # Normalise: may be list or dict with a key
     if isinstance(data, list):
         return data
     for k in ("forecast", "daily", "data", "days"):
@@ -7231,8 +7249,9 @@ def _wt360_fetch_forecast(wt360_id):
 
 
 def _wt360_fetch_alerts(wt360_id):
-    url = f"{WT360_FORECAST_BASE}/alerts/{wt360_id}"
-    r = requests.get(url, params={"key": WT360_API_KEY}, timeout=15)
+    # Correct endpoint: /severe_alerts?key=...&l={loc_id}
+    url = f"{WT360_FORECAST_BASE}/severe_alerts"
+    r = requests.get(url, params={"key": WT360_API_KEY, "l": wt360_id}, timeout=15)
     r.raise_for_status()
     data = r.json()
     if isinstance(data, list):
@@ -7330,12 +7349,9 @@ def wt360_historical():
 
     wt360_id = WT360_LOCATIONS[loc_id]["wt360_id"]
     try:
-        from urllib.parse import urlencode
-        qs = urlencode({"apiKey": WT360_API_KEY, "startDate": start_date, "numDays": days, "fields": fields})
-        full_url = f"{WT360_DATA_BASE}/daily/{wt360_id}?{qs}"
-        import urllib.request as _urlreq
-        with _urlreq.urlopen(full_url, timeout=20) as resp:
-            data = json.loads(resp.read())
+        params = {"sd": start_date, "cnt": days}
+        params.update(_fields_to_params(fields))
+        data = _wt360_data_get("daily", wt360_id, params)
         daily = data if isinstance(data, list) else data.get("daily", data.get("data", []))
         return jsonify({"success": True, "loc_id": loc_id, "daily_data": daily})
     except Exception as e:
@@ -7355,12 +7371,9 @@ def wt360_longrange():
 
     wt360_id = WT360_LOCATIONS[loc_id]["wt360_id"]
     try:
-        from urllib.parse import urlencode
-        qs = urlencode({"apiKey": WT360_API_KEY, "startDate": start_date, "numWeeks": weeks, "fields": fields})
-        full_url = f"{WT360_DATA_BASE}/weekly/{wt360_id}?{qs}"
-        import urllib.request as _urlreq
-        with _urlreq.urlopen(full_url, timeout=20) as resp:
-            data = json.loads(resp.read())
+        params = {"sd": start_date, "cnt": weeks}
+        params.update(_fields_to_params(fields))
+        data = _wt360_data_get("weekly", wt360_id, params)
         weekly = data if isinstance(data, list) else data.get("weekly", data.get("data", []))
         return jsonify({"success": True, "loc_id": loc_id, "weekly_data": weekly})
     except Exception as e:
