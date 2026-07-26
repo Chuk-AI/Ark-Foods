@@ -7332,9 +7332,9 @@ def wt360_historical():
         from urllib.parse import urlencode
         qs = urlencode({"apiKey": WT360_API_KEY, "startDate": start_date, "numDays": days, "fields": fields})
         full_url = f"{WT360_DATA_BASE}/daily/{{{wt360_id}}}?{qs}"
-        r = requests.get(full_url, timeout=20)
-        r.raise_for_status()
-        data = r.json()
+        import urllib.request as _urlreq
+        with _urlreq.urlopen(full_url, timeout=20) as resp:
+            data = json.loads(resp.read())
         daily = data if isinstance(data, list) else data.get("daily", data.get("data", []))
         return jsonify({"success": True, "loc_id": loc_id, "daily_data": daily})
     except Exception as e:
@@ -7356,9 +7356,9 @@ def wt360_longrange():
         from urllib.parse import urlencode
         qs = urlencode({"apiKey": WT360_API_KEY, "startDate": start_date, "numWeeks": weeks, "fields": fields})
         full_url = f"{WT360_DATA_BASE}/weekly/{{{wt360_id}}}?{qs}"
-        r = requests.get(full_url, timeout=20)
-        r.raise_for_status()
-        data = r.json()
+        import urllib.request as _urlreq
+        with _urlreq.urlopen(full_url, timeout=20) as resp:
+            data = json.loads(resp.read())
         weekly = data if isinstance(data, list) else data.get("weekly", data.get("data", []))
         return jsonify({"success": True, "loc_id": loc_id, "weekly_data": weekly})
     except Exception as e:
