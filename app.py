@@ -7235,31 +7235,45 @@ def _fields_to_params(fields_str):
 
 
 def _wt360_fetch_forecast(wt360_id):
-    # Correct endpoint: /forecast/daily-14day?key=...&l={loc_id}
+    # Response: {"data": {"weather": [...], ...}, "status": "success"}
     url = f"{WT360_FORECAST_BASE}/forecast/daily-14day"
     r = requests.get(url, params={"key": WT360_API_KEY, "l": wt360_id}, timeout=15)
     r.raise_for_status()
     data = r.json()
+    inner = data.get("data", data)
+    if isinstance(inner, dict):
+        weather = inner.get("weather", [])
+        if isinstance(weather, list):
+            return weather
     if isinstance(data, list):
         return data
-    for k in ("forecast", "daily", "data", "days"):
-        if k in data and isinstance(data[k], list):
-            return data[k]
     return []
 
 
 def _wt360_fetch_alerts(wt360_id):
-    # Correct endpoint: /severe_alerts?key=...&l={loc_id}
+    # Response: {"data": {"alerts": [...]}, "status": "success"}
     url = f"{WT360_FORECAST_BASE}/severe_alerts"
     r = requests.get(url, params={"key": WT360_API_KEY, "l": wt360_id}, timeout=15)
     r.raise_for_status()
     data = r.json()
+    inner = data.get("data", data)
+    if isinstance(inner, dict):
+        alerts = inner.get("alerts", [])
+        if isinstance(alerts, list):
+            return alerts
     if isinstance(data, list):
         return data
-    for k in ("alerts", "data"):
-        if k in data and isinstance(data[k], list):
-            return data[k]
     return []
+
+
+def _wt360_parse_wx(data, wt360_id):
+    """Extract wxInfo list from weatherInfo response."""
+    weather_info = data.get("weatherInfo", {})
+    loc_data = weather_info.get(wt360_id) or (next(iter(weather_info.values()), {}) if weather_info else {})
+    wx = loc_data.get("wxInfo", [])
+    if isinstance(wx, dict):
+        wx = [wx[k] for k in sorted(wx.keys(), key=lambda x: int(x))]
+    return wx if isinstance(wx, list) else []
 
 
 @app.route("/api/wt360/debug", methods=["GET"])
@@ -7413,7 +7427,7 @@ def wt360_historical():
         params = {"sd": start_date, "cnt": days}
         params.update(_fields_to_params(fields))
         data = _wt360_data_get("daily", wt360_id, params)
-        daily = data if isinstance(data, list) else data.get("daily", data.get("data", []))
+        daily = _wt360_parse_wx(data, wt360_id)
         return jsonify({"success": True, "loc_id": loc_id, "daily_data": daily})
     except Exception as e:
         app.logger.error(f"wt360 historical error: {e}")
@@ -7435,7 +7449,7 @@ def wt360_longrange():
         params = {"sd": start_date, "cnt": weeks}
         params.update(_fields_to_params(fields))
         data = _wt360_data_get("weekly", wt360_id, params)
-        weekly = data if isinstance(data, list) else data.get("weekly", data.get("data", []))
+        weekly = _wt360_parse_wx(data, wt360_id)
         return jsonify({"success": True, "loc_id": loc_id, "weekly_data": weekly})
     except Exception as e:
         app.logger.error(f"wt360 longrange error: {e}")

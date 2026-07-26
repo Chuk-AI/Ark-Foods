@@ -2,8 +2,6 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import Chart from 'chart.js/auto';
 
-// ─── Shared helpers ────────────────────────────────────────────────────────────
-
 function Spinner() {
   return (
     <div style={{ display: 'flex', justifyContent: 'center', padding: 32 }}>
@@ -21,27 +19,35 @@ function SectionTitle({ children, icon }) {
   );
 }
 
-function fTemp(v) { return v != null ? `${Math.round(v)}°F` : '—'; }
-function fPrcp(v) { return v != null ? `${Number(v).toFixed(2)}"` : '—'; }
+function fTemp(v) { return v != null && !isNaN(Number(v)) ? `${Math.round(Number(v))}°F` : '—'; }
+function fPrcp(v) { return v != null && !isNaN(Number(v)) ? `${Number(v).toFixed(2)}"` : '—'; }
 
-function extractField(obj, field) {
-  if (obj == null) return null;
-  const v = obj[field];
-  if (v == null) return null;
-  if (typeof v === 'object') return v.value ?? v.avg ?? v.Value ?? null;
-  return v;
-}
+// Actual WT360 field names — plain numbers stored as strings in historical, numbers in forecast
+function n(v) { return v == null ? null : (isNaN(Number(v)) ? null : Number(v)); }
+function getHi(d)   { return n(d.maxTemp); }
+function getLo(d)   { return n(d.minTemp); }
+function getAvg(d)  { return n(d.avgTemp); }
+function getPrcp(d) { return n(d.prcp); }
+function getGDD(d)  { return n(d.gdd); }
+// Forecast uses utc_date_iso; historical uses utcDate
+function getDate(d) { return d.utc_date_iso || d.utcDate || d.date || d.Date || d.week_start || ''; }
 
 const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 function formatDateLabel(dateStr) {
   if (!dateStr) return '';
-  const s = String(dateStr).replace(/\D/g, '');
-  if (s.length >= 8) {
-    const dt = new Date(`${s.slice(0,4)}-${s.slice(4,6)}-${s.slice(6,8)}`);
-    if (!isNaN(dt)) return `${MONTH_ABBR[dt.getMonth()]} ${dt.getDate()}`;
+  const s = String(dateStr);
+  const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) {
+    const dt = new Date(`${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`);
+    if (!isNaN(dt)) return `${MONTH_ABBR[dt.getUTCMonth()]} ${dt.getUTCDate()}`;
   }
-  return dateStr;
+  const digits = s.replace(/\D/g, '');
+  if (digits.length >= 8) {
+    const dt = new Date(`${digits.slice(0,4)}-${digits.slice(4,6)}-${digits.slice(6,8)}`);
+    if (!isNaN(dt)) return `${MONTH_ABBR[dt.getUTCMonth()]} ${dt.getUTCDate()}`;
+  }
+  return s;
 }
 
 // ─── 1. Alerts Banner ─────────────────────────────────────────────────────────
@@ -83,17 +89,13 @@ function TempStrip({ days }) {
   if (!days || days.length === 0) return null;
   return (
     <div style={{ display: 'flex', gap: 4, marginTop: 8 }}>
-      {days.slice(0, 7).map((d, i) => {
-        const hi = extractField(d, 'maxTemp') ?? extractField(d, 'MaxTemp') ?? extractField(d, 'highTempF');
-        const lo = extractField(d, 'minTemp') ?? extractField(d, 'MinTemp') ?? extractField(d, 'lowTempF');
-        return (
-          <div key={i} style={{ flex: 1, textAlign: 'center', background: '#f0fdf4', borderRadius: 6, padding: '4px 2px' }}>
-            <div style={{ fontSize: 10, color: '#64748b' }}>{formatDateLabel(d.date || d.Date)}</div>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#dc2626' }}>{fTemp(hi)}</div>
-            <div style={{ fontSize: 11, color: '#2563eb' }}>{fTemp(lo)}</div>
-          </div>
-        );
-      })}
+      {days.slice(0, 7).map((d, i) => (
+        <div key={i} style={{ flex: 1, textAlign: 'center', background: '#f0fdf4', borderRadius: 6, padding: '4px 2px' }}>
+          <div style={{ fontSize: 10, color: '#64748b' }}>{formatDateLabel(getDate(d))}</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#dc2626' }}>{fTemp(getHi(d))}</div>
+          <div style={{ fontSize: 11, color: '#2563eb' }}>{fTemp(getLo(d))}</div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -101,11 +103,11 @@ function TempStrip({ days }) {
 function RegionCard({ loc, onSelect, selected }) {
   const days  = loc.forecast || [];
   const today = days[0] || {};
-  const hi   = extractField(today, 'maxTemp') ?? extractField(today, 'MaxTemp') ?? extractField(today, 'highTempF');
-  const lo   = extractField(today, 'minTemp') ?? extractField(today, 'MinTemp') ?? extractField(today, 'lowTempF');
-  const avg  = extractField(today, 'avgTemp') ?? extractField(today, 'AvgTemp');
-  const prcp = extractField(today, 'prcp') ?? extractField(today, 'Precipitation');
-  const gdd  = extractField(today, 'gdd') ?? extractField(today, 'GDD');
+  const hi   = getHi(today);
+  const lo   = getLo(today);
+  const avg  = getAvg(today);
+  const prcp = getPrcp(today);
+  const gdd  = getGDD(today);
 
   return (
     <div onClick={() => onSelect(loc)} style={{
@@ -117,12 +119,14 @@ function RegionCard({ loc, onSelect, selected }) {
       <div style={{ fontWeight: 700, fontSize: 15, color: '#1e293b' }}>{loc.name}</div>
       <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>{loc.state}, {loc.country}</div>
       {loc.error ? (
-        <div style={{ fontSize: 12, color: '#dc2626' }}>No data available</div>
+        <div style={{ fontSize: 12, color: '#dc2626' }}>No forecast data</div>
+      ) : days.length === 0 ? (
+        <div style={{ fontSize: 12, color: '#94a3b8' }}>Loading...</div>
       ) : (
         <>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            {hi   != null && <span style={{ fontSize: 13, color: '#dc2626', fontWeight: 600 }}>Up {fTemp(hi)}</span>}
-            {lo   != null && <span style={{ fontSize: 13, color: '#2563eb', fontWeight: 600 }}>Dn {fTemp(lo)}</span>}
+            {hi   != null && <span style={{ fontSize: 13, color: '#dc2626', fontWeight: 600 }}>Hi {fTemp(hi)}</span>}
+            {lo   != null && <span style={{ fontSize: 13, color: '#2563eb', fontWeight: 600 }}>Lo {fTemp(lo)}</span>}
             {avg  != null && <span style={{ fontSize: 13, color: '#475569' }}>Avg {fTemp(avg)}</span>}
           </div>
           {prcp != null && <div style={{ fontSize: 12, color: '#0284c7', marginTop: 4 }}>Precip {fPrcp(prcp)}</div>}
@@ -153,7 +157,7 @@ function RegionCards({ onSelectLocation }) {
   }, []);
 
   if (loading) return <Spinner />;
-  if (error)   return <div style={{ color: '#dc2626', padding: 16 }}>Error loading regions: {error}</div>;
+  if (error)   return <div style={{ color: '#dc2626', padding: 16 }}>Error: {error}</div>;
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(230px,1fr))', gap: 14 }}>
@@ -194,29 +198,21 @@ function ForecastDetail({ location }) {
         <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 700 }}>
           <thead>
             <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
-              {['Date','High','Low','Avg Temp','Precip','GDD'].map(h => (
+              {['Date','High','Low','Pop %','Precip'].map(h => (
                 <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: 13, fontWeight: 600, color: '#64748b' }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {days.map((d, i) => {
-              const hi   = extractField(d, 'maxTemp') ?? extractField(d, 'MaxTemp') ?? extractField(d, 'highTempF');
-              const lo   = extractField(d, 'minTemp') ?? extractField(d, 'MinTemp') ?? extractField(d, 'lowTempF');
-              const avg  = extractField(d, 'avgTemp') ?? extractField(d, 'AvgTemp');
-              const prcp = extractField(d, 'prcp') ?? extractField(d, 'Precipitation');
-              const gdd  = extractField(d, 'gdd') ?? extractField(d, 'GDD');
-              return (
-                <tr key={i} style={{ borderBottom: '1px solid #f1f5f9', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
-                  <td style={{ padding: '9px 12px', fontSize: 13, fontWeight: 600, color: '#1e293b' }}>{formatDateLabel(d.date || d.Date)}</td>
-                  <td style={{ padding: '9px 12px', fontSize: 13, color: '#dc2626', fontWeight: 600 }}>{fTemp(hi)}</td>
-                  <td style={{ padding: '9px 12px', fontSize: 13, color: '#2563eb', fontWeight: 600 }}>{fTemp(lo)}</td>
-                  <td style={{ padding: '9px 12px', fontSize: 13, color: '#475569' }}>{fTemp(avg)}</td>
-                  <td style={{ padding: '9px 12px', fontSize: 13, color: '#0284c7' }}>{fPrcp(prcp)}</td>
-                  <td style={{ padding: '9px 12px', fontSize: 13, color: '#7c3aed' }}>{gdd != null ? Number(gdd).toFixed(1) : '—'}</td>
-                </tr>
-              );
-            })}
+            {days.map((d, i) => (
+              <tr key={i} style={{ borderBottom: '1px solid #f1f5f9', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
+                <td style={{ padding: '9px 12px', fontSize: 13, fontWeight: 600, color: '#1e293b' }}>{formatDateLabel(getDate(d))}</td>
+                <td style={{ padding: '9px 12px', fontSize: 13, color: '#dc2626', fontWeight: 600 }}>{fTemp(getHi(d))}</td>
+                <td style={{ padding: '9px 12px', fontSize: 13, color: '#2563eb', fontWeight: 600 }}>{fTemp(getLo(d))}</td>
+                <td style={{ padding: '9px 12px', fontSize: 13, color: '#475569' }}>{d.pop != null ? `${d.pop}%` : '—'}</td>
+                <td style={{ padding: '9px 12px', fontSize: 13, color: '#0284c7' }}>{fPrcp(getPrcp(d))}</td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
@@ -271,14 +267,14 @@ function LongRangeOutlook() {
 
   useEffect(() => {
     if (!data || !chartRef.current) return;
-    const wdata = data.weekly_data || data.data || [];
+    const wdata = data.weekly_data || [];
     if (wdata.length === 0) return;
 
-    const labels   = wdata.map((w, i) => { const d = w.date || w.Date || w.week_start; return d ? formatDateLabel(d) : `Wk ${i+1}`; });
-    const avgTemps = wdata.map(w => extractField(w, 'avgTemp') ?? extractField(w, 'AvgTemp') ?? extractField(w, 'avg_temp'));
-    const maxTemps = wdata.map(w => extractField(w, 'maxTemp') ?? extractField(w, 'MaxTemp') ?? extractField(w, 'max_temp'));
-    const minTemps = wdata.map(w => extractField(w, 'minTemp') ?? extractField(w, 'MinTemp') ?? extractField(w, 'min_temp'));
-    const prcps    = wdata.map(w => extractField(w, 'prcp') ?? extractField(w, 'Precipitation') ?? extractField(w, 'precipitation'));
+    const labels   = wdata.map((w, i) => { const d = getDate(w); return d ? formatDateLabel(d) : `Wk ${i+1}`; });
+    const avgTemps = wdata.map(w => getAvg(w));
+    const maxTemps = wdata.map(w => getHi(w));
+    const minTemps = wdata.map(w => getLo(w));
+    const prcps    = wdata.map(w => getPrcp(w));
 
     if (chartInst.current) chartInst.current.destroy();
     chartInst.current = new Chart(chartRef.current.getContext('2d'), {
@@ -358,12 +354,12 @@ function GDDTracker() {
 
   useEffect(() => {
     if (!data || !chartRef.current) return;
-    const days = data.daily_data || data.data || [];
+    const days = data.daily_data || [];
     if (days.length === 0) return;
 
     let cum = 0;
-    const cumGDD = days.map(d => { cum += Number(extractField(d, 'gdd') ?? extractField(d, 'GDD') ?? 0) || 0; return cum; });
-    const labels = days.map((d, i) => { const dt = d.date || d.Date; return dt ? formatDateLabel(dt) : `Day ${i+1}`; });
+    const cumGDD = days.map(d => { cum += Number(getGDD(d) ?? 0) || 0; return cum; });
+    const labels = days.map((d, i) => { const dt = getDate(d); return dt ? formatDateLabel(dt) : `Day ${i+1}`; });
 
     if (chartInst.current) chartInst.current.destroy();
     chartInst.current = new Chart(chartRef.current.getContext('2d'), {
@@ -379,8 +375,8 @@ function GDDTracker() {
 
   useEffect(() => () => { if (chartInst.current) chartInst.current.destroy(); }, []);
 
-  const totalGDD = !data ? null : (data.daily_data || data.data || [])
-    .reduce((s, d) => s + (Number(extractField(d, 'gdd') ?? extractField(d, 'GDD') ?? 0) || 0), 0);
+  const totalGDD = !data ? null : (data.daily_data || [])
+    .reduce((s, d) => s + (Number(getGDD(d) ?? 0) || 0), 0);
 
   return (
     <div>
@@ -465,13 +461,13 @@ export default function WeatherDashboard() {
 
         <div style={{ marginBottom: 28 }}>
           <h1 style={{ fontSize: 28, fontWeight: 800, color: '#1e293b', margin: 0 }}>Weather Intelligence</h1>
-          <p style={{ color: '#64748b', margin: '6px 0 0', fontSize: 14 }}>Powered by WeatherTrends360 - 14 growing regions, 14-day forecasts, and long-range outlooks up to 52 weeks</p>
+          <p style={{ color: '#64748b', margin: '6px 0 0', fontSize: 14 }}>Powered by WeatherTrends360 — 14 growing regions, 14-day forecasts, long-range outlooks up to 52 weeks</p>
         </div>
 
         <AlertsBanner />
 
         <div style={{ background: 'white', borderRadius: 14, padding: 24, marginBottom: 24, boxShadow: '0 1px 6px rgba(0,0,0,.07)' }}>
-          <SectionTitle icon="Region">Growing Regions - Today's Snapshot</SectionTitle>
+          <SectionTitle icon="Region">Growing Regions — Today's Snapshot</SectionTitle>
           <p style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>Click a region card to load its 14-day forecast detail below.</p>
           <RegionCards onSelectLocation={setSelectedLocation} />
         </div>
@@ -488,7 +484,7 @@ export default function WeatherDashboard() {
 
         <div style={{ background: 'white', borderRadius: 14, padding: 24, marginBottom: 24, boxShadow: '0 1px 6px rgba(0,0,0,.07)' }}>
           <SectionTitle icon="GDD">Growing Degree Days (GDD) Tracker</SectionTitle>
-          <p style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>Select a location and planting date to track cumulative heat accumulation from historical data.</p>
+          <p style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>Select a location and planting date to track cumulative heat accumulation.</p>
           <GDDTracker />
         </div>
 
