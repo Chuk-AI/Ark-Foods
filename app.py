@@ -566,6 +566,28 @@ PEPPER_CONDITIONS = {
 
 OPENWEATHER_API_KEY = os.environ.get("OPENWEATHER_API_KEY", "70dda5aad7b938fbdc226c3436e0c1b9")
 
+# ─── WeatherTrends360 ─────────────────────────────────────────────────────────
+WT360_API_KEY       = os.environ.get("WT360_API_KEY", "")
+WT360_FORECAST_BASE = "https://www.weathertrends360.com/api/arkfoods"
+WT360_DATA_BASE     = "https://api.wt360business.com/API/weather"
+
+WT360_LOCATIONS = {
+    "el_morro_mx":     {"name": "El Morro",     "state": "Baja California", "country": "Mexico", "wt360_id": "CL844548", "lat": 30.05, "lon": -115.73, "crops": ["Jalapeño", "Serrano"]},
+    "ensenada_mx":     {"name": "Ensenada",     "state": "Baja California", "country": "Mexico", "wt360_id": "CL844547", "lat": 31.87, "lon": -116.60, "crops": ["Jalapeño", "Serrano"]},
+    "culiacan_mx":     {"name": "Culiacan",     "state": "Sinaloa",         "country": "Mexico", "wt360_id": "ST1905",   "lat": 24.80, "lon": -107.39, "crops": ["Jalapeño", "Serrano", "Poblano", "Habanero"]},
+    "huejotillo_mx":   {"name": "Huejotillo",   "state": "Sinaloa",         "country": "Mexico", "wt360_id": "CL844546", "lat": 24.82, "lon": -107.41, "crops": ["Jalapeño", "Serrano"]},
+    "sonora_mx":       {"name": "Sonora",        "state": "Sonora",          "country": "Mexico", "wt360_id": "CL838001", "lat": 29.30, "lon": -110.33, "crops": ["Jalapeño", "Serrano", "Poblano", "Habanero"]},
+    "arcadia_fl":      {"name": "Arcadia",       "state": "Florida",         "country": "USA",    "wt360_id": "ZU34265",  "lat": 27.22, "lon": -81.86, "crops": ["Jalapeño", "Serrano", "Poblano", "Habanero", "Anaheim", "Fresno"]},
+    "immokalee_fl":    {"name": "Immokalee",     "state": "Florida",         "country": "USA",    "wt360_id": "ZU34142",  "lat": 26.42, "lon": -81.42, "crops": ["Jalapeño", "Serrano", "Poblano", "Habanero", "Anaheim", "Fresno"]},
+    "palm_beach_fl":   {"name": "Palm Beach",    "state": "Florida",         "country": "USA",    "wt360_id": "ZU33480",  "lat": 26.72, "lon": -80.05, "crops": ["Jalapeño", "Serrano", "Poblano", "Habanero", "Anaheim", "Fresno"]},
+    "adel_ga":         {"name": "Adel",          "state": "Georgia",         "country": "USA",    "wt360_id": "ZU31620",  "lat": 31.14, "lon": -83.42, "crops": ["Jalapeño", "Serrano", "Poblano", "Habanero", "Long Hot"]},
+    "lake_park_ga":    {"name": "Lake Park",     "state": "Georgia",         "country": "USA",    "wt360_id": "ZU31636",  "lat": 30.69, "lon": -83.19, "crops": ["Jalapeño", "Serrano", "Poblano"]},
+    "sodus_mi":        {"name": "Sodus",         "state": "Michigan",        "country": "USA",    "wt360_id": "ZU49126",  "lat": 42.01, "lon": -86.36, "crops": ["Jalapeño", "Serrano", "Poblano", "Habanero", "Anaheim", "Fresno"]},
+    "vineland_nj":     {"name": "Vineland",      "state": "New Jersey",      "country": "USA",    "wt360_id": "ZU08360",  "lat": 39.48, "lon": -75.01, "crops": ["Jalapeño", "Serrano", "Poblano", "Habanero", "Anaheim", "Fresno"]},
+    "cameron_sc":      {"name": "Cameron",       "state": "South Carolina",  "country": "USA",    "wt360_id": "ZU29030",  "lat": 33.56, "lon": -80.72, "crops": ["Jalapeño", "Serrano", "Poblano", "Habanero", "Anaheim", "Fresno"]},
+    "ridge_spring_sc": {"name": "Ridge Spring",  "state": "South Carolina",  "country": "USA",    "wt360_id": "ZU29129",  "lat": 33.84, "lon": -81.67, "crops": ["Jalapeño", "Serrano"]},
+}
+
 _PEPPER_ALIASES = {
     "jalapeño": "Jalapeno", "jalapeno": "Jalapeno", "cubanelles": "Cubanelle",
     "cubanelle": "Cubanelle", "hungarian": "Hungarian Wax", "hungarian wax": "Hungarian Wax",
@@ -7190,6 +7212,153 @@ def api_growing_conditions():
 def api_growing_regions():
     regions = [{"key": k, "name": v["name"], "city": v["city"], "lat": v["lat"], "lon": v["lon"], "crops": v["crops"]} for k, v in GROWING_REGIONS.items()]
     return jsonify({"success": True, "regions": regions})
+
+
+# ─── WeatherTrends360 helpers ─────────────────────────────────────────────────
+
+def _wt360_fetch_forecast(wt360_id):
+    url = f"{WT360_FORECAST_BASE}/forecast/{wt360_id}"
+    r = requests.get(url, params={"key": WT360_API_KEY}, timeout=15)
+    r.raise_for_status()
+    data = r.json()
+    # Normalise: may be list or dict with a key
+    if isinstance(data, list):
+        return data
+    for k in ("forecast", "daily", "data", "days"):
+        if k in data and isinstance(data[k], list):
+            return data[k]
+    return []
+
+
+def _wt360_fetch_alerts(wt360_id):
+    url = f"{WT360_FORECAST_BASE}/alerts/{wt360_id}"
+    r = requests.get(url, params={"key": WT360_API_KEY}, timeout=15)
+    r.raise_for_status()
+    data = r.json()
+    if isinstance(data, list):
+        return data
+    for k in ("alerts", "data"):
+        if k in data and isinstance(data[k], list):
+            return data[k]
+    return []
+
+
+@app.route("/api/wt360/regions", methods=["GET"])
+def wt360_regions():
+    regions = [{"key": k, **v} for k, v in WT360_LOCATIONS.items()]
+    return jsonify({"success": True, "regions": regions})
+
+
+@app.route("/api/wt360/forecast_all", methods=["GET"])
+def wt360_forecast_all():
+    import concurrent.futures
+
+    def _fetch(item):
+        key, loc = item
+        try:
+            days = _wt360_fetch_forecast(loc["wt360_id"])
+            return key, {**loc, "key": key, "forecast": days, "error": None}
+        except Exception as e:
+            return key, {**loc, "key": key, "forecast": [], "error": str(e)}
+
+    cache_key = "wt360_forecast_all"
+    cached = cache_get(cache_key, max_age_seconds=7200)
+    if cached:
+        return jsonify(cached)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+        results = dict(ex.map(_fetch, WT360_LOCATIONS.items()))
+
+    payload = {"success": True, "locations": list(results.values())}
+    cache_set(cache_key, payload)
+    return jsonify(payload)
+
+
+@app.route("/api/wt360/forecast/<loc_id>", methods=["GET"])
+def wt360_forecast_single(loc_id):
+    if loc_id not in WT360_LOCATIONS:
+        return jsonify({"error": "Unknown location"}), 404
+    loc = WT360_LOCATIONS[loc_id]
+    cache_key = f"wt360_forecast_{loc_id}"
+    cached = cache_get(cache_key, max_age_seconds=7200)
+    if cached:
+        return jsonify(cached)
+    try:
+        days = _wt360_fetch_forecast(loc["wt360_id"])
+        payload = {"success": True, "key": loc_id, **loc, "forecast": days}
+        cache_set(cache_key, payload)
+        return jsonify(payload)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/wt360/alerts", methods=["GET"])
+def wt360_alerts():
+    import concurrent.futures
+
+    def _fetch_alerts(item):
+        key, loc = item
+        try:
+            alerts = _wt360_fetch_alerts(loc["wt360_id"])
+            return {"key": key, "name": loc["name"], "alerts": alerts}
+        except Exception:
+            return {"key": key, "name": loc["name"], "alerts": []}
+
+    cache_key = "wt360_alerts"
+    cached = cache_get(cache_key, max_age_seconds=1800)
+    if cached:
+        return jsonify(cached)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+        results = list(ex.map(_fetch_alerts, WT360_LOCATIONS.items()))
+
+    payload = {"success": True, "alerts": results}
+    cache_set(cache_key, payload)
+    return jsonify(payload)
+
+
+@app.route("/api/wt360/historical", methods=["GET"])
+def wt360_historical():
+    loc_id     = request.args.get("loc_id", "")
+    start_date = request.args.get("start_date", "")
+    days       = request.args.get("days", 30, type=int)
+    fields     = request.args.get("fields", "avgTemp,maxTemp,minTemp,prcp,gdd")
+
+    if loc_id not in WT360_LOCATIONS:
+        return jsonify({"error": "Unknown location"}), 404
+
+    wt360_id = WT360_LOCATIONS[loc_id]["wt360_id"]
+    url = f"{WT360_DATA_BASE}/daily/{{{wt360_id}}}"
+    try:
+        r = requests.get(url, params={"apiKey": WT360_API_KEY, "startDate": start_date, "numDays": days, "fields": fields}, timeout=20)
+        r.raise_for_status()
+        data = r.json()
+        daily = data if isinstance(data, list) else data.get("daily", data.get("data", []))
+        return jsonify({"success": True, "loc_id": loc_id, "daily_data": daily})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/wt360/longrange", methods=["GET"])
+def wt360_longrange():
+    loc_id     = request.args.get("loc_id", "")
+    start_date = request.args.get("start_date", "")
+    weeks      = request.args.get("weeks", 12, type=int)
+    fields     = request.args.get("fields", "avgTemp,maxTemp,minTemp,prcp")
+
+    if loc_id not in WT360_LOCATIONS:
+        return jsonify({"error": "Unknown location"}), 404
+
+    wt360_id = WT360_LOCATIONS[loc_id]["wt360_id"]
+    url = f"{WT360_DATA_BASE}/weekly/{{{wt360_id}}}"
+    try:
+        r = requests.get(url, params={"apiKey": WT360_API_KEY, "startDate": start_date, "numWeeks": weeks, "fields": fields}, timeout=20)
+        r.raise_for_status()
+        data = r.json()
+        weekly = data if isinstance(data, list) else data.get("weekly", data.get("data", []))
+        return jsonify({"success": True, "loc_id": loc_id, "weekly_data": weekly})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/climatology/<region_name>", methods=["GET"])

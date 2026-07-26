@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
+import Chart from 'chart.js/auto';
 
-// ─── helpers ──────────────────────────────────────────────────────────────────
+// ─── Shared helpers ────────────────────────────────────────────────────────────
 
 function Spinner() {
   return (
@@ -12,282 +13,491 @@ function Spinner() {
   );
 }
 
-function SectionTitle({ children }) {
+function SectionTitle({ children, icon }) {
   return (
-    <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1e293b', borderBottom: '3px solid #059669', paddingBottom: 10, marginBottom: 20 }}>
-      {children}
+    <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1e293b', borderBottom: '3px solid #059669', paddingBottom: 10, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
+      {icon && <span>{icon}</span>}{children}
     </h2>
   );
 }
 
-const STATUS_COLORS = {
-  optimal:  { bg: 'linear-gradient(135deg,#f0fdf4,#dcfce7)', border: '#22c55e', badge: '#065f46', badgeBg: '#d1fae5' },
-  warning:  { bg: 'linear-gradient(135deg,#fffbeb,#fef3c7)', border: '#f59e0b', badge: '#92400e', badgeBg: '#fef3c7' },
-  critical: { bg: 'linear-gradient(135deg,#fef2f2,#fee2e2)', border: '#ef4444', badge: '#991b1b', badgeBg: '#fee2e2' },
-  caution:  { bg: 'linear-gradient(135deg,#fff7ed,#ffedd5)', border: '#f97316', badge: '#9a3412', badgeBg: '#ffedd5' },
-};
+function fTemp(v) { return v != null ? `${Math.round(v)}°F` : '—'; }
+function fPrcp(v) { return v != null ? `${Number(v).toFixed(2)}"` : '—'; }
 
-const growingColor = (s) =>
-  s === 'optimal' ? '#22c55e' : s === 'warning' ? '#f59e0b' : '#ef4444';
+function extractField(obj, field) {
+  if (obj == null) return null;
+  const v = obj[field];
+  if (v == null) return null;
+  if (typeof v === 'object') return v.value ?? v.avg ?? v.Value ?? null;
+  return v;
+}
 
-// ─── 1. Live Weather Cards ────────────────────────────────────────────────────
+const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-function LiveWeatherCards() {
-  const [data, setData] = useState(null);
+function formatDateLabel(dateStr) {
+  if (!dateStr) return '';
+  const s = String(dateStr).replace(/\D/g, '');
+  if (s.length >= 8) {
+    const dt = new Date(`${s.slice(0,4)}-${s.slice(4,6)}-${s.slice(6,8)}`);
+    if (!isNaN(dt)) return `${MONTH_ABBR[dt.getMonth()]} ${dt.getDate()}`;
+  }
+  return dateStr;
+}
+
+// ─── 1. Alerts Banner ─────────────────────────────────────────────────────────
+
+function AlertsBanner() {
+  const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [lastUpdated, setLastUpdated] = useState(null);
 
-  const fetch = useCallback(() => {
-    setLoading(true);
-    axios.get('/api/live_weather')
-      .then((r) => {
-        setData(r.data.regions || []);
-        setLastUpdated(new Date().toLocaleTimeString());
-        setLoading(false);
+  useEffect(() => {
+    axios.get('/api/wt360/alerts')
+      .then(r => {
+        const all = [];
+        (r.data.alerts || []).forEach(loc => {
+          (loc.alerts || []).forEach(a => all.push({ ...a, location: loc.name }));
+        });
+        setAlerts(all);
       })
-      .catch((e) => { setError(e.message); setLoading(false); });
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => { fetch(); }, [fetch]);
-
-  const noKey = data?.every((r) => !r.weather?.temp);
+  if (loading || alerts.length === 0) return null;
 
   return (
-    <div style={{ marginBottom: 40 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, borderBottom: '3px solid #059669', paddingBottom: 10, marginBottom: 20 }}>
-        <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1e293b', margin: 0 }}>☁️ Regional Weather &amp; Growing Conditions</h2>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#22c55e', fontWeight: 700 }}>
-          <span style={{ width: 8, height: 8, background: '#22c55e', borderRadius: '50%', animation: 'pulse2 1.5s infinite' }} />
-          LIVE
-          <style>{`@keyframes pulse2{0%,100%{opacity:1}50%{opacity:.5}}`}</style>
-        </span>
-        <button onClick={fetch} style={{ marginLeft: 'auto', fontSize: 12, padding: '6px 14px', border: '1px solid #e2e8f0', borderRadius: 8, background: '#fff', cursor: 'pointer', color: '#475569', fontWeight: 600 }}>
-          ↻ Refresh
-        </button>
-        {lastUpdated && <span style={{ fontSize: 11, color: '#94a3b8' }}>Updated {lastUpdated}</span>}
-      </div>
-
-      {noKey && (
-        <div style={{ background: '#fefce8', border: '1px solid #fde68a', borderRadius: 8, padding: '12px 16px', fontSize: 13, color: '#92400e', marginBottom: 16 }}>
-          ⚠️ Live weather requires <code>OPENWEATHER_API_KEY</code> in <code>.env</code>. Restart gunicorn after adding it.
+    <div style={{ background: 'linear-gradient(135deg,#fef2f2,#fee2e2)', border: '1px solid #fca5a5', borderRadius: 10, padding: '14px 20px', marginBottom: 28 }}>
+      <div style={{ fontWeight: 700, color: '#991b1b', fontSize: 16, marginBottom: 8 }}>Active Weather Alerts</div>
+      {alerts.map((a, i) => (
+        <div key={i} style={{ fontSize: 14, color: '#7f1d1d', marginBottom: 4 }}>
+          <strong>{a.location}:</strong> {a.headline || a.description || a.type || JSON.stringify(a)}
         </div>
-      )}
-      {loading && <Spinner />}
-      {error && <p style={{ color: '#dc2626' }}>Error: {error}</p>}
-      {data && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 18 }}>
-          {data.map((region) => {
-            const w = region.weather || {};
-            const a = region.analysis || {};
-            const status = (a.status || 'optimal').toLowerCase();
-            const sc = STATUS_COLORS[status] || STATUS_COLORS.optimal;
-            const hasWeather = w.temp != null;
-            const alerts = (a.alerts || []).filter((al) => al.type === 'warning' || al.type === 'critical');
-            return (
-              <div key={region.key} style={{ background: sc.bg, borderLeft: `4px solid ${sc.border}`, borderRadius: 12, padding: 20, ...(status === 'critical' ? { animation: 'palert 2s infinite' } : {}) }}>
-                <style>{`@keyframes palert{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.4)}50%{box-shadow:0 0 0 10px rgba(239,68,68,0)}}`}</style>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                  <div>
-                    <div style={{ fontWeight: 700, color: '#1e293b', fontSize: 14 }}>{region.name}</div>
-                    <div style={{ color: '#64748b', fontSize: 12 }}>{region.city}</div>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-                    {hasWeather && <img src={`https://openweathermap.org/img/wn/${w.weather_icon}@2x.png`} alt={w.weather_desc} style={{ width: 48, height: 48 }} />}
-                    <span style={{ background: sc.badgeBg, color: sc.badge, padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>{status}</span>
-                  </div>
-                </div>
-
-                {hasWeather ? (
-                  <>
-                    <div style={{ fontSize: 32, fontWeight: 800, color: '#1e40af', margin: '6px 0' }}>{Math.round(w.temp)}°F</div>
-                    <p style={{ color: '#64748b', textTransform: 'capitalize', fontSize: 13, marginBottom: 10 }}>{w.weather_desc}</p>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: 12, color: '#475569', marginBottom: 8 }}>
-                      <span>💧 Humidity: <strong>{w.humidity}%</strong></span>
-                      <span>💨 Wind: <strong>{w.wind_speed} mph</strong></span>
-                      <span>☁️ Clouds: <strong>{w.clouds}%</strong></span>
-                      <span>🌡️ Feels: <strong>{Math.round(w.feels_like)}°F</strong></span>
-                    </div>
-                  </>
-                ) : (
-                  <div style={{ fontSize: 24, fontWeight: 700, color: '#94a3b8', margin: '10px 0' }}>No data</div>
-                )}
-
-                {alerts.length > 0 && (
-                  <div style={{ marginBottom: 8 }}>
-                    {alerts.slice(0, 2).map((alert, i) => (
-                      <div key={i} style={{ background: alert.type === 'critical' ? '#fee2e2' : '#fef3c7', borderLeft: `4px solid ${alert.type === 'critical' ? '#dc2626' : '#f59e0b'}`, padding: '8px 10px', borderRadius: 6, fontSize: 11, marginBottom: 4 }}>
-                        {alert.icon} {alert.message}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 8 }}>
-                  {(region.crops || []).map((crop) => (
-                    <span key={crop} style={{ background: '#e0e7ff', color: '#3730a3', padding: '2px 8px', borderRadius: 12, fontSize: 10, fontWeight: 600 }}>{crop}</span>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      ))}
     </div>
   );
 }
 
-// ─── 2. 7-Day Weather Forecast ────────────────────────────────────────────────
+// ─── 2. Region Cards ──────────────────────────────────────────────────────────
 
-function WeatherForecast7Day() {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [selectedRegion, setSelectedRegion] = useState(null);
+function TempStrip({ days }) {
+  if (!days || days.length === 0) return null;
+  return (
+    <div style={{ display: 'flex', gap: 4, marginTop: 8 }}>
+      {days.slice(0, 7).map((d, i) => {
+        const hi = extractField(d, 'maxTemp') ?? extractField(d, 'MaxTemp') ?? extractField(d, 'highTempF');
+        const lo = extractField(d, 'minTemp') ?? extractField(d, 'MinTemp') ?? extractField(d, 'lowTempF');
+        return (
+          <div key={i} style={{ flex: 1, textAlign: 'center', background: '#f0fdf4', borderRadius: 6, padding: '4px 2px' }}>
+            <div style={{ fontSize: 10, color: '#64748b' }}>{formatDateLabel(d.date || d.Date)}</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#dc2626' }}>{fTemp(hi)}</div>
+            <div style={{ fontSize: 11, color: '#2563eb' }}>{fTemp(lo)}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
-  useEffect(() => {
-    axios.get('/api/weather_forecast_7day')
-      .then((r) => {
-        const regions = r.data.regions || [];
-        setData(regions);
-        if (regions.length) setSelectedRegion(regions[0].key);
-        setLoading(false);
-      })
-      .catch((e) => { setError(e.message); setLoading(false); });
-  }, []);
-
-  const region = data?.find((r) => r.key === selectedRegion);
-  const forecast = region?.forecast;
+function RegionCard({ loc, onSelect, selected }) {
+  const days  = loc.forecast || [];
+  const today = days[0] || {};
+  const hi   = extractField(today, 'maxTemp') ?? extractField(today, 'MaxTemp') ?? extractField(today, 'highTempF');
+  const lo   = extractField(today, 'minTemp') ?? extractField(today, 'MinTemp') ?? extractField(today, 'lowTempF');
+  const avg  = extractField(today, 'avgTemp') ?? extractField(today, 'AvgTemp');
+  const prcp = extractField(today, 'prcp') ?? extractField(today, 'Precipitation');
+  const gdd  = extractField(today, 'gdd') ?? extractField(today, 'GDD');
 
   return (
-    <div style={{ marginBottom: 40 }}>
-      <SectionTitle>🌤️ 7-Day Weather Forecast by Region</SectionTitle>
-      {loading && <Spinner />}
-      {error && <div style={{ background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 8, padding: '12px 16px', fontSize: 13, color: '#92400e' }}>ℹ️ {error}</div>}
-      {data && (
+    <div onClick={() => onSelect(loc)} style={{
+      background: selected ? 'linear-gradient(135deg,#ecfdf5,#d1fae5)' : 'white',
+      border: selected ? '2px solid #059669' : '1px solid #e2e8f0',
+      borderRadius: 12, padding: 16, cursor: 'pointer', transition: 'all .2s',
+      boxShadow: selected ? '0 4px 12px rgba(5,150,105,.2)' : '0 1px 4px rgba(0,0,0,.06)',
+    }}>
+      <div style={{ fontWeight: 700, fontSize: 15, color: '#1e293b' }}>{loc.name}</div>
+      <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>{loc.state}, {loc.country}</div>
+      {loc.error ? (
+        <div style={{ fontSize: 12, color: '#dc2626' }}>No data available</div>
+      ) : (
         <>
-          {/* Region pill tabs */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
-            {data.map((r) => (
-              <button key={r.key} onClick={() => setSelectedRegion(r.key)}
-                style={{ padding: '7px 16px', borderRadius: 20, border: '2px solid', cursor: 'pointer', fontSize: 13, fontWeight: 600, transition: 'all .15s',
-                  borderColor: selectedRegion === r.key ? '#059669' : '#e2e8f0',
-                  background: selectedRegion === r.key ? '#059669' : '#fff',
-                  color: selectedRegion === r.key ? '#fff' : '#475569' }}>
-                {r.name}
-              </button>
-            ))}
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            {hi   != null && <span style={{ fontSize: 13, color: '#dc2626', fontWeight: 600 }}>Up {fTemp(hi)}</span>}
+            {lo   != null && <span style={{ fontSize: 13, color: '#2563eb', fontWeight: 600 }}>Dn {fTemp(lo)}</span>}
+            {avg  != null && <span style={{ fontSize: 13, color: '#475569' }}>Avg {fTemp(avg)}</span>}
           </div>
-
-          {/* Selected region forecast */}
-          {region && forecast?.success && (
-            <div style={{ background: '#fff', border: '2px solid #e2e8f0', borderRadius: 12, padding: 24 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <div>
-                  <div style={{ fontWeight: 700, color: '#1e293b', fontSize: 16 }}>{region.name}</div>
-                  <div style={{ fontSize: 12, color: '#94a3b8' }}>{forecast.city}</div>
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                  {(region.crops || []).map((crop) => (
-                    <span key={crop} style={{ background: '#e0e7ff', color: '#3730a3', padding: '2px 8px', borderRadius: 12, fontSize: 10, fontWeight: 600 }}>{crop}</span>
-                  ))}
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 6 }}>
-                {(forecast.forecasts || []).slice(0, 7).map((day, i) => (
-                  <div key={i} style={{ textAlign: 'center', padding: '10px 4px', background: '#f8fafc', borderRadius: 10, borderBottom: `4px solid ${growingColor(day.growing_status)}` }}>
-                    <div style={{ fontWeight: 700, color: '#64748b', fontSize: 11, marginBottom: 4 }}>{day.day_name?.slice(0, 3)}</div>
-                    <img src={`https://openweathermap.org/img/wn/${day.icon}.png`} alt={day.condition} style={{ width: 36 }} />
-                    <div style={{ fontWeight: 800, fontSize: 14, color: '#1e293b' }}>{Math.round(day.temp_high)}°</div>
-                    <div style={{ color: '#94a3b8', fontSize: 11 }}>{Math.round(day.temp_low)}°</div>
-                    <div style={{ fontSize: 10, color: '#3b82f6', marginTop: 2 }}>💧{day.humidity}%</div>
-                    {day.rain_chance != null && (
-                      <div style={{ fontSize: 10, color: '#06b6d4' }}>🌧{day.rain_chance}%</div>
-                    )}
-                    <div style={{ fontSize: 9, marginTop: 3, fontWeight: 700, color: growingColor(day.growing_status), textTransform: 'uppercase' }}>
-                      {day.growing_status}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Legend */}
-              <div style={{ display: 'flex', gap: 16, marginTop: 16, fontSize: 11, color: '#64748b' }}>
-                <span><span style={{ display: 'inline-block', width: 10, height: 10, background: '#22c55e', borderRadius: 2, marginRight: 4 }} />Optimal growing</span>
-                <span><span style={{ display: 'inline-block', width: 10, height: 10, background: '#f59e0b', borderRadius: 2, marginRight: 4 }} />Watch conditions</span>
-                <span><span style={{ display: 'inline-block', width: 10, height: 10, background: '#ef4444', borderRadius: 2, marginRight: 4 }} />Critical stress</span>
-              </div>
-            </div>
-          )}
-          {region && !forecast?.success && (
-            <div style={{ background: '#fff', border: '2px solid #e2e8f0', borderRadius: 12, padding: 24, color: '#dc2626', fontSize: 13 }}>
-              Forecast unavailable for {region.name}
-            </div>
-          )}
+          {prcp != null && <div style={{ fontSize: 12, color: '#0284c7', marginTop: 4 }}>Precip {fPrcp(prcp)}</div>}
+          {gdd  != null && <div style={{ fontSize: 12, color: '#7c3aed', marginTop: 2 }}>GDD {Number(gdd).toFixed(1)}</div>}
+          <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>{loc.crops?.join(', ')}</div>
+          <TempStrip days={days} />
         </>
       )}
     </div>
   );
 }
 
-// ─── 3. Growing Conditions Reference ─────────────────────────────────────────
+function RegionCards({ onSelectLocation }) {
+  const [regions, setRegions]   = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState(null);
+  const [selected, setSelected] = useState(null);
 
-function GrowingConditions() {
-  const [data, setData] = useState(null);
   useEffect(() => {
-    axios.get('/api/growing_conditions').then((r) => setData(r.data.conditions || {})).catch(() => {});
+    axios.get('/api/wt360/forecast_all')
+      .then(r => {
+        const data = r.data.locations || [];
+        setRegions(data);
+        if (data.length > 0) { setSelected(data[0].key); onSelectLocation(data[0]); }
+      })
+      .catch(e => setError(e.message))
+      .finally(() => setLoading(false));
   }, []);
 
-  if (!data) return null;
+  if (loading) return <Spinner />;
+  if (error)   return <div style={{ color: '#dc2626', padding: 16 }}>Error loading regions: {error}</div>;
+
   return (
-    <div style={{ marginBottom: 40 }}>
-      <SectionTitle>🌱 Ideal Growing Conditions by Variety</SectionTitle>
-      <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '10px 16px', fontSize: 12, color: '#166534', marginBottom: 16 }}>
-        Temperature and humidity ranges represent ideal conditions for flowering and fruit set. Readings outside these ranges trigger warning or critical alerts in the weather cards above.
-      </div>
-      <div style={{ background: '#fff', border: '2px solid #e2e8f0', borderRadius: 12, overflow: 'hidden' }}>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead>
-              <tr style={{ background: 'linear-gradient(135deg,#059669,#047857)', color: '#fff' }}>
-                {['Variety', 'Temp Min (°F)', 'Temp Max (°F)', 'Ideal Temp Range', 'Humidity Min (%)', 'Humidity Max (%)', 'Ideal Humidity Range'].map((h) => (
-                  <th key={h} style={{ padding: '10px 14px', textAlign: h === 'Variety' ? 'left' : 'center', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {Object.entries(data).map(([v, c], i) => (
-                <tr key={v} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                  <td style={{ padding: '10px 14px', fontWeight: 700 }}>{v}</td>
-                  <td style={{ padding: '10px 14px', textAlign: 'center', color: '#64748b' }}>{c.temp_min ?? '—'}</td>
-                  <td style={{ padding: '10px 14px', textAlign: 'center', color: '#64748b' }}>{c.temp_max ?? '—'}</td>
-                  <td style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600, color: '#059669' }}>
-                    {c.temp_min != null && c.temp_max != null ? `${c.temp_min}–${c.temp_max}°F` : '—'}
-                  </td>
-                  <td style={{ padding: '10px 14px', textAlign: 'center', color: '#64748b' }}>{c.humidity_min ?? '—'}</td>
-                  <td style={{ padding: '10px 14px', textAlign: 'center', color: '#64748b' }}>{c.humidity_max ?? '—'}</td>
-                  <td style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600, color: '#0284c7' }}>
-                    {c.humidity_min != null && c.humidity_max != null ? `${c.humidity_min}–${c.humidity_max}%` : '—'}
-                  </td>
-                </tr>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(230px,1fr))', gap: 14 }}>
+      {regions.map(loc => (
+        <RegionCard key={loc.key} loc={loc} selected={selected === loc.key}
+          onSelect={l => { setSelected(l.key); onSelectLocation(l); }} />
+      ))}
+    </div>
+  );
+}
+
+// ─── 3. 14-Day Forecast Detail ────────────────────────────────────────────────
+
+function ForecastDetail({ location }) {
+  const [data, setData]       = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState(null);
+
+  useEffect(() => {
+    if (!location) return;
+    setLoading(true); setError(null);
+    axios.get(`/api/wt360/forecast/${location.key}`)
+      .then(r => setData(r.data))
+      .catch(e => setError(e.message))
+      .finally(() => setLoading(false));
+  }, [location && location.key]);
+
+  if (!location) return <div style={{ color: '#94a3b8', padding: 16 }}>Select a region above to see the 14-day forecast.</div>;
+  if (loading)   return <Spinner />;
+  if (error)     return <div style={{ color: '#dc2626', padding: 16 }}>Error: {error}</div>;
+  if (!data)     return null;
+
+  const days = data.forecast || [];
+  return (
+    <div>
+      <div style={{ fontWeight: 600, color: '#475569', marginBottom: 12 }}>{location.name}, {location.state} — 14-Day Outlook</div>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 700 }}>
+          <thead>
+            <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+              {['Date','High','Low','Avg Temp','Precip','GDD'].map(h => (
+                <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: 13, fontWeight: 600, color: '#64748b' }}>{h}</th>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </tr>
+          </thead>
+          <tbody>
+            {days.map((d, i) => {
+              const hi   = extractField(d, 'maxTemp') ?? extractField(d, 'MaxTemp') ?? extractField(d, 'highTempF');
+              const lo   = extractField(d, 'minTemp') ?? extractField(d, 'MinTemp') ?? extractField(d, 'lowTempF');
+              const avg  = extractField(d, 'avgTemp') ?? extractField(d, 'AvgTemp');
+              const prcp = extractField(d, 'prcp') ?? extractField(d, 'Precipitation');
+              const gdd  = extractField(d, 'gdd') ?? extractField(d, 'GDD');
+              return (
+                <tr key={i} style={{ borderBottom: '1px solid #f1f5f9', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
+                  <td style={{ padding: '9px 12px', fontSize: 13, fontWeight: 600, color: '#1e293b' }}>{formatDateLabel(d.date || d.Date)}</td>
+                  <td style={{ padding: '9px 12px', fontSize: 13, color: '#dc2626', fontWeight: 600 }}>{fTemp(hi)}</td>
+                  <td style={{ padding: '9px 12px', fontSize: 13, color: '#2563eb', fontWeight: 600 }}>{fTemp(lo)}</td>
+                  <td style={{ padding: '9px 12px', fontSize: 13, color: '#475569' }}>{fTemp(avg)}</td>
+                  <td style={{ padding: '9px 12px', fontSize: 13, color: '#0284c7' }}>{fPrcp(prcp)}</td>
+                  <td style={{ padding: '9px 12px', fontSize: 13, color: '#7c3aed' }}>{gdd != null ? Number(gdd).toFixed(1) : '—'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   );
 }
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
+// ─── 4. Long-Range Outlook ────────────────────────────────────────────────────
+
+const WT360_LOCATION_KEYS = [
+  { key: 'el_morro_mx',     label: 'El Morro, MX' },
+  { key: 'ensenada_mx',     label: 'Ensenada, MX' },
+  { key: 'culiacan_mx',     label: 'Culiacan, MX' },
+  { key: 'huejotillo_mx',   label: 'Huejotillo, MX' },
+  { key: 'sonora_mx',       label: 'Sonora, MX' },
+  { key: 'arcadia_fl',      label: 'Arcadia, FL' },
+  { key: 'immokalee_fl',    label: 'Immokalee, FL' },
+  { key: 'palm_beach_fl',   label: 'Palm Beach, FL' },
+  { key: 'adel_ga',         label: 'Adel, GA' },
+  { key: 'lake_park_ga',    label: 'Lake Park, GA' },
+  { key: 'sodus_mi',        label: 'Sodus, MI' },
+  { key: 'vineland_nj',     label: 'Vineland, NJ' },
+  { key: 'cameron_sc',      label: 'Cameron, SC' },
+  { key: 'ridge_spring_sc', label: 'Ridge Spring, SC' },
+];
+
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}000000`;
+}
+
+function LongRangeOutlook() {
+  const [locKey, setLocKey]   = useState('vineland_nj');
+  const [weeks, setWeeks]     = useState(12);
+  const [data, setData]       = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState(null);
+  const chartRef  = useRef(null);
+  const chartInst = useRef(null);
+
+  const fetchData = useCallback(() => {
+    setLoading(true); setError(null);
+    axios.get('/api/wt360/longrange', {
+      params: { loc_id: locKey, start_date: todayStr(), weeks, fields: 'avgTemp,maxTemp,minTemp,prcp' }
+    })
+      .then(r => setData(r.data))
+      .catch(e => setError(e.response?.data?.error || e.message))
+      .finally(() => setLoading(false));
+  }, [locKey, weeks]);
+
+  useEffect(() => { fetchData(); }, []);
+
+  useEffect(() => {
+    if (!data || !chartRef.current) return;
+    const wdata = data.weekly_data || data.data || [];
+    if (wdata.length === 0) return;
+
+    const labels   = wdata.map((w, i) => { const d = w.date || w.Date || w.week_start; return d ? formatDateLabel(d) : `Wk ${i+1}`; });
+    const avgTemps = wdata.map(w => extractField(w, 'avgTemp') ?? extractField(w, 'AvgTemp') ?? extractField(w, 'avg_temp'));
+    const maxTemps = wdata.map(w => extractField(w, 'maxTemp') ?? extractField(w, 'MaxTemp') ?? extractField(w, 'max_temp'));
+    const minTemps = wdata.map(w => extractField(w, 'minTemp') ?? extractField(w, 'MinTemp') ?? extractField(w, 'min_temp'));
+    const prcps    = wdata.map(w => extractField(w, 'prcp') ?? extractField(w, 'Precipitation') ?? extractField(w, 'precipitation'));
+
+    if (chartInst.current) chartInst.current.destroy();
+    chartInst.current = new Chart(chartRef.current.getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          { type: 'line', label: 'Avg Temp (F)', data: avgTemps, borderColor: '#059669', backgroundColor: 'rgba(5,150,105,.1)', tension: .3, yAxisID: 'y', pointRadius: 3 },
+          { type: 'line', label: 'High (F)',     data: maxTemps, borderColor: '#dc2626', borderDash: [4,3], backgroundColor: 'transparent', tension: .3, yAxisID: 'y', pointRadius: 2 },
+          { type: 'line', label: 'Low (F)',      data: minTemps, borderColor: '#2563eb', borderDash: [4,3], backgroundColor: 'transparent', tension: .3, yAxisID: 'y', pointRadius: 2 },
+          { type: 'bar',  label: 'Precip (in)',  data: prcps,    backgroundColor: 'rgba(14,165,233,.4)', yAxisID: 'y2' },
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: { legend: { position: 'top' } },
+        scales: {
+          y:  { title: { display: true, text: 'Temperature (F)' }, position: 'left' },
+          y2: { title: { display: true, text: 'Precipitation (in)' }, position: 'right', grid: { drawOnChartArea: false }, beginAtZero: true },
+        }
+      }
+    });
+  }, [data]);
+
+  useEffect(() => () => { if (chartInst.current) chartInst.current.destroy(); }, []);
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 16, alignItems: 'flex-end' }}>
+        <div>
+          <label style={{ fontSize: 13, fontWeight: 600, color: '#475569', display: 'block', marginBottom: 4 }}>Location</label>
+          <select value={locKey} onChange={e => setLocKey(e.target.value)} style={{ border: '1px solid #d1d5db', borderRadius: 6, padding: '7px 10px', fontSize: 13 }}>
+            {WT360_LOCATION_KEYS.map(l => <option key={l.key} value={l.key}>{l.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={{ fontSize: 13, fontWeight: 600, color: '#475569', display: 'block', marginBottom: 4 }}>Horizon: {weeks} weeks</label>
+          <input type="range" min={2} max={52} value={weeks} onChange={e => setWeeks(Number(e.target.value))} style={{ width: 180, accentColor: '#059669' }} />
+        </div>
+        <button onClick={fetchData} style={{ background: '#059669', color: 'white', border: 'none', borderRadius: 8, padding: '8px 18px', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>
+          {loading ? 'Loading...' : 'Update'}
+        </button>
+      </div>
+      {error && <div style={{ color: '#dc2626', marginBottom: 12, fontSize: 13 }}>Error: {error}</div>}
+      <div style={{ position: 'relative', height: 360 }}>
+        {loading ? <Spinner /> : <canvas ref={chartRef} />}
+      </div>
+    </div>
+  );
+}
+
+// ─── 5. GDD Tracker ───────────────────────────────────────────────────────────
+
+function GDDTracker() {
+  const [locKey, setLocKey]       = useState('vineland_nj');
+  const [plantDate, setPlantDate] = useState(() => {
+    const d = new Date(); d.setMonth(d.getMonth() - 2); return d.toISOString().slice(0, 10);
+  });
+  const [data, setData]       = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState(null);
+  const chartRef  = useRef(null);
+  const chartInst = useRef(null);
+
+  const fetchData = useCallback(() => {
+    setLoading(true); setError(null);
+    const today = new Date();
+    const plant = new Date(plantDate);
+    const days  = Math.max(1, Math.round((today - plant) / 86400000));
+    const startDate = plantDate.replace(/-/g, '') + '000000';
+    axios.get('/api/wt360/historical', { params: { loc_id: locKey, start_date: startDate, days, fields: 'gdd' } })
+      .then(r => setData(r.data))
+      .catch(e => setError(e.response?.data?.error || e.message))
+      .finally(() => setLoading(false));
+  }, [locKey, plantDate]);
+
+  useEffect(() => {
+    if (!data || !chartRef.current) return;
+    const days = data.daily_data || data.data || [];
+    if (days.length === 0) return;
+
+    let cum = 0;
+    const cumGDD = days.map(d => { cum += Number(extractField(d, 'gdd') ?? extractField(d, 'GDD') ?? 0) || 0; return cum; });
+    const labels = days.map((d, i) => { const dt = d.date || d.Date; return dt ? formatDateLabel(dt) : `Day ${i+1}`; });
+
+    if (chartInst.current) chartInst.current.destroy();
+    chartInst.current = new Chart(chartRef.current.getContext('2d'), {
+      type: 'line',
+      data: { labels, datasets: [{ label: 'Cumulative GDD', data: cumGDD, borderColor: '#7c3aed', backgroundColor: 'rgba(124,58,237,.1)', fill: true, tension: .3, pointRadius: 2 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: ctx => `Cumulative GDD: ${ctx.parsed.y.toFixed(1)}` } } },
+        scales: { y: { title: { display: true, text: 'Growing Degree Days (cumulative)' } }, x: { ticks: { maxRotation: 45, maxTicksLimit: 12 } } }
+      }
+    });
+  }, [data]);
+
+  useEffect(() => () => { if (chartInst.current) chartInst.current.destroy(); }, []);
+
+  const totalGDD = !data ? null : (data.daily_data || data.data || [])
+    .reduce((s, d) => s + (Number(extractField(d, 'gdd') ?? extractField(d, 'GDD') ?? 0) || 0), 0);
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 16, alignItems: 'flex-end' }}>
+        <div>
+          <label style={{ fontSize: 13, fontWeight: 600, color: '#475569', display: 'block', marginBottom: 4 }}>Location</label>
+          <select value={locKey} onChange={e => setLocKey(e.target.value)} style={{ border: '1px solid #d1d5db', borderRadius: 6, padding: '7px 10px', fontSize: 13 }}>
+            {WT360_LOCATION_KEYS.map(l => <option key={l.key} value={l.key}>{l.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={{ fontSize: 13, fontWeight: 600, color: '#475569', display: 'block', marginBottom: 4 }}>Planting Date</label>
+          <input type="date" value={plantDate} onChange={e => setPlantDate(e.target.value)} style={{ border: '1px solid #d1d5db', borderRadius: 6, padding: '7px 10px', fontSize: 13 }} />
+        </div>
+        <button onClick={fetchData} style={{ background: '#7c3aed', color: 'white', border: 'none', borderRadius: 8, padding: '8px 18px', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>
+          {loading ? 'Loading...' : 'Track GDD'}
+        </button>
+        {totalGDD != null && (
+          <div style={{ background: '#f5f3ff', border: '1px solid #c4b5fd', borderRadius: 8, padding: '8px 16px', fontWeight: 700, color: '#5b21b6', fontSize: 14 }}>
+            Total GDD: {totalGDD.toFixed(1)}
+          </div>
+        )}
+      </div>
+      {error && <div style={{ color: '#dc2626', marginBottom: 12, fontSize: 13 }}>Error: {error}</div>}
+      <div style={{ position: 'relative', height: 320 }}>
+        {loading ? <Spinner /> : <canvas ref={chartRef} />}
+      </div>
+    </div>
+  );
+}
+
+// ─── 6. Growing Conditions reference ─────────────────────────────────────────
+
+const GROWING_CONDITIONS = {
+  'Jalapeno':      { tempMin: 65, tempMax: 85, humMin: 40, humMax: 70 },
+  'Serrano':       { tempMin: 65, tempMax: 90, humMin: 40, humMax: 70 },
+  'Poblano':       { tempMin: 60, tempMax: 85, humMin: 40, humMax: 70 },
+  'Habanero':      { tempMin: 70, tempMax: 90, humMin: 50, humMax: 75 },
+  'Anaheim':       { tempMin: 65, tempMax: 90, humMin: 30, humMax: 65 },
+  'Cubanelle':     { tempMin: 60, tempMax: 85, humMin: 40, humMax: 70 },
+  'Fresno':        { tempMin: 65, tempMax: 85, humMin: 40, humMax: 65 },
+  'Hungarian Wax': { tempMin: 65, tempMax: 85, humMin: 40, humMax: 65 },
+  'Shishito':      { tempMin: 60, tempMax: 85, humMin: 40, humMax: 70 },
+  'Long Hot':      { tempMin: 65, tempMax: 85, humMin: 40, humMax: 65 },
+};
+
+function GrowingConditionsTable() {
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+        <thead>
+          <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+            {['Variety','Min Temp (F)','Max Temp (F)','Min Humidity (%)','Max Humidity (%)'].map(h => (
+              <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 13, fontWeight: 600, color: '#64748b' }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {Object.entries(GROWING_CONDITIONS).map(([name, c], i) => (
+            <tr key={name} style={{ borderBottom: '1px solid #f1f5f9', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
+              <td style={{ padding: '9px 14px', fontWeight: 600, color: '#1e293b', fontSize: 13 }}>{name}</td>
+              <td style={{ padding: '9px 14px', color: '#2563eb', fontSize: 13 }}>{c.tempMin}</td>
+              <td style={{ padding: '9px 14px', color: '#dc2626', fontSize: 13 }}>{c.tempMax}</td>
+              <td style={{ padding: '9px 14px', color: '#0284c7', fontSize: 13 }}>{c.humMin}</td>
+              <td style={{ padding: '9px 14px', color: '#0284c7', fontSize: 13 }}>{c.humMax}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ─── Main Dashboard ───────────────────────────────────────────────────────────
 
 export default function WeatherDashboard() {
+  const [selectedLocation, setSelectedLocation] = useState(null);
+
   return (
-    <div style={{ padding: '28px 20px', maxWidth: 1600, margin: '0 auto', fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif' }}>
-      <LiveWeatherCards />
-      <WeatherForecast7Day />
-      <GrowingConditions />
+    <div style={{ padding: '24px 28px', background: '#f8fafc', minHeight: '100vh', fontFamily: 'system-ui,-apple-system,sans-serif' }}>
+      <div style={{ maxWidth: 1400, margin: '0 auto' }}>
+
+        <div style={{ marginBottom: 28 }}>
+          <h1 style={{ fontSize: 28, fontWeight: 800, color: '#1e293b', margin: 0 }}>Weather Intelligence</h1>
+          <p style={{ color: '#64748b', margin: '6px 0 0', fontSize: 14 }}>Powered by WeatherTrends360 - 14 growing regions, 14-day forecasts, and long-range outlooks up to 52 weeks</p>
+        </div>
+
+        <AlertsBanner />
+
+        <div style={{ background: 'white', borderRadius: 14, padding: 24, marginBottom: 24, boxShadow: '0 1px 6px rgba(0,0,0,.07)' }}>
+          <SectionTitle icon="Region">Growing Regions - Today's Snapshot</SectionTitle>
+          <p style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>Click a region card to load its 14-day forecast detail below.</p>
+          <RegionCards onSelectLocation={setSelectedLocation} />
+        </div>
+
+        <div style={{ background: 'white', borderRadius: 14, padding: 24, marginBottom: 24, boxShadow: '0 1px 6px rgba(0,0,0,.07)' }}>
+          <SectionTitle icon="14-Day">14-Day Forecast Detail</SectionTitle>
+          <ForecastDetail location={selectedLocation} />
+        </div>
+
+        <div style={{ background: 'white', borderRadius: 14, padding: 24, marginBottom: 24, boxShadow: '0 1px 6px rgba(0,0,0,.07)' }}>
+          <SectionTitle icon="Long-Range">Long-Range Outlook (up to 52 weeks)</SectionTitle>
+          <LongRangeOutlook />
+        </div>
+
+        <div style={{ background: 'white', borderRadius: 14, padding: 24, marginBottom: 24, boxShadow: '0 1px 6px rgba(0,0,0,.07)' }}>
+          <SectionTitle icon="GDD">Growing Degree Days (GDD) Tracker</SectionTitle>
+          <p style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>Select a location and planting date to track cumulative heat accumulation from historical data.</p>
+          <GDDTracker />
+        </div>
+
+        <div style={{ background: 'white', borderRadius: 14, padding: 24, boxShadow: '0 1px 6px rgba(0,0,0,.07)' }}>
+          <SectionTitle icon="Conditions">Optimal Growing Conditions by Variety</SectionTitle>
+          <GrowingConditionsTable />
+        </div>
+
+      </div>
     </div>
   );
 }
