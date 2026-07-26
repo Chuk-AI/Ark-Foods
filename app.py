@@ -7289,6 +7289,7 @@ def wt360_forecast_single(loc_id):
         cache_set(cache_key, payload)
         return jsonify(payload)
     except Exception as e:
+        app.logger.error(f"wt360 forecast/{loc_id} error: {e}")
         return jsonify({"error": str(e)}), 500
 
 
@@ -7331,13 +7332,14 @@ def wt360_historical():
     try:
         from urllib.parse import urlencode
         qs = urlencode({"apiKey": WT360_API_KEY, "startDate": start_date, "numDays": days, "fields": fields})
-        full_url = f"{WT360_DATA_BASE}/daily/{{{wt360_id}}}?{qs}"
+        full_url = f"{WT360_DATA_BASE}/daily/{wt360_id}?{qs}"
         import urllib.request as _urlreq
         with _urlreq.urlopen(full_url, timeout=20) as resp:
             data = json.loads(resp.read())
         daily = data if isinstance(data, list) else data.get("daily", data.get("data", []))
         return jsonify({"success": True, "loc_id": loc_id, "daily_data": daily})
     except Exception as e:
+        app.logger.error(f"wt360 historical error: {e}")
         return jsonify({"error": str(e)}), 500
 
 
@@ -7355,13 +7357,14 @@ def wt360_longrange():
     try:
         from urllib.parse import urlencode
         qs = urlencode({"apiKey": WT360_API_KEY, "startDate": start_date, "numWeeks": weeks, "fields": fields})
-        full_url = f"{WT360_DATA_BASE}/weekly/{{{wt360_id}}}?{qs}"
+        full_url = f"{WT360_DATA_BASE}/weekly/{wt360_id}?{qs}"
         import urllib.request as _urlreq
         with _urlreq.urlopen(full_url, timeout=20) as resp:
             data = json.loads(resp.read())
         weekly = data if isinstance(data, list) else data.get("weekly", data.get("data", []))
         return jsonify({"success": True, "loc_id": loc_id, "weekly_data": weekly})
     except Exception as e:
+        app.logger.error(f"wt360 longrange error: {e}")
         return jsonify({"error": str(e)}), 500
 
 
