@@ -7328,9 +7328,11 @@ def wt360_historical():
         return jsonify({"error": "Unknown location"}), 404
 
     wt360_id = WT360_LOCATIONS[loc_id]["wt360_id"]
-    url = f"{WT360_DATA_BASE}/daily/{{{wt360_id}}}"
     try:
-        r = requests.get(url, params={"apiKey": WT360_API_KEY, "startDate": start_date, "numDays": days, "fields": fields}, timeout=20)
+        from urllib.parse import urlencode
+        qs = urlencode({"apiKey": WT360_API_KEY, "startDate": start_date, "numDays": days, "fields": fields})
+        full_url = f"{WT360_DATA_BASE}/daily/{{{wt360_id}}}?{qs}"
+        r = requests.get(full_url, timeout=20)
         r.raise_for_status()
         data = r.json()
         daily = data if isinstance(data, list) else data.get("daily", data.get("data", []))
@@ -7350,9 +7352,11 @@ def wt360_longrange():
         return jsonify({"error": "Unknown location"}), 404
 
     wt360_id = WT360_LOCATIONS[loc_id]["wt360_id"]
-    url = f"{WT360_DATA_BASE}/weekly/{{{wt360_id}}}"
     try:
-        r = requests.get(url, params={"apiKey": WT360_API_KEY, "startDate": start_date, "numWeeks": weeks, "fields": fields}, timeout=20)
+        from urllib.parse import urlencode
+        qs = urlencode({"apiKey": WT360_API_KEY, "startDate": start_date, "numWeeks": weeks, "fields": fields})
+        full_url = f"{WT360_DATA_BASE}/weekly/{{{wt360_id}}}?{qs}"
+        r = requests.get(full_url, timeout=20)
         r.raise_for_status()
         data = r.json()
         weekly = data if isinstance(data, list) else data.get("weekly", data.get("data", []))
