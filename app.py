@@ -7262,6 +7262,67 @@ def _wt360_fetch_alerts(wt360_id):
     return []
 
 
+@app.route("/api/wt360/debug", methods=["GET"])
+def wt360_debug():
+    """Debug endpoint: hits all 4 WT360 API types for one location and returns raw responses."""
+    import urllib.request as _urlreq
+    from urllib.parse import urlencode
+    loc_id = request.args.get("loc_id", "vineland_nj")
+    if loc_id not in WT360_LOCATIONS:
+        return jsonify({"error": "Unknown loc_id"}), 404
+    loc = WT360_LOCATIONS[loc_id]
+    wt360_id = loc["wt360_id"]
+    out = {"loc_id": loc_id, "wt360_id": wt360_id}
+
+    # 1. Forecast
+    try:
+        url = f"{WT360_FORECAST_BASE}/forecast/daily-14day"
+        r = requests.get(url, params={"key": WT360_API_KEY, "l": wt360_id}, timeout=15)
+        out["forecast_url"] = r.url
+        out["forecast_status"] = r.status_code
+        out["forecast_raw"] = r.json()
+    except Exception as e:
+        out["forecast_error"] = str(e)
+
+    # 2. Alerts
+    try:
+        url = f"{WT360_FORECAST_BASE}/severe_alerts"
+        r = requests.get(url, params={"key": WT360_API_KEY, "l": wt360_id}, timeout=15)
+        out["alerts_url"] = r.url
+        out["alerts_status"] = r.status_code
+        out["alerts_raw"] = r.json()
+    except Exception as e:
+        out["alerts_error"] = str(e)
+
+    # 3. Historical (7 days from start of this month)
+    try:
+        sd = datetime.now().replace(day=1).strftime("%Y%m%d000000")
+        qs = urlencode({"apiKey": WT360_API_KEY, "calendar": "julian", "fmt": "json",
+                        "func": "getSummaryInfo", "units": "f", "sd": sd, "cnt": 7,
+                        "avgTemp": 1, "maxTemp": 1, "minTemp": 1, "gdd": 1, "prcp": 1})
+        full_url = f"{WT360_DATA_BASE}/daily/{{{wt360_id}}}?{qs}"
+        out["historical_url"] = full_url
+        with _urlreq.urlopen(full_url, timeout=20) as resp:
+            out["historical_raw"] = json.loads(resp.read())
+    except Exception as e:
+        out["historical_error"] = str(e)
+
+    # 4. Long-range (2 weeks from today)
+    try:
+        sd = datetime.now().strftime("%Y%m%d000000")
+        qs = urlencode({"apiKey": WT360_API_KEY, "calendar": "julian", "fmt": "json",
+                        "func": "getSummaryInfo", "units": "f", "sd": sd, "cnt": 2,
+                        "avgTemp": 1, "maxTemp": 1, "minTemp": 1, "prcp": 1})
+        full_url = f"{WT360_DATA_BASE}/weekly/{{{wt360_id}}}?{qs}"
+        out["longrange_url"] = full_url
+        with _urlreq.urlopen(full_url, timeout=20) as resp:
+            out["longrange_raw"] = json.loads(resp.read())
+    except Exception as e:
+        out["longrange_error"] = str(e)
+
+    return jsonify(out)
+
+
 @app.route("/api/wt360/regions", methods=["GET"])
 def wt360_regions():
     regions = [{"key": k, **v} for k, v in WT360_LOCATIONS.items()]
