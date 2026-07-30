@@ -7456,6 +7456,52 @@ def wt360_longrange():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/wt360/yoy")
+@login_required
+def wt360_yoy():
+    loc_id    = request.args.get("loc_id", "vineland_nj")
+    start_mmdd = request.args.get("start_mmdd", "0101")  # MMDD e.g. "0301"
+    end_mmdd   = request.args.get("end_mmdd",   "1231")
+    num_years  = min(request.args.get("years", 3, type=int), 5)
+    fields     = request.args.get("fields", "avgTemp,maxTemp,minTemp,prcp")
+
+    if loc_id not in WT360_LOCATIONS:
+        return jsonify({"error": "Unknown location"}), 404
+
+    loc      = WT360_LOCATIONS[loc_id]
+    wt360_id = loc["wt360_id"]
+    current_year = datetime.now().year
+    results  = {}
+
+    for i in range(num_years):
+        year = current_year - i
+        cache_key = f"wt360_yoy_{loc_id}_{year}_{start_mmdd}_{end_mmdd}_{fields}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            results[str(year)] = cached
+            continue
+        try:
+            start_dt = datetime.strptime(f"{year}{start_mmdd}", "%Y%m%d")
+            end_dt   = datetime.strptime(f"{year}{end_mmdd}", "%Y%m%d")
+            if end_dt < start_dt:
+                end_dt = end_dt.replace(year=year + 1)
+            days = max(1, (end_dt - start_dt).days + 1)
+            sd   = start_dt.strftime("%Y%m%d") + "000000"
+            params = {"sd": sd, "cnt": days}
+            params.update(_fields_to_params(fields))
+            data = _wt360_data_get("daily", wt360_id, params)
+            wx   = _wt360_parse_wx(data, wt360_id)
+            results[str(year)] = wx
+            ttl = 3600 * 24 if year < current_year else 3600 * 2
+            cache.set(cache_key, wx, timeout=ttl)
+        except Exception as e:
+            app.logger.error(f"wt360 yoy error year={year}: {e}")
+            results[str(year)] = []
+
+    return jsonify({"success": True, "loc_id": loc_id, "location": loc["name"],
+                    "start_mmdd": start_mmdd, "end_mmdd": end_mmdd, "years": results})
+
+
 @app.route("/api/climatology/<region_name>", methods=["GET"])
 def api_climatology(region_name):
     date_str = request.args.get("date")

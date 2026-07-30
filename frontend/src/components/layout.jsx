@@ -201,10 +201,19 @@ function CommandPalette({ open, onClose }) {
   );
 }
 
+const MenuIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+  </svg>
+);
+
 // ── Topbar ────────────────────────────────────────────────────────────────────
-function Topbar({ title, tweaksOpen, setTweaksOpen, onSearchOpen }) {
+function Topbar({ title, tweaksOpen, setTweaksOpen, onSearchOpen, onMenuOpen }) {
   return (
     <header className="topbar">
+      <button className="mobile-menu-btn" onClick={onMenuOpen} title="Menu">
+        <MenuIcon />
+      </button>
       <div className="topbar-crumb">
         <span>Ark Foods</span>
         <span className="sep">/</span>
@@ -309,6 +318,7 @@ function Layout({ children }) {
   });
   const [tweaksOpen, setTweaksOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const setTweak = (k, v) => {
     const next = { ...tweaks, [k]: v };
@@ -328,6 +338,9 @@ function Layout({ children }) {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
+  // Close mobile nav on route change
+  useEffect(() => { setMobileNavOpen(false); }, [location.pathname]);
+
   const title = PAGE_TITLES[location.pathname] || 'Dashboard';
 
   if (!isAuthenticated) {
@@ -346,9 +359,10 @@ function Layout({ children }) {
       data-accent={tweaks.accent}
       data-sidebar={tweaks.nav === 'collapsed' ? 'collapsed' : 'expanded'}
     >
-      <Sidebar />
+      <div className={`mobile-overlay ${mobileNavOpen ? 'visible' : ''}`} onClick={() => setMobileNavOpen(false)} />
+      <Sidebar mobileOpen={mobileNavOpen} onMobileClose={() => setMobileNavOpen(false)} />
       <div className="main">
-        <Topbar title={title} tweaksOpen={tweaksOpen} setTweaksOpen={setTweaksOpen} onSearchOpen={() => setSearchOpen(true)} />
+        <Topbar title={title} tweaksOpen={tweaksOpen} setTweaksOpen={setTweaksOpen} onSearchOpen={() => setSearchOpen(true)} onMenuOpen={() => setMobileNavOpen(true)} />
         <div className="content">
           {children}
         </div>

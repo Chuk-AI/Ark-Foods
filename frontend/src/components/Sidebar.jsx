@@ -20,7 +20,7 @@ const Icon = {
   Forecast: (p) => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M2 12h2"/><path d="M20 12h2"/><path d="M12 2v2"/><path d="M12 20v2"/><circle cx="12" cy="12" r="4"/><path d="M4.93 4.93l1.41 1.41"/><path d="M17.66 17.66l1.41 1.41"/><path d="M17.66 6.34l1.41-1.41"/><path d="M4.93 19.07l1.41-1.41"/></svg>,
 };
 
-function Sidebar({ unreadAlerts = 0 }) {
+function Sidebar({ unreadAlerts = 0, mobileOpen = false, onMobileClose }) {
   const { isAuthenticated, userRole, logout } = useContext(UserContext);
   const location = useLocation();
   const navigate = useNavigate();
@@ -39,16 +39,25 @@ function Sidebar({ unreadAlerts = 0 }) {
   const initials = (userRole || 'U').slice(0, 2).toUpperCase();
 
   return (
-    <aside className="sb">
+    <aside className={`sb${mobileOpen ? ' mobile-open' : ''}`}>
       <div className="sb-brand">
         <div className="sb-logo">AF</div>
         <div>
           <div className="sb-brand-name">Ark Foods</div>
           <div className="sb-brand-sub">Markets workspace</div>
         </div>
+        {onMobileClose && (
+          <button
+            onClick={onMobileClose}
+            style={{ marginLeft: 'auto', width: 28, height: 28, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-3)', cursor: 'pointer', background: 'none', border: 'none', flexShrink: 0 }}
+            title="Close menu"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        )}
       </div>
 
-      <nav className="sb-nav">
+      <nav className="sb-nav" onClick={onMobileClose}>
         <div className="sb-group-label">Workspace</div>
 
         {has([UserRole.SALES, UserRole.OWNER, UserRole.ADMIN]) && (
