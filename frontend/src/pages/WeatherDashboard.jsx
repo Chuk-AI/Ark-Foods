@@ -21,14 +21,21 @@ function SectionTitle({ children, icon }) {
 
 function fTemp(v) { return v != null && !isNaN(Number(v)) ? `${Math.round(Number(v))}°F` : '—'; }
 function fPrcp(v) { return v != null && !isNaN(Number(v)) ? `${Number(v).toFixed(2)}"` : '—'; }
+function fPct(v)  { return v != null && !isNaN(Number(v)) ? `${Math.round(Number(v))}%` : '—'; }
+function fSpd(v)  { return v != null && !isNaN(Number(v)) ? `${Math.round(Number(v))} mph` : '—'; }
 
 // Actual WT360 field names — plain numbers stored as strings in historical, numbers in forecast
 function n(v) { return v == null ? null : (isNaN(Number(v)) ? null : Number(v)); }
-function getHi(d)   { return n(d.maxTemp); }
-function getLo(d)   { return n(d.minTemp); }
-function getAvg(d)  { return n(d.avgTemp); }
-function getPrcp(d) { return n(d.prcp); }
-function getGDD(d)  { return n(d.gdd); }
+function getHi(d)    { return n(d.maxTemp); }
+function getLo(d)    { return n(d.minTemp); }
+function getAvg(d)   { return n(d.avgTemp); }
+function getPrcp(d)  { return n(d.prcp); }
+function getGDD(d)   { return n(d.gdd); }
+function getHum(d)   { return n(d.rh); }
+function getWSpd(d)  { return n(d.wspd); }
+function getGust(d)  { return n(d.gust); }
+function getUV(d)    { return n(d.uv_index); }
+function getPop(d)   { return n(d.pop); }
 // Forecast uses utc_date_iso; historical uses utcDate
 function getDate(d) { return d.utc_date_iso || d.utcDate || d.date || d.Date || d.week_start || ''; }
 
@@ -71,12 +78,32 @@ function AlertsBanner() {
 
   if (loading || alerts.length === 0) return null;
 
+  function fAlertTime(iso) {
+    if (!iso) return '';
+    try { return new Date(iso).toLocaleString(undefined, { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }); }
+    catch { return iso; }
+  }
+
   return (
-    <div style={{ background: 'linear-gradient(135deg,#fef2f2,#fee2e2)', border: '1px solid #fca5a5', borderRadius: 10, padding: '14px 20px', marginBottom: 28 }}>
-      <div style={{ fontWeight: 700, color: '#991b1b', fontSize: 16, marginBottom: 8 }}>Active Weather Alerts</div>
+    <div style={{ background: 'linear-gradient(135deg,#fef2f2,#fee2e2)', border: '1px solid #fca5a5', borderRadius: 10, padding: '16px 20px', marginBottom: 28 }}>
+      <div style={{ fontWeight: 700, color: '#991b1b', fontSize: 16, marginBottom: 12 }}>Active Weather Alerts</div>
       {alerts.map((a, i) => (
-        <div key={i} style={{ fontSize: 14, color: '#7f1d1d', marginBottom: 4 }}>
-          <strong>{a.location}:</strong> {a.headline || a.description || a.type || JSON.stringify(a)}
+        <div key={i} style={{ background: 'rgba(255,255,255,0.6)', border: '1px solid #fca5a5', borderRadius: 8, padding: '10px 14px', marginBottom: i < alerts.length-1 ? 10 : 0 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 4, marginBottom: 4 }}>
+            <span style={{ fontWeight: 700, fontSize: 14, color: '#7f1d1d' }}>{a.title || 'Weather Alert'}</span>
+            <span style={{ fontSize: 12, color: '#991b1b', fontWeight: 600 }}>{a.location}</span>
+          </div>
+          {(a.start || a.end) && (
+            <div style={{ fontSize: 11, color: '#b91c1c', marginBottom: 5 }}>
+              {a.start && <span>From {fAlertTime(a.start)}</span>}
+              {a.end && <span> until {fAlertTime(a.end)}</span>}
+            </div>
+          )}
+          {a.content && (
+            <div style={{ fontSize: 13, color: '#7f1d1d', lineHeight: 1.5 }}>
+              {a.content.length > 280 ? a.content.slice(0, 280) + '…' : a.content}
+            </div>
+          )}
         </div>
       ))}
     </div>
@@ -108,6 +135,9 @@ function RegionCard({ loc, onSelect, selected }) {
   const avg  = getAvg(today);
   const prcp = getPrcp(today);
   const gdd  = getGDD(today);
+  const hum  = getHum(today);
+  const wspd = getWSpd(today);
+  const pop  = getPop(today);
 
   return (
     <div onClick={() => onSelect(loc)} style={{
@@ -129,7 +159,14 @@ function RegionCard({ loc, onSelect, selected }) {
             {lo   != null && <span style={{ fontSize: 13, color: '#2563eb', fontWeight: 600 }}>Lo {fTemp(lo)}</span>}
             {avg  != null && <span style={{ fontSize: 13, color: '#475569' }}>Avg {fTemp(avg)}</span>}
           </div>
-          {prcp != null && <div style={{ fontSize: 12, color: '#0284c7', marginTop: 4 }}>Precip {fPrcp(prcp)}</div>}
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 4 }}>
+            {prcp != null && <span style={{ fontSize: 12, color: '#0284c7' }}>Precip {fPrcp(prcp)}</span>}
+            {pop  != null && <span style={{ fontSize: 12, color: '#0284c7' }}>PoP {fPct(pop)}</span>}
+          </div>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 2 }}>
+            {hum  != null && <span style={{ fontSize: 12, color: '#0369a1' }}>Humidity {fPct(hum)}</span>}
+            {wspd != null && <span style={{ fontSize: 12, color: '#64748b' }}>Wind {fSpd(wspd)}</span>}
+          </div>
           {gdd  != null && <div style={{ fontSize: 12, color: '#7c3aed', marginTop: 2 }}>GDD {Number(gdd).toFixed(1)}</div>}
           <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>{loc.crops?.join(', ')}</div>
           <TempStrip days={days} />
@@ -198,8 +235,8 @@ function ForecastDetail({ location }) {
         <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 700 }}>
           <thead>
             <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
-              {['Date','High','Low','Pop %','Precip'].map(h => (
-                <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: 13, fontWeight: 600, color: '#64748b' }}>{h}</th>
+              {['Date','High','Low','PoP','Precip','Humidity','Wind','UV'].map(h => (
+                <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: 13, fontWeight: 600, color: '#64748b', whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -209,8 +246,11 @@ function ForecastDetail({ location }) {
                 <td style={{ padding: '9px 12px', fontSize: 13, fontWeight: 600, color: '#1e293b' }}>{formatDateLabel(getDate(d))}</td>
                 <td style={{ padding: '9px 12px', fontSize: 13, color: '#dc2626', fontWeight: 600 }}>{fTemp(getHi(d))}</td>
                 <td style={{ padding: '9px 12px', fontSize: 13, color: '#2563eb', fontWeight: 600 }}>{fTemp(getLo(d))}</td>
-                <td style={{ padding: '9px 12px', fontSize: 13, color: '#475569' }}>{d.pop != null ? `${d.pop}%` : '—'}</td>
+                <td style={{ padding: '9px 12px', fontSize: 13, color: '#475569' }}>{fPct(getPop(d))}</td>
                 <td style={{ padding: '9px 12px', fontSize: 13, color: '#0284c7' }}>{fPrcp(getPrcp(d))}</td>
+                <td style={{ padding: '9px 12px', fontSize: 13, color: '#0369a1' }}>{fPct(getHum(d))}</td>
+                <td style={{ padding: '9px 12px', fontSize: 13, color: '#64748b' }}>{getWSpd(d) != null ? fSpd(getWSpd(d)) : '—'}{getGust(d) != null ? ` (g ${Math.round(getGust(d))})` : ''}</td>
+                <td style={{ padding: '9px 12px', fontSize: 13, color: '#b45309' }}>{getUV(d) != null ? Number(getUV(d)).toFixed(1) : '—'}</td>
               </tr>
             ))}
           </tbody>
