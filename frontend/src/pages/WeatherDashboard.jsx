@@ -247,7 +247,7 @@ function RegionCard({ loc, onSelect, selected }) {
   );
 }
 
-function OverviewTab({ onSelectLocation }) {
+function OverviewTab({ onLocationPrime, onCardClick }) {
   const [regions, setRegions]   = useState([]);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState(null);
@@ -258,7 +258,8 @@ function OverviewTab({ onSelectLocation }) {
       .then(r => {
         const data = r.data.locations || [];
         setRegions(data);
-        if (data.length > 0) { setSelected(data[0].key); onSelectLocation(data[0]); }
+        // Prime the selected location without switching tabs
+        if (data.length > 0) { setSelected(data[0].key); onLocationPrime(data[0]); }
       })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
@@ -271,7 +272,7 @@ function OverviewTab({ onSelectLocation }) {
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: 12 }}>
       {regions.map(loc => (
         <RegionCard key={loc.key} loc={loc} selected={selected === loc.key}
-          onSelect={l => { setSelected(l.key); onSelectLocation(l); }} />
+          onSelect={l => { setSelected(l.key); onCardClick(l); }} />
       ))}
     </div>
   );
@@ -775,9 +776,12 @@ export default function WeatherDashboard() {
           {activeTab === 'overview' && (
             <div>
               <p style={{ fontSize: 13, color: 'var(--text-3)', marginBottom: 16 }}>
-                Today's snapshot for all 14 growing regions. Click a card to load its 14-day forecast in the <strong>14-Day Forecast</strong> tab.
+                Today's snapshot for all 14 growing regions. Click a card to open its 14-day forecast.
               </p>
-              <OverviewTab onSelectLocation={(loc) => { handleSelectLocation(loc); setActiveTab('forecast'); }} />
+              <OverviewTab
+                onLocationPrime={handleSelectLocation}
+                onCardClick={(loc) => { handleSelectLocation(loc); setActiveTab('forecast'); }}
+              />
             </div>
           )}
 
