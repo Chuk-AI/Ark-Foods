@@ -2,16 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import Chart from 'chart.js/auto';
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function Spinner() {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
-      <div style={{ width: 32, height: 32, border: '3px solid var(--border)', borderTop: '3px solid var(--accent)', borderRadius: '50%', animation: 'spin 0.9s linear infinite' }} />
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-    </div>
-  );
-}
+// ─── Field accessors ──────────────────────────────────────────────────────────
 
 function n(v) { return v == null ? null : (isNaN(Number(v)) ? null : Number(v)); }
 function getHi(d)   { return n(d.maxTemp); }
@@ -32,14 +23,24 @@ function fPct(v)   { return v != null ? `${Math.round(Number(v))}%` : '—'; }
 function fSpd(v)   { return v != null ? `${Math.round(Number(v))} mph` : '—'; }
 
 const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const DAY_ABBR   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
-function formatDateLabel(dateStr) {
+function fAlertTime(iso) {
+  if (!iso) return '';
+  try { return new Date(iso).toLocaleString(undefined, { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }); }
+  catch { return iso; }
+}
+
+function formatDateLabel(dateStr, withDay) {
   if (!dateStr) return '';
   const s = String(dateStr);
   const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (isoMatch) {
     const dt = new Date(`${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`);
-    if (!isNaN(dt)) return `${MONTH_ABBR[dt.getUTCMonth()]} ${dt.getUTCDate()}`;
+    if (!isNaN(dt)) {
+      const base = `${MONTH_ABBR[dt.getUTCMonth()]} ${dt.getUTCDate()}`;
+      return withDay ? `${DAY_ABBR[dt.getUTCDay()]}\n${base}` : base;
+    }
   }
   const digits = s.replace(/\D/g, '');
   if (digits.length >= 8) {
@@ -49,16 +50,49 @@ function formatDateLabel(dateStr) {
   return s;
 }
 
-function fAlertTime(iso) {
-  if (!iso) return '';
-  try { return new Date(iso).toLocaleString(undefined, { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }); }
-  catch { return iso; }
-}
-
 function todayStr() {
   const d = new Date();
   return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}000000`;
 }
+
+// ─── Weather icon mapping ─────────────────────────────────────────────────────
+
+const ICON_MAP = {
+  'sunny': '☀️', 'clear': '☀️', 'clear-day': '☀️',
+  'mostly-sunny': '🌤', 'mostly-clear': '🌤',
+  'partly-sunny': '⛅', 'partly-cloudy': '⛅',
+  'mostly-cloudy': '🌥', 'cloudy': '☁️', 'overcast': '☁️',
+  'fog': '🌫', 'haze': '🌫',
+  'drizzle': '🌦', 'light-rain': '🌦', 'sprinkles': '🌦',
+  'rain': '🌧', 'showers': '🌧', 'heavy-rain': '🌧', 'rain-showers': '🌧',
+  'thunderstorm': '⛈', 'thundershowers': '⛈', 'tstorms': '⛈', 't-storms': '⛈', 'thunder': '⛈',
+  'snow': '❄️', 'heavy-snow': '❄️', 'light-snow': '🌨', 'snow-showers': '🌨',
+  'sleet': '🌨', 'freezing-rain': '🌨', 'wintry-mix': '🌨',
+  'windy': '💨', 'breezy': '💨',
+};
+
+function weatherIcon(iconStr) {
+  if (!iconStr) return '🌡';
+  const k = String(iconStr).toLowerCase().replace(/[ _]/g, '-');
+  if (ICON_MAP[k]) return ICON_MAP[k];
+  for (const [key, val] of Object.entries(ICON_MAP)) {
+    if (k.includes(key)) return val;
+  }
+  return '🌡';
+}
+
+// ─── Frost colour coding ──────────────────────────────────────────────────────
+
+function frostColor(tmin) {
+  if (tmin == null) return null;
+  const t = Number(tmin);
+  if (t < 33)  return { bg: '#1e40af', text: '#fff', label: 'Freeze' };
+  if (t < 38)  return { bg: '#0284c7', text: '#fff', label: 'Frost' };
+  if (t < 42)  return { bg: '#bae6fd', text: '#0c4a6e', label: 'Patchy' };
+  return null;
+}
+
+// ─── Shared constants ─────────────────────────────────────────────────────────
 
 const WT360_LOCATION_KEYS = [
   { key: 'el_morro_mx',     label: 'El Morro, MX' },
@@ -79,7 +113,17 @@ const WT360_LOCATION_KEYS = [
 
 const YOY_COLORS = ['#059669','#2563eb','#dc2626','#d97706','#7c3aed'];
 
-// ─── Stat chip ────────────────────────────────────────────────────────────────
+// ─── UI primitives ────────────────────────────────────────────────────────────
+
+function Spinner() {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
+      <div style={{ width: 32, height: 32, border: '3px solid var(--border)', borderTop: '3px solid var(--accent)', borderRadius: '50%', animation: 'wd-spin 0.9s linear infinite' }} />
+      <style>{`@keyframes wd-spin{to{transform:rotate(360deg)}}`}</style>
+    </div>
+  );
+}
+
 function Stat({ label, value, color }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -90,12 +134,14 @@ function Stat({ label, value, color }) {
 }
 
 // ─── Tab bar ─────────────────────────────────────────────────────────────────
+
 const TABS = [
-  { id: 'overview',    label: 'Overview',         icon: '🗺' },
-  { id: 'forecast',   label: '14-Day Forecast',  icon: '📅' },
-  { id: 'longrange',  label: 'Long-Range',       icon: '📈' },
-  { id: 'yoy',        label: 'Year-on-Year',     icon: '📊' },
-  { id: 'gdd',        label: 'GDD Tracker',      icon: '🌱' },
+  { id: 'grid',       label: 'Multi-Farm Grid',   icon: '🗺' },
+  { id: 'frost',      label: 'Frost & Freeze',    icon: '❄️' },
+  { id: 'forecast',   label: '14-Day Detail',     icon: '📅' },
+  { id: 'longrange',  label: 'Long-Range',        icon: '📈' },
+  { id: 'yoy',        label: 'Year-on-Year',      icon: '📊' },
+  { id: 'gdd',        label: 'GDD Tracker',       icon: '🌱' },
   { id: 'conditions', label: 'Growing Conditions', icon: '🌿' },
 ];
 
@@ -103,30 +149,25 @@ function TabBar({ active, onChange }) {
   return (
     <div style={{ display: 'flex', gap: 2, borderBottom: '1px solid var(--border)', marginBottom: 24, overflowX: 'auto', flexShrink: 0 }}>
       {TABS.map(t => (
-        <button
-          key={t.id}
-          onClick={() => onChange(t.id)}
-          style={{
-            padding: '10px 14px', border: 'none', background: 'none', cursor: 'pointer',
-            fontSize: 13, fontWeight: active === t.id ? 600 : 500,
-            color: active === t.id ? 'var(--accent)' : 'var(--text-2)',
-            borderBottom: active === t.id ? '2px solid var(--accent)' : '2px solid transparent',
-            marginBottom: -1, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6,
-            transition: 'color .12s',
-          }}
-        >
-          <span>{t.icon}</span>{t.label}
+        <button key={t.id} onClick={() => onChange(t.id)} style={{
+          padding: '10px 12px', border: 'none', background: 'none', cursor: 'pointer',
+          fontSize: 12, fontWeight: active === t.id ? 700 : 500,
+          color: active === t.id ? 'var(--accent)' : 'var(--text-2)',
+          borderBottom: active === t.id ? '2px solid var(--accent)' : '2px solid transparent',
+          marginBottom: -1, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 5,
+          transition: 'color .12s',
+        }}>
+          <span>{t.icon}</span><span>{t.label}</span>
         </button>
       ))}
     </div>
   );
 }
 
-// ─── 1. Alerts Banner ─────────────────────────────────────────────────────────
+// ─── Alerts Banner ────────────────────────────────────────────────────────────
 
 function AlertsBanner() {
   const [alerts, setAlerts] = useState([]);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     axios.get('/api/wt360/alerts')
@@ -137,35 +178,30 @@ function AlertsBanner() {
         });
         setAlerts(all);
       })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+      .catch(() => {});
   }, []);
 
-  if (loading || alerts.length === 0) return null;
+  if (alerts.length === 0) return null;
 
   return (
-    <div style={{ background: 'var(--down-soft)', border: '1px solid oklch(0.62 0.18 25 / 0.3)', borderRadius: 10, padding: '14px 18px', marginBottom: 20 }}>
-      <div style={{ fontWeight: 700, color: 'var(--down)', fontSize: 13, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span>⚠️</span> Active Weather Alerts ({alerts.length})
+    <div style={{ background: 'var(--down-soft)', border: '1px solid oklch(0.62 0.18 25/0.3)', borderRadius: 10, padding: '12px 16px', marginBottom: 18 }}>
+      <div style={{ fontWeight: 700, color: 'var(--down)', fontSize: 13, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+        ⚠️ Active Alerts ({alerts.length})
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {alerts.map((a, i) => (
-          <div key={i} style={{ background: 'var(--surface)', border: '1px solid oklch(0.62 0.18 25 / 0.2)', borderRadius: 8, padding: '10px 14px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 4, marginBottom: 4 }}>
+          <div key={i} style={{ background: 'var(--surface)', border: '1px solid oklch(0.62 0.18 25/0.15)', borderRadius: 8, padding: '10px 14px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 4, marginBottom: 3 }}>
               <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--down)' }}>{a.title || 'Weather Alert'}</span>
               <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-3)', background: 'var(--surface-2)', padding: '2px 8px', borderRadius: 10 }}>{a.location}</span>
             </div>
             {(a.start || a.end) && (
-              <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 5 }}>
+              <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 4 }}>
                 {a.start && <span>From {fAlertTime(a.start)}</span>}
                 {a.end && <span> until {fAlertTime(a.end)}</span>}
               </div>
             )}
-            {a.content && (
-              <div style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5 }}>
-                {a.content.length > 280 ? a.content.slice(0, 280) + '…' : a.content}
-              </div>
-            )}
+            {a.content && <div style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5 }}>{a.content.length > 280 ? a.content.slice(0,280)+'…' : a.content}</div>}
           </div>
         ))}
       </div>
@@ -173,118 +209,192 @@ function AlertsBanner() {
   );
 }
 
-// ─── 2. Region Cards (Overview tab) ──────────────────────────────────────────
+// ─── 1. Multi-Farm Forecast Grid ──────────────────────────────────────────────
 
-function TempStrip({ days }) {
-  if (!days || days.length === 0) return null;
+function MultiFarmGridTab({ regions, loading, error }) {
+  const [days, setDays] = useState(7);
+
+  if (loading) return <Spinner />;
+  if (error)   return <div style={{ color: 'var(--down)', padding: 16 }}>Error: {error}</div>;
+  if (!regions.length) return <div className="empty"><div className="empty-title">No data</div></div>;
+
+  const maxDays = Math.min(days, Math.max(...regions.map(r => (r.forecast || []).length)));
+
   return (
-    <div style={{ display: 'flex', gap: 3, marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border)' }}>
-      {days.slice(0, 7).map((d, i) => (
-        <div key={i} style={{ flex: 1, textAlign: 'center' }}>
-          <div style={{ fontSize: 9, color: 'var(--text-4)', marginBottom: 2 }}>{formatDateLabel(getDate(d))}</div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--down)' }}>{fTemp(getHi(d))}</div>
-          <div style={{ fontSize: 10, color: 'var(--c2)' }}>{fTemp(getLo(d))}</div>
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+        <div style={{ fontSize: 13, color: 'var(--text-2)' }}>
+          One row per farm — compare weather conditions at a glance.
         </div>
-      ))}
-    </div>
-  );
-}
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+          {[7, 10, 14].map(d => (
+            <button key={d} onClick={() => setDays(d)} className="btn btn-sm" style={{
+              background: days === d ? 'var(--accent)' : 'var(--surface)',
+              color: days === d ? '#fff' : 'var(--text-2)',
+              borderColor: days === d ? 'var(--accent)' : 'var(--border)',
+            }}>{d} days</button>
+          ))}
+        </div>
+      </div>
 
-function RegionCard({ loc, onSelect, selected }) {
-  const days  = loc.forecast || [];
-  const today = days[0] || {};
-  const hi   = getHi(today);
-  const lo   = getLo(today);
-  const prcp = getPrcp(today);
-  const gdd  = getGDD(today);
-  const hum  = getHum(today);
-  const wspd = getWSpd(today);
-  const pop  = getPop(today);
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ borderCollapse: 'separate', borderSpacing: 0, width: '100%', minWidth: 600 }}>
+          <thead>
+            <tr style={{ background: 'var(--surface-2)' }}>
+              <th style={{ padding: '8px 14px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em', borderBottom: '2px solid var(--border)', position: 'sticky', left: 0, background: 'var(--surface-2)', zIndex: 2, minWidth: 130 }}>
+                Location
+              </th>
+              {Array.from({ length: maxDays }, (_, i) => {
+                const sampleForecast = regions[0]?.forecast || [];
+                const d = sampleForecast[i];
+                const dateStr = d ? formatDateLabel(getDate(d), true) : `Day ${i+1}`;
+                const [dayLine, dateLine] = dateStr.includes('\n') ? dateStr.split('\n') : ['', dateStr];
+                return (
+                  <th key={i} style={{ padding: '6px 8px', textAlign: 'center', fontSize: 11, fontWeight: 600, color: 'var(--text-3)', borderBottom: '2px solid var(--border)', minWidth: 64, whiteSpace: 'nowrap' }}>
+                    <div style={{ color: 'var(--accent)', fontWeight: 700 }}>{dayLine}</div>
+                    <div>{dateLine}</div>
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {regions.map((loc, ri) => {
+              const forecast = loc.forecast || [];
+              return (
+                <tr key={loc.key} style={{ background: ri % 2 === 0 ? 'var(--surface)' : 'var(--surface-2)' }}>
+                  <td style={{ padding: '8px 14px', borderBottom: '1px solid var(--border)', position: 'sticky', left: 0, background: ri % 2 === 0 ? 'var(--surface)' : 'var(--surface-2)', zIndex: 1 }}>
+                    <div style={{ fontWeight: 600, fontSize: 12, color: 'var(--text)', whiteSpace: 'nowrap' }}>{loc.name}</div>
+                    <div style={{ fontSize: 10, color: 'var(--text-4)' }}>{loc.state}</div>
+                  </td>
+                  {Array.from({ length: maxDays }, (_, i) => {
+                    const d = forecast[i];
+                    if (!d) return <td key={i} style={{ borderBottom: '1px solid var(--border)', padding: '8px', textAlign: 'center', color: 'var(--text-4)', fontSize: 11 }}>—</td>;
+                    const hi = getHi(d);
+                    const lo = getLo(d);
+                    const pop = getPop(d);
+                    const icon = d.icon || d.wx_icon || d.weather_icon || '';
+                    return (
+                      <td key={i} style={{ padding: '6px 4px', textAlign: 'center', borderBottom: '1px solid var(--border)', verticalAlign: 'middle' }}>
+                        <div style={{ fontSize: 20, lineHeight: 1 }}>{weatherIcon(icon)}</div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: '#dc2626', marginTop: 2 }}>{fTemp(hi)}</div>
+                        <div style={{ fontSize: 10, color: '#2563eb' }}>{fTemp(lo)}</div>
+                        {pop != null && pop > 20 && (
+                          <div style={{ fontSize: 9, color: '#0284c7', marginTop: 1 }}>{fPct(pop)}</div>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
 
-  return (
-    <div
-      onClick={() => onSelect(loc)}
-      className="card"
-      style={{
-        cursor: 'pointer',
-        border: selected ? '2px solid var(--accent)' : '1px solid var(--border)',
-        background: selected ? 'var(--accent-soft)' : 'var(--surface)',
-        transition: 'all .15s',
-        margin: 0,
-      }}
-    >
-      <div style={{ padding: '12px 14px' }}>
-        <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text)', marginBottom: 1 }}>{loc.name}</div>
-        <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 10 }}>{loc.state}, {loc.country}</div>
-
-        {loc.error ? (
-          <div style={{ fontSize: 12, color: 'var(--down)' }}>No data</div>
-        ) : days.length === 0 ? (
-          <div style={{ fontSize: 12, color: 'var(--text-4)' }}>Loading…</div>
-        ) : (
-          <>
-            <div style={{ display: 'flex', gap: 12, marginBottom: 8 }}>
-              {hi != null && <Stat label="High" value={fTemp(hi)} color="var(--down)" />}
-              {lo != null && <Stat label="Low"  value={fTemp(lo)} color="var(--c2)" />}
-              {prcp != null && <Stat label="Precip" value={fPrcp(prcp)} color="var(--c1)" />}
-            </div>
-            <div style={{ display: 'flex', gap: 12, marginBottom: 4 }}>
-              {pop  != null && <Stat label="PoP"      value={fPct(pop)} color="var(--c1)" />}
-              {hum  != null && <Stat label="Humidity" value={fPct(hum)} color="var(--c7)" />}
-              {wspd != null && <Stat label="Wind"     value={fSpd(wspd)} color="var(--text-2)" />}
-            </div>
-            {gdd != null && (
-              <div style={{ fontSize: 11, color: 'var(--c5)', marginTop: 4 }}>GDD {Number(gdd).toFixed(1)}</div>
-            )}
-            {loc.crops && loc.crops.length > 0 && (
-              <div style={{ fontSize: 10, color: 'var(--text-4)', marginTop: 4 }}>{loc.crops.join(', ')}</div>
-            )}
-            <TempStrip days={days} />
-          </>
-        )}
+      {/* Legend */}
+      <div style={{ marginTop: 16, display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 11, color: 'var(--text-3)' }}>
+        <span><span style={{ fontSize: 14 }}>☀️</span> Clear</span>
+        <span><span style={{ fontSize: 14 }}>⛅</span> Partly Cloudy</span>
+        <span><span style={{ fontSize: 14 }}>🌧</span> Rain</span>
+        <span><span style={{ fontSize: 14 }}>⛈</span> Thunderstorms</span>
+        <span><span style={{ fontSize: 14 }}>❄️</span> Snow</span>
+        <span style={{ color: '#0284c7' }}>Blue % = precip chance when &gt;20%</span>
       </div>
     </div>
   );
 }
 
-function OverviewTab({ onLocationPrime, onCardClick }) {
-  const [regions, setRegions]   = useState([]);
-  const [loading, setLoading]   = useState(true);
-  const [error, setError]       = useState(null);
-  const [selected, setSelected] = useState(null);
+// ─── 2. Frost & Freeze Risk ───────────────────────────────────────────────────
 
-  useEffect(() => {
-    axios.get('/api/wt360/forecast_all')
-      .then(r => {
-        const data = r.data.locations || [];
-        setRegions(data);
-        // Prime the selected location without switching tabs
-        if (data.length > 0) { setSelected(data[0].key); onLocationPrime(data[0]); }
-      })
-      .catch(e => setError(e.message))
-      .finally(() => setLoading(false));
-  }, []);
-
+function FrostRiskTab({ regions, loading, error }) {
   if (loading) return <Spinner />;
-  if (error)   return <div style={{ color: 'var(--down)', padding: 16 }}>Error loading regions: {error}</div>;
+  if (error)   return <div style={{ color: 'var(--down)', padding: 16 }}>Error: {error}</div>;
+  if (!regions.length) return <div className="empty"><div className="empty-title">No data</div></div>;
+
+  const hasFrost = regions.some(loc =>
+    (loc.forecast || []).some(d => { const lo = getLo(d); return lo != null && lo < 42; })
+  );
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: 12 }}>
-      {regions.map(loc => (
-        <RegionCard key={loc.key} loc={loc} selected={selected === loc.key}
-          onSelect={l => { setSelected(l.key); onCardClick(l); }} />
-      ))}
+    <div>
+      <p style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 16 }}>
+        Highlights days where minimum temperatures approach or fall below freezing across all farm locations.
+        {!hasFrost && <strong style={{ color: 'var(--up)', marginLeft: 8 }}>✓ No frost risk detected in the next 14 days.</strong>}
+      </p>
+
+      {/* Colour legend */}
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+        {[
+          { bg: '#bae6fd', text: '#0c4a6e', label: '38–42°F  Patchy Frost Possible' },
+          { bg: '#0284c7', text: '#fff',    label: '33–38°F  Frost Possible' },
+          { bg: '#1e40af', text: '#fff',    label: '< 33°F   Freeze Possible' },
+        ].map(c => (
+          <div key={c.label} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+            <div style={{ width: 20, height: 20, background: c.bg, borderRadius: 4, border: '1px solid rgba(0,0,0,.12)' }} />
+            <span style={{ color: 'var(--text-2)' }}>{c.label}</span>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ borderCollapse: 'separate', borderSpacing: 0, width: '100%', minWidth: 600 }}>
+          <thead>
+            <tr style={{ background: 'var(--surface-2)' }}>
+              <th style={{ padding: '8px 14px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em', borderBottom: '2px solid var(--border)', position: 'sticky', left: 0, background: 'var(--surface-2)', zIndex: 2, minWidth: 130 }}>
+                Location
+              </th>
+              {(regions[0]?.forecast || []).map((d, i) => {
+                const dateStr = formatDateLabel(getDate(d), true);
+                const [dayLine, dateLine] = dateStr.includes('\n') ? dateStr.split('\n') : ['', dateStr];
+                return (
+                  <th key={i} style={{ padding: '6px 8px', textAlign: 'center', fontSize: 11, fontWeight: 600, color: 'var(--text-3)', borderBottom: '2px solid var(--border)', minWidth: 52 }}>
+                    <div style={{ color: 'var(--accent)', fontWeight: 700 }}>{dayLine}</div>
+                    <div>{dateLine}</div>
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {regions.map((loc, ri) => {
+              const forecast = loc.forecast || [];
+              const rowHasFrost = forecast.some(d => { const lo = getLo(d); return lo != null && lo < 42; });
+              return (
+                <tr key={loc.key} style={{ background: ri % 2 === 0 ? 'var(--surface)' : 'var(--surface-2)', opacity: rowHasFrost ? 1 : 0.6 }}>
+                  <td style={{ padding: '8px 14px', borderBottom: '1px solid var(--border)', position: 'sticky', left: 0, background: ri % 2 === 0 ? 'var(--surface)' : 'var(--surface-2)', zIndex: 1 }}>
+                    <div style={{ fontWeight: 600, fontSize: 12, color: 'var(--text)', whiteSpace: 'nowrap' }}>{loc.name}</div>
+                    <div style={{ fontSize: 10, color: 'var(--text-4)' }}>{loc.state}</div>
+                  </td>
+                  {forecast.map((d, i) => {
+                    const lo  = getLo(d);
+                    const fc  = frostColor(lo);
+                    return (
+                      <td key={i} style={{ padding: '6px 4px', textAlign: 'center', borderBottom: '1px solid var(--border)', background: fc ? fc.bg : 'transparent', transition: 'background .1s' }}>
+                        <div style={{ fontSize: 11, fontWeight: fc ? 700 : 500, color: fc ? fc.text : 'var(--text-2)' }}>
+                          {fTemp(lo)}
+                        </div>
+                        {fc && <div style={{ fontSize: 9, color: fc.text, opacity: 0.85 }}>{fc.label}</div>}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
 
-// ─── 3. 14-Day Forecast Detail ────────────────────────────────────────────────
+// ─── 3. 14-Day Detail (single location) ──────────────────────────────────────
 
-function ForecastTab({ defaultLocation }) {
-  const [locKey, setLocKey]   = useState(defaultLocation?.key || 'vineland_nj');
-  const [data, setData]       = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState(null);
+function ForecastDetailTab({ defaultLocation }) {
+  const [locKey,   setLocKey]   = useState(defaultLocation?.key || 'vineland_nj');
+  const [data,     setData]     = useState(null);
+  const [loading,  setLoading]  = useState(false);
+  const [error,    setError]    = useState(null);
 
   const fetchForecast = useCallback((key) => {
     setLoading(true); setError(null);
@@ -297,18 +407,16 @@ function ForecastTab({ defaultLocation }) {
   useEffect(() => { fetchForecast(locKey); }, [locKey]);
 
   const days = data?.forecast || [];
-  const loc  = WT360_LOCATION_KEYS.find(l => l.key === locKey);
 
   return (
     <div>
-      <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 20, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', marginBottom: 20, flexWrap: 'wrap' }}>
         <div>
           <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-3)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Location</label>
           <select value={locKey} onChange={e => setLocKey(e.target.value)} className="form-select" style={{ width: 200 }}>
             {WT360_LOCATION_KEYS.map(l => <option key={l.key} value={l.key}>{l.label}</option>)}
           </select>
         </div>
-        {loc && <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text)', paddingTop: 20 }}>{loc.label} — 14-Day Forecast</div>}
       </div>
 
       {loading ? <Spinner /> : error ? (
@@ -318,24 +426,29 @@ function ForecastTab({ defaultLocation }) {
           <table className="data-table" style={{ minWidth: 700 }}>
             <thead>
               <tr>
-                {['Date','High','Low','PoP','Precip','Humidity','Wind','UV'].map(h => (
-                  <th key={h}>{h}</th>
-                ))}
+                {['Day','Date','Icon','High','Low','PoP','Precip','Humidity','Wind','UV'].map(h => <th key={h}>{h}</th>)}
               </tr>
             </thead>
             <tbody>
-              {days.map((d, i) => (
-                <tr key={i}>
-                  <td style={{ fontWeight: 600, color: 'var(--text)' }}>{formatDateLabel(getDate(d))}</td>
-                  <td style={{ color: 'var(--down)', fontWeight: 600 }}>{fTemp(getHi(d))}</td>
-                  <td style={{ color: 'var(--c2)', fontWeight: 600 }}>{fTemp(getLo(d))}</td>
-                  <td>{fPct(getPop(d))}</td>
-                  <td style={{ color: 'var(--c1)' }}>{fPrcp(getPrcp(d))}</td>
-                  <td style={{ color: 'var(--c7)' }}>{fPct(getHum(d))}</td>
-                  <td>{getWSpd(d) != null ? fSpd(getWSpd(d)) : '—'}{getGust(d) != null ? ` (g ${Math.round(getGust(d))})` : ''}</td>
-                  <td style={{ color: 'var(--warn)' }}>{getUV(d) != null ? Number(getUV(d)).toFixed(1) : '—'}</td>
-                </tr>
-              ))}
+              {days.map((d, i) => {
+                const dateStr = formatDateLabel(getDate(d), true);
+                const [dayLine, dateLine] = dateStr.includes('\n') ? dateStr.split('\n') : ['', dateStr];
+                const icon = d.icon || d.wx_icon || '';
+                return (
+                  <tr key={i}>
+                    <td style={{ color: 'var(--accent)', fontWeight: 700 }}>{dayLine}</td>
+                    <td style={{ fontWeight: 600, color: 'var(--text)' }}>{dateLine}</td>
+                    <td style={{ fontSize: 18, textAlign: 'center' }}>{weatherIcon(icon)}</td>
+                    <td style={{ color: '#dc2626', fontWeight: 700 }}>{fTemp(getHi(d))}</td>
+                    <td style={{ color: '#2563eb', fontWeight: 700 }}>{fTemp(getLo(d))}</td>
+                    <td>{fPct(getPop(d))}</td>
+                    <td style={{ color: 'var(--c1)' }}>{fPrcp(getPrcp(d))}</td>
+                    <td style={{ color: 'var(--c7)' }}>{fPct(getHum(d))}</td>
+                    <td>{getWSpd(d) != null ? fSpd(getWSpd(d)) : '—'}{getGust(d) != null ? ` (g ${Math.round(getGust(d))})` : ''}</td>
+                    <td style={{ color: 'var(--warn)' }}>{getUV(d) != null ? Number(getUV(d)).toFixed(1) : '—'}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -347,19 +460,17 @@ function ForecastTab({ defaultLocation }) {
 // ─── 4. Long-Range Outlook ────────────────────────────────────────────────────
 
 function LongRangeTab() {
-  const [locKey, setLocKey] = useState('vineland_nj');
-  const [weeks, setWeeks]   = useState(12);
-  const [data, setData]     = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError]   = useState(null);
+  const [locKey,   setLocKey]   = useState('vineland_nj');
+  const [weeks,    setWeeks]    = useState(12);
+  const [data,     setData]     = useState(null);
+  const [loading,  setLoading]  = useState(false);
+  const [error,    setError]    = useState(null);
   const chartRef  = useRef(null);
   const chartInst = useRef(null);
 
   const fetchData = useCallback(() => {
     setLoading(true); setError(null);
-    axios.get('/api/wt360/longrange', {
-      params: { loc_id: locKey, start_date: todayStr(), weeks, fields: 'avgTemp,maxTemp,minTemp,prcp' }
-    })
+    axios.get('/api/wt360/longrange', { params: { loc_id: locKey, start_date: todayStr(), weeks, fields: 'avgTemp,maxTemp,minTemp,prcp' } })
       .then(r => setData(r.data))
       .catch(e => setError(e.response?.data?.error || e.message))
       .finally(() => setLoading(false));
@@ -371,25 +482,16 @@ function LongRangeTab() {
     if (!data || !chartRef.current) return;
     const wdata = data.weekly_data || [];
     if (wdata.length === 0) return;
-
     const labels   = wdata.map((w, i) => { const d = getDate(w); return d ? formatDateLabel(d) : `Wk ${i+1}`; });
-    const avgTemps = wdata.map(w => getAvg(w));
-    const maxTemps = wdata.map(w => getHi(w));
-    const minTemps = wdata.map(w => getLo(w));
-    const prcps    = wdata.map(w => getPrcp(w));
-
     if (chartInst.current) chartInst.current.destroy();
     chartInst.current = new Chart(chartRef.current.getContext('2d'), {
       type: 'bar',
-      data: {
-        labels,
-        datasets: [
-          { type: 'line', label: 'Avg Temp (°F)', data: avgTemps, borderColor: '#059669', backgroundColor: 'rgba(5,150,105,.1)', tension: .3, yAxisID: 'y', pointRadius: 3 },
-          { type: 'line', label: 'High (°F)',     data: maxTemps, borderColor: '#dc2626', borderDash: [4,3], backgroundColor: 'transparent', tension: .3, yAxisID: 'y', pointRadius: 2 },
-          { type: 'line', label: 'Low (°F)',      data: minTemps, borderColor: '#2563eb', borderDash: [4,3], backgroundColor: 'transparent', tension: .3, yAxisID: 'y', pointRadius: 2 },
-          { type: 'bar',  label: 'Precip (in)',   data: prcps,    backgroundColor: 'rgba(14,165,233,.35)', yAxisID: 'y2' },
-        ]
-      },
+      data: { labels, datasets: [
+        { type: 'line', label: 'Avg Temp (°F)', data: wdata.map(w => getAvg(w)), borderColor: '#059669', backgroundColor: 'rgba(5,150,105,.1)', tension: .3, yAxisID: 'y', pointRadius: 3 },
+        { type: 'line', label: 'High (°F)',     data: wdata.map(w => getHi(w)),  borderColor: '#dc2626', borderDash: [4,3], backgroundColor: 'transparent', tension: .3, yAxisID: 'y', pointRadius: 2 },
+        { type: 'line', label: 'Low (°F)',      data: wdata.map(w => getLo(w)),  borderColor: '#2563eb', borderDash: [4,3], backgroundColor: 'transparent', tension: .3, yAxisID: 'y', pointRadius: 2 },
+        { type: 'bar',  label: 'Precip (in)',   data: wdata.map(w => getPrcp(w)), backgroundColor: 'rgba(14,165,233,.35)', yAxisID: 'y2' },
+      ]},
       options: {
         responsive: true, maintainAspectRatio: false,
         interaction: { mode: 'index', intersect: false },
@@ -417,14 +519,10 @@ function LongRangeTab() {
           <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-3)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Horizon: {weeks} weeks</label>
           <input type="range" min={2} max={52} value={weeks} onChange={e => setWeeks(Number(e.target.value))} style={{ width: 160, accentColor: 'var(--accent)' }} />
         </div>
-        <button onClick={fetchData} className="btn btn-primary" disabled={loading}>
-          {loading ? 'Loading…' : 'Update Chart'}
-        </button>
+        <button onClick={fetchData} className="btn btn-primary" disabled={loading}>{loading ? 'Loading…' : 'Update Chart'}</button>
       </div>
       {error && <div style={{ color: 'var(--down)', marginBottom: 12, fontSize: 13 }}>Error: {error}</div>}
-      <div style={{ position: 'relative', height: 380 }}>
-        {loading ? <Spinner /> : <canvas ref={chartRef} />}
-      </div>
+      <div style={{ position: 'relative', height: 380 }}>{loading ? <Spinner /> : <canvas ref={chartRef} />}</div>
     </div>
   );
 }
@@ -432,10 +530,18 @@ function LongRangeTab() {
 // ─── 5. Year-on-Year Analysis ─────────────────────────────────────────────────
 
 const MONTH_OPTS = [
-  { val: '01', label: 'January' }, { val: '02', label: 'February' }, { val: '03', label: 'March' },
-  { val: '04', label: 'April'   }, { val: '05', label: 'May'      }, { val: '06', label: 'June'  },
-  { val: '07', label: 'July'    }, { val: '08', label: 'August'   }, { val: '09', label: 'September' },
-  { val: '10', label: 'October' }, { val: '11', label: 'November' }, { val: '12', label: 'December'  },
+  { val: '01', label: 'January' },  { val: '02', label: 'February' }, { val: '03', label: 'March' },
+  { val: '04', label: 'April' },    { val: '05', label: 'May' },      { val: '06', label: 'June' },
+  { val: '07', label: 'July' },     { val: '08', label: 'August' },   { val: '09', label: 'September' },
+  { val: '10', label: 'October' },  { val: '11', label: 'November' }, { val: '12', label: 'December' },
+];
+
+const YOY_METRICS = [
+  { val: 'avgTemp', label: 'Avg Temp',  accessor: getAvg,  fmt: fTemp },
+  { val: 'maxTemp', label: 'High Temp', accessor: getHi,   fmt: fTemp },
+  { val: 'minTemp', label: 'Low Temp',  accessor: getLo,   fmt: fTemp },
+  { val: 'prcp',    label: 'Precip',    accessor: getPrcp, fmt: fPrcp },
+  { val: 'gdd',     label: 'GDD',       accessor: getGDD,  fmt: v => v != null ? Number(v).toFixed(1) : '—' },
 ];
 
 function YoYTab() {
@@ -450,62 +556,44 @@ function YoYTab() {
   const chartRef  = useRef(null);
   const chartInst = useRef(null);
 
-  const METRICS = [
-    { val: 'avgTemp', label: 'Avg Temp',   color: '#059669' },
-    { val: 'maxTemp', label: 'High Temp',  color: '#dc2626' },
-    { val: 'minTemp', label: 'Low Temp',   color: '#2563eb' },
-    { val: 'prcp',    label: 'Precip',     color: '#0ea5e9' },
-    { val: 'gdd',     label: 'GDD',        color: '#7c3aed' },
-  ];
-
   const fetchData = useCallback(() => {
     setLoading(true); setError(null);
-    const startMmdd = `${startMM}01`;
-    const endDay   = new Date(2000, parseInt(endMM), 0).getDate();
-    const endMmdd  = `${endMM}${endDay}`;
+    const endDay  = new Date(2000, parseInt(endMM), 0).getDate();
     axios.get('/api/wt360/yoy', {
-      params: { loc_id: locKey, start_mmdd: startMmdd, end_mmdd: endMmdd, years: numYears, fields: 'avgTemp,maxTemp,minTemp,prcp,gdd' }
+      params: { loc_id: locKey, start_mmdd: `${startMM}01`, end_mmdd: `${endMM}${endDay}`, years: numYears, fields: 'avgTemp,maxTemp,minTemp,prcp,gdd' }
     })
       .then(r => setData(r.data))
       .catch(e => setError(e.response?.data?.error || e.message))
       .finally(() => setLoading(false));
   }, [locKey, startMM, endMM, numYears]);
 
+  const metricDef = YOY_METRICS.find(m => m.val === metric) || YOY_METRICS[0];
+
   useEffect(() => {
     if (!data || !chartRef.current) return;
     const yearsData = data.years || {};
     const years = Object.keys(yearsData).sort().reverse();
-    if (years.length === 0) return;
-
-    const accessors = { avgTemp: getAvg, maxTemp: getHi, minTemp: getLo, prcp: getPrcp, gdd: getGDD };
-    const accessor = accessors[metric] || getAvg;
-
-    const datasets = years.map((yr, i) => {
-      const wx = yearsData[yr] || [];
-      return {
-        label: yr,
-        data: wx.map(d => accessor(d)),
-        borderColor: YOY_COLORS[i % YOY_COLORS.length],
-        backgroundColor: 'transparent',
-        tension: 0.3, pointRadius: 0, pointHoverRadius: 3,
-        borderWidth: i === 0 ? 2.5 : 1.5,
-      };
-    });
-
+    if (!years.length) return;
+    const datasets = years.map((yr, i) => ({
+      label: yr,
+      data: (yearsData[yr] || []).map(d => metricDef.accessor(d)),
+      borderColor: YOY_COLORS[i % YOY_COLORS.length],
+      backgroundColor: 'transparent',
+      tension: 0.3, pointRadius: 0, pointHoverRadius: 3,
+      borderWidth: i === 0 ? 2.5 : 1.5,
+    }));
     const maxLen = Math.max(...years.map(yr => (yearsData[yr] || []).length));
-    const labels = Array.from({ length: maxLen }, (_, i) => `Day ${i + 1}`);
-
     if (chartInst.current) chartInst.current.destroy();
     chartInst.current = new Chart(chartRef.current.getContext('2d'), {
       type: 'line',
-      data: { labels, datasets },
+      data: { labels: Array.from({ length: maxLen }, (_, i) => `Day ${i+1}`), datasets },
       options: {
         responsive: true, maintainAspectRatio: false,
         interaction: { mode: 'index', intersect: false },
         plugins: { legend: { position: 'top' } },
         scales: {
           x: { ticks: { maxTicksLimit: 12, maxRotation: 0 } },
-          y: { title: { display: true, text: METRICS.find(m => m.val === metric)?.label || '' } },
+          y: { title: { display: true, text: metricDef.label } },
         }
       }
     });
@@ -518,7 +606,6 @@ function YoYTab() {
       <p style={{ fontSize: 13, color: 'var(--text-3)', marginBottom: 20 }}>
         Compare the same date range across multiple years to identify seasonal patterns, warming trends, and anomalies.
       </p>
-
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20, alignItems: 'flex-end' }}>
         <div>
           <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-3)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Location</label>
@@ -544,79 +631,65 @@ function YoYTab() {
             {[2,3,4,5].map(v => <option key={v} value={v}>{v} years</option>)}
           </select>
         </div>
-        <button onClick={fetchData} className="btn btn-primary" disabled={loading}>
-          {loading ? 'Loading…' : 'Compare Years'}
-        </button>
+        <button onClick={fetchData} className="btn btn-primary" disabled={loading}>{loading ? 'Loading…' : 'Compare Years'}</button>
       </div>
 
       {data && !loading && (
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
-          {METRICS.map(m => (
-            <button
-              key={m.val}
-              onClick={() => setMetric(m.val)}
-              className="btn btn-sm"
-              style={{
-                background: metric === m.val ? m.color : 'var(--surface)',
-                color: metric === m.val ? 'white' : 'var(--text-2)',
-                borderColor: metric === m.val ? m.color : 'var(--border)',
-              }}
-            >
-              {m.label}
-            </button>
+          {YOY_METRICS.map((m, mi) => (
+            <button key={m.val} onClick={() => setMetric(m.val)} className="btn btn-sm" style={{
+              background: metric === m.val ? YOY_COLORS[mi] : 'var(--surface)',
+              color: metric === m.val ? 'white' : 'var(--text-2)',
+              borderColor: metric === m.val ? YOY_COLORS[mi] : 'var(--border)',
+            }}>{m.label}</button>
           ))}
         </div>
       )}
 
       {error && <div style={{ color: 'var(--down)', marginBottom: 12, fontSize: 13 }}>Error: {error}</div>}
-
       {!data && !loading && !error && (
         <div className="empty">
-          <div className="empty-title">No data yet</div>
-          <div className="empty-sub">Select filters above and click Compare Years to load historical data.</div>
+          <div className="empty-title">Select filters and click Compare Years</div>
         </div>
       )}
-
       {(data || loading) && (
-        <div style={{ position: 'relative', height: 400 }}>
-          {loading ? <Spinner /> : <canvas ref={chartRef} />}
-        </div>
+        <div style={{ position: 'relative', height: 380 }}>{loading ? <Spinner /> : <canvas ref={chartRef} />}</div>
       )}
 
-      {data && !loading && (
-        <div style={{ marginTop: 20 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Year Summary</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 8 }}>
-            {Object.entries(data.years || {}).sort((a,b) => b[0]-a[0]).map(([yr, wx], i) => {
-              if (!wx || wx.length === 0) return null;
-              const accessors = { avgTemp: getAvg, maxTemp: getHi, minTemp: getLo, prcp: getPrcp, gdd: getGDD };
-              const accessor  = accessors[metric] || getAvg;
-              const vals = wx.map(accessor).filter(v => v != null);
-              if (vals.length === 0) return null;
-              const avg  = vals.reduce((a,b) => a+b, 0) / vals.length;
-              const max  = Math.max(...vals);
-              const min  = Math.min(...vals);
-              const sum  = vals.reduce((a,b) => a+b, 0);
-              const showSum = metric === 'prcp' || metric === 'gdd';
-              return (
-                <div key={yr} style={{ background: 'var(--surface-2)', border: `1px solid ${YOY_COLORS[i % YOY_COLORS.length]}40`, borderRadius: 8, padding: '10px 14px' }}>
-                  <div style={{ fontWeight: 700, fontSize: 14, color: YOY_COLORS[i % YOY_COLORS.length], marginBottom: 6 }}>{yr}</div>
-                  {showSum ? (
-                    <Stat label="Total" value={metric === 'prcp' ? fPrcp(sum) : sum.toFixed(1)} />
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      <Stat label="Avg" value={fTemp(avg)} />
-                      <Stat label="Peak" value={fTemp(max)} color="var(--down)" />
-                      <Stat label="Low"  value={fTemp(min)} color="var(--c2)" />
-                    </div>
-                  )}
-                  <div style={{ fontSize: 10, color: 'var(--text-4)', marginTop: 4 }}>{vals.length} days</div>
-                </div>
-              );
-            })}
+      {data && !loading && (() => {
+        const yearsData = data.years || {};
+        const years = Object.keys(yearsData).sort().reverse();
+        const isTotal = metric === 'prcp' || metric === 'gdd';
+        return (
+          <div style={{ marginTop: 20 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Year Summary — {metricDef.label}</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 8 }}>
+              {years.map((yr, i) => {
+                const wx = yearsData[yr] || [];
+                const vals = wx.map(metricDef.accessor).filter(v => v != null);
+                if (!vals.length) return null;
+                const avg = vals.reduce((a,b) => a+b, 0) / vals.length;
+                const sum = vals.reduce((a,b) => a+b, 0);
+                return (
+                  <div key={yr} style={{ background: 'var(--surface-2)', border: `1px solid ${YOY_COLORS[i%YOY_COLORS.length]}40`, borderRadius: 8, padding: '10px 14px' }}>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: YOY_COLORS[i%YOY_COLORS.length], marginBottom: 6 }}>{yr}</div>
+                    {isTotal ? (
+                      <Stat label="Total" value={metricDef.fmt(sum)} />
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <Stat label="Avg" value={metricDef.fmt(avg)} />
+                        <Stat label="Peak" value={metricDef.fmt(Math.max(...vals))} color="var(--down)" />
+                        <Stat label="Low"  value={metricDef.fmt(Math.min(...vals))} color="var(--c2)" />
+                      </div>
+                    )}
+                    <div style={{ fontSize: 10, color: 'var(--text-4)', marginTop: 4 }}>{vals.length} days</div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
@@ -624,13 +697,11 @@ function YoYTab() {
 // ─── 6. GDD Tracker ───────────────────────────────────────────────────────────
 
 function GDDTab() {
-  const [locKey, setLocKey]       = useState('vineland_nj');
-  const [plantDate, setPlantDate] = useState(() => {
-    const d = new Date(); d.setMonth(d.getMonth() - 2); return d.toISOString().slice(0, 10);
-  });
-  const [data, setData]     = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError]   = useState(null);
+  const [locKey,     setLocKey]     = useState('vineland_nj');
+  const [plantDate,  setPlantDate]  = useState(() => { const d = new Date(); d.setMonth(d.getMonth()-2); return d.toISOString().slice(0,10); });
+  const [data,       setData]       = useState(null);
+  const [loading,    setLoading]    = useState(false);
+  const [error,      setError]      = useState(null);
   const chartRef  = useRef(null);
   const chartInst = useRef(null);
 
@@ -639,8 +710,7 @@ function GDDTab() {
     const today = new Date();
     const plant = new Date(plantDate);
     const days  = Math.max(1, Math.round((today - plant) / 86400000));
-    const startDate = plantDate.replace(/-/g, '') + '000000';
-    axios.get('/api/wt360/historical', { params: { loc_id: locKey, start_date: startDate, days, fields: 'gdd' } })
+    axios.get('/api/wt360/historical', { params: { loc_id: locKey, start_date: plantDate.replace(/-/g,'')+'000000', days, fields: 'gdd' } })
       .then(r => setData(r.data))
       .catch(e => setError(e.response?.data?.error || e.message))
       .finally(() => setLoading(false));
@@ -648,21 +718,24 @@ function GDDTab() {
 
   useEffect(() => {
     if (!data || !chartRef.current) return;
-    const days = data.daily_data || [];
-    if (days.length === 0) return;
-
+    const rawDays = data.daily_data || [];
+    if (!rawDays.length) return;
     let cum = 0;
-    const cumGDD = days.map(d => { cum += Number(getGDD(d) ?? 0) || 0; return cum; });
-    const labels = days.map((d, i) => { const dt = getDate(d); return dt ? formatDateLabel(dt) : `Day ${i+1}`; });
-
+    const cumGDD = rawDays.map(d => { cum += Number(getGDD(d) ?? 0) || 0; return cum; });
+    const labels  = rawDays.map((d, i) => { const dt = getDate(d); return dt ? formatDateLabel(dt) : `Day ${i+1}`; });
     if (chartInst.current) chartInst.current.destroy();
     chartInst.current = new Chart(chartRef.current.getContext('2d'), {
       type: 'line',
-      data: { labels, datasets: [{ label: 'Cumulative GDD', data: cumGDD, borderColor: '#7c3aed', backgroundColor: 'rgba(124,58,237,.1)', fill: true, tension: .3, pointRadius: 2 }] },
+      data: { labels, datasets: [{
+        label: 'Cumulative GDD', data: cumGDD,
+        borderColor: '#7c3aed', backgroundColor: 'rgba(124,58,237,.12)',
+        fill: true, tension: .35, pointRadius: 0, pointHoverRadius: 4,
+        borderWidth: 2.5,
+      }]},
       options: {
         responsive: true, maintainAspectRatio: false,
         plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: ctx => `Cumulative GDD: ${ctx.parsed.y.toFixed(1)}` } } },
-        scales: { y: { title: { display: true, text: 'Growing Degree Days (cumulative)' } }, x: { ticks: { maxRotation: 45, maxTicksLimit: 12 } } }
+        scales: { y: { title: { display: true, text: 'Growing Degree Days (cumulative)' }, beginAtZero: true }, x: { ticks: { maxRotation: 45, maxTicksLimit: 12 } } }
       }
     });
   }, [data]);
@@ -685,7 +758,7 @@ function GDDTab() {
           <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-3)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Planting Date</label>
           <input type="date" value={plantDate} onChange={e => setPlantDate(e.target.value)} className="form-control" style={{ width: 160 }} />
         </div>
-        <button onClick={fetchData} className="btn" style={{ background: '#7c3aed', color: 'white', borderColor: '#7c3aed' }} disabled={loading}>
+        <button onClick={fetchData} className="btn" style={{ background: '#7c3aed', color: '#fff', borderColor: '#7c3aed' }} disabled={loading}>
           {loading ? 'Loading…' : 'Track GDD'}
         </button>
         {totalGDD != null && (
@@ -695,14 +768,12 @@ function GDDTab() {
         )}
       </div>
       {error && <div style={{ color: 'var(--down)', marginBottom: 12, fontSize: 13 }}>Error: {error}</div>}
-      <div style={{ position: 'relative', height: 340 }}>
-        {loading ? <Spinner /> : <canvas ref={chartRef} />}
-      </div>
+      <div style={{ position: 'relative', height: 340 }}>{loading ? <Spinner /> : <canvas ref={chartRef} />}</div>
     </div>
   );
 }
 
-// ─── 7. Growing Conditions reference ──────────────────────────────────────────
+// ─── 7. Growing Conditions ────────────────────────────────────────────────────
 
 const GROWING_CONDITIONS = {
   'Jalapeno':      { tempMin: 65, tempMax: 85, humMin: 40, humMax: 70, gddTarget: 1200 },
@@ -720,15 +791,11 @@ const GROWING_CONDITIONS = {
 function ConditionsTab() {
   return (
     <div>
-      <p style={{ fontSize: 13, color: 'var(--text-3)', marginBottom: 20 }}>Optimal growing ranges for Ark Foods pepper varieties. Use with the GDD Tracker to estimate crop readiness.</p>
+      <p style={{ fontSize: 13, color: 'var(--text-3)', marginBottom: 20 }}>Optimal growing ranges for Ark Foods pepper varieties. Use GDD Target with the GDD Tracker to estimate crop readiness.</p>
       <div style={{ overflowX: 'auto' }}>
         <table className="data-table">
           <thead>
-            <tr>
-              {['Variety','Min Temp (°F)','Max Temp (°F)','Min Humidity (%)','Max Humidity (%)','GDD Target'].map(h => (
-                <th key={h}>{h}</th>
-              ))}
-            </tr>
+            <tr>{['Variety','Min Temp (°F)','Max Temp (°F)','Min Humidity (%)','Max Humidity (%)','GDD Target'].map(h => <th key={h}>{h}</th>)}</tr>
           </thead>
           <tbody>
             {Object.entries(GROWING_CONDITIONS).map(([name, c]) => (
@@ -751,11 +818,19 @@ function ConditionsTab() {
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
 export default function WeatherDashboard() {
-  const [activeTab, setActiveTab]         = useState('overview');
+  const [activeTab,        setActiveTab]        = useState('grid');
   const [selectedLocation, setSelectedLocation] = useState(null);
 
-  const handleSelectLocation = useCallback((loc) => {
-    setSelectedLocation(loc);
+  // Shared forecast_all data — used by Multi-Farm Grid and Frost Risk tabs
+  const [regions,  setRegions]  = useState([]);
+  const [regLoad,  setRegLoad]  = useState(true);
+  const [regError, setRegError] = useState(null);
+
+  useEffect(() => {
+    axios.get('/api/wt360/forecast_all')
+      .then(r => setRegions(r.data.locations || []))
+      .catch(e => setRegError(e.message))
+      .finally(() => setRegLoad(false));
   }, []);
 
   return (
@@ -773,20 +848,16 @@ export default function WeatherDashboard() {
         <div className="card-body">
           <TabBar active={activeTab} onChange={setActiveTab} />
 
-          {activeTab === 'overview' && (
-            <div>
-              <p style={{ fontSize: 13, color: 'var(--text-3)', marginBottom: 16 }}>
-                Today's snapshot for all 14 growing regions. Click a card to open its 14-day forecast.
-              </p>
-              <OverviewTab
-                onLocationPrime={handleSelectLocation}
-                onCardClick={(loc) => { handleSelectLocation(loc); setActiveTab('forecast'); }}
-              />
-            </div>
+          {activeTab === 'grid' && (
+            <MultiFarmGridTab regions={regions} loading={regLoad} error={regError} />
+          )}
+
+          {activeTab === 'frost' && (
+            <FrostRiskTab regions={regions} loading={regLoad} error={regError} />
           )}
 
           {activeTab === 'forecast' && (
-            <ForecastTab defaultLocation={selectedLocation} />
+            <ForecastDetailTab defaultLocation={selectedLocation} />
           )}
 
           {activeTab === 'longrange' && <LongRangeTab />}
