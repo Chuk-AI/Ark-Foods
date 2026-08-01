@@ -1,4 +1,4 @@
-import React, { useContext, useState, useEffect, useRef, useCallback } from 'react';
+import React, { useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import Sidebar from './Sidebar';
@@ -208,29 +208,48 @@ const MenuIcon = () => (
 );
 
 // ── Topbar ────────────────────────────────────────────────────────────────────
-function Topbar({ title, tweaksOpen, setTweaksOpen, onSearchOpen, onMenuOpen }) {
+function Topbar({ title, tweaksOpen, setTweaksOpen, onSearchOpen, onMenuOpen, isMobile }) {
   return (
     <header className="topbar">
-      <button className="mobile-menu-btn" onClick={onMenuOpen} title="Menu">
+      {/* Hamburger — always rendered, JS-controlled visibility */}
+      <button
+        onClick={onMenuOpen}
+        title="Menu"
+        style={{
+          display: isMobile ? 'flex' : 'none',
+          width: 36, height: 36, flexShrink: 0,
+          alignItems: 'center', justifyContent: 'center',
+          borderRadius: 6, border: 'none', background: 'none',
+          color: 'var(--text-2)', cursor: 'pointer',
+        }}
+      >
         <MenuIcon />
       </button>
       <div className="topbar-crumb">
-        <span>Ark Foods</span>
-        <span className="sep">/</span>
+        {!isMobile && <span>Ark Foods</span>}
+        {!isMobile && <span className="sep">/</span>}
         <span className="topbar-title">{title}</span>
       </div>
       <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
-        <button className="search" onClick={onSearchOpen} title="Search (⌘K)">
+        {/* Search — full on desktop, icon-only on mobile */}
+        <button
+          onClick={onSearchOpen}
+          title="Search (⌘K)"
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            height: 32, padding: isMobile ? '0 8px' : '0 10px',
+            background: 'var(--surface-2)', border: '1px solid var(--border)',
+            borderRadius: 6, color: 'var(--text-3)',
+            minWidth: isMobile ? 'unset' : 220,
+            fontSize: 12.5, cursor: 'pointer', fontFamily: 'var(--sans)',
+          }}
+        >
           <SearchIcon />
-          <span>Search…</span>
-          <kbd>⌘K</kbd>
+          {!isMobile && <span>Search…</span>}
+          {!isMobile && <kbd style={{ marginLeft: 'auto', fontFamily: 'var(--sans)', fontSize: 10.5, fontWeight: 500, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 4, padding: '1px 5px', color: 'var(--text-3)' }}>⌘K</kbd>}
         </button>
-        <button className="icon-btn" title="Notifications">
-          <BellIcon />
-        </button>
-        <button className="icon-btn" title="Tweaks" onClick={() => setTweaksOpen(o => !o)}>
-          <SparkleIcon />
-        </button>
+        <button className="icon-btn" title="Notifications"><BellIcon /></button>
+        <button className="icon-btn" title="Tweaks" onClick={() => setTweaksOpen(o => !o)}><SparkleIcon /></button>
       </div>
     </header>
   );
@@ -312,13 +331,21 @@ function Layout({ children }) {
   const { isAuthenticated } = useContext(UserContext);
   const location = useLocation();
 
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 900);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 900px)');
+    const handler = (e) => { setIsMobile(e.matches); if (!e.matches) setMobileNavOpen(false); };
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
   const [tweaks, setTweaks] = useState(() => {
     try { return JSON.parse(localStorage.getItem('ark_tweaks')) || { theme: 'light', density: 'comfortable', accent: 'teal', nav: 'sidebar' }; }
     catch { return { theme: 'light', density: 'comfortable', accent: 'teal', nav: 'sidebar' }; }
   });
   const [tweaksOpen, setTweaksOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const setTweak = (k, v) => {
     const next = { ...tweaks, [k]: v };
@@ -359,10 +386,20 @@ function Layout({ children }) {
       data-accent={tweaks.accent}
       data-sidebar={tweaks.nav === 'collapsed' ? 'collapsed' : 'expanded'}
     >
-      <div className={`mobile-overlay ${mobileNavOpen ? 'visible' : ''}`} onClick={() => setMobileNavOpen(false)} />
+      {/* Overlay — JS-controlled, no CSS dependency */}
+      <div
+        onClick={() => setMobileNavOpen(false)}
+        style={{
+          display: isMobile ? 'block' : 'none',
+          position: 'fixed', inset: 0, zIndex: 299,
+          background: mobileNavOpen ? 'rgba(0,0,0,0.45)' : 'rgba(0,0,0,0)',
+          pointerEvents: mobileNavOpen ? 'all' : 'none',
+          transition: 'background 0.25s ease',
+        }}
+      />
       <Sidebar mobileOpen={mobileNavOpen} onMobileClose={() => setMobileNavOpen(false)} />
       <div className="main">
-        <Topbar title={title} tweaksOpen={tweaksOpen} setTweaksOpen={setTweaksOpen} onSearchOpen={() => setSearchOpen(true)} onMenuOpen={() => setMobileNavOpen(true)} />
+        <Topbar title={title} tweaksOpen={tweaksOpen} setTweaksOpen={setTweaksOpen} onSearchOpen={() => setSearchOpen(true)} onMenuOpen={() => setMobileNavOpen(true)} isMobile={isMobile} />
         <div className="content">
           {children}
         </div>

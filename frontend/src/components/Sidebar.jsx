@@ -1,8 +1,19 @@
-import React, { useContext } from 'react';
+import React, { useContext, useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { UserContext } from './userContext';
 import { UserRole } from './roles';
 import '../styles/styles.css';
+
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 900);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 900px)');
+    const handler = (e) => setIsMobile(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+  return isMobile;
+}
 
 // SVG icon set matching the design
 const Icon = {
@@ -24,6 +35,7 @@ function Sidebar({ unreadAlerts = 0, mobileOpen = false, onMobileClose }) {
   const { isAuthenticated, userRole, logout } = useContext(UserContext);
   const location = useLocation();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
 
   const isActive = (path) => location.pathname === path;
 
@@ -35,11 +47,23 @@ function Sidebar({ unreadAlerts = 0, mobileOpen = false, onMobileClose }) {
   };
 
   const has = (roles) => roles.includes(userRole);
-
   const initials = (userRole || 'U').slice(0, 2).toUpperCase();
 
+  // On mobile: drawer controlled by JS inline styles (bypasses CSS cache/specificity)
+  const mobileStyle = isMobile ? {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    height: '100vh',
+    width: '240px',
+    zIndex: 300,
+    transform: mobileOpen ? 'translateX(0)' : 'translateX(-100%)',
+    transition: 'transform 0.25s ease, box-shadow 0.25s ease',
+    boxShadow: mobileOpen ? '4px 0 32px rgba(0,0,0,0.28)' : 'none',
+  } : {};
+
   return (
-    <aside className={`sb${mobileOpen ? ' mobile-open' : ''}`}>
+    <aside className="sb" style={mobileStyle}>
       <div className="sb-brand">
         <div className="sb-logo">AF</div>
         <div>
