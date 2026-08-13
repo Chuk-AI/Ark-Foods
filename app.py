@@ -7478,7 +7478,7 @@ def wt360_yoy():
 
         for i in range(num_years):
             year = current_year - i
-            cache_key = f"wt360_yoy_{loc_id}_{year}_{start_mmdd}_{end_mmdd}_{fields}"
+            cache_key = f"wt360_yoy_v2_{loc_id}_{year}_{start_mmdd}_{end_mmdd}_{fields}"
             try:
                 cached = cache.get(cache_key)
                 if cached is not None:
