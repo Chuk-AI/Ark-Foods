@@ -7497,11 +7497,19 @@ def wt360_yoy():
                     results[str(year)] = []
                     continue
 
-                days = max(1, (end_dt - start_dt).days + 1)
-                sd   = start_dt.strftime("%Y%m%d") + "000000"
-                params = {"sd": sd, "cnt": days}
-                params.update(_fields_to_params(fields))
-                data = _wt360_data_get("daily", wt360_id, params)
+                total_days = max(1, (end_dt - start_dt).days + 1)
+                sd = start_dt.strftime("%Y%m%d") + "000000"
+                if total_days > 90:
+                    # WT360 daily API silently returns empty data for large cnt values;
+                    # use weekly endpoint instead for multi-month ranges
+                    weeks = max(1, round(total_days / 7))
+                    params = {"sd": sd, "cnt": weeks}
+                    params.update(_fields_to_params(fields))
+                    data = _wt360_data_get("weekly", wt360_id, params)
+                else:
+                    params = {"sd": sd, "cnt": total_days}
+                    params.update(_fields_to_params(fields))
+                    data = _wt360_data_get("daily", wt360_id, params)
                 wx   = _wt360_parse_wx(data, wt360_id)
                 results[str(year)] = wx
                 ttl = 3600 * 24 if year < current_year else 3600 * 2

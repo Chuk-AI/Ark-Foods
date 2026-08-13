@@ -589,10 +589,16 @@ function YoYTab() {
       borderWidth: i === 0 ? 2.5 : 1.5,
     }));
     const maxLen = Math.max(...years.map(yr => (yearsData[yr] || []).length));
+    const firstYearData = yearsData[years[0]] || [];
+    const labels = Array.from({ length: maxLen }, (_, i) => {
+      const d = firstYearData[i];
+      if (d) { const ds = getDate(d); if (ds) return formatDateLabel(ds); }
+      return maxLen <= 60 ? `Wk ${i+1}` : `Day ${i+1}`;
+    });
     if (chartInst.current) chartInst.current.destroy();
     chartInst.current = new Chart(chartRef.current.getContext('2d'), {
       type: 'line',
-      data: { labels: Array.from({ length: maxLen }, (_, i) => `Day ${i+1}`), datasets },
+      data: { labels, datasets },
       options: {
         responsive: true, maintainAspectRatio: false,
         interaction: { mode: 'index', intersect: false },
