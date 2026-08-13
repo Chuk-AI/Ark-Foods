@@ -7438,7 +7438,7 @@ def wt360_historical():
 def wt360_longrange():
     loc_id     = request.args.get("loc_id", "")
     start_date = request.args.get("start_date", "")
-    weeks      = request.args.get("weeks", 12, type=int)
+    weeks      = min(request.args.get("weeks", 12, type=int), 46)
     fields     = request.args.get("fields", "avgTemp,maxTemp,minTemp,prcp")
 
     if loc_id not in WT360_LOCATIONS:

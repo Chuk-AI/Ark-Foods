@@ -521,7 +521,7 @@ function LongRangeTab() {
         </div>
         <div>
           <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-3)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Horizon: {weeks} weeks</label>
-          <input type="range" min={2} max={52} value={weeks} onChange={e => setWeeks(Number(e.target.value))} style={{ width: 160, accentColor: 'var(--accent)' }} />
+          <input type="range" min={2} max={46} value={weeks} onChange={e => setWeeks(Number(e.target.value))} style={{ width: 160, accentColor: 'var(--accent)' }} />
         </div>
         <button onClick={fetchData} className="btn btn-primary" disabled={loading}>{loading ? 'Loading…' : 'Update Chart'}</button>
       </div>
