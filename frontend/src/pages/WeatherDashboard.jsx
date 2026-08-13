@@ -55,30 +55,62 @@ function todayStr() {
   return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}000000`;
 }
 
-// ─── Weather icon mapping ─────────────────────────────────────────────────────
+// ─── Weather icon + label mapping ─────────────────────────────────────────────
 
-const ICON_MAP = {
-  'sunny': '☀️', 'clear': '☀️', 'clear-day': '☀️',
-  'mostly-sunny': '🌤', 'mostly-clear': '🌤',
-  'partly-sunny': '⛅', 'partly-cloudy': '⛅',
-  'mostly-cloudy': '🌥', 'cloudy': '☁️', 'overcast': '☁️',
-  'fog': '🌫', 'haze': '🌫',
-  'drizzle': '🌦', 'light-rain': '🌦', 'sprinkles': '🌦',
-  'rain': '🌧', 'showers': '🌧', 'heavy-rain': '🌧', 'rain-showers': '🌧',
-  'thunderstorm': '⛈', 'thundershowers': '⛈', 'tstorms': '⛈', 't-storms': '⛈', 'thunder': '⛈',
-  'snow': '❄️', 'heavy-snow': '❄️', 'light-snow': '🌨', 'snow-showers': '🌨',
-  'sleet': '🌨', 'freezing-rain': '🌨', 'wintry-mix': '🌨',
-  'windy': '💨', 'breezy': '💨',
-};
+const ICON_DATA = [
+  { key: 'sunny',          emoji: '☀️',  label: 'Sunny' },
+  { key: 'clear',          emoji: '☀️',  label: 'Clear' },
+  { key: 'clear-day',      emoji: '☀️',  label: 'Clear' },
+  { key: 'mostly-sunny',   emoji: '🌤',  label: 'Mostly Sunny' },
+  { key: 'mostly-clear',   emoji: '🌤',  label: 'Mostly Clear' },
+  { key: 'partly-sunny',   emoji: '⛅',  label: 'Partly Cloudy' },
+  { key: 'partly-cloudy',  emoji: '⛅',  label: 'Partly Cloudy' },
+  { key: 'mostly-cloudy',  emoji: '🌥',  label: 'Mostly Cloudy' },
+  { key: 'cloudy',         emoji: '☁️',  label: 'Cloudy' },
+  { key: 'overcast',       emoji: '☁️',  label: 'Overcast' },
+  { key: 'fog',            emoji: '🌫',  label: 'Foggy' },
+  { key: 'haze',           emoji: '🌫',  label: 'Hazy' },
+  { key: 'drizzle',        emoji: '🌦',  label: 'Drizzle' },
+  { key: 'light-rain',     emoji: '🌦',  label: 'Light Rain' },
+  { key: 'sprinkles',      emoji: '🌦',  label: 'Sprinkles' },
+  { key: 'rain',           emoji: '🌧',  label: 'Rainy' },
+  { key: 'showers',        emoji: '🌧',  label: 'Showers' },
+  { key: 'heavy-rain',     emoji: '🌧',  label: 'Heavy Rain' },
+  { key: 'rain-showers',   emoji: '🌧',  label: 'Rain Showers' },
+  { key: 'thunderstorm',   emoji: '⛈',  label: 'Thunderstorm' },
+  { key: 'thundershowers', emoji: '⛈',  label: 'T-Showers' },
+  { key: 'tstorms',        emoji: '⛈',  label: 'T-Storms' },
+  { key: 't-storms',       emoji: '⛈',  label: 'T-Storms' },
+  { key: 'thunder',        emoji: '⛈',  label: 'Thunder' },
+  { key: 'snow',           emoji: '❄️',  label: 'Snow' },
+  { key: 'heavy-snow',     emoji: '❄️',  label: 'Heavy Snow' },
+  { key: 'light-snow',     emoji: '🌨',  label: 'Light Snow' },
+  { key: 'snow-showers',   emoji: '🌨',  label: 'Snow Showers' },
+  { key: 'sleet',          emoji: '🌨',  label: 'Sleet' },
+  { key: 'freezing-rain',  emoji: '🌨',  label: 'Freezing Rain' },
+  { key: 'wintry-mix',     emoji: '🌨',  label: 'Wintry Mix' },
+  { key: 'windy',          emoji: '💨',  label: 'Windy' },
+  { key: 'breezy',         emoji: '💨',  label: 'Breezy' },
+];
+
+function _resolveIcon(iconStr) {
+  if (!iconStr) return null;
+  const k = String(iconStr).toLowerCase().replace(/[ _]/g, '-');
+  const exact = ICON_DATA.find(d => d.key === k);
+  if (exact) return exact;
+  return ICON_DATA.find(d => k.includes(d.key)) || null;
+}
 
 function weatherIcon(iconStr) {
-  if (!iconStr) return '🌡';
-  const k = String(iconStr).toLowerCase().replace(/[ _]/g, '-');
-  if (ICON_MAP[k]) return ICON_MAP[k];
-  for (const [key, val] of Object.entries(ICON_MAP)) {
-    if (k.includes(key)) return val;
-  }
-  return '🌡';
+  const d = _resolveIcon(iconStr);
+  return d ? d.emoji : '🌡';
+}
+
+function weatherLabel(iconStr) {
+  const d = _resolveIcon(iconStr);
+  if (d) return d.label;
+  if (!iconStr) return '';
+  return String(iconStr).replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
 // ─── Frost colour coding ──────────────────────────────────────────────────────
@@ -136,16 +168,17 @@ function Stat({ label, value, color }) {
 // ─── Tab bar ─────────────────────────────────────────────────────────────────
 
 const TABS = [
-  { id: 'grid',       label: 'Multi-Farm Grid',   icon: '🗺' },
-  { id: 'frost',      label: 'Frost & Freeze',    icon: '❄️' },
-  { id: 'forecast',   label: '14-Day Detail',     icon: '📅' },
-  { id: 'longrange',  label: 'Long-Range',        icon: '📈' },
-  { id: 'yoy',        label: 'Year-on-Year',      icon: '📊' },
-  { id: 'gdd',        label: 'GDD Tracker',       icon: '🌱' },
+  { id: 'grid',       label: 'Multi-Farm Grid',    icon: '🗺' },
+  { id: 'frost',      label: 'Frost & Freeze',     icon: '❄️' },
+  { id: 'forecast',   label: '14-Day Detail',      icon: '📅' },
+  { id: 'longrange',  label: 'Long-Range',         icon: '📈' },
+  { id: 'yoy',        label: 'Year-on-Year',       icon: '📊' },
+  { id: 'gdd',        label: 'GDD Tracker',        icon: '🌱' },
   { id: 'conditions', label: 'Growing Conditions', icon: '🌿' },
+  { id: 'alerts',     label: 'Alerts',             icon: '⚠️' },
 ];
 
-function TabBar({ active, onChange }) {
+function TabBar({ active, onChange, alertCount }) {
   return (
     <div style={{ display: 'flex', gap: 2, borderBottom: '1px solid var(--border)', marginBottom: 24, overflowX: 'auto', flexShrink: 0 }}>
       {TABS.map(t => (
@@ -157,54 +190,13 @@ function TabBar({ active, onChange }) {
           marginBottom: -1, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 5,
           transition: 'color .12s',
         }}>
-          <span>{t.icon}</span><span>{t.label}</span>
+          <span>{t.icon}</span>
+          <span>{t.label}</span>
+          {t.id === 'alerts' && alertCount > 0 && (
+            <span style={{ background: 'var(--down)', color: '#fff', borderRadius: 10, fontSize: 10, fontWeight: 700, padding: '1px 6px', minWidth: 18, textAlign: 'center' }}>{alertCount}</span>
+          )}
         </button>
       ))}
-    </div>
-  );
-}
-
-// ─── Alerts Banner ────────────────────────────────────────────────────────────
-
-function AlertsBanner() {
-  const [alerts, setAlerts] = useState([]);
-
-  useEffect(() => {
-    axios.get('/api/wt360/alerts')
-      .then(r => {
-        const all = [];
-        (r.data.alerts || []).forEach(loc => {
-          (loc.alerts || []).forEach(a => all.push({ ...a, location: loc.name }));
-        });
-        setAlerts(all);
-      })
-      .catch(() => {});
-  }, []);
-
-  if (alerts.length === 0) return null;
-
-  return (
-    <div style={{ background: 'var(--down-soft)', border: '1px solid oklch(0.62 0.18 25/0.3)', borderRadius: 10, padding: '12px 16px', marginBottom: 18 }}>
-      <div style={{ fontWeight: 700, color: 'var(--down)', fontSize: 13, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-        ⚠️ Active Alerts ({alerts.length})
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {alerts.map((a, i) => (
-          <div key={i} style={{ background: 'var(--surface)', border: '1px solid oklch(0.62 0.18 25/0.15)', borderRadius: 8, padding: '10px 14px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 4, marginBottom: 3 }}>
-              <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--down)' }}>{a.title || 'Weather Alert'}</span>
-              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-3)', background: 'var(--surface-2)', padding: '2px 8px', borderRadius: 10 }}>{a.location}</span>
-            </div>
-            {(a.start || a.end) && (
-              <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 4 }}>
-                {a.start && <span>From {fAlertTime(a.start)}</span>}
-                {a.end && <span> until {fAlertTime(a.end)}</span>}
-              </div>
-            )}
-            {a.content && <div style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5 }}>{a.content.length > 280 ? a.content.slice(0,280)+'…' : a.content}</div>}
-          </div>
-        ))}
-      </div>
     </div>
   );
 }
@@ -273,10 +265,11 @@ function MultiFarmGridTab({ regions, loading, error }) {
                     const hi = getHi(d);
                     const lo = getLo(d);
                     const pop = getPop(d);
-                    const icon = d.icon || d.wx_icon || d.weather_icon || '';
+                    const iconStr = d.icon || d.wx_icon || d.weather_icon || '';
+                    const lbl = weatherLabel(iconStr);
                     return (
                       <td key={i} style={{ padding: '6px 4px', textAlign: 'center', borderBottom: '1px solid var(--border)', verticalAlign: 'middle' }}>
-                        <div style={{ fontSize: 20, lineHeight: 1 }}>{weatherIcon(icon)}</div>
+                        <div title={lbl} style={{ fontSize: 20, lineHeight: 1, cursor: lbl ? 'default' : undefined }}>{weatherIcon(iconStr)}</div>
                         <div style={{ fontSize: 11, fontWeight: 700, color: '#dc2626', marginTop: 2 }}>{fTemp(hi)}</div>
                         <div style={{ fontSize: 10, color: '#2563eb' }}>{fTemp(lo)}</div>
                         {pop != null && pop > 20 && (
@@ -300,6 +293,7 @@ function MultiFarmGridTab({ regions, loading, error }) {
         <span><span style={{ fontSize: 14 }}>⛈</span> Thunderstorms</span>
         <span><span style={{ fontSize: 14 }}>❄️</span> Snow</span>
         <span style={{ color: '#0284c7' }}>Blue % = precip chance when &gt;20%</span>
+        <span style={{ fontStyle: 'italic' }}>Hover icons for weather description</span>
       </div>
     </div>
   );
@@ -423,22 +417,28 @@ function ForecastDetailTab({ defaultLocation }) {
         <div style={{ color: 'var(--down)', padding: 16 }}>Error: {error}</div>
       ) : (
         <div style={{ overflowX: 'auto' }}>
-          <table className="data-table" style={{ minWidth: 700 }}>
+          <table className="data-table" style={{ minWidth: 760 }}>
             <thead>
               <tr>
-                {['Day','Date','Icon','High','Low','PoP','Precip','Humidity','Wind','UV'].map(h => <th key={h}>{h}</th>)}
+                {['Day','Date','Conditions','High','Low','PoP','Precip','Humidity','Wind','UV'].map(h => <th key={h}>{h}</th>)}
               </tr>
             </thead>
             <tbody>
               {days.map((d, i) => {
                 const dateStr = formatDateLabel(getDate(d), true);
                 const [dayLine, dateLine] = dateStr.includes('\n') ? dateStr.split('\n') : ['', dateStr];
-                const icon = d.icon || d.wx_icon || '';
+                const iconStr = d.icon || d.wx_icon || '';
+                const lbl = weatherLabel(iconStr);
                 return (
                   <tr key={i}>
                     <td style={{ color: 'var(--accent)', fontWeight: 700 }}>{dayLine}</td>
                     <td style={{ fontWeight: 600, color: 'var(--text)' }}>{dateLine}</td>
-                    <td style={{ fontSize: 18, textAlign: 'center' }}>{weatherIcon(icon)}</td>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span title={lbl} style={{ fontSize: 18 }}>{weatherIcon(iconStr)}</span>
+                        {lbl && <span style={{ fontSize: 12, color: 'var(--text-2)', whiteSpace: 'nowrap' }}>{lbl}</span>}
+                      </div>
+                    </td>
                     <td style={{ color: '#dc2626', fontWeight: 700 }}>{fTemp(getHi(d))}</td>
                     <td style={{ color: '#2563eb', fontWeight: 700 }}>{fTemp(getLo(d))}</td>
                     <td>{fPct(getPop(d))}</td>
@@ -480,7 +480,7 @@ function LongRangeTab() {
 
   useEffect(() => {
     if (!data || !chartRef.current) return;
-    const wdata = data.weekly_data || [];
+    const wdata = (data.weekly_data || []).filter(w => getAvg(w) != null || getHi(w) != null || getLo(w) != null);
     if (wdata.length === 0) return;
     const labels   = wdata.map((w, i) => { const d = getDate(w); return d ? formatDateLabel(d) : `Wk ${i+1}`; });
     if (chartInst.current) chartInst.current.destroy();
@@ -499,6 +499,7 @@ function LongRangeTab() {
         scales: {
           y:  { title: { display: true, text: 'Temperature (°F)' }, position: 'left' },
           y2: { title: { display: true, text: 'Precip (in)' }, position: 'right', grid: { drawOnChartArea: false }, beginAtZero: true },
+          x:  { ticks: { maxRotation: 45, maxTicksLimit: 16 } },
         }
       }
     });
@@ -508,6 +509,9 @@ function LongRangeTab() {
 
   return (
     <div>
+      <p style={{ fontSize: 13, color: 'var(--text-3)', marginBottom: 16 }}>
+        Weekly temperature and precipitation outlook. Only weeks with valid forecast data are shown — weeks beyond the forecast horizon are automatically excluded.
+      </p>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20, alignItems: 'flex-end' }}>
         <div>
           <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-3)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Location</label>
@@ -566,6 +570,8 @@ function YoYTab() {
       .catch(e => setError(e.response?.data?.error || e.message))
       .finally(() => setLoading(false));
   }, [locKey, startMM, endMM, numYears]);
+
+  useEffect(() => { fetchData(); }, []);
 
   const metricDef = YOY_METRICS.find(m => m.val === metric) || YOY_METRICS[0];
 
@@ -647,13 +653,9 @@ function YoYTab() {
       )}
 
       {error && <div style={{ color: 'var(--down)', marginBottom: 12, fontSize: 13 }}>Error: {error}</div>}
-      {!data && !loading && !error && (
-        <div className="empty">
-          <div className="empty-title">Select filters and click Compare Years</div>
-        </div>
-      )}
-      {(data || loading) && (
-        <div style={{ position: 'relative', height: 380 }}>{loading ? <Spinner /> : <canvas ref={chartRef} />}</div>
+      {loading && <Spinner />}
+      {!loading && (data || error) && (
+        <div style={{ position: 'relative', height: 380 }}><canvas ref={chartRef} /></div>
       )}
 
       {data && !loading && (() => {
@@ -696,6 +698,14 @@ function YoYTab() {
 
 // ─── 6. GDD Tracker ───────────────────────────────────────────────────────────
 
+const GDD_MILESTONES = [
+  { gdd: 200,  label: 'Germination / Seedling' },
+  { gdd: 600,  label: 'Vegetative Growth' },
+  { gdd: 900,  label: 'Flowering / Budset' },
+  { gdd: 1200, label: 'Fruit Development' },
+  { gdd: 1500, label: 'Harvest Readiness' },
+];
+
 function GDDTab() {
   const [locKey,     setLocKey]     = useState('vineland_nj');
   const [plantDate,  setPlantDate]  = useState(() => { const d = new Date(); d.setMonth(d.getMonth()-2); return d.toISOString().slice(0,10); });
@@ -710,43 +720,91 @@ function GDDTab() {
     const today = new Date();
     const plant = new Date(plantDate);
     const days  = Math.max(1, Math.round((today - plant) / 86400000));
-    axios.get('/api/wt360/historical', { params: { loc_id: locKey, start_date: plantDate.replace(/-/g,'')+'000000', days, fields: 'gdd' } })
+    const startParam = plantDate.replace(/-/g,'') + '000000';
+    axios.get('/api/wt360/historical', { params: { loc_id: locKey, start_date: startParam, days, fields: 'gdd,avgTemp,maxTemp,minTemp' } })
       .then(r => setData(r.data))
       .catch(e => setError(e.response?.data?.error || e.message))
       .finally(() => setLoading(false));
   }, [locKey, plantDate]);
+
+  // Auto-fetch on mount
+  useEffect(() => { fetchData(); }, []);
 
   useEffect(() => {
     if (!data || !chartRef.current) return;
     const rawDays = data.daily_data || [];
     if (!rawDays.length) return;
     let cum = 0;
-    const cumGDD = rawDays.map(d => { cum += Number(getGDD(d) ?? 0) || 0; return cum; });
-    const labels  = rawDays.map((d, i) => { const dt = getDate(d); return dt ? formatDateLabel(dt) : `Day ${i+1}`; });
+    const cumGDD = rawDays.map(d => { cum += Number(getGDD(d) ?? 0) || 0; return parseFloat(cum.toFixed(1)); });
+    const labels  = rawDays.map((d, i) => {
+      const dt = getDate(d);
+      return dt ? formatDateLabel(dt) : `Day ${i+1}`;
+    });
+    const maxGDD = cumGDD[cumGDD.length - 1] || 0;
+
     if (chartInst.current) chartInst.current.destroy();
     chartInst.current = new Chart(chartRef.current.getContext('2d'), {
       type: 'line',
-      data: { labels, datasets: [{
-        label: 'Cumulative GDD', data: cumGDD,
-        borderColor: '#7c3aed', backgroundColor: 'rgba(124,58,237,.12)',
-        fill: true, tension: .35, pointRadius: 0, pointHoverRadius: 4,
-        borderWidth: 2.5,
-      }]},
+      data: { labels, datasets: [
+        {
+          label: 'Cumulative GDD (base 50°F)',
+          data: cumGDD,
+          borderColor: '#7c3aed',
+          backgroundColor: 'rgba(124,58,237,.12)',
+          fill: true, tension: .35, pointRadius: 0, pointHoverRadius: 4,
+          borderWidth: 2.5,
+        },
+      ]},
       options: {
         responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: ctx => `Cumulative GDD: ${ctx.parsed.y.toFixed(1)}` } } },
-        scales: { y: { title: { display: true, text: 'Growing Degree Days (cumulative)' }, beginAtZero: true }, x: { ticks: { maxRotation: 45, maxTicksLimit: 12 } } }
+        plugins: {
+          legend: { position: 'top' },
+          tooltip: {
+            callbacks: {
+              label: ctx => `GDD accumulated: ${ctx.parsed.y.toFixed(1)}`,
+              afterBody: (items) => {
+                const val = items[0]?.parsed?.y;
+                if (val == null) return [];
+                const stage = [...GDD_MILESTONES].reverse().find(m => val >= m.gdd);
+                return stage ? [`Stage: ${stage.label}`] : ['Stage: Pre-germination'];
+              },
+            }
+          },
+          annotation: undefined,
+        },
+        scales: {
+          y: {
+            title: { display: true, text: 'Growing Degree Days (cumulative, base 50°F)' },
+            beginAtZero: true,
+            suggestedMax: Math.max(maxGDD * 1.1, 200),
+          },
+          x: {
+            ticks: { maxRotation: 45, maxTicksLimit: 14 },
+            title: { display: true, text: 'Date' },
+          }
+        }
       }
     });
   }, [data]);
 
   useEffect(() => () => { if (chartInst.current) chartInst.current.destroy(); }, []);
 
-  const totalGDD = !data ? null : (data.daily_data || []).reduce((s, d) => s + (Number(getGDD(d) ?? 0) || 0), 0);
+  const rawDays = data?.daily_data || [];
+  const totalGDD = rawDays.reduce((s, d) => s + (Number(getGDD(d) ?? 0) || 0), 0);
+  const currentStage = [...GDD_MILESTONES].reverse().find(m => totalGDD >= m.gdd);
+  const nextMilestone = GDD_MILESTONES.find(m => totalGDD < m.gdd);
 
   return (
     <div>
-      <p style={{ fontSize: 13, color: 'var(--text-3)', marginBottom: 20 }}>Track heat accumulation from a planting date to estimate crop maturity.</p>
+      <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 18px', marginBottom: 20 }}>
+        <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 6, color: 'var(--text)' }}>What is GDD?</div>
+        <p style={{ fontSize: 12, color: 'var(--text-2)', margin: 0, lineHeight: 1.6 }}>
+          Growing Degree Days (GDD) measure heat accumulation to predict crop development stages. Each day contributes
+          GDD = max(0, avg daily temp − 50°F). Select a planting date and location to see accumulated heat units from
+          that date through today.
+        </p>
+      </div>
+
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20, alignItems: 'flex-end' }}>
         <div>
           <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-3)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Location</label>
@@ -759,16 +817,52 @@ function GDDTab() {
           <input type="date" value={plantDate} onChange={e => setPlantDate(e.target.value)} className="form-control" style={{ width: 160 }} />
         </div>
         <button onClick={fetchData} className="btn" style={{ background: '#7c3aed', color: '#fff', borderColor: '#7c3aed' }} disabled={loading}>
-          {loading ? 'Loading…' : 'Track GDD'}
+          {loading ? 'Loading…' : 'Update'}
         </button>
-        {totalGDD != null && (
-          <div style={{ background: 'oklch(0.94 0.04 300)', border: '1px solid oklch(0.78 0.09 300)', borderRadius: 8, padding: '8px 16px', fontWeight: 700, color: '#5b21b6', fontSize: 14 }}>
-            Total: {totalGDD.toFixed(1)} GDD
+
+        {data && !loading && (
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <div style={{ background: 'oklch(0.94 0.04 300)', border: '1px solid oklch(0.78 0.09 300)', borderRadius: 8, padding: '8px 16px', fontWeight: 700, color: '#5b21b6', fontSize: 14 }}>
+              {totalGDD.toFixed(1)} GDD
+            </div>
+            {currentStage && (
+              <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 14px', fontSize: 12, color: 'var(--text-2)' }}>
+                📍 <strong>{currentStage.label}</strong>
+              </div>
+            )}
+            {nextMilestone && (
+              <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 14px', fontSize: 12, color: 'var(--text-3)' }}>
+                Next: {nextMilestone.label} at {nextMilestone.gdd} GDD (+{(nextMilestone.gdd - totalGDD).toFixed(0)} needed)
+              </div>
+            )}
           </div>
         )}
       </div>
+
       {error && <div style={{ color: 'var(--down)', marginBottom: 12, fontSize: 13 }}>Error: {error}</div>}
       <div style={{ position: 'relative', height: 340 }}>{loading ? <Spinner /> : <canvas ref={chartRef} />}</div>
+
+      {/* GDD milestone reference */}
+      <div style={{ marginTop: 20 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>Pepper Development Milestones (approximate)</div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {GDD_MILESTONES.map(m => {
+            const reached = totalGDD >= m.gdd;
+            return (
+              <div key={m.gdd} style={{
+                display: 'flex', alignItems: 'center', gap: 6, fontSize: 11,
+                padding: '5px 10px', borderRadius: 6,
+                background: reached ? 'oklch(0.94 0.04 300)' : 'var(--surface-2)',
+                border: `1px solid ${reached ? 'oklch(0.78 0.09 300)' : 'var(--border)'}`,
+                color: reached ? '#5b21b6' : 'var(--text-3)',
+                fontWeight: reached ? 700 : 400,
+              }}>
+                {reached ? '✓' : '○'} {m.gdd} GDD — {m.label}
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
@@ -815,11 +909,84 @@ function ConditionsTab() {
   );
 }
 
+// ─── 8. Alerts Tab ────────────────────────────────────────────────────────────
+
+function AlertsTab() {
+  const [alerts,  setAlerts]  = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error,   setError]   = useState(null);
+
+  const fetchAlerts = useCallback(() => {
+    setLoading(true); setError(null);
+    axios.get('/api/wt360/alerts')
+      .then(r => {
+        const all = [];
+        (r.data.alerts || []).forEach(loc => {
+          (loc.alerts || []).forEach(a => all.push({ ...a, location: loc.name }));
+        });
+        setAlerts(all);
+      })
+      .catch(e => setError(e.message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { fetchAlerts(); }, []);
+
+  if (loading) return <Spinner />;
+  if (error)   return <div style={{ color: 'var(--down)', padding: 16 }}>Error loading alerts: {error}</div>;
+
+  if (alerts.length === 0) {
+    return (
+      <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+        <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
+        <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text)', marginBottom: 6 }}>No Active Alerts</div>
+        <div style={{ fontSize: 13, color: 'var(--text-3)' }}>All monitored locations are clear. No severe weather warnings at this time.</div>
+        <button onClick={fetchAlerts} className="btn btn-sm" style={{ marginTop: 20 }}>Refresh</button>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ fontWeight: 700, color: 'var(--down)', fontSize: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+          ⚠️ {alerts.length} Active Alert{alerts.length !== 1 ? 's' : ''} Across Your Farm Locations
+        </div>
+        <button onClick={fetchAlerts} className="btn btn-sm">Refresh</button>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {alerts.map((a, i) => (
+          <div key={i} style={{ background: 'var(--surface)', border: '1px solid oklch(0.62 0.18 25/0.25)', borderLeft: '4px solid var(--down)', borderRadius: 8, padding: '14px 18px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
+              <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--down)' }}>{a.title || 'Weather Alert'}</span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-3)', background: 'var(--surface-2)', padding: '3px 10px', borderRadius: 10, border: '1px solid var(--border)' }}>
+                📍 {a.location}
+              </span>
+            </div>
+            {(a.start || a.end) && (
+              <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 8, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                {a.start && <span>🕐 From {fAlertTime(a.start)}</span>}
+                {a.end && <span>Until {fAlertTime(a.end)}</span>}
+              </div>
+            )}
+            {a.content && (
+              <div style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.65, background: 'var(--surface-2)', borderRadius: 6, padding: '10px 12px' }}>
+                {a.content}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
 export default function WeatherDashboard() {
   const [activeTab,        setActiveTab]        = useState('grid');
   const [selectedLocation, setSelectedLocation] = useState(null);
+  const [alertCount,       setAlertCount]       = useState(0);
 
   // Shared forecast_all data — used by Multi-Farm Grid and Frost Risk tabs
   const [regions,  setRegions]  = useState([]);
@@ -833,6 +1000,17 @@ export default function WeatherDashboard() {
       .finally(() => setRegLoad(false));
   }, []);
 
+  // Fetch alert count for badge (lightweight — just count)
+  useEffect(() => {
+    axios.get('/api/wt360/alerts')
+      .then(r => {
+        let count = 0;
+        (r.data.alerts || []).forEach(loc => { count += (loc.alerts || []).length; });
+        setAlertCount(count);
+      })
+      .catch(() => {});
+  }, []);
+
   return (
     <div>
       <div className="page-head">
@@ -842,11 +1020,9 @@ export default function WeatherDashboard() {
         </div>
       </div>
 
-      <AlertsBanner />
-
       <div className="card" style={{ marginBottom: 0 }}>
         <div className="card-body">
-          <TabBar active={activeTab} onChange={setActiveTab} />
+          <TabBar active={activeTab} onChange={setActiveTab} alertCount={alertCount} />
 
           {activeTab === 'grid' && (
             <MultiFarmGridTab regions={regions} loading={regLoad} error={regError} />
@@ -867,6 +1043,8 @@ export default function WeatherDashboard() {
           {activeTab === 'gdd' && <GDDTab />}
 
           {activeTab === 'conditions' && <ConditionsTab />}
+
+          {activeTab === 'alerts' && <AlertsTab />}
         </div>
       </div>
     </div>

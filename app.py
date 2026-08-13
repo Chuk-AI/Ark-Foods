@@ -7450,6 +7450,8 @@ def wt360_longrange():
         params.update(_fields_to_params(fields))
         data = _wt360_data_get("weekly", wt360_id, params)
         weekly = _wt360_parse_wx(data, wt360_id)
+        # Filter out weeks where WT360 returned no usable temperature data
+        weekly = [w for w in weekly if any(w.get(f) not in (None, '', 'null') for f in ('avgTemp', 'maxTemp', 'minTemp'))]
         return jsonify({"success": True, "loc_id": loc_id, "weekly_data": weekly})
     except Exception as e:
         app.logger.error(f"wt360 longrange error: {e}")
@@ -7457,7 +7459,6 @@ def wt360_longrange():
 
 
 @app.route("/api/wt360/yoy")
-@login_required
 def wt360_yoy():
     loc_id    = request.args.get("loc_id", "vineland_nj")
     start_mmdd = request.args.get("start_mmdd", "0101")  # MMDD e.g. "0301"
