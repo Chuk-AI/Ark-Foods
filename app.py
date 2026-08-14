@@ -7498,19 +7498,20 @@ def wt360_yoy():
                     continue
 
                 total_days = max(1, (end_dt - start_dt).days + 1)
-                sd = start_dt.strftime("%Y%m%d") + "000000"
-                if total_days > 90:
-                    # WT360 daily API silently returns empty data for large cnt values;
-                    # use weekly endpoint instead for multi-month ranges
-                    weeks = max(1, round(total_days / 7))
-                    params = {"sd": sd, "cnt": weeks}
-                    params.update(_fields_to_params(fields))
-                    data = _wt360_data_get("weekly", wt360_id, params)
-                else:
-                    params = {"sd": sd, "cnt": total_days}
-                    params.update(_fields_to_params(fields))
-                    data = _wt360_data_get("daily", wt360_id, params)
-                wx   = _wt360_parse_wx(data, wt360_id)
+                # WT360 daily API silently returns empty data for cnt > ~90;
+                # chunk into batches of 90 days and concatenate
+                CHUNK = 90
+                wx = []
+                chunk_start = start_dt
+                field_params = _fields_to_params(fields)
+                while chunk_start <= end_dt:
+                    chunk_days = min(CHUNK, (end_dt - chunk_start).days + 1)
+                    sd = chunk_start.strftime("%Y%m%d") + "000000"
+                    params = {"sd": sd, "cnt": chunk_days}
+                    params.update(field_params)
+                    chunk_data = _wt360_data_get("daily", wt360_id, params)
+                    wx.extend(_wt360_parse_wx(chunk_data, wt360_id))
+                    chunk_start = chunk_start + timedelta(days=chunk_days)
                 results[str(year)] = wx
                 ttl = 3600 * 24 if year < current_year else 3600 * 2
                 cache.set(cache_key, wx, timeout=ttl)
