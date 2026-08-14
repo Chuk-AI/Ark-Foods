@@ -589,11 +589,14 @@ function YoYTab() {
       borderWidth: i === 0 ? 2.5 : 1.5,
     }));
     const maxLen = Math.max(...years.map(yr => (yearsData[yr] || []).length));
-    const firstYearData = yearsData[years[0]] || [];
+    // Use the year with the most data for labels so we get full Jan–Dec coverage
+    const labelYear = years.reduce((best, yr) =>
+      (yearsData[yr] || []).length > (yearsData[best] || []).length ? yr : best, years[0]);
+    const labelData = yearsData[labelYear] || [];
     const labels = Array.from({ length: maxLen }, (_, i) => {
-      const d = firstYearData[i];
+      const d = labelData[i];
       if (d) { const ds = getDate(d); if (ds) return formatDateLabel(ds); }
-      return maxLen <= 60 ? `Wk ${i+1}` : `Day ${i+1}`;
+      return `Day ${i+1}`;
     });
     if (chartInst.current) chartInst.current.destroy();
     chartInst.current = new Chart(chartRef.current.getContext('2d'), {
