@@ -7480,7 +7480,8 @@ def wt360_yoy():
             year = current_year - i
             cache_key = f"wt360_yoy_v3_{loc_id}_{year}_{start_mmdd}_{end_mmdd}_{fields}"
             try:
-                cached = cache.get(cache_key)
+                max_age = 3600 * 24 if year < current_year else 3600 * 2
+                cached = cache_get(cache_key, max_age_seconds=max_age)
                 if cached is not None:
                     results[str(year)] = cached
                     continue
@@ -7516,8 +7517,7 @@ def wt360_yoy():
                         app.logger.error(f"wt360 yoy chunk error {sd}: {ce}")
                     chunk_start = chunk_start + timedelta(days=chunk_days)
                 results[str(year)] = wx
-                ttl = 3600 * 24 if year < current_year else 3600 * 2
-                cache.set(cache_key, wx, timeout=ttl)
+                cache_set(cache_key, wx)
             except Exception as e:
                 app.logger.error(f"wt360 yoy error year={year}: {e}")
                 results[str(year)] = []
