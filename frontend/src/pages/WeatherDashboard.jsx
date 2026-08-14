@@ -646,7 +646,7 @@ function YoYTab() {
             {[2,3,4,5].map(v => <option key={v} value={v}>{v} years</option>)}
           </select>
         </div>
-        <button onClick={fetchData} className="btn btn-primary" disabled={loading}>{loading ? 'Loading…' : 'Compare Years'}</button>
+        <button onClick={fetchData} className="btn btn-primary" disabled={loading}>{loading ? 'Fetching data…' : 'Compare Years'}</button>
       </div>
 
       {data && !loading && (
@@ -662,7 +662,7 @@ function YoYTab() {
       )}
 
       {error && <div style={{ color: 'var(--down)', marginBottom: 12, fontSize: 13 }}>Error: {error}</div>}
-      {loading && <Spinner />}
+      {loading && <><Spinner /><p style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 8 }}>Fetching daily records from WT360 — this may take 10–15 seconds for a full year…</p></>}
       {!loading && (data || error) && (
         <div style={{ position: 'relative', height: 380 }}><canvas ref={chartRef} /></div>
       )}

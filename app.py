@@ -7478,7 +7478,7 @@ def wt360_yoy():
 
         for i in range(num_years):
             year = current_year - i
-            cache_key = f"wt360_yoy_v2_{loc_id}_{year}_{start_mmdd}_{end_mmdd}_{fields}"
+            cache_key = f"wt360_yoy_v3_{loc_id}_{year}_{start_mmdd}_{end_mmdd}_{fields}"
             try:
                 cached = cache.get(cache_key)
                 if cached is not None:
@@ -7497,10 +7497,8 @@ def wt360_yoy():
                     results[str(year)] = []
                     continue
 
-                total_days = max(1, (end_dt - start_dt).days + 1)
-                # WT360 daily API silently returns empty data for cnt > ~90;
-                # chunk into batches of 90 days and concatenate
-                CHUNK = 90
+                # Chunk into 30-day batches — large cnt values time out or return empty
+                CHUNK = 30
                 wx = []
                 chunk_start = start_dt
                 field_params = _fields_to_params(fields)
@@ -7509,8 +7507,13 @@ def wt360_yoy():
                     sd = chunk_start.strftime("%Y%m%d") + "000000"
                     params = {"sd": sd, "cnt": chunk_days}
                     params.update(field_params)
-                    chunk_data = _wt360_data_get("daily", wt360_id, params)
-                    wx.extend(_wt360_parse_wx(chunk_data, wt360_id))
+                    try:
+                        chunk_data = _wt360_data_get("daily", wt360_id, params)
+                        chunk_wx = _wt360_parse_wx(chunk_data, wt360_id)
+                        app.logger.info(f"wt360 yoy chunk {sd} cnt={chunk_days} → {len(chunk_wx)} records")
+                        wx.extend(chunk_wx)
+                    except Exception as ce:
+                        app.logger.error(f"wt360 yoy chunk error {sd}: {ce}")
                     chunk_start = chunk_start + timedelta(days=chunk_days)
                 results[str(year)] = wx
                 ttl = 3600 * 24 if year < current_year else 3600 * 2
