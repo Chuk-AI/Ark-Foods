@@ -495,7 +495,7 @@ function LongRangeTab() {
       options: {
         responsive: true, maintainAspectRatio: false,
         interaction: { mode: 'index', intersect: false },
-        plugins: { legend: { position: 'top' } },
+        plugins: { legend: { position: 'top' }, datalabels: { display: false } },
         scales: {
           y:  { title: { display: true, text: 'Temperature (°F)' }, position: 'left' },
           y2: { title: { display: true, text: 'Precip (in)' }, position: 'right', grid: { drawOnChartArea: false }, beginAtZero: true },
@@ -605,7 +605,7 @@ function YoYTab() {
       options: {
         responsive: true, maintainAspectRatio: false,
         interaction: { mode: 'index', intersect: false },
-        plugins: { legend: { position: 'top' } },
+        plugins: { legend: { position: 'top' }, datalabels: { display: false } },
         scales: {
           x: { ticks: { maxTicksLimit: 12, maxRotation: 0 } },
           y: { title: { display: true, text: metricDef.label } },
@@ -768,6 +768,7 @@ function GDDTab() {
         responsive: true, maintainAspectRatio: false,
         plugins: {
           legend: { position: 'top' },
+          datalabels: { display: false },
           tooltip: {
             callbacks: {
               label: ctx => `GDD accumulated: ${ctx.parsed.y.toFixed(1)}`,
