@@ -2810,20 +2810,10 @@ def get_sales_seasonal_prices():
             f"Query Filters: Commodities: {commodities}, Cities: {cities}, Start Year: {start_year}, End Year: {end_year}, Start Day: {start_day}, End Day: {end_day}"
         )
 
-        if start_year == end_year:
-            query = query.filter(
-                PriceData.year == start_year,
-                PriceData.day >= start_day,
-                PriceData.day <= end_day,
-            )
-        else:
-            query = query.filter(
-                or_(
-                    and_(PriceData.year == start_year, PriceData.day >= start_day),
-                    and_(PriceData.year == end_year, PriceData.day <= end_day),
-                    and_(PriceData.year > start_year, PriceData.year < end_year),
-                )
-            )
+        query = query.filter(
+            PriceData.year >= start_year,
+            PriceData.year <= end_year,
+        )
 
     # Retrieve data - Ensure this happens in the proper order
     try:
@@ -3339,8 +3329,10 @@ def calculate_forecasted_price(
     query = db.session.query(PriceData.price, PriceData.package).filter(
         PriceData.commodity == variety,
         PriceData.season == season,
-        PriceData.year >= start_year,
-        PriceData.day >= start_day,
+        or_(
+            PriceData.year > start_year,
+            and_(PriceData.year == start_year, PriceData.day >= start_day),
+        ),
     )
 
     # Add source filter
@@ -3746,8 +3738,10 @@ def get_seasonal_prices():
 
         if start_date:
             query = query.filter(
-                PriceData.year >= start_year,
-                PriceData.day >= start_day,
+                or_(
+                    PriceData.year > start_year,
+                    and_(PriceData.year == start_year, PriceData.day >= start_day),
+                )
             )
 
         if city and city != "All cities":
