@@ -116,6 +116,36 @@ app.config["JWT_ALGORITHM"] = "HS256"
 jwt = JWTManager(app)
 
 
+@app.route("/api/fix_produceiq_seasons")
+def fix_produceiq_seasons():
+    """One-time fix: recalculate season from year+day for all ProduceIQ records."""
+    try:
+        records = PriceData.query.filter_by(source="ProduceIQ").all()
+        updated = 0
+        for record in records:
+            try:
+                actual_date = datetime.strptime(f"{record.year}-{record.day}", "%Y-%j")
+                month = actual_date.month
+                if month in [3, 4, 5]:
+                    correct_season = "Spring"
+                elif month in [6, 7, 8]:
+                    correct_season = "Summer"
+                elif month in [9, 10, 11]:
+                    correct_season = "Autumn"
+                else:
+                    correct_season = "Winter"
+                if record.season != correct_season:
+                    record.season = correct_season
+                    updated += 1
+            except (ValueError, TypeError):
+                continue
+        db.session.commit()
+        return jsonify({"status": "success", "updated_records": updated, "total_checked": len(records)})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
 @app.route("/api/normalize_price_data")
 def normalize_price_data():
     try:
@@ -1790,9 +1820,8 @@ def fetch_daily_data():
                     raw_price = item.get("price")
                     source = "ProduceIQ"
 
-                    month = (
-                        pd.Timestamp(year=year, day=1, month=1).day_of_year // 30 + 1
-                    )
+                    actual_date = datetime.strptime(f"{year}-{day_of_year}", "%Y-%j")
+                    month = actual_date.month
                     if month in [3, 4, 5]:
                         season = "Spring"
                     elif month in [6, 7, 8]:
