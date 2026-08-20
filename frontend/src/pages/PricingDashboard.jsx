@@ -52,6 +52,38 @@ function PricingMatrix() {
   const cityOrder = ['Baltimore', 'Boston', 'Chicago', 'Miami', 'New York', 'Philadelphia', 'Los Angeles', 'Detroit', 'Atlanta', 'Columbia'];
   const cities = data ? cityOrder.filter((c) => data[c]) : [];
 
+  // Build flat rows: one row per (variety, package variant)
+  const buildRows = (cityData) => {
+    const items = cityData?.items || [];
+    const rows = [];
+    for (const item of items) {
+      const allUsda = item.usda_all || (item.usda ? [item.usda] : []);
+      const allPiq  = item.produceiq_all || (item.produceiq ? [item.produceiq] : []);
+
+      // Merge by package key
+      const pkgMap = {};
+      for (const p of allPiq) {
+        const key = p.package || '—';
+        pkgMap[key] = { ...pkgMap[key], variety: item.variety, package: key, piq: p, size: p.item_size || null, origin: null };
+      }
+      for (const u of allUsda) {
+        const key = u.package || '—';
+        if (pkgMap[key]) {
+          pkgMap[key].usda = u;
+          pkgMap[key].origin = pkgMap[key].origin || u.origin || null;
+        } else {
+          pkgMap[key] = { variety: item.variety, package: key, usda: u, size: u.item_size || null, origin: u.origin || null };
+        }
+      }
+
+      const pkgRows = Object.values(pkgMap);
+      // Mark first row of each variety for rowspan label
+      pkgRows.forEach((r, i) => { r._firstInVariety = i === 0; r._varietySpan = pkgRows.length; });
+      rows.push(...pkgRows);
+    }
+    return rows;
+  };
+
   return (
     <div style={{ marginBottom: 40 }}>
       <SectionTitle>💰 Terminal Market Pricing Matrix</SectionTitle>
@@ -65,7 +97,7 @@ function PricingMatrix() {
             <strong> FOB</strong> = best $/bu − 26% freight · <strong>Diff</strong> = ProduceIQ − USDA ($/bu)
           </div>
           {cities.map((city) => {
-            const items = data[city]?.items || [];
+            const rows = buildRows(data[city]);
             return (
               <div key={city} style={{ background: '#fff', border: '2px solid #e2e8f0', borderRadius: 12, padding: 20, marginBottom: 20 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -76,41 +108,38 @@ function PricingMatrix() {
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                     <thead>
                       <tr style={{ background: 'linear-gradient(135deg,#059669,#047857)', color: '#fff' }}>
-                        <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 600 }}>Variety</th>
-                        <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 600 }}>Package</th>
-                        <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600 }}>PIQ $/bu</th>
-                        <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600 }}>USDA $/bu</th>
-                        <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600 }}>Difference</th>
-                        <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600 }}>FOB</th>
+                        {['Variety', 'Package', 'Size', 'Origin', 'PIQ $/bu', 'USDA $/bu', 'Difference', 'FOB'].map((h) => (
+                          <th key={h} style={{ padding: '10px 12px', textAlign: ['PIQ $/bu','USDA $/bu','Difference','FOB'].includes(h) ? 'center' : 'left', fontWeight: 600 }}>{h}</th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {items.map((row, i) => {
+                      {rows.map((row, i) => {
                         const u = row.usda;
-                        const p = row.produceiq;
-                        const d = row.diff;
+                        const p = row.piq;
+                        const d = (u && p) ? (() => {
+                          const abs = p.price - u.price;
+                          const pct = u.price ? (abs / u.price) * 100 : null;
+                          return { abs: round2(abs), pct: pct != null ? round2(pct) : null };
+                        })() : null;
+                        const fob = p ? round2(p.price * 0.74) : u ? round2(u.price * 0.74) : null;
+                        const bg = i % 2 === 0 ? '#fff' : '#f8fafc';
                         return (
-                          <tr key={row.variety} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                            <td style={{ padding: '10px 12px', fontWeight: 700, color: '#1e293b' }}>{row.variety}</td>
-                            <td style={{ padding: '10px 12px', color: '#475569', fontSize: 11, maxWidth: 140 }}>
-                              {(p?.package || u?.package)
-                                ? <span title={p?.package || u?.package}>{p?.package || u?.package}</span>
-                                : <span style={{ color: '#94a3b8' }}>—</span>}
+                          <tr key={`${row.variety}-${row.package}-${i}`} style={{ background: bg, borderBottom: '1px solid #e2e8f0' }}>
+                            <td style={{ padding: '10px 12px', fontWeight: 700, color: '#1e293b' }}>{row._firstInVariety ? row.variety : ''}</td>
+                            <td style={{ padding: '10px 12px', color: '#475569', fontSize: 11 }}>{row.package}</td>
+                            <td style={{ padding: '10px 12px', color: '#64748b', fontSize: 11 }}>{row.size || '—'}</td>
+                            <td style={{ padding: '10px 12px', color: '#64748b', fontSize: 11 }}>{row.origin || '—'}</td>
+                            <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                              {p ? <><div style={{ fontWeight: 700, color: '#92400e' }}>{money(p.price)}</div><div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>{p.date}</div></> : <span style={{ color: '#94a3b8' }}>—</span>}
                             </td>
                             <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                              {p
-                                ? <><div style={{ fontWeight: 700, color: '#92400e' }}>{money(p.price)}</div><div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>{p.unit}</div><div style={{ fontSize: 10, color: '#94a3b8' }}>{p.date}</div></>
-                                : <span style={{ color: '#94a3b8' }}>—</span>}
-                            </td>
-                            <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                              {u
-                                ? <><div style={{ fontWeight: 700, color: '#1e40af' }}>{money(u.price)}</div><div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>{u.unit}</div><div style={{ fontSize: 10, color: '#94a3b8' }}>{u.date}</div></>
-                                : <span style={{ color: '#94a3b8' }}>—</span>}
+                              {u ? <><div style={{ fontWeight: 700, color: '#1e40af' }}>{money(u.price)}</div><div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>{u.date}</div></> : <span style={{ color: '#94a3b8' }}>—</span>}
                             </td>
                             <td style={{ padding: '10px 12px', textAlign: 'center' }}>
                               {d ? <><div style={{ fontWeight: 700, color: d.pct >= 0 ? '#dc2626' : '#16a34a' }}>{pctFmt(d.pct)}</div><div style={{ fontSize: 11, color: '#64748b' }}>{d.abs >= 0 ? '+' : ''}{money(d.abs)}</div></> : <span style={{ color: '#94a3b8' }}>—</span>}
                             </td>
-                            <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: '#16a34a', fontSize: 15 }}>{money(row.fob)}</td>
+                            <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: '#16a34a', fontSize: 15 }}>{money(fob)}</td>
                           </tr>
                         );
                       })}
@@ -125,6 +154,8 @@ function PricingMatrix() {
     </div>
   );
 }
+
+function round2(x) { return Math.round(x * 100) / 100; }
 
 function HighestPrices() {
   const [data, setData] = useState(null);

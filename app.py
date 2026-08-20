@@ -2531,6 +2531,65 @@ def api_terminal_market_pricing():
     cities = ["Baltimore", "Boston", "Chicago", "Columbia", "Miami",
               "New York", "Philadelphia", "Los Angeles", "Atlanta", "Detroit"]
 
+    def _latest_all(source_name, v, c):
+        """Return all package rows on the most recent date for this source/commodity/city."""
+        latest = (
+            db.session.query(PriceData.year, PriceData.day)
+            .filter(
+                PriceData.commodity.in_(sorted(v)),
+                PriceData.source == source_name,
+                PriceData.price > 0,
+                func.upper(PriceData.city_name) == c.upper(),
+                or_(
+                    PriceData.year > cutoff_year,
+                    and_(PriceData.year == cutoff_year, PriceData.day >= cutoff_day)
+                )
+            )
+            .order_by(PriceData.year.desc(), PriceData.day.desc())
+            .first()
+        )
+        if not latest:
+            return []
+        return (
+            db.session.query(
+                PriceData.package,
+                PriceData.item_size,
+                PriceData.origin,
+                func.avg(PriceData.price).label("price"),
+                PriceData.year,
+                PriceData.day,
+                func.count().label("cnt"),
+            )
+            .filter(
+                PriceData.commodity.in_(sorted(v)),
+                PriceData.source == source_name,
+                PriceData.price > 0,
+                func.upper(PriceData.city_name) == c.upper(),
+                PriceData.year == latest.year,
+                PriceData.day == latest.day,
+            )
+            .group_by(PriceData.package, PriceData.item_size, PriceData.origin, PriceData.year, PriceData.day)
+            .order_by(func.count().desc())
+            .all()
+        )
+
+    def _fmt_rows(rows):
+        if not rows:
+            return None, []
+        date_str = (datetime(int(rows[0].year), 1, 1) + timedelta(days=int(rows[0].day) - 1)).strftime("%Y-%m-%d")
+        def _r(row):
+            unit_label = row.package or "pkg"
+            return {
+                "price": round(float(row.price), 2),
+                "unit": f"$/{unit_label}",
+                "package": unit_label,
+                "date": date_str,
+                "item_size": row.item_size or None,
+                "origin": row.origin or None,
+            }
+        all_pkgs = [_r(r) for r in rows]
+        return all_pkgs[0], all_pkgs  # dominant first (highest cnt)
+
     result = {}
     for city in cities:
         items = []
@@ -2539,70 +2598,35 @@ def api_terminal_market_pricing():
             if commodity == "Cubanelle":
                 variants.add("Cubanelles")
 
-            def _latest(source_name, v=variants, c=city):
-                # Group by unit (package) so we don't mix prices across different package sizes.
-                # Order by most recent date then highest count to surface the dominant unit.
-                return (
-                    db.session.query(
-                        PriceData.package,
-                        func.avg(PriceData.price).label("price"),
-                        PriceData.year,
-                        PriceData.day,
-                        func.count().label("cnt"),
-                    )
-                    .filter(
-                        PriceData.commodity.in_(sorted(v)),
-                        PriceData.source == source_name,
-                        PriceData.price > 0,
-                        func.upper(PriceData.city_name) == c.upper(),
-                        or_(
-                            PriceData.year > cutoff_year,
-                            and_(PriceData.year == cutoff_year, PriceData.day >= cutoff_day)
-                        )
-                    )
-                    .group_by(PriceData.package, PriceData.year, PriceData.day)
-                    .order_by(PriceData.year.desc(), PriceData.day.desc())
-                    .first()
-                )
+            usda_rows = _latest_all("USDA", variants, city)
+            piq_rows  = _latest_all("ProduceIQ", variants, city)
 
-            usda_row = _latest("USDA")
-            piq_row = _latest("ProduceIQ")
-
-            if not usda_row and not piq_row:
+            if not usda_rows and not piq_rows:
                 continue
 
-            def _fmt_row(row, source_name):
-                if not row:
-                    return None
-                date_str = (datetime(int(row.year), 1, 1) + timedelta(days=int(row.day) - 1)).strftime("%Y-%m-%d")
-                unit_label = row.package or "pkg"
-                return {
-                    "price": round(float(row.price), 2),
-                    "unit": f"$/{unit_label}",
-                    "package": unit_label,
-                    "date": date_str,
-                }
+            usda_dom, usda_all = _fmt_rows(usda_rows)
+            piq_dom,  piq_all  = _fmt_rows(piq_rows)
 
-            usda_obj = _fmt_row(usda_row, "USDA")
-            piq_obj = _fmt_row(piq_row, "ProduceIQ")
-            best_price = (piq_obj or usda_obj)["price"]
+            best_price = (piq_dom or usda_dom)["price"]
             fob = round(best_price * 0.74, 2)
 
             diff = None
-            if usda_obj and piq_obj and usda_obj["price"]:
-                diff_abs = round(piq_obj["price"] - usda_obj["price"], 2)
-                diff_pct = round((diff_abs / usda_obj["price"]) * 100, 1)
+            if usda_dom and piq_dom and usda_dom["price"]:
+                diff_abs = round(piq_dom["price"] - usda_dom["price"], 2)
+                diff_pct = round((diff_abs / usda_dom["price"]) * 100, 1)
                 diff = {"abs": diff_abs, "pct": diff_pct}
 
-            dominant_obj = piq_obj or usda_obj
+            dominant = piq_dom or usda_dom
             items.append({
                 "variety": commodity,
-                "usda": usda_obj,
-                "produceiq": piq_obj,
+                "usda": usda_dom,
+                "usda_all": usda_all,
+                "produceiq": piq_dom,
+                "produceiq_all": piq_all,
                 "diff": diff,
                 "fob": fob,
-                "package": dominant_obj["package"] if dominant_obj else None,
-                "unit": dominant_obj["unit"] if dominant_obj else None,
+                "package": dominant["package"] if dominant else None,
+                "unit": dominant["unit"] if dominant else None,
             })
 
         if items:
@@ -2731,7 +2755,8 @@ def api_most_recent_prices():
         )
     ).cte("ranked_prices")
 
-    final_query = (
+    # Return all ranked rows (not just rn==1) so we can build dominant + all_packages
+    all_rows_query = (
         select(
             ranked_prices_cte.c.commodity,
             ranked_prices_cte.c.city_name,
@@ -2739,44 +2764,61 @@ def api_most_recent_prices():
             ranked_prices_cte.c.year,
             ranked_prices_cte.c.day,
             ranked_prices_cte.c.package,
+            ranked_prices_cte.c.rn,
         )
         .select_from(ranked_prices_cte)
-        .where(ranked_prices_cte.c.rn == 1)
     )
 
-    results = db.session.execute(final_query).all()
+    results = db.session.execute(all_rows_query).all()
 
-    # Map results by (original_commodity, original_city)
-    key_to_row = {}
+    # Group all rows by (original_commodity, original_city)
+    from collections import defaultdict
+    grouped = defaultdict(list)
     for row in results:
         original_commodity = reverse_commodity_map.get(row.commodity, row.commodity)
         normalized_city = row.city_name.lower()
         original_city = city_lower_map.get(normalized_city)
         if original_city and original_commodity in set(commodities):
-            key_to_row[(original_commodity, original_city)] = row
+            grouped[(original_commodity, original_city)].append(row)
 
     # Build the response
     recent_prices = {
         commodity: {city: "-" for city in cities} for commodity in commodities
     }
 
-    for (orig_comm, orig_city), row in key_to_row.items():
+    for (orig_comm, orig_city), rows in grouped.items():
         if orig_city not in cities or orig_comm not in recent_prices:
             continue
-        price = float(row.avg_price) if row.avg_price is not None else None
-        if price is None:
+        dominant = next((r for r in rows if r.rn == 1), None)
+        if not dominant or dominant.avg_price is None:
             continue
 
         date_str = None
-        if row.year and row.day:
-            date_str = (datetime(int(row.year), 1, 1) + timedelta(days=int(row.day) - 1)).strftime("%Y-%m-%d")
+        if dominant.year and dominant.day:
+            date_str = (datetime(int(dominant.year), 1, 1) + timedelta(days=int(dominant.day) - 1)).strftime("%Y-%m-%d")
 
-        unit_label = row.package or "pkg"
+        unit_label = dominant.package or "pkg"
+
+        # Build all_packages list (sorted by dominant first)
+        all_pkgs = []
+        for r in sorted(rows, key=lambda x: x.rn):
+            if r.avg_price is None:
+                continue
+            r_date = None
+            if r.year and r.day:
+                r_date = (datetime(int(r.year), 1, 1) + timedelta(days=int(r.day) - 1)).strftime("%Y-%m-%d")
+            all_pkgs.append({
+                "package": r.package or "pkg",
+                "price": round(float(r.avg_price), 2),
+                "date": r_date,
+            })
+
         recent_prices[orig_comm][orig_city] = {
-            "price": round(price, 2),
+            "price": round(float(dominant.avg_price), 2),
             "date": date_str,
             "unit": f"$/{unit_label}",
             "package": unit_label,
+            "all_packages": all_pkgs,
         }
 
     return jsonify({"prices": recent_prices})

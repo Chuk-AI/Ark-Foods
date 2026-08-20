@@ -119,15 +119,29 @@ function SalesDashboard() {
               return <td key={city}>-</td>;
             }
             const isMax = city === maxCity;
+            const allPkgs = cell.all_packages || [];
+            const hasMore = allPkgs.length > 1;
             return (
-              <td key={city} className={isMax ? "highlight-max" : ""} style={{ verticalAlign: "top", minWidth: 90 }}>
-                <div style={{ fontWeight: 700, fontFamily: "var(--mono)", color: isMax ? undefined : "var(--up)" }}>
-                  ${cell.price.toFixed(2)}
+              <td key={city} className={isMax ? "highlight-max" : ""} style={{ verticalAlign: "top", minWidth: 90, position: "relative" }}>
+                <div className="price-cell-wrapper" style={{ cursor: hasMore ? "help" : "default" }}>
+                  <div style={{ fontWeight: 700, fontFamily: "var(--mono)", color: isMax ? undefined : "var(--up)" }}>
+                    ${cell.price.toFixed(2)}
+                  </div>
+                  <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 2 }}>
+                    {cell.unit}
+                  </div>
+                  <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 1 }}>{cell.date}</div>
+                  {hasMore && (
+                    <div className="pkg-tooltip">
+                      {allPkgs.map((pk, idx) => (
+                        <div key={idx} style={{ padding: "3px 0", borderBottom: idx < allPkgs.length - 1 ? "1px solid #e2e8f0" : "none" }}>
+                          <span style={{ fontWeight: 700, fontFamily: "var(--mono)" }}>${pk.price.toFixed(2)}</span>
+                          <span style={{ marginLeft: 6, color: "#64748b", fontSize: 11 }}>{pk.package}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 2 }}>
-                  {cell.unit}
-                </div>
-                <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 1 }}>{cell.date}</div>
               </td>
             );
           })}

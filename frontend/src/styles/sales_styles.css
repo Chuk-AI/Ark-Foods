@@ -170,6 +170,26 @@
   color: #7c4f00 !important;
 }
 
+.price-cell-wrapper { position: relative; }
+.pkg-tooltip {
+  display: none;
+  position: absolute;
+  z-index: 100;
+  top: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px 12px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  min-width: 180px;
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.price-cell-wrapper:hover .pkg-tooltip { display: block; }
+
 /* ── Charts ──────────────────────────────────────────────── */
 .chart-wrap {
   position: relative;
