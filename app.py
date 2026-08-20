@@ -118,9 +118,21 @@ jwt = JWTManager(app)
 
 @app.route("/api/fix_produceiq_seasons")
 def fix_produceiq_seasons():
-    """One-time fix: recalculate season from year+day for all ProduceIQ records."""
+    """One-time fix: recalculate season from year+day for all ProduceIQ records.
+    Accepts ?offset=N to paginate — call repeatedly until done=true.
+    """
+    BATCH = 5000
     try:
-        records = PriceData.query.filter_by(source="ProduceIQ").all()
+        offset = int(request.args.get("offset", 0))
+        records = (
+            PriceData.query
+            .filter_by(source="ProduceIQ")
+            .filter(PriceData.season == "Winter")  # only touch wrongly-labelled rows
+            .order_by(PriceData.id)
+            .limit(BATCH)
+            .offset(offset)
+            .all()
+        )
         updated = 0
         for record in records:
             try:
@@ -133,14 +145,23 @@ def fix_produceiq_seasons():
                 elif month in [9, 10, 11]:
                     correct_season = "Autumn"
                 else:
-                    correct_season = "Winter"
-                if record.season != correct_season:
-                    record.season = correct_season
-                    updated += 1
+                    continue  # genuinely Winter — skip
+                record.season = correct_season
+                updated += 1
             except (ValueError, TypeError):
                 continue
         db.session.commit()
-        return jsonify({"status": "success", "updated_records": updated, "total_checked": len(records)})
+        next_offset = offset + BATCH
+        done = len(records) < BATCH
+        return jsonify({
+            "status": "success",
+            "batch_size": BATCH,
+            "offset": offset,
+            "rows_in_batch": len(records),
+            "updated_in_batch": updated,
+            "done": done,
+            "next_url": None if done else f"/api/fix_produceiq_seasons?offset={next_offset}",
+        })
     except Exception as e:
         db.session.rollback()
         return jsonify({"status": "error", "message": str(e)}), 500
