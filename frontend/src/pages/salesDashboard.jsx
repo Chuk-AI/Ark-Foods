@@ -131,16 +131,39 @@ function SalesDashboard() {
                     {cell.unit}
                   </div>
                   <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 1 }}>{cell.date}</div>
-                  {hasMore && (
-                    <div className="pkg-tooltip">
-                      {allPkgs.map((pk, idx) => (
-                        <div key={idx} style={{ padding: "3px 0", borderBottom: idx < allPkgs.length - 1 ? "1px solid #e2e8f0" : "none" }}>
-                          <span style={{ fontWeight: 700, fontFamily: "var(--mono)" }}>${pk.price.toFixed(2)}</span>
-                          <span style={{ marginLeft: 6, color: "#64748b", fontSize: 11 }}>{pk.package}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  {hasMore && (() => {
+                    // Suppress fields that are identical across every row — they add no info
+                    const uniq = (key) => new Set(allPkgs.map((p) => p[key]).filter(Boolean)).size;
+                    const showSize   = uniq("item_size") > 1 || (allPkgs.length === 1 && allPkgs[0].item_size);
+                    const showOrigin = uniq("origin")    > 1 || (allPkgs.length === 1 && allPkgs[0].origin);
+                    const showSource = uniq("source")    > 1 || (allPkgs.length === 1 && allPkgs[0].source);
+                    // If all rows share the same non-null value, show it as a header instead of per-row
+                    const common = (key) => {
+                      const vals = [...new Set(allPkgs.map((p) => p[key]).filter(Boolean))];
+                      return vals.length === 1 ? vals[0] : null;
+                    };
+                    const commonSize   = common("item_size");
+                    const commonOrigin = common("origin");
+                    const commonSource = common("source");
+                    return (
+                      <div className="pkg-tooltip">
+                        {(commonSize || commonOrigin || commonSource) && (
+                          <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 4, paddingBottom: 4, borderBottom: "1px solid #e2e8f0" }}>
+                            {[commonSource, commonSize, commonOrigin].filter(Boolean).join(" · ")}
+                          </div>
+                        )}
+                        {allPkgs.map((pk, idx) => (
+                          <div key={idx} style={{ padding: "3px 0", borderBottom: idx < allPkgs.length - 1 ? "1px solid #e2e8f0" : "none", display: "flex", alignItems: "baseline", gap: 6 }}>
+                            <span style={{ fontWeight: 700, fontFamily: "var(--mono)", minWidth: 44 }}>${pk.price.toFixed(2)}</span>
+                            <span style={{ color: "#475569", fontSize: 11 }}>{pk.package}</span>
+                            {(!commonSize && pk.item_size) && <span style={{ color: "#94a3b8", fontSize: 10 }}>{pk.item_size}</span>}
+                            {(!commonOrigin && pk.origin) && <span style={{ color: "#94a3b8", fontSize: 10 }}>{pk.origin}</span>}
+                            {(!commonSource && pk.source) && <span style={{ color: "#94a3b8", fontSize: 10 }}>{pk.source}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
                 </div>
               </td>
             );

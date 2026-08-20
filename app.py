@@ -2704,8 +2704,8 @@ def api_most_recent_prices():
     else:
         date_filter_conditions = true()
 
-    # Group by unit (package) so we never average across different package sizes.
-    # CTE1: avg price per (commodity, city, year, day, package)
+    # Group by (package, item_size, origin, source) so we keep distinct variants.
+    # CTE1: avg price per (commodity, city, year, day, package, item_size, origin, source)
     price_subquery_cte = (
         db.session.query(
             PriceData.commodity,
@@ -2713,6 +2713,9 @@ def api_most_recent_prices():
             PriceData.year,
             PriceData.day,
             PriceData.package,
+            PriceData.item_size,
+            PriceData.origin,
+            PriceData.source,
             func.avg(func.nullif(PriceData.price, 0)).label("avg_price"),
             func.count().label("cnt"),
         )
@@ -2729,6 +2732,9 @@ def api_most_recent_prices():
             PriceData.year,
             PriceData.day,
             PriceData.package,
+            PriceData.item_size,
+            PriceData.origin,
+            PriceData.source,
         )
     ).cte("price_subquery")
 
@@ -2751,11 +2757,14 @@ def api_most_recent_prices():
             price_subquery_cte.c.year,
             price_subquery_cte.c.day,
             price_subquery_cte.c.package,
+            price_subquery_cte.c.item_size,
+            price_subquery_cte.c.origin,
+            price_subquery_cte.c.source,
             window.label("rn"),
         )
     ).cte("ranked_prices")
 
-    # Return all ranked rows (not just rn==1) so we can build dominant + all_packages
+    # Return all ranked rows so we can build dominant + all_packages
     all_rows_query = (
         select(
             ranked_prices_cte.c.commodity,
@@ -2764,6 +2773,9 @@ def api_most_recent_prices():
             ranked_prices_cte.c.year,
             ranked_prices_cte.c.day,
             ranked_prices_cte.c.package,
+            ranked_prices_cte.c.item_size,
+            ranked_prices_cte.c.origin,
+            ranked_prices_cte.c.source,
             ranked_prices_cte.c.rn,
         )
         .select_from(ranked_prices_cte)
@@ -2799,18 +2811,17 @@ def api_most_recent_prices():
 
         unit_label = dominant.package or "pkg"
 
-        # Build all_packages list (sorted by dominant first)
+        # Build all_packages list (sorted by rank)
         all_pkgs = []
         for r in sorted(rows, key=lambda x: x.rn):
             if r.avg_price is None:
                 continue
-            r_date = None
-            if r.year and r.day:
-                r_date = (datetime(int(r.year), 1, 1) + timedelta(days=int(r.day) - 1)).strftime("%Y-%m-%d")
             all_pkgs.append({
                 "package": r.package or "pkg",
                 "price": round(float(r.avg_price), 2),
-                "date": r_date,
+                "item_size": r.item_size or None,
+                "origin": r.origin or None,
+                "source": r.source or None,
             })
 
         recent_prices[orig_comm][orig_city] = {
