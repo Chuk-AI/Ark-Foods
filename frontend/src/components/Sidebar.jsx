@@ -119,6 +119,13 @@ function Sidebar({ unreadAlerts = 0, mobileOpen = false, onMobileClose }) {
           </Link>
         )}
 
+        {has([UserRole.SALES, UserRole.OWNER, UserRole.ADMIN]) && (
+          <Link to="/forecasting_variance" className={`sb-item ${isActive('/forecasting_variance') ? 'active' : ''}`}>
+            <Icon.Forecast />
+            <span>Forecasting Variance</span>
+          </Link>
+        )}
+
         {has([UserRole.ADMIN, UserRole.OWNER]) && (
           <Link to="/admin_dashboard" className={`sb-item ${isActive('/admin_dashboard') ? 'active' : ''}`}>
             <Icon.Settings />
