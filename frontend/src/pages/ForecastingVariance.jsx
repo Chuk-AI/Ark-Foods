@@ -606,6 +606,8 @@ export default function ForecastingVariance() {
             ['Base price then', fmt(data.base_price)],
             ['Seasonal norm', fmt(data.seasonal_at_as_of)],
             ['Level offset', data.level_offset != null ? `${data.level_offset > 0 ? '+' : ''}${data.level_offset.toFixed(2)}` : '—'],
+            ['Recent volatility', data.recent_cv != null ? `${(data.recent_cv * 100).toFixed(1)}%` : '—'],
+            ['Model weight', data.model_weight != null ? `${(data.model_weight * 100).toFixed(0)}%` : '—'],
             ['σ (residual)', fmt(data.sigma)],
             ['Trend slope', `${data.slope > 0 ? '+' : ''}${(data.slope || 0).toFixed(2)}/wk`],
             ['Training rows', data.training_rows],
@@ -737,7 +739,11 @@ export default function ForecastingVariance() {
             <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '14px 16px' }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Current model</div>
               <div style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.6 }}>
-                Ratio-based seasonality (recency-weighted, median/MAD robust) + mean-reverting level offset (4-wk half-life) + decaying trend. Segregated by unit / size / origin. Weather and shipment signals come next.
+                Volatility-gated blend of a flat base price and a seasonal model
+                (shrunk ratios + mean-reverting level offset + decaying trend),
+                anchored to base at short horizons. <strong>Model weight</strong> above shows
+                how much the seasonal side was trusted — calm markets stay near
+                the base price, where a flat forecast measurably wins.
               </div>
             </div>
           </div>

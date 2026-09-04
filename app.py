@@ -934,34 +934,89 @@ def seasonal_ratio_at(model, woy):
     return 1.0
 
 
-def generate_forecast_series(model, recent_level, slope, as_of_woy, horizon_weeks,
-                             level_halflife=4.0, trend_decay_weeks=6.0):
+def realized_volatility(weekly_series):
     """
-    Forecast = seasonal level + mean-reverting level offset + decaying trend.
+    Coefficient of variation of a recent weekly price series.
 
-    The level offset is the key improvement over a pure seasonal baseline: if
-    prices are currently well above the seasonal norm, the forecast starts from
-    where the market actually is and reverts toward the seasonal level with a
-    4-week half-life, rather than snapping to the historical average.
+    This is the calm/wild detector. Diagnostics showed the seasonal model
+    beats a flat 'price never moves' forecast on volatile segments
+    (33.6% vs 56.8% MAPE) but loses badly on stable ones (16.7% vs 9.3%),
+    and that telling the two apart is worth ~5 MAPE points -- far more than
+    any parameter tuning. Recent realized volatility is the signal that is
+    actually knowable when the forecast is made.
+    """
+    vals = [float(v) for v in weekly_series if v is not None]
+    if len(vals) < 3:
+        return None
+    mean = float(np.mean(vals))
+    if mean <= 0:
+        return None
+    return float(np.std(vals)) / mean
 
-    Uncertainty widens with the horizon (sigma * sqrt(1 + w/4)) so the bands
-    reflect genuinely lower confidence further out.
+
+def generate_forecast_series(model, recent_level, slope, as_of_woy, horizon_weeks,
+                             level_halflife=3.0, trend_decay_weeks=8.0,
+                             seasonal_shrink=0.75, anchor_tau=1.0,
+                             recent_cv=None, cv_lo=0.04, cv_hi=0.20):
+    """
+    Forecast = blend( flat base price , seasonal + level offset + trend ).
+
+    Components
+    ----------
+    seasonal        where this week-of-year normally sits, shrunk toward the
+                    segment's own mean by `seasonal_shrink` because per-week
+                    seasonal estimates are noisy when history is thin.
+    level offset    how far the market sat above/below seasonal when the
+                    forecast was made, decaying with `level_halflife`.
+    trend           short-term momentum, decaying over `trend_decay_weeks`.
+    anchor          at very short horizons the flat base price is simply more
+                    accurate, so week 1-2 are pulled back toward it
+                    (`anchor_tau`); without this the model lost to naive by
+                    24% at week 1.
+    volatility mix  `recent_cv` (realized CV of recent weeks) decides how much
+                    to trust the model at all: calm segments stay near the base
+                    price, volatile ones get the full seasonal reversion.
+
+    Defaults come from the rolling-origin diagnostics sweep.
     """
     import math
 
     overall = model.get("overall_median", 0.0)
     sigma_base = model.get("sigma", 0.0) or max(overall * 0.12, 0.5)
 
+    # Mean seasonal level across the horizon, used as the shrinkage target
+    horizon_ratios = [seasonal_ratio_at(model, (as_of_woy + w) % 52)
+                      for w in range(1, horizon_weeks + 1)]
+    mean_seasonal = overall * (float(np.mean(horizon_ratios)) if horizon_ratios else 1.0)
+
     expected_now = overall * seasonal_ratio_at(model, as_of_woy)
-    level_offset = (float(recent_level) - expected_now) if recent_level is not None else 0.0
+    base = float(recent_level) if recent_level is not None else expected_now
+    level_offset = base - expected_now
+
+    # How much to trust the seasonal model vs a flat base price
+    if recent_cv is None:
+        model_weight = 1.0
+    else:
+        span = max(cv_hi - cv_lo, 1e-6)
+        model_weight = max(0.0, min(1.0, (float(recent_cv) - cv_lo) / span))
 
     out = []
     for w in range(1, horizon_weeks + 1):
         woy = (as_of_woy + w) % 52
-        seasonal_level = overall * seasonal_ratio_at(model, woy)
+        raw_seasonal = overall * seasonal_ratio_at(model, woy)
+        seasonal_level = mean_seasonal + seasonal_shrink * (raw_seasonal - mean_seasonal)
+
         lvl = level_offset * (0.5 ** (w / level_halflife))
         tr = slope * max(0.0, 1.0 - (w - 1) / trend_decay_weeks)
-        price = max(seasonal_level + lvl + tr, 0.01)
+        model_price = seasonal_level + lvl + tr
+
+        # Short-horizon anchor toward the flat base price
+        aw = 1.0 - 0.5 ** (w / anchor_tau) if anchor_tau else 1.0
+        model_price = (1.0 - aw) * base + aw * model_price
+
+        # Volatility-gated blend between flat base and the seasonal model
+        price = max((1.0 - model_weight) * base + model_weight * model_price, 0.01)
+
         sig = sigma_base * math.sqrt(1.0 + w / 4.0)
         out.append({
             "week": w,
@@ -969,6 +1024,7 @@ def generate_forecast_series(model, recent_level, slope, as_of_woy, horizon_week
             "seasonal_component": round(seasonal_level, 2),
             "level_component": round(lvl, 2),
             "trend_component": round(tr, 2),
+            "model_weight": round(model_weight, 3),
             "median": round(price, 2),
             "sigma": round(sig, 2),
             "ci_50_lo": round(max(price - 0.674 * sig, 0.0), 2), "ci_50_hi": round(price + 0.674 * sig, 2),
@@ -8325,7 +8381,8 @@ def api_forecast_hindcast():
 
     # ---- Fit model on training rows ----
     model = build_seasonal_model(
-        [(r.year, r.day, r.price) for r in train], ref_year=as_of_year
+        [(r.year, r.day, r.price) for r in train], ref_year=as_of_year,
+        recency_weight=0.9,
     )
 
     # Recent level: median of the last 21 days before as_of (robust anchor)
@@ -8336,6 +8393,14 @@ def api_forecast_hindcast():
     if len(recent_window) < 2:
         recent_window = [float(r.price) for r in train[-8:]]
     base_price = round(float(np.median(recent_window)), 2) if recent_window else None
+
+    # Realized volatility of the 8 weeks before as-of — the calm/wild detector
+    rv = defaultdict(list)
+    for r in train:
+        if int(r.year) == as_of_year and 0 <= as_of_day - int(r.day) <= 56:
+            rv[(as_of_day - int(r.day)) // 7].append(float(r.price))
+    recent_weekly = [float(np.median(v)) for _, v in sorted(rv.items())]
+    recent_cv = realized_volatility(recent_weekly)
 
     # Short-term slope from weekly means over the last 8 weeks before as_of
     trend_rows = [r for r in train if int(r.year) == as_of_year and int(r.day) >= max(1, as_of_day - 56)]
@@ -8353,6 +8418,7 @@ def api_forecast_hindcast():
     forecast_weeks = generate_forecast_series(
         model, recent_level=base_price, slope=slope,
         as_of_woy=as_of_woy, horizon_weeks=horizon_weeks,
+        recent_cv=recent_cv,
     )
 
     seasonal_now = round(model["overall_median"] * seasonal_ratio_at(model, as_of_woy), 2)
@@ -8452,6 +8518,8 @@ def api_forecast_hindcast():
         "level_offset": round((base_price - seasonal_now), 2) if base_price is not None else None,
         "sigma": round(model["sigma"], 2),
         "slope": round(slope, 2),
+        "recent_cv": round(recent_cv, 4) if recent_cv is not None else None,
+        "model_weight": forecast_weeks[0]["model_weight"] if forecast_weeks else None,
         "training_rows": len(train),
         "history": history_chart,
         "forecast": forecast_weeks,
@@ -8522,11 +8590,14 @@ def api_forecast_hindcast_batch():
 
     # Parameter grid
     if do_sweep:
-        RECENCY   = [0.6, 0.75, 0.9]
-        HALFLIFE  = [2.0, 3.0, 4.0, 6.0, 8.0]
-        TRENDDECAY = [4.0, 6.0, 8.0]
+        RECENCY    = [0.75, 0.9]
+        HALFLIFE   = [3.0, 4.0, 6.0]
+        TRENDDECAY = [6.0, 8.0]
+        # Calm/wild detector thresholds — the highest-value knobs per diagnostics
+        CVBANDS    = [(0.0, 0.0001), (0.02, 0.12), (0.04, 0.20), (0.06, 0.30), (0.10, 0.45)]
     else:
-        RECENCY, HALFLIFE, TRENDDECAY = [0.75], [4.0], [6.0]
+        RECENCY, HALFLIFE, TRENDDECAY = [0.9], [3.0], [8.0]
+        CVBANDS = [(0.04, 0.20)]
 
     def _abs_day(yr, dy):
         return int(yr) * 365 + int(dy)
@@ -8575,6 +8646,17 @@ def api_forecast_hindcast_batch():
             tser = [float(np.mean(v)) for _, v in sorted(tw.items())]
             slope = max(-2.0, min(2.0, _linear_trend(tser))) if len(tser) >= 3 else 0.0
 
+            # Realized volatility of recent weeks — the calm/wild detector
+            rvw = defaultdict(list)
+            for p in train:
+                gap = as_of_abs - _abs_day(p[0], p[1])
+                if 0 <= gap <= 56:
+                    rvw[gap // 7].append(p[2])
+            recent_weekly = [float(np.median(v)) for _, v in sorted(rvw.items())]
+            recent_cv = realized_volatility(recent_weekly)
+            # Realized CV of the actual test window, for offline calibration only
+            future_cv = realized_volatility([actuals[k] for k in sorted(actuals)])
+
             run_rec = {
                 "commodity": commodity,
                 "city": city,
@@ -8586,6 +8668,8 @@ def api_forecast_hindcast_batch():
                 "test_weeks": len(actuals),
                 "base_price": round(base_price, 2) if base_price else None,
                 "slope": round(slope, 3),
+                "recent_cv": round(recent_cv, 4) if recent_cv is not None else None,
+                "future_cv": round(future_cv, 4) if future_cv is not None else None,
                 "results": {},
             }
 
@@ -8599,11 +8683,13 @@ def api_forecast_hindcast_batch():
                     run_rec["sigma"] = round(model["sigma"], 2)
 
                 for hl in HALFLIFE:
-                    for td in TRENDDECAY:
+                  for td in TRENDDECAY:
+                    for (clo, chi) in CVBANDS:
                         fc = generate_forecast_series(
                             model, recent_level=base_price, slope=slope,
                             as_of_woy=as_of_woy, horizon_weeks=horizon_weeks,
                             level_halflife=hl, trend_decay_weeks=td,
+                            recent_cv=recent_cv, cv_lo=clo, cv_hi=chi,
                         )
                         abs_e, pct_e, c50, c80, c95, nai = [], [], [], [], [], []
                         for f in fc:
@@ -8621,7 +8707,7 @@ def api_forecast_hindcast_batch():
                                 nai.append(abs(a - base_price))
                         if not abs_e:
                             continue
-                        combo = f"rw{rw}_hl{hl}_td{td}"
+                        combo = f"rw{rw}_hl{hl}_td{td}_cv{clo}-{chi}"
                         acc = sweep_acc[combo]
                         acc["abs"].extend(abs_e); acc["pct"].extend(pct_e)
                         acc["c50"].extend(c50); acc["c80"].extend(c80); acc["c95"].extend(c95)
@@ -8633,11 +8719,12 @@ def api_forecast_hindcast_batch():
                         }
 
             # Per-week detail for the default parameter set only (keeps payload sane)
-            default_model = build_seasonal_model(train, ref_year=as_of.year, recency_weight=0.75)
+            default_model = build_seasonal_model(train, ref_year=as_of.year, recency_weight=0.9)
             if default_model["overall_median"] > 0:
                 fc = generate_forecast_series(
                     default_model, recent_level=base_price, slope=slope,
                     as_of_woy=as_of_woy, horizon_weeks=horizon_weeks,
+                    recent_cv=recent_cv,
                 )
                 weeks = []
                 for f in fc:
@@ -8651,6 +8738,7 @@ def api_forecast_hindcast_batch():
                         "level": f["level_component"],
                         "trend": f["trend_component"],
                         "sigma": f["sigma"],
+                        "model_weight": f["model_weight"],
                         "ci_80_lo": f["ci_80_lo"], "ci_80_hi": f["ci_80_hi"],
                     })
                 run_rec["weeks_default_params"] = weeks
@@ -8665,7 +8753,9 @@ def api_forecast_hindcast_batch():
     for combo, acc in sweep_acc.items():
         if not acc["abs"]:
             continue
-        rw, hl, td = combo.replace("rw", "").replace("hl", "").replace("td", "").split("_")
+        parts = combo.split("_")
+        rw = parts[0][2:]; hl = parts[1][2:]; td = parts[2][2:]
+        cvlo, cvhi = parts[3][2:].split("-")
         mae = float(np.mean(acc["abs"]))
         naive_mae = float(np.mean(acc["naive"])) if acc["naive"] else None
         sweep.append({
@@ -8673,6 +8763,8 @@ def api_forecast_hindcast_batch():
             "recency_weight": float(rw),
             "level_halflife": float(hl),
             "trend_decay_weeks": float(td),
+            "cv_lo": float(cvlo),
+            "cv_hi": float(cvhi),
             "n_points": len(acc["abs"]),
             "mae": round(mae, 3),
             "mape": round(float(np.mean(acc["pct"])), 2) if acc["pct"] else None,
@@ -8685,7 +8777,7 @@ def api_forecast_hindcast_batch():
         })
     sweep.sort(key=lambda s: (s["mape"] if s["mape"] is not None else 1e9))
 
-    current = next((s for s in sweep if s["combo"] == "rw0.75_hl4.0_td6.0"), None)
+    current = next((s for s in sweep if s["combo"] == "rw0.9_hl3.0_td8.0_cv0.04-0.2"), None)
     best = sweep[0] if sweep else None
 
     return jsonify({
@@ -8698,7 +8790,9 @@ def api_forecast_hindcast_batch():
             "max_groups": max_groups,
             "sweep_enabled": do_sweep,
         },
-        "current_params": {"recency_weight": 0.75, "level_halflife": 4.0, "trend_decay_weeks": 6.0},
+        "current_params": {"recency_weight": 0.9, "level_halflife": 3.0,
+                           "trend_decay_weeks": 8.0, "cv_lo": 0.04, "cv_hi": 0.20,
+                           "seasonal_shrink": 0.75, "anchor_tau": 1.0},
         "current_performance": current,
         "best_params": best,
         "improvement_available": (
