@@ -9668,6 +9668,9 @@ def api_weather_price_correlation():
     def _run():
         app._wxcorr_running = True
         app._wxcorr_started = datetime.now().isoformat()
+        # Clear the previous run's completion stamp, otherwise a poll during a
+        # fresh run shows a finished time earlier than its start.
+        app._wxcorr_finished = None
         app._wxcorr_error = None
         app._wxcorr_result = None
         try:
