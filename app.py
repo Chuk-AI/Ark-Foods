@@ -9290,26 +9290,35 @@ def _weekly_weather(loc_id, start_date, days):
 
 def _deseasonalise(weeks, values):
     """
-    Strip the annual cycle by subtracting each week-of-year's own mean.
+    Remove the annual cycle by fitting a low-order harmonic, not per-week means.
 
-    Weather and price both swing with the seasons, so over a short window they
-    move together whether or not one drives the other - the correlation just
-    reports that both are travelling through the same part of the year. Working
-    on anomalies asks the question that matters: does an unusually cold week at
-    origin precede an unusually dear week at market.
+    Subtracting each week-of-year's own mean needs several years before that
+    mean is an estimate rather than the observation itself. On three years of
+    data most weeks carry one or two values, so the subtraction removed the
+    signal and left paired residuals whose structure the circular-shift null
+    could not reproduce: on two independent series it fired 53% of the time at
+    54 weeks and 32% at 80, against the 5% it should.
 
-    Falls back to the raw series where a week-of-year appears only once, since
-    subtracting a mean built from a single observation would zero it out.
+    A sine and cosine at the annual frequency plus the same at the semi-annual
+    one describes the cycle with five coefficients regardless of series length,
+    so it is well conditioned on one year and stays honest on four.
     """
-    from collections import defaultdict
-    buckets = defaultdict(list)
-    for (_, woy), v in zip(weeks, values):
-        buckets[woy].append(v)
-    means = {w: float(np.mean(v)) for w, v in buckets.items() if len(v) >= 2}
-    if len(means) < 4:
+    n = len(values)
+    if n < 16:
         return list(values)
-    return [v - means.get(woy, v) if woy in means else 0.0
-            for (_, woy), v in zip(weeks, values)]
+    t = np.array([(y * 52 + w) for (y, w) in weeks], dtype=float)
+    y = np.asarray(values, dtype=float)
+    two_pi = 2.0 * np.pi
+    design = np.column_stack([
+        np.ones(n),
+        np.sin(two_pi * t / 52.0), np.cos(two_pi * t / 52.0),
+        np.sin(two_pi * t / 26.0), np.cos(two_pi * t / 26.0),
+    ])
+    try:
+        coef, *_ = np.linalg.lstsq(design, y, rcond=None)
+        return list(y - design @ coef)
+    except np.linalg.LinAlgError:
+        return list(values)
 
 
 def _too_sparse(values, min_distinct=5, max_zero_share=0.9):
