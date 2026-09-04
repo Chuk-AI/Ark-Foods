@@ -9190,25 +9190,74 @@ def _origin_to_regions(origin):
 
 
 def _weekly_weather(loc_id, start_date, days):
-    """Weekly weather features for one growing region, from WT360 daily history."""
+    """
+    Weekly weather features for one growing region, plus a diagnostic record.
+
+    Fetched a year at a time: a single multi-year daily request comes back empty
+    from WT360 rather than erroring, which previously left this returning {} with
+    nothing to say about why.
+
+    Returns (weeks, diag).
+    """
     from collections import defaultdict
     loc = WT360_LOCATIONS.get(loc_id)
     if not loc:
-        return {}
-    params = {"sd": start_date.strftime("%Y%m%d000000"), "cnt": days}
-    params.update(_fields_to_params("avgTemp,maxTemp,minTemp,prcp,gdd"))
-    data = _wt360_data_get("daily", loc["wt360_id"], params)
-    rows = _wt360_parse_wx(data, loc["wt360_id"])
+        return {}, {"error": "unknown location key"}
+
+    diag = {"wt360_id": loc["wt360_id"], "chunks": [], "raw_rows": 0,
+            "parsed_days": 0, "unparsed_dates": 0, "sample": None}
+
+    raw_rows = []
+    remaining, cursor = days, start_date
+    while remaining > 0:
+        chunk = min(remaining, 365)
+        try:
+            params = {"sd": cursor.strftime("%Y%m%d000000"), "cnt": chunk}
+            params.update(_fields_to_params("avgTemp,maxTemp,minTemp,prcp,gdd"))
+            data = _wt360_data_get("daily", loc["wt360_id"], params)
+            rows = _wt360_parse_wx(data, loc["wt360_id"])
+            diag["chunks"].append({"from": cursor.strftime("%Y-%m-%d"), "days": chunk,
+                                   "rows": len(rows)})
+            if rows and diag["sample"] is None:
+                diag["sample"] = {k: rows[0].get(k) for k in list(rows[0])[:8]}
+            raw_rows.extend(rows)
+        except Exception as e:
+            diag["chunks"].append({"from": cursor.strftime("%Y-%m-%d"), "days": chunk,
+                                   "error": str(e)[:200]})
+        cursor += timedelta(days=chunk)
+        remaining -= chunk
+
+    diag["raw_rows"] = len(raw_rows)
+
+    def _parse_date(rec):
+        for key in ("utcDate", "endTS", "date", "localDate"):
+            raw = rec.get(key)
+            if raw is None:
+                continue
+            s = str(raw).strip()
+            for fmt in ("%Y%m%d", "%Y-%m-%d", "%m/%d/%Y", "%Y%m%d%H%M%S"):
+                try:
+                    return datetime.strptime(s[:len(fmt.replace("%Y", "2000")
+                                                    .replace("%m", "01")
+                                                    .replace("%d", "01")
+                                                    .replace("%H", "00")
+                                                    .replace("%M", "00")
+                                                    .replace("%S", "00"))], fmt)
+                except ValueError:
+                    continue
+            try:
+                return datetime.fromtimestamp(float(s) / (1000 if len(s) > 11 else 1))
+            except (ValueError, OSError, OverflowError):
+                continue
+        return None
 
     weeks = defaultdict(lambda: {"tmin": [], "tmax": [], "prcp": [], "gdd": []})
-    for r in rows:
-        raw = r.get("utcDate") or r.get("endTS")
-        if not raw:
+    for r in raw_rows:
+        dt = _parse_date(r)
+        if dt is None:
+            diag["unparsed_dates"] += 1
             continue
-        try:
-            dt = datetime.strptime(str(raw)[:8], "%Y%m%d")
-        except ValueError:
-            continue
+        diag["parsed_days"] += 1
         key = (dt.year, (dt.timetuple().tm_yday - 1) // 7)
         for src_key, dst in (("minTemp", "tmin"), ("maxTemp", "tmax"),
                              ("prcp", "prcp"), ("gdd", "gdd")):
@@ -9229,11 +9278,14 @@ def _weekly_weather(loc_id, start_date, days):
             "mean_temp":  float(np.mean(v["tmin"] + v["tmax"])) if (v["tmin"] or v["tmax"]) else None,
             "precip":     float(np.sum(v["prcp"])) if v["prcp"] else 0.0,
             "gdd":        float(np.sum(v["gdd"])) if v["gdd"] else None,
-            # Crop-stress counts, which matter more than averages for peppers
             "frost_days": sum(1 for t in v["tmin"] if t <= 36),
             "heat_days":  sum(1 for t in v["tmax"] if t >= 95),
         }
-    return out
+    diag["weeks_built"] = len(out)
+    if out:
+        ks = sorted(out)
+        diag["week_span"] = [f"{ks[0][0]}w{ks[0][1]}", f"{ks[-1][0]}w{ks[-1][1]}"]
+    return out, diag
 
 
 def _pearson(xs, ys):
@@ -9347,16 +9399,19 @@ def api_weather_price_correlation():
     needed = set()
     for (_, _, origin) in series:
         needed.update(_origin_to_regions(origin))
-    weather, weather_errors = {}, {}
+    weather, weather_errors, weather_diag = {}, {}, {}
     for loc_id in sorted(needed):
         try:
-            weather[loc_id] = _weekly_weather(loc_id, start, min(365 * years_back, 1800))
+            weather[loc_id], weather_diag[loc_id] = _weekly_weather(
+                loc_id, start, 365 * years_back)
         except Exception as e:
             weather_errors[loc_id] = str(e)
+            weather[loc_id] = {}
 
     FEATURES = ["min_temp", "max_temp", "mean_temp", "precip", "gdd", "frost_days", "heat_days"]
 
     results, unmapped, thin = [], set(), 0
+    no_weather, no_weather_regions = 0, set()
     tests_run = 0
 
     for (comm, city, origin), wkmap in series.items():
@@ -9364,9 +9419,15 @@ def api_weather_price_correlation():
         if not regions:
             unmapped.add(origin)
             continue
-        regions = [g for g in regions if weather.get(g)]
-        if not regions:
+        with_weather = [g for g in regions if weather.get(g)]
+        if not with_weather:
+            # Previously this fell through silently, so a total weather-fetch
+            # failure looked identical to having tested everything and found
+            # nothing. Count it instead.
+            no_weather += 1
+            no_weather_regions.update(regions)
             continue
+        regions = with_weather
         if len(wkmap) < min_weeks:
             thin += 1
             continue
@@ -9430,8 +9491,15 @@ def api_weather_price_correlation():
     # 5% of combinations should clear it even if weather explains nothing.
     expected_by_chance = round(len(results) * 0.05, 1)
 
-    if not results:
-        verdict = "No combination had enough linked weather and price weeks to test."
+    if not results and no_weather:
+        fetched = sum(d.get("raw_rows", 0) for d in weather_diag.values())
+        verdict = (f"Nothing could be tested: {no_weather} combinations were dropped because no "
+                   f"weather came back for their growing regions. WT360 returned {fetched} daily "
+                   f"records in total across {len(weather_diag)} regions. This is a data-fetch "
+                   f"problem, not a finding about weather - see weather_diagnostics.")
+    elif not results:
+        verdict = ("No combination had enough overlapping weather and price weeks to test. "
+                   "See weather_diagnostics for how much weather was actually retrieved.")
     elif len(real) <= expected_by_chance:
         verdict = (f"{len(real)} of {len(results)} combinations cleared the null, and about "
                    f"{expected_by_chance} would be expected by chance. On this data the weather "
@@ -9463,7 +9531,10 @@ def api_weather_price_correlation():
         "significant": real,
         "unmapped_origins": sorted(unmapped),
         "skipped_thin_series": thin,
+        "skipped_no_weather": no_weather,
+        "regions_without_weather": sorted(no_weather_regions),
         "weather_fetch_errors": weather_errors,
+        "weather_diagnostics": weather_diag,
         "method": ("Weekly median price per commodity/market/origin against weather at the "
                    "growing regions that supply that origin, tested at lags 0-{} weeks. "
                    "Significance is judged against a null built by circularly shifting the "
