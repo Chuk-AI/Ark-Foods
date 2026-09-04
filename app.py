@@ -954,37 +954,61 @@ def realized_volatility(weekly_series):
     return float(np.std(vals)) / mean
 
 
+def adaptive_halflife(recent_cv, hl_calm=7.0, hl_volatile=2.5, cv_lo=0.04, cv_hi=0.25):
+    """
+    Level-offset half-life chosen from the segment's recent volatility.
+
+    Per-segment diagnostics showed the best half-life tracks volatility
+    monotonically -- calm segments preferred ~6.7 weeks (stay near the current
+    price), volatile ones ~2.4 (revert to the seasonal level quickly). Deriving
+    it from an observable feature generalises, where fitting a free half-life
+    per segment would just overfit thin histories.
+    """
+    if recent_cv is None:
+        return (hl_calm + hl_volatile) / 2.0
+    span = max(cv_hi - cv_lo, 1e-6)
+    t = max(0.0, min(1.0, (float(recent_cv) - cv_lo) / span))
+    return hl_calm + (hl_volatile - hl_calm) * t
+
+
 def generate_forecast_series(model, recent_level, slope, as_of_woy, horizon_weeks,
-                             level_halflife=3.0, trend_decay_weeks=8.0,
+                             level_halflife=None, trend_decay_weeks=8.0,
                              seasonal_shrink=0.75, anchor_tau=1.0,
-                             recent_cv=None, cv_lo=0.04, cv_hi=0.20):
+                             recent_cv=None, cv_lo=0.04, cv_hi=0.20,
+                             hl_calm=7.0, hl_volatile=2.5):
     """
     Forecast = blend( flat base price , seasonal + level offset + trend ).
+
+    Everything that adapts here is driven by the segment's own recent
+    volatility, because segments differ far more than parameters do: the
+    globally best parameter set was best in only 1 of 27 segments, and
+    choosing per segment was worth ~3.3 MAPE points against ~0.3 from global
+    tuning. Origin and size are the main drivers of that spread -- Dominican
+    Republic and Mexico segments reach ~14% MAPE while rows with no recorded
+    origin sit near 18.7%, and unsized rows are worst at ~25%.
 
     Components
     ----------
     seasonal        where this week-of-year normally sits, shrunk toward the
-                    segment's own mean by `seasonal_shrink` because per-week
-                    seasonal estimates are noisy when history is thin.
-    level offset    how far the market sat above/below seasonal when the
-                    forecast was made, decaying with `level_halflife`.
+                    segment's mean by `seasonal_shrink` since per-week ratios
+                    are noisy on thin history.
+    level offset    distance from seasonal when the forecast was made, decaying
+                    with a half-life derived from volatility (see
+                    adaptive_halflife) unless `level_halflife` is given.
     trend           short-term momentum, decaying over `trend_decay_weeks`.
-    anchor          at very short horizons the flat base price is simply more
-                    accurate, so week 1-2 are pulled back toward it
-                    (`anchor_tau`); without this the model lost to naive by
-                    24% at week 1.
-    volatility mix  `recent_cv` (realized CV of recent weeks) decides how much
-                    to trust the model at all: calm segments stay near the base
-                    price, volatile ones get the full seasonal reversion.
-
-    Defaults come from the rolling-origin diagnostics sweep.
+    anchor          weeks 1-2 pulled toward the flat base price, which beat the
+                    model there by 24% and 14% before this was added.
+    volatility mix  calm segments stay near the base price, volatile ones get
+                    full seasonal reversion.
     """
     import math
 
     overall = model.get("overall_median", 0.0)
     sigma_base = model.get("sigma", 0.0) or max(overall * 0.12, 0.5)
 
-    # Mean seasonal level across the horizon, used as the shrinkage target
+    if level_halflife is None:
+        level_halflife = adaptive_halflife(recent_cv, hl_calm=hl_calm, hl_volatile=hl_volatile)
+
     horizon_ratios = [seasonal_ratio_at(model, (as_of_woy + w) % 52)
                       for w in range(1, horizon_weeks + 1)]
     mean_seasonal = overall * (float(np.mean(horizon_ratios)) if horizon_ratios else 1.0)
@@ -993,7 +1017,6 @@ def generate_forecast_series(model, recent_level, slope, as_of_woy, horizon_week
     base = float(recent_level) if recent_level is not None else expected_now
     level_offset = base - expected_now
 
-    # How much to trust the seasonal model vs a flat base price
     if recent_cv is None:
         model_weight = 1.0
     else:
@@ -1010,11 +1033,9 @@ def generate_forecast_series(model, recent_level, slope, as_of_woy, horizon_week
         tr = slope * max(0.0, 1.0 - (w - 1) / trend_decay_weeks)
         model_price = seasonal_level + lvl + tr
 
-        # Short-horizon anchor toward the flat base price
         aw = 1.0 - 0.5 ** (w / anchor_tau) if anchor_tau else 1.0
         model_price = (1.0 - aw) * base + aw * model_price
 
-        # Volatility-gated blend between flat base and the seasonal model
         price = max((1.0 - model_weight) * base + model_weight * model_price, 0.01)
 
         sig = sigma_base * math.sqrt(1.0 + w / 4.0)
@@ -1025,6 +1046,7 @@ def generate_forecast_series(model, recent_level, slope, as_of_woy, horizon_week
             "level_component": round(lvl, 2),
             "trend_component": round(tr, 2),
             "model_weight": round(model_weight, 3),
+            "level_halflife": round(level_halflife, 2),
             "median": round(price, 2),
             "sigma": round(sig, 2),
             "ci_50_lo": round(max(price - 0.674 * sig, 0.0), 2), "ci_50_hi": round(price + 0.674 * sig, 2),
@@ -8520,6 +8542,7 @@ def api_forecast_hindcast():
         "slope": round(slope, 2),
         "recent_cv": round(recent_cv, 4) if recent_cv is not None else None,
         "model_weight": forecast_weeks[0]["model_weight"] if forecast_weeks else None,
+        "level_halflife": forecast_weeks[0]["level_halflife"] if forecast_weeks else None,
         "training_rows": len(train),
         "history": history_chart,
         "forecast": forecast_weeks,
@@ -8591,12 +8614,12 @@ def api_forecast_hindcast_batch():
     # Parameter grid
     if do_sweep:
         RECENCY    = [0.75, 0.9]
-        HALFLIFE   = [3.0, 4.0, 6.0]
+        # (hl_calm, hl_volatile) — the volatility→half-life mapping. None = fixed.
+        HLMAPS     = [(7.0, 2.5), (8.0, 2.0), (6.0, 3.0), (4.0, 4.0)]
         TRENDDECAY = [6.0, 8.0]
-        # Calm/wild detector thresholds — the highest-value knobs per diagnostics
-        CVBANDS    = [(0.0, 0.0001), (0.02, 0.12), (0.04, 0.20), (0.06, 0.30), (0.10, 0.45)]
+        CVBANDS    = [(0.0, 0.0001), (0.02, 0.12), (0.04, 0.20), (0.06, 0.30)]
     else:
-        RECENCY, HALFLIFE, TRENDDECAY = [0.9], [3.0], [8.0]
+        RECENCY, HLMAPS, TRENDDECAY = [0.9], [(7.0, 2.5)], [8.0]
         CVBANDS = [(0.04, 0.20)]
 
     def _abs_day(yr, dy):
@@ -8682,14 +8705,14 @@ def api_forecast_hindcast_batch():
                         model["overall_median"] * seasonal_ratio_at(model, as_of_woy), 2)
                     run_rec["sigma"] = round(model["sigma"], 2)
 
-                for hl in HALFLIFE:
+                for (hlc, hlv) in HLMAPS:
                   for td in TRENDDECAY:
                     for (clo, chi) in CVBANDS:
                         fc = generate_forecast_series(
                             model, recent_level=base_price, slope=slope,
                             as_of_woy=as_of_woy, horizon_weeks=horizon_weeks,
-                            level_halflife=hl, trend_decay_weeks=td,
-                            recent_cv=recent_cv, cv_lo=clo, cv_hi=chi,
+                            trend_decay_weeks=td, recent_cv=recent_cv,
+                            cv_lo=clo, cv_hi=chi, hl_calm=hlc, hl_volatile=hlv,
                         )
                         abs_e, pct_e, c50, c80, c95, nai = [], [], [], [], [], []
                         for f in fc:
@@ -8707,7 +8730,7 @@ def api_forecast_hindcast_batch():
                                 nai.append(abs(a - base_price))
                         if not abs_e:
                             continue
-                        combo = f"rw{rw}_hl{hl}_td{td}_cv{clo}-{chi}"
+                        combo = f"rw{rw}_hl{hlc}-{hlv}_td{td}_cv{clo}-{chi}"
                         acc = sweep_acc[combo]
                         acc["abs"].extend(abs_e); acc["pct"].extend(pct_e)
                         acc["c50"].extend(c50); acc["c80"].extend(c80); acc["c95"].extend(c95)
@@ -8754,14 +8777,16 @@ def api_forecast_hindcast_batch():
         if not acc["abs"]:
             continue
         parts = combo.split("_")
-        rw = parts[0][2:]; hl = parts[1][2:]; td = parts[2][2:]
+        rw = parts[0][2:]; td = parts[2][2:]
+        hlc, hlv = parts[1][2:].split("-")
         cvlo, cvhi = parts[3][2:].split("-")
         mae = float(np.mean(acc["abs"]))
         naive_mae = float(np.mean(acc["naive"])) if acc["naive"] else None
         sweep.append({
             "combo": combo,
             "recency_weight": float(rw),
-            "level_halflife": float(hl),
+            "hl_calm": float(hlc),
+            "hl_volatile": float(hlv),
             "trend_decay_weeks": float(td),
             "cv_lo": float(cvlo),
             "cv_hi": float(cvhi),
@@ -8777,8 +8802,98 @@ def api_forecast_hindcast_batch():
         })
     sweep.sort(key=lambda s: (s["mape"] if s["mape"] is not None else 1e9))
 
-    current = next((s for s in sweep if s["combo"] == "rw0.9_hl3.0_td8.0_cv0.04-0.2"), None)
+    DEFAULT_COMBO = "rw0.9_hl7.0-2.5_td8.0_cv0.04-0.2"
+    current = next((s for s in sweep if s["combo"] == DEFAULT_COMBO), None)
     best = sweep[0] if sweep else None
+
+    # ---- Per-segment analysis ----------------------------------------------
+    # A single pooled MAPE hides that segments differ far more than parameters
+    # do: origin and size change both the achievable accuracy and which
+    # parameters are best, so everything below is reported per segment first
+    # and rolled up afterwards.
+    per_seg = defaultdict(lambda: {
+        "abs": [], "pct": [], "naive": [], "cv": [], "combo_mape": defaultdict(list),
+        "meta": None, "runs": 0,
+    })
+    for r in runs:
+        skey = (r["commodity"], r["city"], r["segment"])
+        s = per_seg[skey]
+        s["runs"] += 1
+        s["meta"] = {
+            "commodity": r["commodity"], "city": r["city"], "segment": r["segment"],
+            "unit": r["unit"], "item_size": r["item_size"], "origin": r["origin"],
+        }
+        if r.get("recent_cv") is not None:
+            s["cv"].append(r["recent_cv"])
+        bp = r.get("base_price")
+        for w in r.get("weeks_default_params", []):
+            a = w.get("actual")
+            if a is None or not a:
+                continue
+            e = abs(a - w["forecast"])
+            s["abs"].append(e)
+            s["pct"].append(e / a * 100.0)
+            if bp:
+                s["naive"].append(abs(a - bp))
+        for combo, v in r.get("results", {}).items():
+            if v.get("mape") is not None:
+                s["combo_mape"][combo].append(v["mape"])
+
+    segments_out = []
+    for skey, s in per_seg.items():
+        if not s["pct"]:
+            continue
+        combo_avg = {c: float(np.mean(v)) for c, v in s["combo_mape"].items() if v}
+        best_combo = min(combo_avg, key=combo_avg.get) if combo_avg else None
+        default_mape = combo_avg.get(DEFAULT_COMBO)
+        mae = float(np.mean(s["abs"]))
+        nmae = float(np.mean(s["naive"])) if s["naive"] else None
+        segments_out.append({
+            **s["meta"],
+            "runs": s["runs"],
+            "n_points": len(s["pct"]),
+            "recent_cv": round(float(np.mean(s["cv"])), 4) if s["cv"] else None,
+            "mae": round(mae, 3),
+            "mape": round(float(np.mean(s["pct"])), 2),
+            "naive_mae": round(nmae, 3) if nmae else None,
+            "skill_score": round((1 - mae / nmae) * 100, 2) if nmae else None,
+            "best_combo": best_combo,
+            "best_combo_mape": round(combo_avg[best_combo], 2) if best_combo else None,
+            "default_combo_mape": round(default_mape, 2) if default_mape is not None else None,
+            "gain_from_per_segment": (
+                round(default_mape - combo_avg[best_combo], 2)
+                if best_combo and default_mape is not None else None
+            ),
+        })
+    segments_out.sort(key=lambda s: -s["mape"])
+
+    def _rollup(field):
+        acc = defaultdict(lambda: {"mape": [], "skill": [], "n": 0, "segs": 0, "gain": []})
+        for s in segments_out:
+            k = s.get(field) or "(not recorded)"
+            a = acc[k]
+            a["mape"].append(s["mape"]); a["n"] += s["n_points"]; a["segs"] += 1
+            if s.get("skill_score") is not None:
+                a["skill"].append(s["skill_score"])
+            if s.get("gain_from_per_segment") is not None:
+                a["gain"].append(s["gain_from_per_segment"])
+        out = []
+        for k, a in acc.items():
+            out.append({
+                field: k,
+                "segments": a["segs"],
+                "n_points": a["n"],
+                "mape": round(float(np.mean(a["mape"])), 2),
+                "skill_score": round(float(np.mean(a["skill"])), 2) if a["skill"] else None,
+                "tuning_gain_available": round(float(np.mean(a["gain"])), 2) if a["gain"] else None,
+            })
+        out.sort(key=lambda x: x["mape"])
+        return out
+
+    all_pct = [p for s in per_seg.values() for p in s["pct"]]
+    seg_mapes = [s["mape"] for s in segments_out]
+    per_seg_gains = [s["gain_from_per_segment"] for s in segments_out
+                     if s.get("gain_from_per_segment") is not None]
 
     return jsonify({
         "generated_at": now.strftime("%Y-%m-%d %H:%M:%S"),
@@ -8790,7 +8905,7 @@ def api_forecast_hindcast_batch():
             "max_groups": max_groups,
             "sweep_enabled": do_sweep,
         },
-        "current_params": {"recency_weight": 0.9, "level_halflife": 3.0,
+        "current_params": {"recency_weight": 0.9, "hl_calm": 7.0, "hl_volatile": 2.5,
                            "trend_decay_weeks": 8.0, "cv_lo": 0.04, "cv_hi": 0.20,
                            "seasonal_shrink": 0.75, "anchor_tau": 1.0},
         "current_performance": current,
@@ -8801,11 +8916,28 @@ def api_forecast_hindcast_batch():
             else None
         ),
         "param_sweep": sweep,
+        "segments": segments_out,
+        "by_origin": _rollup("origin"),
+        "by_size": _rollup("item_size"),
+        "by_unit": _rollup("unit"),
+        "by_commodity": _rollup("commodity"),
+        "aggregate": {
+            "micro_mape": round(float(np.mean(all_pct)), 2) if all_pct else None,
+            "macro_mape": round(float(np.mean(seg_mapes)), 2) if seg_mapes else None,
+            "median_segment_mape": round(float(np.median(seg_mapes)), 2) if seg_mapes else None,
+            "worst_segment_mape": round(max(seg_mapes), 2) if seg_mapes else None,
+            "best_segment_mape": round(min(seg_mapes), 2) if seg_mapes else None,
+            "per_segment_tuning_gain": round(float(np.mean(per_seg_gains)), 2) if per_seg_gains else None,
+            "note": ("micro pools every forecast point; macro averages segments equally. "
+                     "Prefer macro when judging the model, since pooling lets high-volume "
+                     "segments speak for markets they do not represent."),
+        },
         "runs": runs,
         "summary": {
             "groups_evaluated": len(ranked),
             "total_runs": len(runs),
-            "total_forecast_points": sum(len(a["abs"]) for a in sweep_acc.values()) // max(len(sweep), 1),
+            "segments_analysed": len(segments_out),
+            "total_forecast_points": len(all_pct),
         },
     })
 

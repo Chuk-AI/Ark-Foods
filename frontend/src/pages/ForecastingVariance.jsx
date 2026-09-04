@@ -54,6 +54,7 @@ function DiagnosticsExport() {
 
   const best = result?.best_params;
   const cur = result?.current_performance;
+  const agg = result?.aggregate;
 
   return (
     <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '16px 20px', marginBottom: 20 }}>
@@ -63,9 +64,10 @@ function DiagnosticsExport() {
             Model Diagnostics Export
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-3)', lineHeight: 1.6 }}>
-            Runs rolling-origin hindcasts across ~30 segments at 4 different as-of dates each,
-            and sweeps the model's tunable parameters. Downloads a JSON file — send it back
-            and the numbers in it say exactly which parameters to change.
+            Runs rolling-origin hindcasts across ~30 segments at 4 as-of dates each, scoring
+            every segment separately and rolling the results up by origin and size — pooled
+            numbers hide that a Dominican 8&nbsp;lb line and an unsized 1&nbsp;bu line are
+            different forecasting problems. Downloads a JSON file; send it back to retune.
           </div>
         </div>
         <button onClick={run} disabled={busy}
@@ -82,31 +84,77 @@ function DiagnosticsExport() {
 
       {result && (
         <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
-          <div style={{ fontSize: 12, color: '#15803d', fontWeight: 700, marginBottom: 8 }}>
-            ✓ Downloaded — {result.summary?.total_runs} runs across {result.summary?.groups_evaluated} segments
+          <div style={{ fontSize: 12, color: '#15803d', fontWeight: 700, marginBottom: 10 }}>
+            ✓ Downloaded — {result.summary?.total_runs} runs across {result.summary?.segments_analysed} segments
           </div>
-          <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', fontSize: 12 }}>
-            {cur && (
-              <div>
-                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Current params</div>
-                <div style={{ color: 'var(--text-2)' }}>MAPE {cur.mape}% · skill {cur.skill_score}%</div>
-              </div>
-            )}
-            {best && (
-              <div>
-                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Best in sweep</div>
-                <div style={{ color: '#15803d', fontWeight: 600 }}>
-                  MAPE {best.mape}% · hl={best.level_halflife} rw={best.recency_weight} td={best.trend_decay_weeks}
+
+          {/* Aggregate: micro vs macro */}
+          {agg && (
+            <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap', fontSize: 12, marginBottom: 14 }}>
+              {[
+                ['Macro MAPE', `${agg.macro_mape}%`, 'segments weighted equally', '#1e293b'],
+                ['Micro MAPE', `${agg.micro_mape}%`, 'all points pooled', 'var(--text-3)'],
+                ['Median segment', `${agg.median_segment_mape}%`, null, 'var(--text-2)'],
+                ['Best → worst', `${agg.best_segment_mape}% → ${agg.worst_segment_mape}%`, 'spread across segments', 'var(--text-2)'],
+                ['Per-segment tuning gain', agg.per_segment_tuning_gain != null ? `−${agg.per_segment_tuning_gain} pts` : '—', 'vs one global setting', '#15803d'],
+              ].map(([k, v, sub, col]) => (
+                <div key={k}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{k}</div>
+                  <div style={{ color: col, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{v}</div>
+                  {sub && <div style={{ fontSize: 10, color: 'var(--text-3)' }}>{sub}</div>}
                 </div>
+              ))}
+            </div>
+          )}
+
+          {/* Origin / size rollups side by side */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(230px,1fr))', gap: 14 }}>
+            {[['By origin', result.by_origin, 'origin'], ['By size', result.by_size, 'item_size']].map(([title, rows, field]) => (
+              <div key={title}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }}>{title}</div>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                  <tbody>
+                    {(rows || []).slice(0, 8).map(r => (
+                      <tr key={String(r[field])} style={{ borderBottom: '1px solid var(--border)' }}>
+                        <td style={{ padding: '4px 6px 4px 0', color: 'var(--text-2)' }}>{String(r[field])}</td>
+                        <td style={{ padding: '4px 6px', color: 'var(--text-3)', textAlign: 'right' }}>{r.segments}seg</td>
+                        <td style={{ padding: '4px 0 4px 6px', textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums',
+                          color: r.mape <= 15 ? '#15803d' : r.mape <= 22 ? '#b45309' : '#dc2626' }}>{r.mape}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            )}
-            {result.improvement_available != null && result.improvement_available > 0 && (
-              <div>
-                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Available gain</div>
-                <div style={{ color: '#15803d', fontWeight: 700 }}>−{result.improvement_available} pts MAPE</div>
-              </div>
-            )}
+            ))}
           </div>
+
+          {/* Worst segments */}
+          {result.segments?.length > 0 && (
+            <div style={{ marginTop: 14 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }}>
+                Worst segments
+              </div>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                  <tbody>
+                    {result.segments.slice(0, 6).map((s, i) => (
+                      <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
+                        <td style={{ padding: '4px 8px 4px 0', color: 'var(--text-2)', whiteSpace: 'nowrap' }}>{s.commodity} · {s.city}</td>
+                        <td style={{ padding: '4px 8px', color: 'var(--text-3)' }}>{s.segment}</td>
+                        <td style={{ padding: '4px 8px', textAlign: 'right', color: 'var(--text-3)' }}>
+                          cv {s.recent_cv != null ? `${(s.recent_cv * 100).toFixed(0)}%` : '—'}
+                        </td>
+                        <td style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 700, color: '#dc2626', fontVariantNumeric: 'tabular-nums' }}>{s.mape}%</td>
+                        <td style={{ padding: '4px 0 4px 8px', textAlign: 'right', color: s.skill_score > 0 ? '#15803d' : '#dc2626', fontVariantNumeric: 'tabular-nums' }}>
+                          {s.skill_score != null ? `${s.skill_score > 0 ? '+' : ''}${s.skill_score}%` : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
