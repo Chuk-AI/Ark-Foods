@@ -9152,6 +9152,291 @@ def api_forecast_hindcast_batch():
     })
 
 
+# Which growing regions actually supply a given USDA origin label. Weather is
+# measured at the farm; prices are quoted at terminal markets hundreds of miles
+# away, so the two only connect through the product that physically moved. The
+# origin column is what links them.
+ORIGIN_REGION_MAP = {
+    "florida":         ["arcadia_fl", "immokalee_fl", "palm_beach_fl"],
+    "georgia":         ["adel_ga", "lake_park_ga"],
+    "michigan":        ["sodus_mi"],
+    "new jersey":      ["vineland_nj"],
+    "south carolina":  ["cameron_sc", "ridge_spring_sc"],
+    "mexico":          ["culiacan_mx", "sonora_mx", "el_morro_mx", "ensenada_mx", "huejotillo_mx"],
+    "sinaloa":         ["culiacan_mx", "huejotillo_mx"],
+    "sonora":          ["sonora_mx"],
+    "baja california": ["el_morro_mx", "ensenada_mx"],
+}
+
+
+def _origin_to_regions(origin):
+    if not origin:
+        return []
+    o = str(origin).strip().lower()
+    if o in ORIGIN_REGION_MAP:
+        return ORIGIN_REGION_MAP[o]
+    for k, v in ORIGIN_REGION_MAP.items():
+        if k in o or o in k:
+            return v
+    return []
+
+
+def _weekly_weather(loc_id, start_date, days):
+    """Weekly weather features for one growing region, from WT360 daily history."""
+    from collections import defaultdict
+    loc = WT360_LOCATIONS.get(loc_id)
+    if not loc:
+        return {}
+    params = {"sd": start_date.strftime("%Y%m%d000000"), "cnt": days}
+    params.update(_fields_to_params("avgTemp,maxTemp,minTemp,prcp,gdd"))
+    data = _wt360_data_get("daily", loc["wt360_id"], params)
+    rows = _wt360_parse_wx(data, loc["wt360_id"])
+
+    weeks = defaultdict(lambda: {"tmin": [], "tmax": [], "prcp": [], "gdd": []})
+    for r in rows:
+        raw = r.get("utcDate") or r.get("endTS")
+        if not raw:
+            continue
+        try:
+            dt = datetime.strptime(str(raw)[:8], "%Y%m%d")
+        except ValueError:
+            continue
+        key = (dt.year, (dt.timetuple().tm_yday - 1) // 7)
+        for src_key, dst in (("minTemp", "tmin"), ("maxTemp", "tmax"),
+                             ("prcp", "prcp"), ("gdd", "gdd")):
+            v = r.get(src_key)
+            if v is not None:
+                try:
+                    weeks[key][dst].append(float(v))
+                except (TypeError, ValueError):
+                    pass
+
+    out = {}
+    for key, v in weeks.items():
+        if not v["tmin"] and not v["tmax"]:
+            continue
+        out[key] = {
+            "min_temp":   float(np.min(v["tmin"])) if v["tmin"] else None,
+            "max_temp":   float(np.max(v["tmax"])) if v["tmax"] else None,
+            "mean_temp":  float(np.mean(v["tmin"] + v["tmax"])) if (v["tmin"] or v["tmax"]) else None,
+            "precip":     float(np.sum(v["prcp"])) if v["prcp"] else 0.0,
+            "gdd":        float(np.sum(v["gdd"])) if v["gdd"] else None,
+            # Crop-stress counts, which matter more than averages for peppers
+            "frost_days": sum(1 for t in v["tmin"] if t <= 36),
+            "heat_days":  sum(1 for t in v["tmax"] if t >= 95),
+        }
+    return out
+
+
+def _pearson(xs, ys):
+    if len(xs) < 6:
+        return None
+    sx, sy = float(np.std(xs)), float(np.std(ys))
+    if sx <= 0 or sy <= 0:
+        return None
+    return float(np.corrcoef(xs, ys)[0, 1])
+
+
+def _null_threshold(xs, ys, trials=200, pct=95):
+    """
+    Largest |r| reachable by chance, from circularly shifting one series.
+
+    A plain shuffle would destroy the autocorrelation in both weather and price
+    and make the null far too tight, so almost any lag would look significant.
+    Circular shifts keep each series' own structure intact and only break the
+    alignment between them, which is the thing being tested.
+    """
+    n = len(xs)
+    if n < 8:
+        return None
+    rs = []
+    for k in range(1, min(trials, n - 1) + 1):
+        shifted = ys[k:] + ys[:k]
+        r = _pearson(xs, shifted)
+        if r is not None:
+            rs.append(abs(r))
+    if not rs:
+        return None
+    return float(np.percentile(rs, pct))
+
+
+@app.route("/api/weather_price_correlation", methods=["GET"])
+def api_weather_price_correlation():
+    """
+    Does weather at the growing region actually move price at the terminal market?
+
+    Weather is measured at the farm and prices are quoted hundreds of miles away,
+    so the two are only linked through product that physically shipped. This uses
+    the USDA origin column to route each market's prices back to the regions that
+    supplied them, then tests weather features against price at lags of 0-8 weeks.
+
+    Every candidate is checked against a null built by circularly shifting the
+    price series, which preserves its autocorrelation and breaks only the
+    alignment being tested. The response reports how many results clear that null
+    and how many would be expected by chance, because with this many combinations
+    some correlations will look strong whether or not anything real is there.
+    """
+    from collections import defaultdict
+
+    commodity = request.args.get("commodity")
+    years_back = min(max(int(request.args.get("years_back", 3)), 1), 5)
+    max_lag = min(max(int(request.args.get("max_lag", 8)), 1), 12)
+    min_weeks = min(max(int(request.args.get("min_weeks", 20)), 10), 100)
+
+    now = datetime.now()
+    start = now - timedelta(days=365 * years_back)
+
+    if not WT360_API_KEY:
+        return jsonify({"error": "WT360_API_KEY is not configured; cannot fetch weather history."}), 200
+
+    q = [
+        PriceData.price > 0,
+        PriceData.source == "USDA",          # origin is only populated on USDA rows
+        PriceData.origin.isnot(None),
+        PriceData.year >= start.year,
+    ]
+    if commodity:
+        q.append(PriceData.commodity == normalize_commodity(commodity))
+
+    rows = db.session.query(
+        PriceData.commodity, PriceData.city_name, PriceData.origin,
+        PriceData.year, PriceData.day, PriceData.price,
+    ).filter(*q).all()
+
+    if not rows:
+        return jsonify({
+            "error": "No USDA rows with a recorded origin in this window. "
+                     "Origin is only present on USDA data, so the weather link "
+                     "cannot be traced without it.",
+        }), 200
+
+    # Weekly median price per (commodity, market, origin)
+    series = defaultdict(lambda: defaultdict(list))
+    for r in rows:
+        wk = (int(r.year), (int(r.day) - 1) // 7)
+        series[(r.commodity, r.city_name, r.origin)][wk].append(float(r.price))
+
+    # Weather per growing region, fetched once each
+    needed = set()
+    for (_, _, origin) in series:
+        needed.update(_origin_to_regions(origin))
+    weather, weather_errors = {}, {}
+    for loc_id in sorted(needed):
+        try:
+            weather[loc_id] = _weekly_weather(loc_id, start, min(365 * years_back, 1800))
+        except Exception as e:
+            weather_errors[loc_id] = str(e)
+
+    FEATURES = ["min_temp", "max_temp", "mean_temp", "precip", "gdd", "frost_days", "heat_days"]
+
+    results, unmapped, thin = [], set(), 0
+    tests_run = 0
+
+    for (comm, city, origin), wkmap in series.items():
+        regions = _origin_to_regions(origin)
+        if not regions:
+            unmapped.add(origin)
+            continue
+        regions = [g for g in regions if weather.get(g)]
+        if not regions:
+            continue
+        if len(wkmap) < min_weeks:
+            thin += 1
+            continue
+
+        price_weeks = sorted(wkmap)
+        price_by_week = {w: float(np.median(v)) for w, v in wkmap.items()}
+
+        # Average the weather across the regions serving this origin
+        merged = defaultdict(lambda: defaultdict(list))
+        for g in regions:
+            for wk, feats in weather[g].items():
+                for f in FEATURES:
+                    if feats.get(f) is not None:
+                        merged[wk][f].append(feats[f])
+
+        def _shift(wk, lag):
+            y, w = wk
+            w -= lag
+            while w < 0:
+                y -= 1
+                w += 52
+            return (y, w)
+
+        best = None
+        for feat in FEATURES:
+            for lag in range(0, max_lag + 1):
+                xs, ys = [], []
+                for wk in price_weeks:
+                    src = _shift(wk, lag)
+                    vals = merged.get(src, {}).get(feat)
+                    if vals:
+                        xs.append(float(np.mean(vals)))
+                        ys.append(price_by_week[wk])
+                if len(xs) < min_weeks:
+                    continue
+                r = _pearson(xs, ys)
+                if r is None:
+                    continue
+                tests_run += 1
+                thresh = _null_threshold(xs, ys)
+                rec = {
+                    "feature": feat, "lag_weeks": lag, "r": round(r, 3),
+                    "n_weeks": len(xs),
+                    "null_threshold": round(thresh, 3) if thresh is not None else None,
+                    "beats_null": bool(thresh is not None and abs(r) > thresh),
+                }
+                if best is None or abs(r) > abs(best["r"]):
+                    best = rec
+
+        if best:
+            results.append({
+                "commodity": comm, "market": city, "origin": origin,
+                "growing_regions": regions,
+                "weeks_of_price_data": len(wkmap),
+                **best,
+            })
+
+    results.sort(key=lambda x: -abs(x["r"]))
+    real = [x for x in results if x["beats_null"]]
+    # With one test per combination at the 95th percentile of the null, roughly
+    # 5% of combinations should clear it even if weather explains nothing.
+    expected_by_chance = round(len(results) * 0.05, 1)
+
+    if not results:
+        verdict = "No combination had enough linked weather and price weeks to test."
+    elif len(real) <= expected_by_chance:
+        verdict = (f"{len(real)} of {len(results)} combinations cleared the null, and about "
+                   f"{expected_by_chance} would be expected by chance. On this data the weather "
+                   f"link is not distinguishable from noise.")
+    else:
+        verdict = (f"{len(real)} of {len(results)} combinations cleared the null against about "
+                   f"{expected_by_chance} expected by chance, so there is signal here beyond "
+                   f"what randomness produces. Treat the individual rows as candidates to "
+                   f"confirm, not as settled effects.")
+
+    return jsonify({
+        "generated_at": now.strftime("%Y-%m-%d %H:%M:%S"),
+        "window_years": years_back,
+        "max_lag_weeks": max_lag,
+        "min_weeks_required": min_weeks,
+        "combinations_tested": len(results),
+        "individual_tests": tests_run,
+        "cleared_null": len(real),
+        "expected_by_chance": expected_by_chance,
+        "verdict": verdict,
+        "results": results,
+        "significant": real,
+        "unmapped_origins": sorted(unmapped),
+        "skipped_thin_series": thin,
+        "weather_fetch_errors": weather_errors,
+        "method": ("Weekly median price per commodity/market/origin against weather at the "
+                   "growing regions that supply that origin, tested at lags 0-{} weeks. "
+                   "Significance is judged against a null built by circularly shifting the "
+                   "price series, which keeps its autocorrelation intact.").format(max_lag),
+    })
+
+
 # Run the app
 if __name__ == "__main__":
     app.run(debug=True)
