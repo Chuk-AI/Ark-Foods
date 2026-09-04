@@ -96,7 +96,8 @@ function DiagnosticsExport() {
                 ['Micro MAPE', `${agg.micro_mape}%`, 'all points pooled', 'var(--text-3)'],
                 ['Median segment', `${agg.median_segment_mape}%`, null, 'var(--text-2)'],
                 ['Best → worst', `${agg.best_segment_mape}% → ${agg.worst_segment_mape}%`, 'spread across segments', 'var(--text-2)'],
-                ['Per-segment tuning gain', agg.per_segment_tuning_gain != null ? `−${agg.per_segment_tuning_gain} pts` : '—', 'vs one global setting', '#15803d'],
+                ['Per-segment gain (out-of-sample)', agg.per_segment_tuning_gain_oos != null ? `${agg.per_segment_tuning_gain_oos > 0 ? '−' : '+'}${Math.abs(agg.per_segment_tuning_gain_oos)} pts` : '—', `hindsight would say ${agg.per_segment_tuning_gain_hindsight ?? '—'}`, 'var(--text-2)'],
+                ['Volatility persistence', agg.volatility_persistence != null ? agg.volatility_persistence.toFixed(2) : '—', 'corr(recent, future) — gates adaptivity', agg.volatility_persistence > 0.4 ? '#15803d' : '#b45309'],
               ].map(([k, v, sub, col]) => (
                 <div key={k}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{k}</div>
