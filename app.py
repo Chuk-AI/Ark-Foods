@@ -867,7 +867,7 @@ def _robust_sigma(values):
     return mad * 1.4826
 
 
-def build_seasonal_model(rows, ref_year):
+def build_seasonal_model(rows, ref_year, recency_weight=0.75):
     """
     Build a ratio-based seasonal model with recency weighting.
 
@@ -884,7 +884,7 @@ def build_seasonal_model(rows, ref_year):
     for (yr, dy, pr) in rows:
         try:
             woy = max(0, min(51, (int(dy) - 1) // 7))
-            wt = 0.75 ** max(0, int(ref_year) - int(yr))
+            wt = recency_weight ** max(0, int(ref_year) - int(yr))
             week_vals[woy].append(float(pr))
             week_wts[woy].append(wt)
             all_vals.append(float(pr))
@@ -8457,6 +8457,262 @@ def api_forecast_hindcast():
         "forecast": forecast_weeks,
         "metrics": metrics,
         **_catalogue(),
+    })
+
+
+@app.route("/api/forecast_hindcast_batch", methods=["GET"])
+def api_forecast_hindcast_batch():
+    """
+    Model diagnostics export.
+
+    Runs rolling-origin hindcasts across many (commodity, city, segment) groups
+    and sweeps the tunable model parameters, so the resulting JSON contains
+    everything needed to judge and retune the forecast model offline.
+
+    Query params
+    ------------
+    horizon_weeks : forecast horizon per run (default 8)
+    origins       : number of rolling as-of dates per group (default 4)
+    origin_step   : weeks between successive as-of dates (default 4)
+    max_groups    : cap on (commodity, city, segment) groups evaluated (default 30)
+    sweep         : "1" to include the parameter sweep (default 1)
+    """
+    from collections import defaultdict
+    import math
+
+    horizon_weeks = min(max(int(request.args.get("horizon_weeks", 8)), 2), 16)
+    n_origins     = min(max(int(request.args.get("origins", 4)), 1), 8)
+    origin_step   = min(max(int(request.args.get("origin_step", 4)), 1), 8)
+    max_groups    = min(max(int(request.args.get("max_groups", 30)), 1), 80)
+    do_sweep      = request.args.get("sweep", "1") != "0"
+
+    now = datetime.now()
+
+    # ---- Pull everything once; do the rolling split in memory ----
+    rows = (
+        db.session.query(
+            PriceData.commodity, PriceData.city_name, PriceData.year, PriceData.day,
+            PriceData.price, PriceData.package, PriceData.item_size, PriceData.origin,
+        )
+        .filter(
+            PriceData.price > 0,
+            PriceData.source.in_(["ProduceIQ", "USDA"]),
+            PriceData.year >= now.year - 4,
+        )
+        .all()
+    )
+    if not rows:
+        return jsonify({"error": "No price data available"}), 200
+
+    groups = defaultdict(list)
+    for r in rows:
+        seg = segment_key(r.package, r.item_size, r.origin)
+        groups[(r.commodity, r.city_name, seg)].append(
+            (int(r.year), int(r.day), float(r.price))
+        )
+
+    # Rank groups by data volume; only keep ones that can support the evaluation
+    ranked = sorted(
+        ((k, v) for k, v in groups.items() if len(v) >= 40),
+        key=lambda kv: -len(kv[1]),
+    )[:max_groups]
+
+    if not ranked:
+        return jsonify({"error": "No segment had enough rows (need >= 40)"}), 200
+
+    # Parameter grid
+    if do_sweep:
+        RECENCY   = [0.6, 0.75, 0.9]
+        HALFLIFE  = [2.0, 3.0, 4.0, 6.0, 8.0]
+        TRENDDECAY = [4.0, 6.0, 8.0]
+    else:
+        RECENCY, HALFLIFE, TRENDDECAY = [0.75], [4.0], [6.0]
+
+    def _abs_day(yr, dy):
+        return int(yr) * 365 + int(dy)
+
+    runs = []
+    # combo key -> list of per-week abs errors / pct errors / coverage flags
+    sweep_acc = defaultdict(lambda: {"abs": [], "pct": [], "c50": [], "c80": [], "c95": [], "naive": []})
+
+    for (commodity, city, seg), pts in ranked:
+        pts.sort(key=lambda t: (t[0], t[1]))
+
+        for oi in range(n_origins):
+            as_of = now - timedelta(weeks=horizon_weeks + oi * origin_step)
+            as_of_abs = _abs_day(as_of.year, as_of.timetuple().tm_yday)
+            as_of_woy = max(0, min(51, (as_of.timetuple().tm_yday - 1) // 7))
+
+            train = [p for p in pts if _abs_day(p[0], p[1]) < as_of_abs]
+            test  = [p for p in pts if 0 < _abs_day(p[0], p[1]) - as_of_abs <= horizon_weeks * 7]
+            if len(train) < 20 or len(test) < 2:
+                continue
+
+            # Weekly actuals relative to as_of
+            aw = defaultdict(list)
+            for (yr, dy, pr) in test:
+                w = (_abs_day(yr, dy) - as_of_abs - 1) // 7 + 1
+                if 1 <= w <= horizon_weeks:
+                    aw[w].append(pr)
+            actuals = {w: float(np.median(v)) for w, v in aw.items()}
+            if len(actuals) < 2:
+                continue
+
+            # Anchor level + slope (independent of the swept params)
+            recent = [p[2] for p in train if 0 <= as_of_abs - _abs_day(p[0], p[1]) <= 21]
+            if len(recent) < 2:
+                recent = [p[2] for p in train[-8:]]
+            base_price = float(np.median(recent)) if recent else None
+
+            tw = defaultdict(list)
+            trend_pts = [p for p in train if 0 <= as_of_abs - _abs_day(p[0], p[1]) <= 56]
+            if len(trend_pts) < 4:
+                trend_pts = train[-20:]
+            if trend_pts:
+                b = min(_abs_day(p[0], p[1]) for p in trend_pts)
+                for p in trend_pts:
+                    tw[(_abs_day(p[0], p[1]) - b) // 7].append(p[2])
+            tser = [float(np.mean(v)) for _, v in sorted(tw.items())]
+            slope = max(-2.0, min(2.0, _linear_trend(tser))) if len(tser) >= 3 else 0.0
+
+            run_rec = {
+                "commodity": commodity,
+                "city": city,
+                "segment": segment_label(*seg),
+                "unit": seg[0], "item_size": seg[1], "origin": seg[2],
+                "as_of": as_of.strftime("%Y-%m-%d"),
+                "origin_index": oi,
+                "training_rows": len(train),
+                "test_weeks": len(actuals),
+                "base_price": round(base_price, 2) if base_price else None,
+                "slope": round(slope, 3),
+                "results": {},
+            }
+
+            for rw in RECENCY:
+                model = build_seasonal_model(train, ref_year=as_of.year, recency_weight=rw)
+                if model["overall_median"] <= 0:
+                    continue
+                if oi == 0 and rw == 0.75:
+                    run_rec["seasonal_at_as_of"] = round(
+                        model["overall_median"] * seasonal_ratio_at(model, as_of_woy), 2)
+                    run_rec["sigma"] = round(model["sigma"], 2)
+
+                for hl in HALFLIFE:
+                    for td in TRENDDECAY:
+                        fc = generate_forecast_series(
+                            model, recent_level=base_price, slope=slope,
+                            as_of_woy=as_of_woy, horizon_weeks=horizon_weeks,
+                            level_halflife=hl, trend_decay_weeks=td,
+                        )
+                        abs_e, pct_e, c50, c80, c95, nai = [], [], [], [], [], []
+                        for f in fc:
+                            a = actuals.get(f["week"])
+                            if a is None:
+                                continue
+                            e = abs(a - f["median"])
+                            abs_e.append(e)
+                            if a:
+                                pct_e.append(e / a * 100.0)
+                            c50.append(f["ci_50_lo"] <= a <= f["ci_50_hi"])
+                            c80.append(f["ci_80_lo"] <= a <= f["ci_80_hi"])
+                            c95.append(f["ci_95_lo"] <= a <= f["ci_95_hi"])
+                            if base_price:
+                                nai.append(abs(a - base_price))
+                        if not abs_e:
+                            continue
+                        combo = f"rw{rw}_hl{hl}_td{td}"
+                        acc = sweep_acc[combo]
+                        acc["abs"].extend(abs_e); acc["pct"].extend(pct_e)
+                        acc["c50"].extend(c50); acc["c80"].extend(c80); acc["c95"].extend(c95)
+                        acc["naive"].extend(nai)
+                        run_rec["results"][combo] = {
+                            "mae": round(float(np.mean(abs_e)), 3),
+                            "mape": round(float(np.mean(pct_e)), 2) if pct_e else None,
+                            "naive_mae": round(float(np.mean(nai)), 3) if nai else None,
+                        }
+
+            # Per-week detail for the default parameter set only (keeps payload sane)
+            default_model = build_seasonal_model(train, ref_year=as_of.year, recency_weight=0.75)
+            if default_model["overall_median"] > 0:
+                fc = generate_forecast_series(
+                    default_model, recent_level=base_price, slope=slope,
+                    as_of_woy=as_of_woy, horizon_weeks=horizon_weeks,
+                )
+                weeks = []
+                for f in fc:
+                    a = actuals.get(f["week"])
+                    weeks.append({
+                        "week": f["week"],
+                        "forecast": f["median"],
+                        "actual": round(a, 2) if a is not None else None,
+                        "error": round(a - f["median"], 2) if a is not None else None,
+                        "seasonal": f["seasonal_component"],
+                        "level": f["level_component"],
+                        "trend": f["trend_component"],
+                        "sigma": f["sigma"],
+                        "ci_80_lo": f["ci_80_lo"], "ci_80_hi": f["ci_80_hi"],
+                    })
+                run_rec["weeks_default_params"] = weeks
+
+            runs.append(run_rec)
+
+    # ---- Aggregate the sweep ----
+    def _pct(flags):
+        return round(sum(flags) / len(flags) * 100, 1) if flags else None
+
+    sweep = []
+    for combo, acc in sweep_acc.items():
+        if not acc["abs"]:
+            continue
+        rw, hl, td = combo.replace("rw", "").replace("hl", "").replace("td", "").split("_")
+        mae = float(np.mean(acc["abs"]))
+        naive_mae = float(np.mean(acc["naive"])) if acc["naive"] else None
+        sweep.append({
+            "combo": combo,
+            "recency_weight": float(rw),
+            "level_halflife": float(hl),
+            "trend_decay_weeks": float(td),
+            "n_points": len(acc["abs"]),
+            "mae": round(mae, 3),
+            "mape": round(float(np.mean(acc["pct"])), 2) if acc["pct"] else None,
+            "rmse": round(float(np.sqrt(np.mean([e ** 2 for e in acc["abs"]]))), 3),
+            "naive_mae": round(naive_mae, 3) if naive_mae else None,
+            "skill_score": round((1 - mae / naive_mae) * 100, 2) if naive_mae else None,
+            "ci_50_coverage": _pct(acc["c50"]),
+            "ci_80_coverage": _pct(acc["c80"]),
+            "ci_95_coverage": _pct(acc["c95"]),
+        })
+    sweep.sort(key=lambda s: (s["mape"] if s["mape"] is not None else 1e9))
+
+    current = next((s for s in sweep if s["combo"] == "rw0.75_hl4.0_td6.0"), None)
+    best = sweep[0] if sweep else None
+
+    return jsonify({
+        "generated_at": now.strftime("%Y-%m-%d %H:%M:%S"),
+        "schema_version": 1,
+        "config": {
+            "horizon_weeks": horizon_weeks,
+            "origins": n_origins,
+            "origin_step_weeks": origin_step,
+            "max_groups": max_groups,
+            "sweep_enabled": do_sweep,
+        },
+        "current_params": {"recency_weight": 0.75, "level_halflife": 4.0, "trend_decay_weeks": 6.0},
+        "current_performance": current,
+        "best_params": best,
+        "improvement_available": (
+            round(current["mape"] - best["mape"], 2)
+            if current and best and current["mape"] is not None and best["mape"] is not None
+            else None
+        ),
+        "param_sweep": sweep,
+        "runs": runs,
+        "summary": {
+            "groups_evaluated": len(ranked),
+            "total_runs": len(runs),
+            "total_forecast_points": sum(len(a["abs"]) for a in sweep_acc.values()) // max(len(sweep), 1),
+        },
     })
 
 

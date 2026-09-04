@@ -22,6 +22,97 @@ function MetricCard({ label, value, sub, color }) {
   );
 }
 
+// ── Model diagnostics export ──────────────────────────────────────────────
+function DiagnosticsExport() {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+  const [err, setErr] = useState(null);
+
+  const run = () => {
+    setBusy(true); setErr(null); setResult(null);
+    axios.get('/api/forecast_hindcast_batch', {
+      params: { horizon_weeks: 8, origins: 4, origin_step: 4, max_groups: 30, sweep: 1 },
+      timeout: 180000,
+    })
+      .then(r => {
+        if (r.data.error) { setErr(r.data.error); return; }
+        setResult(r.data);
+        // Trigger download
+        const blob = new Blob([JSON.stringify(r.data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `ark-model-diagnostics-${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      })
+      .catch(e => setErr(e.message))
+      .finally(() => setBusy(false));
+  };
+
+  const best = result?.best_params;
+  const cur = result?.current_performance;
+
+  return (
+    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '16px 20px', marginBottom: 20 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 260 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 4 }}>
+            Model Diagnostics Export
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-3)', lineHeight: 1.6 }}>
+            Runs rolling-origin hindcasts across ~30 segments at 4 different as-of dates each,
+            and sweeps the model's tunable parameters. Downloads a JSON file — send it back
+            and the numbers in it say exactly which parameters to change.
+          </div>
+        </div>
+        <button onClick={run} disabled={busy}
+          style={{ padding: '9px 18px', fontSize: 12, fontWeight: 700, background: busy ? 'var(--text-3)' : 'var(--accent)', color: '#fff', border: 'none', borderRadius: 6, cursor: busy ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
+          {busy ? 'Running… (up to 2 min)' : 'Run & Download'}
+        </button>
+      </div>
+
+      {err && (
+        <div style={{ marginTop: 12, padding: '9px 12px', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 6, color: '#991b1b', fontSize: 12 }}>
+          {err}
+        </div>
+      )}
+
+      {result && (
+        <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
+          <div style={{ fontSize: 12, color: '#15803d', fontWeight: 700, marginBottom: 8 }}>
+            ✓ Downloaded — {result.summary?.total_runs} runs across {result.summary?.groups_evaluated} segments
+          </div>
+          <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', fontSize: 12 }}>
+            {cur && (
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Current params</div>
+                <div style={{ color: 'var(--text-2)' }}>MAPE {cur.mape}% · skill {cur.skill_score}%</div>
+              </div>
+            )}
+            {best && (
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Best in sweep</div>
+                <div style={{ color: '#15803d', fontWeight: 600 }}>
+                  MAPE {best.mape}% · hl={best.level_halflife} rw={best.recency_weight} td={best.trend_decay_weeks}
+                </div>
+              </div>
+            )}
+            {result.improvement_available != null && result.improvement_available > 0 && (
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Available gain</div>
+                <div style={{ color: '#15803d', fontWeight: 700 }}>−{result.improvement_available} pts MAPE</div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Spinner() {
   return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: 48 }}>
@@ -459,6 +550,8 @@ export default function ForecastingVariance() {
           Hindcast — simulate a forecast made <strong>{horizonWeeks} weeks ago</strong>, then compare against what actually happened.
         </p>
       </div>
+
+      <DiagnosticsExport />
 
       {/* Controls */}
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 24, alignItems: 'flex-end' }}>
