@@ -9410,19 +9410,30 @@ def _weather_price_correlation(commodity=None, years_back=3, max_lag=8, min_week
     import concurrent.futures
 
     def _one_region(loc_id):
-        ck = f"wxcorr_{loc_id}_{start:%Y%m%d}_{years_back}y"
-        hit = cache_get(ck, max_age_seconds=7 * 24 * 3600)
-        if hit and hit.get("weeks"):
-            return loc_id, {tuple(map(int, k.split("|"))): v
-                            for k, v in hit["weeks"].items()}, hit.get("diag", {}), None
-        try:
-            wk, diag = _weekly_weather(loc_id, start, 365 * years_back)
+        # Pool workers do not inherit the caller's application context, and the
+        # cache helpers below go through db.session, so each worker pushes its
+        # own. Without this the whole run dies with "Working outside of
+        # application context" as soon as it touches the cache.
+        with app.app_context():
+            ck = f"wxcorr_{loc_id}_{start:%Y%m%d}_{years_back}y"
+            try:
+                hit = cache_get(ck, max_age_seconds=7 * 24 * 3600)
+            except Exception:
+                hit = None
+            if hit and hit.get("weeks"):
+                return loc_id, {tuple(map(int, k.split("|"))): v
+                                for k, v in hit["weeks"].items()}, hit.get("diag", {}), None
+            try:
+                wk, diag = _weekly_weather(loc_id, start, 365 * years_back)
+            except Exception as e:
+                return loc_id, {}, {}, str(e)
             if wk:
-                cache_set(ck, {"weeks": {f"{a}|{b}": v for (a, b), v in wk.items()},
-                               "diag": diag})
+                try:
+                    cache_set(ck, {"weeks": {f"{a}|{b}": v for (a, b), v in wk.items()},
+                                   "diag": diag})
+                except Exception:
+                    pass   # a cache miss is survivable; losing the fetch is not
             return loc_id, wk, diag, None
-        except Exception as e:
-            return loc_id, {}, {}, str(e)
 
     weather, weather_errors, weather_diag = {}, {}, {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
