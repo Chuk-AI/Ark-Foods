@@ -9309,19 +9309,27 @@ def _null_threshold(xs, ys, trials=200, pct=95):
     n = len(xs)
     if n < 8:
         return None
+    x = np.asarray(xs, dtype=float)
+    y = np.asarray(ys, dtype=float)
+    x = x - x.mean()
+    sx = float(np.sqrt((x * x).sum()))
+    if sx <= 0:
+        return None
+    ks = range(1, min(trials, n - 1) + 1)
     rs = []
-    for k in range(1, min(trials, n - 1) + 1):
-        shifted = ys[k:] + ys[:k]
-        r = _pearson(xs, shifted)
-        if r is not None:
-            rs.append(abs(r))
+    for k in ks:
+        s = np.roll(y, k)
+        s = s - s.mean()
+        ss = float(np.sqrt((s * s).sum()))
+        if ss <= 0:
+            continue
+        rs.append(abs(float((x * s).sum()) / (sx * ss)))
     if not rs:
         return None
     return float(np.percentile(rs, pct))
 
 
-@app.route("/api/weather_price_correlation", methods=["GET"])
-def api_weather_price_correlation():
+def _weather_price_correlation(commodity=None, years_back=3, max_lag=8, min_weeks=20):
     """
     Does weather at the growing region actually move price at the terminal market?
 
@@ -9338,16 +9346,15 @@ def api_weather_price_correlation():
     """
     from collections import defaultdict
 
-    commodity = request.args.get("commodity")
-    years_back = min(max(int(request.args.get("years_back", 3)), 1), 5)
-    max_lag = min(max(int(request.args.get("max_lag", 8)), 1), 12)
-    min_weeks = min(max(int(request.args.get("min_weeks", 20)), 10), 100)
+    years_back = min(max(int(years_back), 1), 5)
+    max_lag = min(max(int(max_lag), 1), 12)
+    min_weeks = min(max(int(min_weeks), 10), 100)
 
     now = datetime.now()
     start = now - timedelta(days=365 * years_back)
 
     if not WT360_API_KEY:
-        return jsonify({"error": "WT360_API_KEY is not configured; cannot fetch weather history."}), 200
+        return {"error": "WT360_API_KEY is not configured; cannot fetch weather history."}
 
     q = [
         PriceData.price > 0,
@@ -9364,11 +9371,9 @@ def api_weather_price_correlation():
     ).filter(*q).all()
 
     if not rows:
-        return jsonify({
-            "error": "No USDA rows with a recorded origin in this window. "
-                     "Origin is only present on USDA data, so the weather link "
-                     "cannot be traced without it.",
-        }), 200
+        return {"error": "No USDA rows with a recorded origin in this window. "
+                         "Origin is only present on USDA data, so the weather link "
+                         "cannot be traced without it."}
 
     # How much price data sits behind each origin, and whether we watch its weather.
     # A null result means nothing until you know whether it came from an absent
@@ -9399,14 +9404,33 @@ def api_weather_price_correlation():
     needed = set()
     for (_, _, origin) in series:
         needed.update(_origin_to_regions(origin))
-    weather, weather_errors, weather_diag = {}, {}, {}
-    for loc_id in sorted(needed):
+    # Fetch regions in parallel and cache the result. Sequentially this was ~40
+    # WT360 calls at up to 20s each, which is well past any gateway timeout.
+    # Historical weather does not change, so a long TTL is safe.
+    import concurrent.futures
+
+    def _one_region(loc_id):
+        ck = f"wxcorr_{loc_id}_{start:%Y%m%d}_{years_back}y"
+        hit = cache_get(ck, max_age_seconds=7 * 24 * 3600)
+        if hit and hit.get("weeks"):
+            return loc_id, {tuple(map(int, k.split("|"))): v
+                            for k, v in hit["weeks"].items()}, hit.get("diag", {}), None
         try:
-            weather[loc_id], weather_diag[loc_id] = _weekly_weather(
-                loc_id, start, 365 * years_back)
+            wk, diag = _weekly_weather(loc_id, start, 365 * years_back)
+            if wk:
+                cache_set(ck, {"weeks": {f"{a}|{b}": v for (a, b), v in wk.items()},
+                               "diag": diag})
+            return loc_id, wk, diag, None
         except Exception as e:
-            weather_errors[loc_id] = str(e)
-            weather[loc_id] = {}
+            return loc_id, {}, {}, str(e)
+
+    weather, weather_errors, weather_diag = {}, {}, {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+        for loc_id, wk, diag, err in ex.map(_one_region, sorted(needed)):
+            weather[loc_id] = wk
+            weather_diag[loc_id] = diag
+            if err:
+                weather_errors[loc_id] = err
 
     FEATURES = ["min_temp", "max_temp", "mean_temp", "precip", "gdd", "frost_days", "heat_days"]
 
@@ -9515,7 +9539,7 @@ def api_weather_price_correlation():
                    f"monitor, so this is a measurement gap rather than evidence about weather. "
                    f"See origin_coverage for which origins to add stations for. ") + verdict
 
-    return jsonify({
+    return {
         "generated_at": now.strftime("%Y-%m-%d %H:%M:%S"),
         "origin_coverage": coverage,
         "monitored_share_pct": covered_share,
@@ -9539,6 +9563,65 @@ def api_weather_price_correlation():
                    "growing regions that supply that origin, tested at lags 0-{} weeks. "
                    "Significance is judged against a null built by circularly shifting the "
                    "price series, which keeps its autocorrelation intact.").format(max_lag),
+    }
+
+
+@app.route("/api/weather_price_correlation", methods=["GET"])
+def api_weather_price_correlation():
+    """
+    Run the weather/price test, or start it in the background.
+
+    A cold run fetches years of daily history for every growing region and takes
+    minutes, which a gateway will cut off long before it finishes. Pass
+    background=1 to start it and poll /api/weather_price_correlation/status;
+    once the weather is cached a direct call returns quickly.
+    """
+    import threading
+
+    commodity = request.args.get("commodity")
+    years_back = int(request.args.get("years_back", 3))
+    max_lag = int(request.args.get("max_lag", 8))
+    min_weeks = int(request.args.get("min_weeks", 20))
+    background = request.args.get("background", "0") == "1"
+
+    if not background:
+        return jsonify(_weather_price_correlation(commodity, years_back, max_lag, min_weeks))
+
+    if getattr(app, "_wxcorr_running", False):
+        return jsonify({"success": False, "status": "running",
+                        "message": "A weather/price run is already in progress.",
+                        "started": getattr(app, "_wxcorr_started", None)}), 409
+
+    def _run():
+        app._wxcorr_running = True
+        app._wxcorr_started = datetime.now().isoformat()
+        app._wxcorr_error = None
+        app._wxcorr_result = None
+        try:
+            with app.app_context():
+                app._wxcorr_result = _weather_price_correlation(
+                    commodity, years_back, max_lag, min_weeks)
+        except Exception as e:
+            import traceback as _tb
+            app._wxcorr_error = f"{e}"
+            app.logger.error(f"weather_price_correlation failed: {e}\n{_tb.format_exc()}")
+        finally:
+            app._wxcorr_running = False
+            app._wxcorr_finished = datetime.now().isoformat()
+
+    threading.Thread(target=_run, daemon=True).start()
+    return jsonify({"success": True, "status": "started",
+                    "poll": "/api/weather_price_correlation/status"}), 202
+
+
+@app.route("/api/weather_price_correlation/status", methods=["GET"])
+def api_weather_price_correlation_status():
+    return jsonify({
+        "running": getattr(app, "_wxcorr_running", False),
+        "started": getattr(app, "_wxcorr_started", None),
+        "finished": getattr(app, "_wxcorr_finished", None),
+        "error": getattr(app, "_wxcorr_error", None),
+        "result": getattr(app, "_wxcorr_result", None),
     })
 
 
