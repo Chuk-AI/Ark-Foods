@@ -650,6 +650,59 @@ def _icon_severity(icon):
         return 0
     return _ICON_SEVERITY.get(str(icon).lower().strip(), 0)
 
+
+def _day_risk(day):
+    """
+    Overall risk for one forecast day, combining the icon with the numeric
+    fields WT360 returns. Peppers are frost-intolerant, so a clear night at
+    30F is more dangerous to the crop than a thunderstorm — the icon alone
+    misses that entirely.
+
+    Returns (severity 0-3, list of human-readable reasons).
+    """
+    reasons = []
+    sev = _icon_severity(day.get("icon") or day.get("wx_icon", ""))
+    if sev >= 3:
+        reasons.append("Severe storm risk")
+    elif sev == 2:
+        reasons.append("Thunderstorm risk")
+    elif sev == 1:
+        reasons.append("Heavy precipitation")
+
+    def _num(key):
+        v = day.get(key)
+        try:
+            return float(v) if v is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    tmin, gust, wspd, prcp = _num("minTemp"), _num("gust"), _num("wspd"), _num("prcp")
+
+    # Frost / freeze — the dominant crop risk for peppers
+    if tmin is not None:
+        if tmin <= 32:
+            sev = max(sev, 3); reasons.append(f"Hard freeze ({tmin:.0f}F)")
+        elif tmin <= 36:
+            sev = max(sev, 2); reasons.append(f"Frost risk ({tmin:.0f}F)")
+        elif tmin <= 40:
+            sev = max(sev, 1); reasons.append(f"Cold night ({tmin:.0f}F)")
+
+    # Damaging wind
+    if gust is not None and gust >= 45:
+        sev = max(sev, 2); reasons.append(f"Damaging gusts ({gust:.0f} mph)")
+    elif gust is not None and gust >= 30:
+        sev = max(sev, 1); reasons.append(f"Strong gusts ({gust:.0f} mph)")
+    elif wspd is not None and wspd >= 25:
+        sev = max(sev, 1); reasons.append(f"Sustained wind ({wspd:.0f} mph)")
+
+    # Flooding rain
+    if prcp is not None and prcp >= 2.0:
+        sev = max(sev, 2); reasons.append(f"Heavy rain ({prcp:.1f}in)")
+    elif prcp is not None and prcp >= 1.0:
+        sev = max(sev, 1); reasons.append(f"Significant rain ({prcp:.1f}in)")
+
+    return sev, reasons
+
 WT360_LOCATIONS = {
     "el_morro_mx":     {"name": "El Morro",     "state": "Baja California", "country": "Mexico", "wt360_id": "CL844548", "lat": 30.05, "lon": -115.73, "crops": ["Jalapeño", "Serrano"]},
     "ensenada_mx":     {"name": "Ensenada",     "state": "Baja California", "country": "Mexico", "wt360_id": "CL844547", "lat": 31.87, "lon": -116.60, "crops": ["Jalapeño", "Serrano"]},
@@ -792,11 +845,145 @@ def _get_combined_current_price(commodity: str, city: str, max_age_days: int = 3
     return float(dominant.avg_price) if dominant.avg_price else None
 
 
+def segment_key(package, item_size, origin):
+    """Composite segment key: (normalized unit, size, origin)."""
+    unit = normalize_unit_for_grouping((package or "pkg").strip()) or "pkg"
+    size = (item_size or "").strip() or None
+    orig = (origin or "").strip() or None
+    return (unit, size, orig)
+
+
+def segment_label(unit, size, orig):
+    """Human-readable segment label."""
+    return " · ".join([p for p in (unit, size, orig) if p])
+
+
+def _robust_sigma(values):
+    """MAD-based sigma — resistant to outliers, unlike plain std."""
+    if len(values) < 3:
+        return 0.0
+    med = float(np.median(values))
+    mad = float(np.median([abs(float(v) - med) for v in values]))
+    return mad * 1.4826
+
+
+def build_seasonal_model(rows, ref_year):
+    """
+    Build a ratio-based seasonal model with recency weighting.
+
+    rows: iterable of (year, day_of_year, price)
+    Returns dict with seasonal_ratio per week-of-year, overall_median, sigma.
+
+    Ratio-based (rather than absolute) seasonality handles year-over-year
+    price inflation: the shape of the season is stable even when levels shift.
+    Recent years are weighted more heavily (0.75 ** years_ago).
+    """
+    from collections import defaultdict
+
+    week_vals, week_wts, all_vals = defaultdict(list), defaultdict(list), []
+    for (yr, dy, pr) in rows:
+        try:
+            woy = max(0, min(51, (int(dy) - 1) // 7))
+            wt = 0.75 ** max(0, int(ref_year) - int(yr))
+            week_vals[woy].append(float(pr))
+            week_wts[woy].append(wt)
+            all_vals.append(float(pr))
+        except (TypeError, ValueError):
+            continue
+
+    if not all_vals:
+        return {"seasonal_ratio": {}, "overall_median": 0.0, "sigma": 0.0, "n": 0}
+
+    overall_median = float(np.median(all_vals))
+
+    seasonal_ratio = {}
+    if overall_median > 0:
+        for woy, vals in week_vals.items():
+            wts = week_wts[woy]
+            wsum = sum(wts)
+            wmean = (sum(v * w for v, w in zip(vals, wts)) / wsum) if wsum > 0 else float(np.median(vals))
+            # Clamp to keep a sparse week from producing an absurd ratio
+            seasonal_ratio[woy] = max(0.4, min(2.5, wmean / overall_median))
+
+    residuals = []
+    for (yr, dy, pr) in rows:
+        try:
+            woy = max(0, min(51, (int(dy) - 1) // 7))
+            expected = overall_median * seasonal_ratio.get(woy, 1.0)
+            residuals.append(float(pr) - expected)
+        except (TypeError, ValueError):
+            continue
+
+    sigma = _robust_sigma(residuals) or max(overall_median * 0.12, 0.5)
+
+    return {
+        "seasonal_ratio": seasonal_ratio,
+        "overall_median": overall_median,
+        "sigma": sigma,
+        "n": len(all_vals),
+    }
+
+
+def seasonal_ratio_at(model, woy):
+    """Seasonal ratio at a week-of-year, searching neighbours when sparse."""
+    sr = model.get("seasonal_ratio", {})
+    for off in (0, 1, -1, 2, -2, 3, -3):
+        k = (woy + off) % 52
+        if k in sr:
+            return sr[k]
+    return 1.0
+
+
+def generate_forecast_series(model, recent_level, slope, as_of_woy, horizon_weeks,
+                             level_halflife=4.0, trend_decay_weeks=6.0):
+    """
+    Forecast = seasonal level + mean-reverting level offset + decaying trend.
+
+    The level offset is the key improvement over a pure seasonal baseline: if
+    prices are currently well above the seasonal norm, the forecast starts from
+    where the market actually is and reverts toward the seasonal level with a
+    4-week half-life, rather than snapping to the historical average.
+
+    Uncertainty widens with the horizon (sigma * sqrt(1 + w/4)) so the bands
+    reflect genuinely lower confidence further out.
+    """
+    import math
+
+    overall = model.get("overall_median", 0.0)
+    sigma_base = model.get("sigma", 0.0) or max(overall * 0.12, 0.5)
+
+    expected_now = overall * seasonal_ratio_at(model, as_of_woy)
+    level_offset = (float(recent_level) - expected_now) if recent_level is not None else 0.0
+
+    out = []
+    for w in range(1, horizon_weeks + 1):
+        woy = (as_of_woy + w) % 52
+        seasonal_level = overall * seasonal_ratio_at(model, woy)
+        lvl = level_offset * (0.5 ** (w / level_halflife))
+        tr = slope * max(0.0, 1.0 - (w - 1) / trend_decay_weeks)
+        price = max(seasonal_level + lvl + tr, 0.01)
+        sig = sigma_base * math.sqrt(1.0 + w / 4.0)
+        out.append({
+            "week": w,
+            "week_of_year": woy,
+            "seasonal_component": round(seasonal_level, 2),
+            "level_component": round(lvl, 2),
+            "trend_component": round(tr, 2),
+            "median": round(price, 2),
+            "sigma": round(sig, 2),
+            "ci_50_lo": round(max(price - 0.674 * sig, 0.0), 2), "ci_50_hi": round(price + 0.674 * sig, 2),
+            "ci_80_lo": round(max(price - 1.282 * sig, 0.0), 2), "ci_80_hi": round(price + 1.282 * sig, 2),
+            "ci_95_lo": round(max(price - 1.960 * sig, 0.0), 2), "ci_95_hi": round(price + 1.960 * sig, 2),
+        })
+    return out
+
+
 def calculate_price_forecast(commodity, city=None, source="ProduceIQ", forecast_days=7):
     """
-    Per-unit 7-day forecast. Only units seen in the last 14 days are shown
-    (recent = currently traded quality tiers). Each unit gets its own
-    independent forecast using only that unit's price history.
+    Per-segment 7-day forecast, where a segment is (unit, size, origin).
+    Only segments traded in the last 14 days are shown. Each segment gets an
+    independent forecast from its own price history, so a 'Large / Mexico'
+    variant is never blended with a 'Medium / Florida' one.
     """
     try:
         from collections import defaultdict
@@ -821,46 +1008,64 @@ def calculate_price_forecast(commodity, city=None, source="ProduceIQ", forecast_
             *city_filter,
         ]
 
-        # Step 1: find which normalized units have data in the last 14 days (recent)
+        # Step 1: find which segments (unit, size, origin) traded in the last 14 days
         recent_min_day = max(current_day - 14, 1)
         recent_rows = (
-            db.session.query(PriceData.package)
+            db.session.query(PriceData.package, PriceData.item_size, PriceData.origin)
             .filter(*base_q, PriceData.day >= recent_min_day)
             .all()
         )
         if not recent_rows:
             return {"success": False, "error": "No price data in the last 14 days for this commodity/city"}
 
-        recent_units = {normalize_unit_for_grouping(r.package or "pkg") for r in recent_rows}
+        recent_segments = {segment_key(r.package, r.item_size, r.origin) for r in recent_rows}
 
-        # Step 2: for each recent unit, fetch up to 60 days of history for trend calc
+        # Step 2: fetch up to 60 days of history for trend calc
         history_min_day = max(current_day - 60, 1)
         all_rows = (
-            db.session.query(PriceData.day, PriceData.price, PriceData.package)
+            db.session.query(
+                PriceData.day, PriceData.price, PriceData.package,
+                PriceData.item_size, PriceData.origin,
+            )
             .filter(*base_q, PriceData.day >= history_min_day)
             .order_by(PriceData.day)
             .all()
         )
 
-        # Group into per-unit daily averages, keeping only recent units
-        unit_days: dict[str, dict[int, list]] = defaultdict(lambda: defaultdict(list))
+        # Group into per-segment daily averages, keeping only recently traded segments
+        seg_days: dict[tuple, dict[int, list]] = defaultdict(lambda: defaultdict(list))
         for r in all_rows:
-            norm = normalize_unit_for_grouping(r.package or "pkg")
-            if norm in recent_units:
-                unit_days[norm][int(r.day)].append(float(r.price))
+            seg = segment_key(r.package, r.item_size, r.origin)
+            if seg in recent_segments:
+                seg_days[seg][int(r.day)].append(float(r.price))
 
-        # Build ordered daily price series per unit (need ≥3 points)
-        unit_series: dict[str, list[float]] = {}
-        for unit, day_map in unit_days.items():
-            series = [
-                sum(prices) / len(prices)
-                for _, prices in sorted(day_map.items())
-            ]
+        # Build ordered daily price series per segment (need >= 3 points)
+        seg_series: dict[tuple, list[float]] = {}
+        for seg, day_map in seg_days.items():
+            series = [sum(p) / len(p) for _, p in sorted(day_map.items())]
             if len(series) >= 3:
-                unit_series[unit] = series
+                seg_series[seg] = series
 
-        if not unit_series:
-            return {"success": False, "error": "Insufficient data per unit for forecast"}
+        # Fall back to unit-only grouping if segment split leaves nothing usable
+        if not seg_series:
+            unit_days: dict[tuple, dict[int, list]] = defaultdict(lambda: defaultdict(list))
+            for r in all_rows:
+                unit_only = (normalize_unit_for_grouping(r.package or "pkg") or "pkg", None, None)
+                unit_days[unit_only][int(r.day)].append(float(r.price))
+            for seg, day_map in unit_days.items():
+                series = [sum(p) / len(p) for _, p in sorted(day_map.items())]
+                if len(series) >= 3:
+                    seg_series[seg] = series
+
+        if not seg_series:
+            return {"success": False, "error": "Insufficient data per segment for forecast"}
+
+        # Keep the legacy unit_series shape (keyed by label) for the code below
+        unit_series = {segment_label(*seg): s for seg, s in seg_series.items()}
+        segment_meta = {
+            segment_label(*seg): {"unit": seg[0], "item_size": seg[1], "origin": seg[2]}
+            for seg in seg_series
+        }
 
         def _build_unit_forecast(unit_label: str, series: list[float]) -> dict:
             trend_window = series[-14:] if len(series) >= 14 else series
@@ -910,6 +1115,14 @@ def calculate_price_forecast(commodity, city=None, source="ProduceIQ", forecast_
             }
 
         forecasts_by_unit = {u: _build_unit_forecast(u, s) for u, s in unit_series.items()}
+        # Attach segment metadata (unit / size / origin) to each forecast
+        for label, fc in forecasts_by_unit.items():
+            meta = segment_meta.get(label, {})
+            fc["segment"] = label
+            fc["package_unit"] = meta.get("unit")
+            fc["item_size"] = meta.get("item_size")
+            fc["origin"] = meta.get("origin")
+
         dominant_unit = max(unit_series, key=lambda u: len(unit_series[u]))
         dominant = forecasts_by_unit[dominant_unit]
         units_available = sorted(forecasts_by_unit.keys())
@@ -920,6 +1133,10 @@ def calculate_price_forecast(commodity, city=None, source="ProduceIQ", forecast_
             "city": city or "",
             "source": "Combined (ProduceIQ + USDA)",
             "unit": dominant["unit"],
+            "segment": dominant.get("segment"),
+            "package_unit": dominant.get("package_unit"),
+            "item_size": dominant.get("item_size"),
+            "origin": dominant.get("origin"),
             "current_price": dominant["current_price"],
             "forecasts": dominant["forecasts"],
             "overall_trend": dominant["overall_trend"],
@@ -928,7 +1145,10 @@ def calculate_price_forecast(commodity, city=None, source="ProduceIQ", forecast_
             "momentum_pct": dominant["momentum_pct"],
             "std_dev": dominant["std_dev"],
             "forecasts_by_unit": forecasts_by_unit,
+            "forecasts_by_segment": forecasts_by_unit,
             "units_available": units_available,
+            "segments_available": units_available,
+            "segment_meta": segment_meta,
         }
     except Exception as e:
         import traceback as _tb
@@ -2839,18 +3059,29 @@ def api_most_recent_prices():
 
         unit_label = dominant.package or "pkg"
 
-        # Build all_packages list (sorted by rank)
+        # Build all_packages: only rows from the most recent date, deduped on the
+        # display tuple so the same variant is never listed twice in the tooltip.
+        latest_year, latest_day = dominant.year, dominant.day
+        seen = set()
         all_pkgs = []
         for r in sorted(rows, key=lambda x: x.rn):
             if r.avg_price is None:
                 continue
-            all_pkgs.append({
+            if r.year != latest_year or r.day != latest_day:
+                continue
+            entry = {
                 "package": r.package or "pkg",
                 "price": round(float(r.avg_price), 2),
                 "item_size": r.item_size or None,
                 "origin": r.origin or None,
                 "source": r.source or None,
-            })
+            }
+            dedupe_key = (entry["package"], entry["price"], entry["item_size"],
+                          entry["origin"], entry["source"])
+            if dedupe_key in seen:
+                continue
+            seen.add(dedupe_key)
+            all_pkgs.append(entry)
 
         recent_prices[orig_comm][orig_city] = {
             "price": round(float(dominant.avg_price), 2),
@@ -7576,12 +7807,18 @@ def wt360_severe_outlook():
             days = _wt360_fetch_forecast(loc["wt360_id"])
             enriched = []
             for d in days:
-                sev = _icon_severity(d.get("icon") or d.get("wx_icon", ""))
-                enriched.append({**d, "icon_severity": sev})
+                sev, reasons = _day_risk(d)
+                enriched.append({
+                    **d,
+                    "icon_severity": _icon_severity(d.get("icon") or d.get("wx_icon", "")),
+                    "risk_severity": sev,
+                    "risk_reasons": reasons,
+                })
             result["forecast"] = enriched
-            severe = [d for d in enriched if d["icon_severity"] >= 1]
-            result["severe_days"] = severe
-            all_sev = [d["icon_severity"] for d in enriched] + [len(result["alerts"]) > 0 and 2 or 0]
+            result["severe_days"] = [d for d in enriched if d["risk_severity"] >= 1]
+            all_sev = [d["risk_severity"] for d in enriched]
+            if result["alerts"]:
+                all_sev.append(2)
             result["max_severity"] = max(all_sev) if all_sev else 0
         except Exception:
             pass
@@ -7955,19 +8192,23 @@ def api_test_single_forecast():
 def api_forecast_hindcast():
     """
     Hindcast: simulate a forecast made horizon_weeks ago, compare against actuals.
-    Uses only data available before the simulated 'as_of' date, then fetches
-    what actually happened after it.
+
+    Uses the same segregated (unit / size / origin) model as the live forecast,
+    and the same seasonal + level-reversion + trend engine. Only data strictly
+    before the simulated as-of date feeds the model.
     """
     from collections import defaultdict
 
     commodity = request.args.get("commodity", "Bell Peppers")
     city = request.args.get("city", "New York")
-    horizon_weeks = min(int(request.args.get("horizon_weeks", 12)), 24)
+    horizon_weeks = min(max(int(request.args.get("horizon_weeks", 12)), 2), 24)
+    want_segment = (request.args.get("segment") or "").strip() or None
 
     now = datetime.now()
     as_of_date = now - timedelta(weeks=horizon_weeks)
     as_of_year = as_of_date.year
     as_of_day = as_of_date.timetuple().tm_yday
+    as_of_woy = max(0, min(51, (as_of_day - 1) // 7))
 
     commodity_norm = normalize_commodity(commodity)
     commodity_variants = {commodity_norm}
@@ -7981,9 +8222,20 @@ def api_forecast_hindcast():
         PriceData.source.in_(["ProduceIQ", "USDA"]),
     ]
 
-    # --- Historical data (before as_of) ---
+    def _catalogue():
+        return {
+            "commodities": [r[0] for r in db.session.query(PriceData.commodity)
+                            .distinct().order_by(PriceData.commodity).all()],
+            "cities": [r[0] for r in db.session.query(PriceData.city_name)
+                       .distinct().order_by(PriceData.city_name).all()],
+        }
+
+    # ---- Training rows (strictly before as_of) ----
     hist_rows = (
-        db.session.query(PriceData.year, PriceData.day, PriceData.price)
+        db.session.query(
+            PriceData.year, PriceData.day, PriceData.price,
+            PriceData.package, PriceData.item_size, PriceData.origin,
+        )
         .filter(
             *base_filter,
             db.or_(
@@ -7996,93 +8248,18 @@ def api_forecast_hindcast():
     )
 
     if len(hist_rows) < 10:
-        # Try without city filter to signal data availability
-        available_cities = [r[0] for r in db.session.query(PriceData.city_name).distinct().order_by(PriceData.city_name).all()]
-        available_commodities = [r[0] for r in db.session.query(PriceData.commodity).distinct().order_by(PriceData.commodity).all()]
         return jsonify({
-            "error": f"Insufficient historical data for {commodity_norm} in {city} (found {len(hist_rows)} rows). Try a different commodity or city.",
-            "commodities": available_commodities,
-            "cities": available_cities,
+            "error": f"Insufficient history for {commodity_norm} in {city} "
+                     f"(found {len(hist_rows)} rows before {as_of_date:%Y-%m-%d}).",
+            **_catalogue(),
         }), 200
 
-    # --- Seasonal baseline: mean price per week-of-year (0-51) ---
-    week_prices = defaultdict(list)
-    for r in hist_rows:
-        woy = max(0, (r.day - 1) // 7)
-        week_prices[woy].append(float(r.price))
-
-    seasonal_mean = {woy: float(np.mean(prices)) for woy, prices in week_prices.items()}
-    overall_mean = float(np.mean([r.price for r in hist_rows]))
-
-    # --- Residuals → sigma for confidence intervals ---
-    residuals = []
-    for r in hist_rows:
-        woy = max(0, (r.day - 1) // 7)
-        smean = seasonal_mean.get(woy, overall_mean)
-        residuals.append(float(r.price) - smean)
-    sigma = float(np.std(residuals)) if len(residuals) > 2 else max(overall_mean * 0.1, 1.0)
-
-    # --- Recent trend: linear slope from last 8 weeks before as_of ---
-    trend_start_day = as_of_day - 56
-    trend_rows = [r for r in hist_rows if r.year == as_of_year and r.day >= max(1, trend_start_day)]
-    if len(trend_rows) < 4:
-        trend_rows = hist_rows[-max(8, len(hist_rows) // 4):]
-
-    trend_week_map = defaultdict(list)
-    min_trend_day = min(r.day for r in trend_rows) if trend_rows else as_of_day
-    for r in trend_rows:
-        rel_week = (r.day - min_trend_day) // 7
-        trend_week_map[rel_week].append(float(r.price))
-    trend_series = [float(np.mean(v)) for _, v in sorted(trend_week_map.items())]
-    slope = 0.0
-    if len(trend_series) >= 3:
-        slope = max(-2.0, min(2.0, _linear_trend(trend_series)))
-
-    # --- Generate forecast ---
-    forecast_weeks = []
-    for w in range(1, horizon_weeks + 1):
-        target_day = as_of_day + w * 7
-        target_year = as_of_year
-        while target_day > 365:
-            target_day -= 365
-            target_year += 1
-        target_woy = max(0, (target_day - 1) // 7)
-
-        # Nearest seasonal mean (search ±3 weeks for sparse data)
-        smean = None
-        for offset in [0, 1, -1, 2, -2, 3, -3]:
-            candidate = (target_woy + offset) % 52
-            if candidate in seasonal_mean:
-                smean = seasonal_mean[candidate]
-                break
-        if smean is None:
-            smean = overall_mean
-
-        decay = max(0.0, 1.0 - (w - 1) / 8.0)
-        trend_contrib = slope * decay
-        forecast_price = smean + trend_contrib
-
-        target_date = datetime(target_year, 1, 1) + timedelta(days=target_day - 1)
-        forecast_weeks.append({
-            "week": w,
-            "target_year": target_year,
-            "target_day": target_day,
-            "week_label": target_date.strftime("%b %d"),
-            "week_of_year": target_woy,
-            "seasonal_component": round(smean, 2),
-            "trend_component": round(trend_contrib, 2),
-            "median": round(forecast_price, 2),
-            "ci_50_lo": round(forecast_price - 0.67 * sigma, 2),
-            "ci_50_hi": round(forecast_price + 0.67 * sigma, 2),
-            "ci_80_lo": round(forecast_price - 1.28 * sigma, 2),
-            "ci_80_hi": round(forecast_price + 1.28 * sigma, 2),
-            "ci_95_lo": round(forecast_price - 1.96 * sigma, 2),
-            "ci_95_hi": round(forecast_price + 1.96 * sigma, 2),
-        })
-
-    # --- Actual prices after as_of ---
+    # ---- Actuals (after as_of, within horizon) ----
     actual_rows = (
-        db.session.query(PriceData.year, PriceData.day, PriceData.price)
+        db.session.query(
+            PriceData.year, PriceData.day, PriceData.price,
+            PriceData.package, PriceData.item_size, PriceData.origin,
+        )
         .filter(
             *base_filter,
             db.or_(
@@ -8094,91 +8271,192 @@ def api_forecast_hindcast():
         .all()
     )
 
-    actual_week_prices = defaultdict(list)
-    for r in actual_rows:
-        if r.year == as_of_year:
-            delta_days = r.day - as_of_day
+    def _weeks_after(yr, dy):
+        if int(yr) == as_of_year:
+            delta = int(dy) - as_of_day
         else:
-            delta_days = (365 - as_of_day) + r.day + (r.year - as_of_year - 1) * 365
-        if delta_days <= 0:
-            continue
-        wnum = (delta_days - 1) // 7 + 1
-        if wnum <= horizon_weeks:
-            actual_week_prices[wnum].append(float(r.price))
+            delta = (365 - as_of_day) + int(dy) + (int(yr) - as_of_year - 1) * 365
+        return delta
 
-    actuals_by_week = {w: round(float(np.mean(prices)), 2) for w, prices in actual_week_prices.items()}
+    # ---- Segment inventory: which segments have enough history + some actuals ----
+    hist_by_seg = defaultdict(list)
+    for r in hist_rows:
+        hist_by_seg[segment_key(r.package, r.item_size, r.origin)].append(r)
 
-    # --- Merge actuals, compute per-week metrics ---
-    ci50_hits, ci80_hits, ci95_hits, abs_errors, pct_errors, dir_correct = [], [], [], [], [], []
-    prev_actual = prev_forecast = None
+    actual_by_seg = defaultdict(list)
+    for r in actual_rows:
+        actual_by_seg[segment_key(r.package, r.item_size, r.origin)].append(r)
+
+    seg_catalogue = []
+    for seg, rows in hist_by_seg.items():
+        seg_catalogue.append({
+            "segment": segment_label(*seg),
+            "unit": seg[0], "item_size": seg[1], "origin": seg[2],
+            "history_rows": len(rows),
+            "actual_rows": len(actual_by_seg.get(seg, [])),
+        })
+    seg_catalogue.sort(key=lambda s: (-s["actual_rows"], -s["history_rows"]))
+
+    # ---- Choose the segment to run ----
+    ALL = "__all__"
+    usable = [s for s in seg_catalogue if s["history_rows"] >= 8 and s["actual_rows"] >= 2]
+    if want_segment and want_segment != ALL:
+        chosen = next((s for s in seg_catalogue if s["segment"] == want_segment), None)
+    elif usable:
+        chosen = usable[0]
+    else:
+        chosen = None
+
+    if chosen is None:
+        train = hist_rows
+        actual_src = actual_rows
+        active_segment = ALL
+        segment_note = "All segments pooled (no single segment had enough data)"
+    else:
+        seg = (chosen["unit"], chosen["item_size"], chosen["origin"])
+        train = hist_by_seg.get(seg, [])
+        actual_src = actual_by_seg.get(seg, [])
+        active_segment = chosen["segment"]
+        segment_note = None
+        if len(train) < 8:
+            train, actual_src = hist_rows, actual_rows
+            active_segment = ALL
+            segment_note = f"Fell back to pooled data — '{chosen['segment']}' had only {len(train)} rows"
+
+    # ---- Fit model on training rows ----
+    model = build_seasonal_model(
+        [(r.year, r.day, r.price) for r in train], ref_year=as_of_year
+    )
+
+    # Recent level: median of the last 21 days before as_of (robust anchor)
+    recent_window = [
+        float(r.price) for r in train
+        if int(r.year) == as_of_year and (as_of_day - int(r.day)) <= 21 and int(r.day) < as_of_day
+    ]
+    if len(recent_window) < 2:
+        recent_window = [float(r.price) for r in train[-8:]]
+    base_price = round(float(np.median(recent_window)), 2) if recent_window else None
+
+    # Short-term slope from weekly means over the last 8 weeks before as_of
+    trend_rows = [r for r in train if int(r.year) == as_of_year and int(r.day) >= max(1, as_of_day - 56)]
+    if len(trend_rows) < 4:
+        trend_rows = train[-20:]
+    tw = defaultdict(list)
+    if trend_rows:
+        base_day = min(int(r.day) for r in trend_rows)
+        for r in trend_rows:
+            tw[(int(r.day) - base_day) // 7].append(float(r.price))
+    trend_series = [float(np.mean(v)) for _, v in sorted(tw.items())]
+    slope = max(-2.0, min(2.0, _linear_trend(trend_series))) if len(trend_series) >= 3 else 0.0
+
+    # ---- Generate forecast ----
+    forecast_weeks = generate_forecast_series(
+        model, recent_level=base_price, slope=slope,
+        as_of_woy=as_of_woy, horizon_weeks=horizon_weeks,
+    )
+
+    seasonal_now = round(model["overall_median"] * seasonal_ratio_at(model, as_of_woy), 2)
+
+    # ---- Attach dates + actuals ----
+    aw = defaultdict(list)
+    for r in actual_src:
+        d = _weeks_after(r.year, r.day)
+        if d > 0:
+            wnum = (d - 1) // 7 + 1
+            if wnum <= horizon_weeks:
+                aw[wnum].append(float(r.price))
+    actuals_by_week = {w: round(float(np.median(v)), 2) for w, v in aw.items()}
+
+    ci50, ci80, ci95, abs_err, pct_err, dir_ok = [], [], [], [], [], []
+    prev_a = prev_f = None
 
     for fw in forecast_weeks:
         w = fw["week"]
+        target = as_of_date + timedelta(weeks=w)
+        fw["week_label"] = target.strftime("%b %d")
+        fw["week_date"] = target.strftime("%Y-%m-%d")
+        fw["base_price"] = base_price
+
         actual = actuals_by_week.get(w)
         fw["actual"] = actual
-        if actual is not None:
-            err = actual - fw["median"]
-            fw["error"] = round(err, 2)
-            fw["error_pct"] = round(abs(err) / actual * 100, 1) if actual else None
-            fw["in_ci_50"] = fw["ci_50_lo"] <= actual <= fw["ci_50_hi"]
-            fw["in_ci_80"] = fw["ci_80_lo"] <= actual <= fw["ci_80_hi"]
-            fw["in_ci_95"] = fw["ci_95_lo"] <= actual <= fw["ci_95_hi"]
-            abs_errors.append(abs(err))
-            if actual:
-                pct_errors.append(abs(err) / actual * 100)
-            ci50_hits.append(fw["in_ci_50"])
-            ci80_hits.append(fw["in_ci_80"])
-            ci95_hits.append(fw["in_ci_95"])
-            if prev_actual is not None:
-                dir_correct.append((actual > prev_actual) == (fw["median"] > prev_forecast))
-            prev_actual, prev_forecast = actual, fw["median"]
-        else:
+        if actual is None:
             fw["error"] = fw["error_pct"] = None
             fw["in_ci_50"] = fw["in_ci_80"] = fw["in_ci_95"] = None
+            fw["naive_error"] = None
+            continue
 
-    # --- Summary metrics ---
-    def _pct(hits): return round(sum(hits) / len(hits) * 100, 1) if hits else None
+        err = actual - fw["median"]
+        fw["error"] = round(err, 2)
+        fw["error_pct"] = round(abs(err) / actual * 100, 1) if actual else None
+        fw["in_ci_50"] = fw["ci_50_lo"] <= actual <= fw["ci_50_hi"]
+        fw["in_ci_80"] = fw["ci_80_lo"] <= actual <= fw["ci_80_hi"]
+        fw["in_ci_95"] = fw["ci_95_lo"] <= actual <= fw["ci_95_hi"]
+        # Naive benchmark: "price never moves from base"
+        fw["naive_error"] = round(abs(actual - base_price), 2) if base_price else None
+
+        abs_err.append(abs(err))
+        if actual:
+            pct_err.append(abs(err) / actual * 100)
+        ci50.append(fw["in_ci_50"]); ci80.append(fw["in_ci_80"]); ci95.append(fw["in_ci_95"])
+        if prev_a is not None:
+            dir_ok.append((actual > prev_a) == (fw["median"] > prev_f))
+        prev_a, prev_f = actual, fw["median"]
+
+    def _pct(hits):
+        return round(sum(hits) / len(hits) * 100, 1) if hits else None
+
+    naive_errs = [fw["naive_error"] for fw in forecast_weeks if fw.get("naive_error") is not None]
+    mae = round(float(np.mean(abs_err)), 2) if abs_err else None
+    naive_mae = round(float(np.mean(naive_errs)), 2) if naive_errs else None
+    # Skill score > 0 means the model beats "assume no change"
+    skill = None
+    if mae is not None and naive_mae:
+        skill = round((1.0 - mae / naive_mae) * 100, 1)
 
     metrics = {
-        "mape": round(float(np.mean(pct_errors)), 1) if pct_errors else None,
-        "mae": round(float(np.mean(abs_errors)), 2) if abs_errors else None,
-        "rmse": round(float(np.sqrt(np.mean([e ** 2 for e in abs_errors]))), 2) if abs_errors else None,
-        "directional_accuracy": _pct(dir_correct),
-        "ci_50_coverage": _pct(ci50_hits),
-        "ci_80_coverage": _pct(ci80_hits),
-        "ci_95_coverage": _pct(ci95_hits),
-        "weeks_with_actuals": len(abs_errors),
+        "mape": round(float(np.mean(pct_err)), 1) if pct_err else None,
+        "mae": mae,
+        "rmse": round(float(np.sqrt(np.mean([e ** 2 for e in abs_err]))), 2) if abs_err else None,
+        "naive_mae": naive_mae,
+        "skill_score": skill,
+        "directional_accuracy": _pct(dir_ok),
+        "ci_50_coverage": _pct(ci50),
+        "ci_80_coverage": _pct(ci80),
+        "ci_95_coverage": _pct(ci95),
+        "weeks_with_actuals": len(abs_err),
     }
 
-    # --- Chart history: horizon_weeks before as_of ---
-    hist_start_day = as_of_day - horizon_weeks * 7
-    hist_chart_rows = [r for r in hist_rows if r.year == as_of_year and r.day >= max(1, hist_start_day)]
-    hist_week_map = defaultdict(list)
-    if hist_chart_rows:
-        hist_min_day = min(r.day for r in hist_chart_rows)
-        for r in hist_chart_rows:
-            rel_week = -(horizon_weeks) + (r.day - hist_min_day) // 7
-            hist_week_map[rel_week].append(float(r.price))
+    # ---- Chart history (weekly medians before as_of) ----
+    hist_start = as_of_day - horizon_weeks * 7
+    hchart = [r for r in train if int(r.year) == as_of_year and int(r.day) >= max(1, hist_start)]
+    hw = defaultdict(list)
+    if hchart:
+        hmin = min(int(r.day) for r in hchart)
+        for r in hchart:
+            hw[-horizon_weeks + (int(r.day) - hmin) // 7].append(float(r.price))
     history_chart = [
-        {"week_offset": int(wk), "price": round(float(np.mean(p)), 2)}
-        for wk, p in sorted(hist_week_map.items())
+        {"week_offset": int(k), "price": round(float(np.median(v)), 2)}
+        for k, v in sorted(hw.items())
     ]
-
-    available_commodities = [r[0] for r in db.session.query(PriceData.commodity).distinct().order_by(PriceData.commodity).all()]
-    available_cities = [r[0] for r in db.session.query(PriceData.city_name).distinct().order_by(PriceData.city_name).all()]
 
     return jsonify({
         "commodity": commodity_norm,
         "city": city,
         "as_of_date": as_of_date.strftime("%Y-%m-%d"),
         "horizon_weeks": horizon_weeks,
-        "sigma": round(sigma, 2),
+        "active_segment": active_segment,
+        "segment_note": segment_note,
+        "segments": seg_catalogue,
+        "base_price": base_price,
+        "seasonal_at_as_of": seasonal_now,
+        "level_offset": round((base_price - seasonal_now), 2) if base_price is not None else None,
+        "sigma": round(model["sigma"], 2),
         "slope": round(slope, 2),
+        "training_rows": len(train),
         "history": history_chart,
         "forecast": forecast_weeks,
         "metrics": metrics,
-        "commodities": available_commodities,
-        "cities": available_cities,
+        **_catalogue(),
     })
 
 

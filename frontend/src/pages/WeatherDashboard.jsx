@@ -1075,7 +1075,7 @@ function AlertsTab() {
             ⚡ Severe Weather in 14-Day Forecast — {totalSevere} day{totalSevere !== 1 ? 's' : ''} flagged across {severeLocs.length} location{severeLocs.length !== 1 ? 's' : ''}
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 14 }}>
-            Based on forecast icon classification ·
+            Combines storm icons with frost, wind and rainfall thresholds ·
             <span style={{ marginLeft: 8 }}>
               <span style={{ color: '#ca8a04', fontWeight: 700 }}>● Moderate</span>
               <span style={{ marginLeft: 8, color: '#ea580c', fontWeight: 700 }}>● High</span>
@@ -1098,16 +1098,30 @@ function AlertsTab() {
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                     {(loc.severe_days || []).map((d, i) => {
-                      const sev = d.icon_severity || iconSeverity(d.icon || '');
+                      const sev = d.risk_severity ?? d.icon_severity ?? iconSeverity(d.icon || '');
                       const dsm = severityMeta(sev);
                       const dateStr = d.utc_date_iso ? new Date(d.utc_date_iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : `Day ${i + 1}`;
+                      const reasons = d.risk_reasons || [];
                       return (
-                        <div key={i} title={`${weatherLabel(d.icon)} · High ${d.maxTemp ?? '—'}° Low ${d.minTemp ?? '—'}° · Precip ${d.prcp ?? '—'}"`}
-                          style={{ background: dsm.bg, border: `1px solid ${severityBorderColor[sev]}`, borderRadius: 6, padding: '6px 10px', fontSize: 11, minWidth: 80, textAlign: 'center', cursor: 'default' }}>
-                          <div style={{ fontSize: 18, lineHeight: 1, marginBottom: 2 }}>{weatherIcon(d.icon)}</div>
-                          <div style={{ fontWeight: 700, color: 'var(--text)', marginBottom: 1 }}>{dateStr}</div>
-                          <div style={{ color: dsm.text, fontWeight: 600 }}>{weatherLabel(d.icon)}</div>
-                          {d.maxTemp != null && <div style={{ color: 'var(--text-3)', marginTop: 2 }}>↑{d.maxTemp}° ↓{d.minTemp}°</div>}
+                        <div key={i} title={reasons.join(' · ') || weatherLabel(d.icon)}
+                          style={{ background: dsm.bg, border: `1px solid ${severityBorderColor[sev]}`, borderRadius: 6, padding: '8px 10px', fontSize: 11, minWidth: 110, cursor: 'default' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                            <span style={{ fontSize: 18, lineHeight: 1 }}>{weatherIcon(d.icon)}</span>
+                            <span style={{ fontWeight: 700, color: 'var(--text)' }}>{dateStr}</span>
+                          </div>
+                          <div style={{ color: dsm.text, fontWeight: 600, marginBottom: 3 }}>{weatherLabel(d.icon)}</div>
+                          {reasons.length > 0 && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 1, marginBottom: 3 }}>
+                              {reasons.map((rs, ri) => (
+                                <div key={ri} style={{ fontSize: 10, color: dsm.text, fontWeight: 600 }}>• {rs}</div>
+                              ))}
+                            </div>
+                          )}
+                          <div style={{ color: 'var(--text-3)', fontSize: 10, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                            {d.maxTemp != null && <span>↑{d.maxTemp}° ↓{d.minTemp}°</span>}
+                            {d.prcp != null && Number(d.prcp) > 0 && <span>💧{d.prcp}"</span>}
+                            {d.gust != null && Number(d.gust) >= 20 && <span>💨{d.gust}</span>}
+                          </div>
                         </div>
                       );
                     })}
@@ -1156,7 +1170,7 @@ export default function WeatherDashboard() {
         let count = 0;
         locs.forEach(loc => {
           count += (loc.alerts || []).length;
-          count += (loc.severe_days || []).filter(d => (d.icon_severity || 0) >= 2).length;
+          count += (loc.severe_days || []).filter(d => (d.risk_severity ?? d.icon_severity ?? 0) >= 2).length;
         });
         setAlertCount(count);
       })

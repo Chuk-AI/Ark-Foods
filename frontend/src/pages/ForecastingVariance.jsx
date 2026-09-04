@@ -242,41 +242,61 @@ function FanChart({ data, horizonWeeks }) {
 }
 
 // ── Error table ────────────────────────────────────────────────────────────
-function ErrorTable({ forecast }) {
+function ErrorTable({ forecast, basePrice }) {
   const weeks = forecast.filter(f => f.actual != null);
   if (!weeks.length) return <p style={{ color: 'var(--text-3)', fontSize: 13, padding: '16px 0' }}>No actuals available yet for comparison.</p>;
 
-  const maxErr = Math.max(...weeks.map(w => Math.abs(w.error || 0)));
+  const maxErr = Math.max(...weeks.map(w => Math.abs(w.error || 0)), 0.01);
 
   const errColor = (pctErr) => {
     if (pctErr == null) return 'var(--text-3)';
     if (pctErr <= 5) return '#15803d';
-    if (pctErr <= 10) return '#b45309';
+    if (pctErr <= 12) return '#b45309';
     return '#dc2626';
   };
+
+  const cols = [
+    { h: 'Week', align: 'left' },
+    { h: 'Date', align: 'left' },
+    { h: 'Base @ forecast', align: 'center' },
+    { h: 'Forecast', align: 'center' },
+    { h: 'Actual', align: 'center' },
+    { h: 'Error', align: 'center' },
+    { h: '% Error', align: 'center' },
+    { h: 'vs Naive', align: 'center' },
+    { h: 'Error bar', align: 'left' },
+    { h: '50%', align: 'center' },
+    { h: '80%', align: 'center' },
+    { h: '95%', align: 'center' },
+  ];
 
   return (
     <div style={{ overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
         <thead>
           <tr style={{ background: 'var(--surface-2)' }}>
-            {['Week', 'Date', 'Forecast', 'Actual', 'Error', '% Error', 'Error bar', '50%', '80%', '95%'].map(h => (
-              <th key={h} style={{
-                padding: '9px 12px', textAlign: ['Forecast', 'Actual', 'Error', '% Error', '50%', '80%', '95%'].includes(h) ? 'center' : 'left',
+            {cols.map(c => (
+              <th key={c.h} style={{
+                padding: '9px 12px', textAlign: c.align,
                 fontSize: 11, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase',
                 letterSpacing: '0.06em', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap',
-              }}>{h}</th>
+              }}>{c.h}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {weeks.map((f, i) => {
-            const barW = maxErr > 0 ? Math.abs(f.error || 0) / maxErr * 100 : 0;
+            const barW = Math.abs(f.error || 0) / maxErr * 100;
             const barColor = (f.error || 0) > 0 ? '#b45309' : '#2A6349';
+            // Did the model beat "assume price never moved"?
+            const beatNaive = f.naive_error != null && Math.abs(f.error || 0) < f.naive_error;
             return (
               <tr key={f.week} style={{ borderBottom: '1px solid var(--border)', background: i % 2 === 0 ? 'transparent' : 'var(--surface-2)' }}>
                 <td style={{ padding: '9px 12px', color: 'var(--text-3)', fontWeight: 600 }}>+{f.week}w</td>
                 <td style={{ padding: '9px 12px', color: 'var(--text-2)', whiteSpace: 'nowrap' }}>{f.week_label}</td>
+                <td style={{ padding: '9px 12px', textAlign: 'center', color: 'var(--text-3)', fontVariantNumeric: 'tabular-nums' }}>
+                  {fmt(f.base_price ?? basePrice)}
+                </td>
                 <td style={{ padding: '9px 12px', textAlign: 'center', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{fmt(f.median)}</td>
                 <td style={{ padding: '9px 12px', textAlign: 'center', fontWeight: 700, color: '#b45309', fontVariantNumeric: 'tabular-nums' }}>{fmt(f.actual)}</td>
                 <td style={{ padding: '9px 12px', textAlign: 'center', color: (f.error || 0) > 0 ? '#dc2626' : '#15803d', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
@@ -285,20 +305,23 @@ function ErrorTable({ forecast }) {
                 <td style={{ padding: '9px 12px', textAlign: 'center', fontWeight: 700, color: errColor(f.error_pct) }}>
                   {pct(f.error_pct)}
                 </td>
+                <td style={{ padding: '9px 12px', textAlign: 'center', fontSize: 11 }}>
+                  {f.naive_error == null ? '—' : beatNaive
+                    ? <span style={{ color: '#15803d', fontWeight: 700 }}>✓ better</span>
+                    : <span style={{ color: '#dc2626', fontWeight: 600 }}>worse</span>}
+                </td>
                 <td style={{ padding: '9px 12px', minWidth: 80 }}>
                   <div style={{ height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
                     <div style={{ height: '100%', width: `${barW}%`, background: barColor, borderRadius: 3 }} />
                   </div>
                 </td>
-                <td style={{ padding: '9px 12px', textAlign: 'center' }}>
-                  {f.in_ci_50 === true ? <span style={{ color: '#15803d', fontSize: 14 }}>✓</span> : <span style={{ color: '#dc2626', fontSize: 12 }}>✗</span>}
-                </td>
-                <td style={{ padding: '9px 12px', textAlign: 'center' }}>
-                  {f.in_ci_80 === true ? <span style={{ color: '#15803d', fontSize: 14 }}>✓</span> : <span style={{ color: '#dc2626', fontSize: 12 }}>✗</span>}
-                </td>
-                <td style={{ padding: '9px 12px', textAlign: 'center' }}>
-                  {f.in_ci_95 === true ? <span style={{ color: '#15803d', fontSize: 14 }}>✓</span> : <span style={{ color: '#dc2626', fontSize: 12 }}>✗</span>}
-                </td>
+                {['in_ci_50', 'in_ci_80', 'in_ci_95'].map(k => (
+                  <td key={k} style={{ padding: '9px 12px', textAlign: 'center' }}>
+                    {f[k] === true
+                      ? <span style={{ color: '#15803d', fontSize: 14 }}>✓</span>
+                      : <span style={{ color: '#dc2626', fontSize: 12 }}>✗</span>}
+                  </td>
+                ))}
               </tr>
             );
           })}
@@ -310,40 +333,58 @@ function ErrorTable({ forecast }) {
 
 // ── Component breakdown bar chart ─────────────────────────────────────────
 function ComponentChart({ forecast }) {
-  const maxAbs = Math.max(...forecast.map(f => Math.max(Math.abs(f.seasonal_component), Math.abs(f.trend_component))), 1);
+  const maxAbs = Math.max(
+    ...forecast.map(f => Math.max(
+      Math.abs(f.seasonal_component || 0),
+      Math.abs(f.level_component || 0),
+      Math.abs(f.trend_component || 0),
+    )), 1);
+
+  const Bar = ({ v, color }) => (
+    <div style={{ height: 5, background: 'var(--border)', borderRadius: 3, width: 90 }}>
+      <div style={{ height: '100%', width: `${Math.min(Math.abs(v || 0) / maxAbs * 100, 100)}%`, background: color, borderRadius: 3 }} />
+    </div>
+  );
+  const signed = (v) => `${v > 0 ? '+' : ''}${(v || 0).toFixed(2)}`;
+
   return (
-    <div style={{ overflowX: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-        <thead>
-          <tr>
-            {['Week', 'Seasonal base', '', 'Trend adj', '', 'Forecast'].map((h, i) => (
-              <th key={i} style={{ padding: '8px 10px', textAlign: i === 0 || i === 5 ? 'left' : 'left', fontSize: 10, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {forecast.map((f, i) => (
-            <tr key={f.week} style={{ borderBottom: '1px solid var(--border)', background: i % 2 === 0 ? 'transparent' : 'var(--surface-2)' }}>
-              <td style={{ padding: '7px 10px', color: 'var(--text-3)', fontWeight: 600 }}>+{f.week}w</td>
-              <td style={{ padding: '7px 10px', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{fmt(f.seasonal_component)}</td>
-              <td style={{ padding: '7px 10px', width: 100 }}>
-                <div style={{ height: 5, background: 'var(--border)', borderRadius: 3 }}>
-                  <div style={{ height: '100%', width: `${Math.abs(f.seasonal_component) / maxAbs * 100}%`, background: '#4a6a4a', borderRadius: 3 }} />
-                </div>
-              </td>
-              <td style={{ padding: '7px 10px', fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: f.trend_component >= 0 ? '#dc2626' : '#15803d' }}>
-                {f.trend_component > 0 ? '+' : ''}{f.trend_component.toFixed(2)}
-              </td>
-              <td style={{ padding: '7px 10px', width: 100 }}>
-                <div style={{ height: 5, background: 'var(--border)', borderRadius: 3 }}>
-                  <div style={{ height: '100%', width: `${Math.abs(f.trend_component) / maxAbs * 100}%`, background: f.trend_component >= 0 ? '#dc2626' : '#15803d', borderRadius: 3 }} />
-                </div>
-              </td>
-              <td style={{ padding: '7px 10px', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{fmt(f.median)}</td>
+    <div>
+      <div style={{ padding: '10px 14px', fontSize: 11, color: 'var(--text-3)', borderBottom: '1px solid var(--border)', lineHeight: 1.6 }}>
+        <strong style={{ color: 'var(--text-2)' }}>Forecast = Seasonal level + Level offset + Trend.</strong>{' '}
+        Seasonal is where this week-of-year normally sits. Level offset is how far
+        the market was above/below that when the forecast was made — it decays with a
+        4-week half-life. Trend is short-term momentum, decaying over 6 weeks.
+      </div>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+          <thead>
+            <tr>
+              {['Week', 'Seasonal', '', 'Level offset', '', 'Trend', '', 'Forecast', '± σ'].map((h, i) => (
+                <th key={i} style={{ padding: '8px 10px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{h}</th>
+              ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {forecast.map((f, i) => (
+              <tr key={f.week} style={{ borderBottom: '1px solid var(--border)', background: i % 2 === 0 ? 'transparent' : 'var(--surface-2)' }}>
+                <td style={{ padding: '7px 10px', color: 'var(--text-3)', fontWeight: 600 }}>+{f.week}w</td>
+                <td style={{ padding: '7px 10px', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{fmt(f.seasonal_component)}</td>
+                <td style={{ padding: '7px 10px' }}><Bar v={f.seasonal_component} color="#4a6a4a" /></td>
+                <td style={{ padding: '7px 10px', fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: (f.level_component || 0) >= 0 ? '#dc2626' : '#15803d' }}>
+                  {signed(f.level_component)}
+                </td>
+                <td style={{ padding: '7px 10px' }}><Bar v={f.level_component} color={(f.level_component || 0) >= 0 ? '#dc2626' : '#15803d'} /></td>
+                <td style={{ padding: '7px 10px', fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: (f.trend_component || 0) >= 0 ? '#b45309' : '#2A6349' }}>
+                  {signed(f.trend_component)}
+                </td>
+                <td style={{ padding: '7px 10px' }}><Bar v={f.trend_component} color={(f.trend_component || 0) >= 0 ? '#b45309' : '#2A6349'} /></td>
+                <td style={{ padding: '7px 10px', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{fmt(f.median)}</td>
+                <td style={{ padding: '7px 10px', color: 'var(--text-3)', fontVariantNumeric: 'tabular-nums' }}>±{(f.sigma || 0).toFixed(2)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -355,31 +396,40 @@ export default function ForecastingVariance() {
   const [commodity, setCommodity] = useState('Bell Peppers');
   const [city, setCity] = useState('New York');
   const [horizonWeeks, setHorizonWeeks] = useState(12);
+  const [segment, setSegment] = useState('');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('error-table');
 
-  const load = useCallback(() => {
+  const load = useCallback((segOverride) => {
     setLoading(true);
     setError(null);
-    axios.get('/api/forecast_hindcast', { params: { commodity, city, horizon_weeks: horizonWeeks } })
+    const params = { commodity, city, horizon_weeks: horizonWeeks };
+    const seg = segOverride !== undefined ? segOverride : segment;
+    if (seg) params.segment = seg;
+    axios.get('/api/forecast_hindcast', { params })
       .then(r => {
         if (r.data.error) {
           setError(r.data.error);
+          setData(null);
           if (r.data.commodities) setCommodities(r.data.commodities);
           if (r.data.cities) setCities(r.data.cities);
         } else {
           setData(r.data);
           if (r.data.commodities?.length) setCommodities(r.data.commodities);
           if (r.data.cities?.length) setCities(r.data.cities);
+          if (!seg && r.data.active_segment) setSegment(r.data.active_segment);
         }
         setLoading(false);
       })
       .catch(e => { setError(e.message); setLoading(false); });
-  }, [commodity, city, horizonWeeks]);
+  }, [commodity, city, horizonWeeks, segment]);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(''); }, []);
+
+  // Reset segment when commodity/city changes — segments are per-market
+  useEffect(() => { setSegment(''); }, [commodity, city]);
 
   const m = data?.metrics;
   const mapeColor = m?.mape == null ? 'var(--text-2)' : m.mape <= 5 ? '#15803d' : m.mape <= 12 ? '#b45309' : '#dc2626';
@@ -436,16 +486,49 @@ export default function ForecastingVariance() {
             <option value={20}>20 weeks</option>
           </select>
         </div>
-        <button onClick={load} disabled={loading}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Segment (size / origin)</label>
+          <select value={segment} onChange={e => { setSegment(e.target.value); load(e.target.value); }}
+            style={{ fontSize: 13, padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', color: 'var(--text)', minWidth: 220 }}>
+            <option value="__all__">All segments pooled</option>
+            {(data?.segments || []).map(s => (
+              <option key={s.segment} value={s.segment}>
+                {s.segment} ({s.history_rows}h / {s.actual_rows}a)
+              </option>
+            ))}
+          </select>
+        </div>
+        <button onClick={() => load()} disabled={loading}
           style={{ padding: '8px 20px', fontSize: 12, fontWeight: 700, background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', alignSelf: 'flex-end', opacity: loading ? 0.6 : 1 }}>
           Run Hindcast
         </button>
-        {data && (
-          <div style={{ alignSelf: 'flex-end', fontSize: 12, color: 'var(--text-3)', marginLeft: 4 }}>
-            As-of {data.as_of_date} · σ = {fmt(data.sigma)} · slope = {data.slope > 0 ? '+' : ''}{data.slope.toFixed(2)}/wk
-          </div>
-        )}
       </div>
+
+      {/* Run context strip */}
+      {data && !loading && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, padding: '12px 16px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, marginBottom: 20, fontSize: 12 }}>
+          {[
+            ['Forecast made', data.as_of_date],
+            ['Segment', data.active_segment === '__all__' ? 'All pooled' : data.active_segment],
+            ['Base price then', fmt(data.base_price)],
+            ['Seasonal norm', fmt(data.seasonal_at_as_of)],
+            ['Level offset', data.level_offset != null ? `${data.level_offset > 0 ? '+' : ''}${data.level_offset.toFixed(2)}` : '—'],
+            ['σ (residual)', fmt(data.sigma)],
+            ['Trend slope', `${data.slope > 0 ? '+' : ''}${(data.slope || 0).toFixed(2)}/wk`],
+            ['Training rows', data.training_rows],
+          ].map(([k, v]) => (
+            <div key={k} style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{k}</span>
+              <span style={{ fontWeight: 600, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>{v}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {data?.segment_note && (
+        <div style={{ padding: '9px 14px', background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: 6, fontSize: 12, color: '#92400e', marginBottom: 16 }}>
+          ⚠ {data.segment_note}
+        </div>
+      )}
 
       {loading && <Spinner />}
       {error && <div style={{ padding: '14px 18px', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 8, color: '#991b1b', fontSize: 13 }}>{error}</div>}
@@ -471,6 +554,12 @@ export default function ForecastingVariance() {
               value={m?.rmse != null ? fmt(m.rmse) : '—'}
               sub="Root Mean Sq. Error"
               color="var(--text-2)"
+            />
+            <MetricCard
+              label="Skill vs Naive"
+              value={m?.skill_score != null ? `${m.skill_score > 0 ? '+' : ''}${m.skill_score}%` : '—'}
+              sub={m?.naive_mae != null ? `naive MAE ${fmt(m.naive_mae)}` : 'vs assume-no-change'}
+              color={m?.skill_score == null ? 'var(--text-2)' : m.skill_score > 0 ? '#15803d' : '#dc2626'}
             />
             <MetricCard
               label="Directional"
@@ -531,7 +620,7 @@ export default function ForecastingVariance() {
               ))}
             </div>
             <div style={{ padding: 0 }}>
-              {activeTab === 'error-table' && <ErrorTable forecast={data.forecast} />}
+              {activeTab === 'error-table' && <ErrorTable forecast={data.forecast} basePrice={data.base_price} />}
               {activeTab === 'components' && <ComponentChart forecast={data.forecast} />}
             </div>
           </div>
@@ -555,7 +644,7 @@ export default function ForecastingVariance() {
             <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '14px 16px' }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Current model</div>
               <div style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.6 }}>
-                Seasonal baseline + linear trend with 8-week decay. Adding weather signals and shipment volumes (Phase 2) will reduce MAPE and improve directional accuracy.
+                Ratio-based seasonality (recency-weighted, median/MAD robust) + mean-reverting level offset (4-wk half-life) + decaying trend. Segregated by unit / size / origin. Weather and shipment signals come next.
               </div>
             </div>
           </div>
