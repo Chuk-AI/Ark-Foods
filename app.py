@@ -9288,6 +9288,46 @@ def _weekly_weather(loc_id, start_date, days):
     return out, diag
 
 
+def _deseasonalise(weeks, values):
+    """
+    Strip the annual cycle by subtracting each week-of-year's own mean.
+
+    Weather and price both swing with the seasons, so over a short window they
+    move together whether or not one drives the other - the correlation just
+    reports that both are travelling through the same part of the year. Working
+    on anomalies asks the question that matters: does an unusually cold week at
+    origin precede an unusually dear week at market.
+
+    Falls back to the raw series where a week-of-year appears only once, since
+    subtracting a mean built from a single observation would zero it out.
+    """
+    from collections import defaultdict
+    buckets = defaultdict(list)
+    for (_, woy), v in zip(weeks, values):
+        buckets[woy].append(v)
+    means = {w: float(np.mean(v)) for w, v in buckets.items() if len(v) >= 2}
+    if len(means) < 4:
+        return list(values)
+    return [v - means.get(woy, v) if woy in means else 0.0
+            for (_, woy), v in zip(weeks, values)]
+
+
+def _too_sparse(values, min_distinct=5, max_zero_share=0.9):
+    """
+    Reject near-constant series such as frost days in a Georgia summer.
+
+    A mostly-zero series barely changes under circular shifting, so its null
+    threshold collapses and almost any correlation clears it. Georgia frost days
+    against New York habanero prices scored r=0.885 against a threshold of 0.197
+    on twenty weeks that way.
+    """
+    vals = [float(v) for v in values]
+    if len({round(v, 6) for v in vals}) < min_distinct:
+        return True
+    zeros = sum(1 for v in vals if abs(v) < 1e-9)
+    return zeros / max(len(vals), 1) > max_zero_share
+
+
 def _pearson(xs, ys):
     if len(xs) < 6:
         return None
@@ -9348,7 +9388,11 @@ def _weather_price_correlation(commodity=None, years_back=3, max_lag=8, min_week
 
     years_back = min(max(int(years_back), 1), 5)
     max_lag = min(max(int(max_lag), 1), 12)
-    min_weeks = min(max(int(min_weeks), 10), 100)
+    # A full year minimum: on a 20-week window two seasonal series correlate
+    # almost automatically, and the circular-shift null has no complete cycle
+    # to shift through, so it cannot test the aligned-seasons case that
+    # produces the correlation in the first place.
+    min_weeks = min(max(int(min_weeks), 52), 200)
 
     now = datetime.now()
     start = now - timedelta(days=365 * years_back)
@@ -9446,6 +9490,7 @@ def _weather_price_correlation(commodity=None, years_back=3, max_lag=8, min_week
     FEATURES = ["min_temp", "max_temp", "mean_temp", "precip", "gdd", "frost_days", "heat_days"]
 
     results, unmapped, thin = [], set(), 0
+    sparse_skipped = 0
     no_weather, no_weather_regions = 0, set()
     tests_run = 0
 
@@ -9489,22 +9534,33 @@ def _weather_price_correlation(commodity=None, years_back=3, max_lag=8, min_week
         best = None
         for feat in FEATURES:
             for lag in range(0, max_lag + 1):
-                xs, ys = [], []
+                xs, ys, wks = [], [], []
                 for wk in price_weeks:
-                    src = _shift(wk, lag)
-                    vals = merged.get(src, {}).get(feat)
+                    srcwk = _shift(wk, lag)
+                    vals = merged.get(srcwk, {}).get(feat)
                     if vals:
                         xs.append(float(np.mean(vals)))
                         ys.append(price_by_week[wk])
+                        wks.append(wk)
                 if len(xs) < min_weeks:
                     continue
-                r = _pearson(xs, ys)
+                if _too_sparse(xs):
+                    sparse_skipped += 1
+                    continue
+                # Correlate anomalies, not levels: both series carry the same
+                # annual cycle, and correlating the raw levels mostly measures
+                # that shared cycle rather than any link between them.
+                xa = _deseasonalise(wks, xs)
+                ya = _deseasonalise(wks, ys)
+                r = _pearson(xa, ya)
                 if r is None:
                     continue
                 tests_run += 1
-                thresh = _null_threshold(xs, ys)
+                thresh = _null_threshold(xa, ya)
+                raw_r = _pearson(xs, ys)
                 rec = {
                     "feature": feat, "lag_weeks": lag, "r": round(r, 3),
+                    "r_raw_levels": round(raw_r, 3) if raw_r is not None else None,
                     "n_weeks": len(xs),
                     "null_threshold": round(thresh, 3) if thresh is not None else None,
                     "beats_null": bool(thresh is not None and abs(r) > thresh),
@@ -9566,6 +9622,7 @@ def _weather_price_correlation(commodity=None, years_back=3, max_lag=8, min_week
         "significant": real,
         "unmapped_origins": sorted(unmapped),
         "skipped_thin_series": thin,
+        "skipped_sparse_features": sparse_skipped,
         "skipped_no_weather": no_weather,
         "regions_without_weather": sorted(no_weather_regions),
         "weather_fetch_errors": weather_errors,
@@ -9573,7 +9630,12 @@ def _weather_price_correlation(commodity=None, years_back=3, max_lag=8, min_week
         "method": ("Weekly median price per commodity/market/origin against weather at the "
                    "growing regions that supply that origin, tested at lags 0-{} weeks. "
                    "Significance is judged against a null built by circularly shifting the "
-                   "price series, which keeps its autocorrelation intact.").format(max_lag),
+                   "price series, which keeps its autocorrelation intact. Both series are "
+                   "deseasonalised first - each week-of-year's own mean is subtracted - so "
+                   "what is tested is whether an unusually cold or hot week at origin "
+                   "precedes an unusually priced week at market, rather than the shared "
+                   "annual cycle both series carry. r_raw_levels shows what the undeseasonalised "
+                   "correlation would have been.").format(max_lag),
     }
 
 
@@ -9592,7 +9654,7 @@ def api_weather_price_correlation():
     commodity = request.args.get("commodity")
     years_back = int(request.args.get("years_back", 3))
     max_lag = int(request.args.get("max_lag", 8))
-    min_weeks = int(request.args.get("min_weeks", 20))
+    min_weeks = int(request.args.get("min_weeks", 52))
     background = request.args.get("background", "0") == "1"
 
     if not background:
