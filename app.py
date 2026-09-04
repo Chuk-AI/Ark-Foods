@@ -9158,6 +9158,14 @@ def api_forecast_hindcast_batch():
 # origin column is what links them.
 ORIGIN_REGION_MAP = {
     "florida":         ["arcadia_fl", "immokalee_fl", "palm_beach_fl"],
+    "north carolina":  ["cameron_sc", "ridge_spring_sc"],   # nearest monitored proxy
+    "delaware":        ["vineland_nj"],                      # same growing corridor
+    "maryland":        ["vineland_nj"],
+    "pennsylvania":    ["vineland_nj"],
+    "new york":        ["vineland_nj"],
+    "ohio":            ["sodus_mi"],
+    "indiana":         ["sodus_mi"],
+    "illinois":        ["sodus_mi"],
     "georgia":         ["adel_ga", "lake_park_ga"],
     "michigan":        ["sodus_mi"],
     "new jersey":      ["vineland_nj"],
@@ -9310,6 +9318,25 @@ def api_weather_price_correlation():
                      "cannot be traced without it.",
         }), 200
 
+    # How much price data sits behind each origin, and whether we watch its weather.
+    # A null result means nothing until you know whether it came from an absent
+    # effect or an absent measurement.
+    origin_rows = defaultdict(int)
+    for r in rows:
+        origin_rows[(r.origin or "").strip() or "(blank)"] += 1
+    total_rows = sum(origin_rows.values()) or 1
+    coverage = []
+    for o, cnt in sorted(origin_rows.items(), key=lambda kv: -kv[1]):
+        regions = _origin_to_regions(o)
+        coverage.append({
+            "origin": o,
+            "price_rows": cnt,
+            "share_pct": round(cnt / total_rows * 100, 1),
+            "monitored": bool(regions),
+            "growing_regions": regions,
+        })
+    covered_share = round(sum(c["share_pct"] for c in coverage if c["monitored"]), 1)
+
     # Weekly median price per (commodity, market, origin)
     series = defaultdict(lambda: defaultdict(list))
     for r in rows:
@@ -9415,8 +9442,15 @@ def api_weather_price_correlation():
                    f"what randomness produces. Treat the individual rows as candidates to "
                    f"confirm, not as settled effects.")
 
+    if covered_share < 50:
+        verdict = (f"Only {covered_share}% of priced volume comes from origins whose weather we "
+                   f"monitor, so this is a measurement gap rather than evidence about weather. "
+                   f"See origin_coverage for which origins to add stations for. ") + verdict
+
     return jsonify({
         "generated_at": now.strftime("%Y-%m-%d %H:%M:%S"),
+        "origin_coverage": coverage,
+        "monitored_share_pct": covered_share,
         "window_years": years_back,
         "max_lag_weeks": max_lag,
         "min_weeks_required": min_weeks,
