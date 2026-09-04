@@ -57,48 +57,104 @@ function todayStr() {
 
 // ─── Weather icon + label mapping ─────────────────────────────────────────────
 
+// Full WT360 icon list + legacy keys. Severity: 0=routine,1=moderate,2=high,3=critical
 const ICON_DATA = [
-  { key: 'sunny',          emoji: '☀️',  label: 'Sunny' },
-  { key: 'clear',          emoji: '☀️',  label: 'Clear' },
-  { key: 'clear-day',      emoji: '☀️',  label: 'Clear' },
-  { key: 'mostly-sunny',   emoji: '🌤',  label: 'Mostly Sunny' },
-  { key: 'mostly-clear',   emoji: '🌤',  label: 'Mostly Clear' },
-  { key: 'partly-sunny',   emoji: '⛅',  label: 'Partly Cloudy' },
-  { key: 'partly-cloudy',  emoji: '⛅',  label: 'Partly Cloudy' },
-  { key: 'mostly-cloudy',  emoji: '🌥',  label: 'Mostly Cloudy' },
-  { key: 'cloudy',         emoji: '☁️',  label: 'Cloudy' },
-  { key: 'overcast',       emoji: '☁️',  label: 'Overcast' },
-  { key: 'fog',            emoji: '🌫',  label: 'Foggy' },
-  { key: 'haze',           emoji: '🌫',  label: 'Hazy' },
-  { key: 'drizzle',        emoji: '🌦',  label: 'Drizzle' },
-  { key: 'light-rain',     emoji: '🌦',  label: 'Light Rain' },
-  { key: 'sprinkles',      emoji: '🌦',  label: 'Sprinkles' },
-  { key: 'rain',           emoji: '🌧',  label: 'Rainy' },
-  { key: 'showers',        emoji: '🌧',  label: 'Showers' },
-  { key: 'heavy-rain',     emoji: '🌧',  label: 'Heavy Rain' },
-  { key: 'rain-showers',   emoji: '🌧',  label: 'Rain Showers' },
-  { key: 'thunderstorm',   emoji: '⛈',  label: 'Thunderstorm' },
-  { key: 'thundershowers', emoji: '⛈',  label: 'T-Showers' },
-  { key: 'tstorms',        emoji: '⛈',  label: 'T-Storms' },
-  { key: 't-storms',       emoji: '⛈',  label: 'T-Storms' },
-  { key: 'thunder',        emoji: '⛈',  label: 'Thunder' },
-  { key: 'snow',           emoji: '❄️',  label: 'Snow' },
-  { key: 'heavy-snow',     emoji: '❄️',  label: 'Heavy Snow' },
-  { key: 'light-snow',     emoji: '🌨',  label: 'Light Snow' },
-  { key: 'snow-showers',   emoji: '🌨',  label: 'Snow Showers' },
-  { key: 'sleet',          emoji: '🌨',  label: 'Sleet' },
-  { key: 'freezing-rain',  emoji: '🌨',  label: 'Freezing Rain' },
-  { key: 'wintry-mix',     emoji: '🌨',  label: 'Wintry Mix' },
-  { key: 'windy',          emoji: '💨',  label: 'Windy' },
-  { key: 'breezy',         emoji: '💨',  label: 'Breezy' },
+  // ── Sunny / clear ──────────────────────────────────────────────────────────
+  { key: 'sunny',                         emoji: '☀️',  label: 'Sunny',                    severity: 0 },
+  { key: 'sunny-windy',                   emoji: '🌬☀️', label: 'Sunny & Windy',             severity: 0 },
+  { key: 'clear',                         emoji: '☀️',  label: 'Clear',                    severity: 0 },
+  { key: 'clear-day',                     emoji: '☀️',  label: 'Clear',                    severity: 0 },
+  { key: 'moon-clear-skies',              emoji: '🌙',  label: 'Clear Skies',              severity: 0 },
+  // ── Partly sunny / cloudy ──────────────────────────────────────────────────
+  { key: 'mostly-sunny',                  emoji: '🌤',  label: 'Mostly Sunny',             severity: 0 },
+  { key: 'mostly-clear',                  emoji: '🌤',  label: 'Mostly Clear',             severity: 0 },
+  { key: 'partly-sunny',                  emoji: '⛅',  label: 'Partly Sunny',             severity: 0 },
+  { key: 'partly-sunny-windy',            emoji: '⛅',  label: 'Partly Sunny & Windy',     severity: 0 },
+  { key: 'partly-cloudy',                 emoji: '⛅',  label: 'Partly Cloudy',            severity: 0 },
+  { key: 'partly-cloudy-windy',           emoji: '⛅',  label: 'Partly Cloudy & Windy',    severity: 0 },
+  { key: 'mostly-cloudy',                 emoji: '🌥',  label: 'Mostly Cloudy',            severity: 0 },
+  { key: 'mostly-cloudy-windy',           emoji: '🌥',  label: 'Mostly Cloudy & Windy',    severity: 0 },
+  { key: 'cloudy',                        emoji: '☁️',  label: 'Cloudy',                   severity: 0 },
+  { key: 'cloudy-windy',                  emoji: '☁️',  label: 'Cloudy & Windy',           severity: 0 },
+  { key: 'overcast',                      emoji: '☁️',  label: 'Overcast',                 severity: 0 },
+  // ── Nighttime partly cloudy ────────────────────────────────────────────────
+  { key: 'moon-partly-sunny',             emoji: '🌙⛅', label: 'Partly Cloudy Night',      severity: 0 },
+  { key: 'moon-partly-sunny-windy',       emoji: '🌙⛅', label: 'Partly Cloudy Night Windy',severity: 0 },
+  { key: 'moon-partly-cloudy',            emoji: '🌙⛅', label: 'Partly Cloudy Night',      severity: 0 },
+  { key: 'moon-partly-cloudy-windy',      emoji: '🌙⛅', label: 'Partly Cloudy Night Windy',severity: 0 },
+  { key: 'moon-mostly-cloudy',            emoji: '🌙🌥', label: 'Mostly Cloudy Night',      severity: 0 },
+  { key: 'moon-mostly-cloudy-windy',      emoji: '🌙🌥', label: 'Mostly Cloudy Night Windy',severity: 0 },
+  { key: 'moon-windy',                    emoji: '🌙💨', label: 'Windy Night',              severity: 0 },
+  { key: 'moon-hazy',                     emoji: '🌙🌫', label: 'Hazy Night',               severity: 0 },
+  // ── Fog / haze / dust ─────────────────────────────────────────────────────
+  { key: 'fog',                           emoji: '🌫',  label: 'Foggy',                    severity: 0 },
+  { key: 'hazy',                          emoji: '🌫',  label: 'Hazy',                     severity: 0 },
+  { key: 'haze',                          emoji: '🌫',  label: 'Hazy',                     severity: 0 },
+  { key: 'blowingdust',                   emoji: '💨🌫', label: 'Blowing Dust',             severity: 1 },
+  // ── Wind ──────────────────────────────────────────────────────────────────
+  { key: 'windy',                         emoji: '💨',  label: 'Windy',                    severity: 0 },
+  { key: 'breezy',                        emoji: '💨',  label: 'Breezy',                   severity: 0 },
+  // ── Light rain ────────────────────────────────────────────────────────────
+  { key: 'light-rain',                    emoji: '🌦',  label: 'Light Rain',               severity: 0 },
+  { key: 'light-rain-shower',             emoji: '🌦',  label: 'Light Rain Shower',        severity: 0 },
+  { key: 'moon-light-rain-shower',        emoji: '🌧',  label: 'Light Rain Shower Night',  severity: 0 },
+  { key: 'drizzle',                       emoji: '🌦',  label: 'Drizzle',                  severity: 0 },
+  { key: 'sprinkles',                     emoji: '🌦',  label: 'Sprinkles',                severity: 0 },
+  { key: 'rain',                          emoji: '🌧',  label: 'Rainy',                    severity: 0 },
+  { key: 'rain-showers',                  emoji: '🌧',  label: 'Rain Showers',             severity: 0 },
+  { key: 'showers',                       emoji: '🌧',  label: 'Showers',                  severity: 0 },
+  { key: 'rain-shower-cloudy',            emoji: '🌧',  label: 'Rain Showers (Cloudy)',    severity: 1 },
+  // ── Heavy rain ────────────────────────────────────────────────────────────
+  { key: 'heavy-rain',                    emoji: '🌧',  label: 'Heavy Rain',               severity: 1 },
+  { key: 'heavy-rain-shower',             emoji: '🌧',  label: 'Heavy Rain Shower',        severity: 1 },
+  { key: 'moon-heavy-rain-shower',        emoji: '🌧',  label: 'Heavy Rain Shower Night',  severity: 1 },
+  // ── Thunder ───────────────────────────────────────────────────────────────
+  { key: 'isolated-thunder-shower',       emoji: '⛈',  label: 'Isolated T-Shower',        severity: 2 },
+  { key: 'moon-isolated-thunder-shower',  emoji: '⛈',  label: 'Isolated T-Shower Night',  severity: 2 },
+  { key: 'thundershower',                 emoji: '⛈',  label: 'Thundershower',             severity: 2 },
+  { key: 'thundershower-cloudy',          emoji: '⛈',  label: 'Thundershower (Cloudy)',    severity: 2 },
+  { key: 'thundershowers',                emoji: '⛈',  label: 'Thundershowers',            severity: 2 },
+  { key: 'thunderstorm',                  emoji: '⛈',  label: 'Thunderstorm',              severity: 2 },
+  { key: 'thunderstorm-severe',           emoji: '🌩',  label: 'Severe Thunderstorm',       severity: 3 },
+  { key: 'tstorms',                       emoji: '⛈',  label: 'T-Storms',                 severity: 2 },
+  { key: 't-storms',                      emoji: '⛈',  label: 'T-Storms',                 severity: 2 },
+  { key: 'thunder',                       emoji: '⛈',  label: 'Thunder',                  severity: 2 },
+  // ── Tornado ───────────────────────────────────────────────────────────────
+  { key: 'tornado',                       emoji: '🌪',  label: 'Tornado',                  severity: 3 },
+  // ── Light snow ────────────────────────────────────────────────────────────
+  { key: 'light-snow',                    emoji: '🌨',  label: 'Light Snow',               severity: 0 },
+  { key: 'light-snow-shower',             emoji: '🌨',  label: 'Light Snow Shower',        severity: 0 },
+  { key: 'moon-light-snow-shower',        emoji: '🌨',  label: 'Light Snow Shower Night',  severity: 0 },
+  { key: 'snow-showers',                  emoji: '🌨',  label: 'Snow Showers',             severity: 0 },
+  { key: 'snow-shower-cloudy',            emoji: '🌨',  label: 'Snow Showers (Cloudy)',    severity: 1 },
+  { key: 'snow',                          emoji: '❄️',  label: 'Snow',                     severity: 0 },
+  // ── Heavy snow ────────────────────────────────────────────────────────────
+  { key: 'heavy-snow',                    emoji: '❄️',  label: 'Heavy Snow',               severity: 1 },
+  { key: 'heavy-snow-shower',             emoji: '❄️',  label: 'Heavy Snow Shower',        severity: 1 },
+  { key: 'moon-heavy-snow-shower',        emoji: '❄️',  label: 'Heavy Snow Shower Night',  severity: 1 },
+  // ── Mixed precip ──────────────────────────────────────────────────────────
+  { key: 'sleet',                         emoji: '🌨',  label: 'Sleet',                    severity: 1 },
+  { key: 'freezing-rain',                 emoji: '🌨',  label: 'Freezing Rain',            severity: 1 },
+  { key: 'wintry-mix',                    emoji: '🌨',  label: 'Wintry Mix',               severity: 1 },
 ];
+
+// Severity label + color helpers
+const SEVERITY_META = {
+  0: { label: 'Routine',  bg: 'transparent',          text: 'var(--text-3)' },
+  1: { label: 'Moderate', bg: 'rgba(234,179,8,0.15)',  text: '#b45309' },
+  2: { label: 'High',     bg: 'rgba(234,88,12,0.15)',  text: '#c2410c' },
+  3: { label: 'Critical', bg: 'rgba(220,38,38,0.18)',  text: '#dc2626' },
+};
+function severityMeta(level) { return SEVERITY_META[level] || SEVERITY_META[0]; }
 
 function _resolveIcon(iconStr) {
   if (!iconStr) return null;
   const k = String(iconStr).toLowerCase().replace(/[ _]/g, '-');
   const exact = ICON_DATA.find(d => d.key === k);
   if (exact) return exact;
-  return ICON_DATA.find(d => k.includes(d.key)) || null;
+  // longest-prefix match to avoid 'rain' matching 'heavy-rain' wrongly
+  const matches = ICON_DATA.filter(d => k.includes(d.key));
+  return matches.sort((a, b) => b.key.length - a.key.length)[0] || null;
 }
 
 function weatherIcon(iconStr) {
@@ -111,6 +167,12 @@ function weatherLabel(iconStr) {
   if (d) return d.label;
   if (!iconStr) return '';
   return String(iconStr).replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function iconSeverity(iconStr) {
+  // Use backend field if available, otherwise derive from icon string
+  const d = _resolveIcon(iconStr);
+  return d ? (d.severity || 0) : 0;
 }
 
 // ─── Frost colour coding ──────────────────────────────────────────────────────
@@ -922,71 +984,147 @@ function ConditionsTab() {
 // ─── 8. Alerts Tab ────────────────────────────────────────────────────────────
 
 function AlertsTab() {
-  const [alerts,  setAlerts]  = useState([]);
+  const [outlook, setOutlook] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState(null);
 
-  const fetchAlerts = useCallback(() => {
+  const fetch = useCallback(() => {
     setLoading(true); setError(null);
-    axios.get('/api/wt360/alerts')
-      .then(r => {
-        const all = [];
-        (r.data.alerts || []).forEach(loc => {
-          (loc.alerts || []).forEach(a => all.push({ ...a, location: loc.name }));
-        });
-        setAlerts(all);
-      })
+    axios.get('/api/wt360/severe_outlook')
+      .then(r => { setOutlook(r.data); })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => { fetchAlerts(); }, []);
+  useEffect(() => { fetch(); }, []);
 
   if (loading) return <Spinner />;
-  if (error)   return <div style={{ color: 'var(--down)', padding: 16 }}>Error loading alerts: {error}</div>;
+  if (error)   return <div style={{ color: 'var(--down)', padding: 16 }}>Error loading outlook: {error}</div>;
 
-  if (alerts.length === 0) {
+  const locations = outlook?.locations || [];
+
+  // Flatten active alerts
+  const activeAlerts = [];
+  locations.forEach(loc => {
+    (loc.alerts || []).forEach(a => activeAlerts.push({ ...a, locationName: loc.name }));
+  });
+
+  // Locations with upcoming severe forecast days (severity >= 1)
+  const severeLocs = locations
+    .filter(loc => (loc.severe_days || []).length > 0)
+    .sort((a, b) => b.max_severity - a.max_severity);
+
+  const totalSevere = severeLocs.reduce((s, l) => s + (l.severe_days || []).length, 0);
+  const hasAnything = activeAlerts.length > 0 || severeLocs.length > 0;
+
+  if (!hasAnything) {
     return (
       <div style={{ textAlign: 'center', padding: '60px 20px' }}>
         <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
-        <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text)', marginBottom: 6 }}>No Active Alerts</div>
-        <div style={{ fontSize: 13, color: 'var(--text-3)' }}>All monitored locations are clear. No severe weather warnings at this time.</div>
-        <button onClick={fetchAlerts} className="btn btn-sm" style={{ marginTop: 20 }}>Refresh</button>
+        <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text)', marginBottom: 6 }}>All Clear</div>
+        <div style={{ fontSize: 13, color: 'var(--text-3)' }}>No active alerts and no severe weather in the 14-day forecast across all monitored locations.</div>
+        <button onClick={fetch} className="btn btn-sm" style={{ marginTop: 20 }}>Refresh</button>
       </div>
     );
   }
 
+  const severityBorderColor = { 3: '#dc2626', 2: '#ea580c', 1: '#ca8a04', 0: 'var(--border)' };
+
   return (
-    <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
-        <div style={{ fontWeight: 700, color: 'var(--down)', fontSize: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
-          ⚠️ {alerts.length} Active Alert{alerts.length !== 1 ? 's' : ''} Across Your Farm Locations
-        </div>
-        <button onClick={fetchAlerts} className="btn btn-sm">Refresh</button>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {alerts.map((a, i) => (
-          <div key={i} style={{ background: 'var(--surface)', border: '1px solid oklch(0.62 0.18 25/0.25)', borderLeft: '4px solid var(--down)', borderRadius: 8, padding: '14px 18px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
-              <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--down)' }}>{a.title || 'Weather Alert'}</span>
-              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-3)', background: 'var(--surface-2)', padding: '3px 10px', borderRadius: 10, border: '1px solid var(--border)' }}>
-                📍 {a.location}
-              </span>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+
+      {/* ── Active alerts ────────────────────────────────────── */}
+      {activeAlerts.length > 0 && (
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+            <div style={{ fontWeight: 700, color: '#dc2626', fontSize: 14 }}>
+              🚨 {activeAlerts.length} Active Alert{activeAlerts.length !== 1 ? 's' : ''}
             </div>
-            {(a.start || a.end) && (
-              <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 8, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                {a.start && <span>🕐 From {fAlertTime(a.start)}</span>}
-                {a.end && <span>Until {fAlertTime(a.end)}</span>}
-              </div>
-            )}
-            {a.content && (
-              <div style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.65, background: 'var(--surface-2)', borderRadius: 6, padding: '10px 12px' }}>
-                {a.content}
-              </div>
-            )}
+            <button onClick={fetch} className="btn btn-sm">Refresh</button>
           </div>
-        ))}
-      </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {activeAlerts.map((a, i) => (
+              <div key={i} style={{ background: 'var(--surface)', border: '1px solid rgba(220,38,38,0.25)', borderLeft: '4px solid #dc2626', borderRadius: 8, padding: '14px 18px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
+                  <span style={{ fontWeight: 700, fontSize: 14, color: '#dc2626' }}>{a.title || 'Weather Alert'}</span>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-3)', background: 'var(--surface-2)', padding: '3px 10px', borderRadius: 10, border: '1px solid var(--border)' }}>
+                    📍 {a.locationName}
+                  </span>
+                </div>
+                {(a.start || a.end) && (
+                  <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 8, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                    {a.start && <span>🕐 From {fAlertTime(a.start)}</span>}
+                    {a.end && <span>Until {fAlertTime(a.end)}</span>}
+                  </div>
+                )}
+                {a.content && (
+                  <div style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.65, background: 'var(--surface-2)', borderRadius: 6, padding: '10px 12px' }}>
+                    {a.content}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Severe forecast outlook ──────────────────────────── */}
+      {severeLocs.length > 0 && (
+        <div>
+          <div style={{ fontWeight: 700, color: 'var(--text)', fontSize: 14, marginBottom: 4 }}>
+            ⚡ Severe Weather in 14-Day Forecast — {totalSevere} day{totalSevere !== 1 ? 's' : ''} flagged across {severeLocs.length} location{severeLocs.length !== 1 ? 's' : ''}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 14 }}>
+            Based on forecast icon classification ·
+            <span style={{ marginLeft: 8 }}>
+              <span style={{ color: '#ca8a04', fontWeight: 700 }}>● Moderate</span>
+              <span style={{ marginLeft: 8, color: '#ea580c', fontWeight: 700 }}>● High</span>
+              <span style={{ marginLeft: 8, color: '#dc2626', fontWeight: 700 }}>● Critical</span>
+            </span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {severeLocs.map(loc => {
+              const sm = severityMeta(loc.max_severity);
+              return (
+                <div key={loc.key} style={{ background: 'var(--surface)', border: `1px solid ${severityBorderColor[loc.max_severity] || 'var(--border)'}`, borderLeft: `4px solid ${severityBorderColor[loc.max_severity]}`, borderRadius: 8, padding: '14px 18px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
+                    <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)' }}>📍 {loc.name}, {loc.state}</span>
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: sm.bg, color: sm.text, border: `1px solid ${severityBorderColor[loc.max_severity]}` }}>
+                      {sm.label}
+                    </span>
+                    {loc.crops?.length > 0 && (
+                      <span style={{ fontSize: 11, color: 'var(--text-3)' }}>{loc.crops.join(', ')}</span>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {(loc.severe_days || []).map((d, i) => {
+                      const sev = d.icon_severity || iconSeverity(d.icon || '');
+                      const dsm = severityMeta(sev);
+                      const dateStr = d.utc_date_iso ? new Date(d.utc_date_iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : `Day ${i + 1}`;
+                      return (
+                        <div key={i} title={`${weatherLabel(d.icon)} · High ${d.maxTemp ?? '—'}° Low ${d.minTemp ?? '—'}° · Precip ${d.prcp ?? '—'}"`}
+                          style={{ background: dsm.bg, border: `1px solid ${severityBorderColor[sev]}`, borderRadius: 6, padding: '6px 10px', fontSize: 11, minWidth: 80, textAlign: 'center', cursor: 'default' }}>
+                          <div style={{ fontSize: 18, lineHeight: 1, marginBottom: 2 }}>{weatherIcon(d.icon)}</div>
+                          <div style={{ fontWeight: 700, color: 'var(--text)', marginBottom: 1 }}>{dateStr}</div>
+                          <div style={{ color: dsm.text, fontWeight: 600 }}>{weatherLabel(d.icon)}</div>
+                          {d.maxTemp != null && <div style={{ color: 'var(--text-3)', marginTop: 2 }}>↑{d.maxTemp}° ↓{d.minTemp}°</div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {activeAlerts.length === 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: 'var(--surface-2)', borderRadius: 8, fontSize: 12, color: 'var(--text-3)' }}>
+          ✅ No active NWS alerts — forecast-based outlook shown above
+          <button onClick={fetch} className="btn btn-sm" style={{ marginLeft: 'auto' }}>Refresh</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -1010,12 +1148,16 @@ export default function WeatherDashboard() {
       .finally(() => setRegLoad(false));
   }, []);
 
-  // Fetch alert count for badge (lightweight — just count)
+  // Fetch alert+severe count for badge
   useEffect(() => {
-    axios.get('/api/wt360/alerts')
+    axios.get('/api/wt360/severe_outlook')
       .then(r => {
+        const locs = r.data.locations || [];
         let count = 0;
-        (r.data.alerts || []).forEach(loc => { count += (loc.alerts || []).length; });
+        locs.forEach(loc => {
+          count += (loc.alerts || []).length;
+          count += (loc.severe_days || []).filter(d => (d.icon_severity || 0) >= 2).length;
+        });
         setAlertCount(count);
       })
       .catch(() => {});

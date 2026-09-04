@@ -622,6 +622,34 @@ WT360_API_KEY       = os.environ.get("WT360_API_KEY", "")
 WT360_FORECAST_BASE = "https://www.weathertrends360.com/api/arkfoods"
 WT360_DATA_BASE     = "https://api.wt360business.com/API/weather"
 
+# Severity levels: 3=critical, 2=high, 1=moderate, 0=routine
+_ICON_SEVERITY = {
+    "tornado":                      3,
+    "thunderstorm-severe":          3,
+    "thunderstorm":                 2,
+    "thundershower":                2,
+    "thundershower-cloudy":         2,
+    "isolated-thunder-shower":      2,
+    "moon-isolated-thunder-shower": 2,
+    "heavy-rain":                   1,
+    "heavy-rain-shower":            1,
+    "moon-heavy-rain-shower":       1,
+    "rain-shower-cloudy":           1,
+    "heavy-snow":                   1,
+    "heavy-snow-shower":            1,
+    "moon-heavy-snow-shower":       1,
+    "snow-shower-cloudy":           1,
+    "sleet":                        1,
+    "wintry-mix":                   1,
+    "blowingdust":                  1,
+}
+
+def _icon_severity(icon):
+    """Return severity level 0-3 for a WT360 icon string."""
+    if not icon:
+        return 0
+    return _ICON_SEVERITY.get(str(icon).lower().strip(), 0)
+
 WT360_LOCATIONS = {
     "el_morro_mx":     {"name": "El Morro",     "state": "Baja California", "country": "Mexico", "wt360_id": "CL844548", "lat": 30.05, "lon": -115.73, "crops": ["Jalapeño", "Serrano"]},
     "ensenada_mx":     {"name": "Ensenada",     "state": "Baja California", "country": "Mexico", "wt360_id": "CL844547", "lat": 31.87, "lon": -116.60, "crops": ["Jalapeño", "Serrano"]},
@@ -7448,7 +7476,8 @@ def wt360_forecast_all():
         key, loc = item
         try:
             days = _wt360_fetch_forecast(loc["wt360_id"])
-            return key, {**loc, "key": key, "forecast": days, "error": None}
+            enriched = [{**d, "icon_severity": _icon_severity(d.get("icon") or d.get("wx_icon", ""))} for d in days]
+            return key, {**loc, "key": key, "forecast": enriched, "error": None}
         except Exception as e:
             return key, {**loc, "key": key, "forecast": [], "error": str(e)}
 
@@ -7476,7 +7505,8 @@ def wt360_forecast_single(loc_id):
         return jsonify(cached)
     try:
         days = _wt360_fetch_forecast(loc["wt360_id"])
-        payload = {"success": True, "key": loc_id, **loc, "forecast": days}
+        enriched = [{**d, "icon_severity": _icon_severity(d.get("icon") or d.get("wx_icon", ""))} for d in days]
+        payload = {"success": True, "key": loc_id, **loc, "forecast": enriched}
         cache_set(cache_key, payload)
         return jsonify(payload)
     except Exception as e:
@@ -7505,6 +7535,67 @@ def wt360_alerts():
         results = list(ex.map(_fetch_alerts, WT360_LOCATIONS.items()))
 
     payload = {"success": True, "alerts": results}
+    cache_set(cache_key, payload)
+    return jsonify(payload)
+
+
+@app.route("/api/wt360/severe_outlook", methods=["GET"])
+def wt360_severe_outlook():
+    """
+    Combined severe weather outlook per growing region:
+    - Active alerts (from severe_alerts endpoint)
+    - Forecast days with severity >= 1 based on icon field (from 14-day forecast)
+    Each day in forecast gets an icon_severity field (0-3).
+    """
+    import concurrent.futures
+
+    cache_key = "wt360_severe_outlook"
+    cached = cache_get(cache_key, max_age_seconds=1800)
+    if cached:
+        return jsonify(cached)
+
+    def _fetch_location(item):
+        key, loc = item
+        result = {
+            "key": key,
+            "name": loc["name"],
+            "state": loc.get("state", ""),
+            "country": loc.get("country", ""),
+            "crops": loc.get("crops", []),
+            "alerts": [],
+            "forecast": [],
+            "severe_days": [],
+            "max_severity": 0,
+        }
+        try:
+            alerts = _wt360_fetch_alerts(loc["wt360_id"])
+            result["alerts"] = alerts
+        except Exception:
+            pass
+        try:
+            days = _wt360_fetch_forecast(loc["wt360_id"])
+            enriched = []
+            for d in days:
+                sev = _icon_severity(d.get("icon") or d.get("wx_icon", ""))
+                enriched.append({**d, "icon_severity": sev})
+            result["forecast"] = enriched
+            severe = [d for d in enriched if d["icon_severity"] >= 1]
+            result["severe_days"] = severe
+            all_sev = [d["icon_severity"] for d in enriched] + [len(result["alerts"]) > 0 and 2 or 0]
+            result["max_severity"] = max(all_sev) if all_sev else 0
+        except Exception:
+            pass
+        return key, result
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+        results = dict(ex.map(_fetch_location, WT360_LOCATIONS.items()))
+
+    payload = {
+        "success": True,
+        "locations": list(results.values()),
+        "has_critical": any(r["max_severity"] >= 3 for r in results.values()),
+        "has_alerts": any(len(r["alerts"]) > 0 for r in results.values()),
+    }
     cache_set(cache_key, payload)
     return jsonify(payload)
 
