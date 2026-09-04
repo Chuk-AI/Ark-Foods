@@ -977,6 +977,43 @@ def adaptive_halflife(recent_cv, hl_calm=6.0, hl_volatile=3.0, cv_lo=0.02, cv_hi
     return hl_calm + (hl_volatile - hl_calm) * t
 
 
+def blend_seasonal_models(child, parent, prior_strength=40.0):
+    """
+    Shrink a thin segment's seasonal profile toward a broader parent profile.
+
+    Segments are small - typically 8-20 usable observations - which is why
+    fitting anything per segment overfits. Rather than choosing between a
+    segment-specific model and a pooled one, this blends them: the segment's own
+    seasonal shape gets weight n/(n+prior_strength), the parent (same commodity
+    and city across all sizes and origins) takes the rest. A segment with plenty
+    of history is left alone; a thin one leans on its commodity.
+    """
+    if not parent or not parent.get("seasonal_ratio"):
+        return child
+    n = float(child.get("n", 0))
+    w = n / (n + prior_strength) if (n + prior_strength) > 0 else 0.0
+
+    cr, pr = child.get("seasonal_ratio", {}), parent["seasonal_ratio"]
+    ratios = {}
+    for k in set(cr) | set(pr):
+        c, p = cr.get(k), pr.get(k)
+        if c is None:
+            ratios[k] = p
+        elif p is None:
+            ratios[k] = c
+        else:
+            ratios[k] = w * c + (1.0 - w) * p
+
+    # Keep the child's own level and dispersion; only the seasonal shape is shared.
+    return {
+        "seasonal_ratio": ratios,
+        "overall_median": child.get("overall_median", 0.0),
+        "sigma": child.get("sigma", 0.0) or parent.get("sigma", 0.0),
+        "n": child.get("n", 0),
+        "shrinkage_weight": round(w, 3),
+    }
+
+
 def generate_forecast_series(model, recent_level, slope, as_of_woy, horizon_weeks,
                              level_halflife=None, trend_decay_weeks=8.0,
                              seasonal_shrink=0.75, anchor_tau=1.0,
@@ -8288,7 +8325,7 @@ def api_forecast_hindcast():
     """
     from collections import defaultdict
 
-    commodity = request.args.get("commodity", "Bell Peppers")
+    commodity = request.args.get("commodity", "Jalapeno")
     city = request.args.get("city", "New York")
     horizon_weeks = min(max(int(request.args.get("horizon_weeks", 12)), 2), 24)
     want_segment = (request.args.get("segment") or "").strip() or None
@@ -8306,17 +8343,20 @@ def api_forecast_hindcast():
 
     base_filter = [
         PriceData.commodity.in_(sorted(commodity_variants)),
-        PriceData.city_name == city,
+        PriceData.city_name.ilike(city.strip()),
         PriceData.price > 0,
         PriceData.source.in_(["ProduceIQ", "USDA"]),
     ]
 
     def _catalogue():
+        # Raw DB values carry both spellings of some varieties (Cubanelle and
+        # Cubanelles) and stray whitespace on city names, which put duplicate
+        # and dead entries in the pickers. Normalise before returning.
+        raw_c = [r[0] for r in db.session.query(PriceData.commodity).distinct().all()]
+        raw_t = [r[0] for r in db.session.query(PriceData.city_name).distinct().all()]
         return {
-            "commodities": [r[0] for r in db.session.query(PriceData.commodity)
-                            .distinct().order_by(PriceData.commodity).all()],
-            "cities": [r[0] for r in db.session.query(PriceData.city_name)
-                       .distinct().order_by(PriceData.city_name).all()],
+            "commodities": sorted({normalize_commodity(c) for c in raw_c if c and c.strip()}),
+            "cities": sorted({t.strip() for t in raw_t if t and t.strip()}),
         }
 
     # ---- Training rows (strictly before as_of) ----
@@ -8413,10 +8453,18 @@ def api_forecast_hindcast():
             segment_note = f"Fell back to pooled data — '{chosen['segment']}' had only {len(train)} rows"
 
     # ---- Fit model on training rows ----
+    # The segment's own profile, then shrunk toward the commodity+city profile
+    # built from every size and origin. Thin segments lean on the parent.
     model = build_seasonal_model(
         [(r.year, r.day, r.price) for r in train], ref_year=as_of_year,
         recency_weight=0.9,
     )
+    parent_model = build_seasonal_model(
+        [(r.year, r.day, r.price) for r in hist_rows], ref_year=as_of_year,
+        recency_weight=0.9,
+    )
+    if active_segment != ALL:
+        model = blend_seasonal_models(model, parent_model)
 
     # Recent level: median of the last 21 days before as_of (robust anchor)
     recent_window = [
@@ -8466,7 +8514,24 @@ def api_forecast_hindcast():
                 aw[wnum].append(float(r.price))
     actuals_by_week = {w: round(float(np.median(v)), 2) for w, v in aw.items()}
 
+    # ---- Alternative baselines -------------------------------------------
+    # The flat base price is frozen at as-of, so it decays as the horizon grows
+    # and flatters the model's skill at long range. Two fairer comparisons:
+    #   rolling  - re-anchor on last week's actual, i.e. forecast weekly instead
+    #              of once. This is what the client would actually see if they
+    #              checked in every week.
+    #   seasonal - the price this same week a year ago, which does not decay.
+    seasonal_naive = {}
+    for w in range(1, horizon_weeks + 1):
+        tgt = as_of_date + timedelta(weeks=w)
+        ly_year, ly_day = tgt.year - 1, tgt.timetuple().tm_yday
+        near = [float(r.price) for r in train
+                if int(r.year) == ly_year and abs(int(r.day) - ly_day) <= 10]
+        if near:
+            seasonal_naive[w] = round(float(np.median(near)), 2)
+
     ci50, ci80, ci95, abs_err, pct_err, dir_ok = [], [], [], [], [], []
+    roll_err, seas_err = [], []
     prev_a = prev_f = None
 
     for fw in forecast_weeks:
@@ -8490,8 +8555,21 @@ def api_forecast_hindcast():
         fw["in_ci_50"] = fw["ci_50_lo"] <= actual <= fw["ci_50_hi"]
         fw["in_ci_80"] = fw["ci_80_lo"] <= actual <= fw["ci_80_hi"]
         fw["in_ci_95"] = fw["ci_95_lo"] <= actual <= fw["ci_95_hi"]
-        # Naive benchmark: "price never moves from base"
+        # Benchmarks. The flat one is frozen at as-of; the rolling one re-anchors
+        # each week on the last actual; the seasonal one is last year's price.
         fw["naive_error"] = round(abs(actual - base_price), 2) if base_price else None
+
+        rolling_base = prev_a if prev_a is not None else base_price
+        fw["rolling_base"] = round(rolling_base, 2) if rolling_base is not None else None
+        fw["rolling_error"] = round(abs(actual - rolling_base), 2) if rolling_base is not None else None
+        if fw["rolling_error"] is not None:
+            roll_err.append(fw["rolling_error"])
+
+        sn = seasonal_naive.get(w)
+        fw["seasonal_naive"] = sn
+        fw["seasonal_naive_error"] = round(abs(actual - sn), 2) if sn else None
+        if sn:
+            seas_err.append(abs(actual - sn))
 
         abs_err.append(abs(err))
         if actual:
@@ -8507,10 +8585,15 @@ def api_forecast_hindcast():
     naive_errs = [fw["naive_error"] for fw in forecast_weeks if fw.get("naive_error") is not None]
     mae = round(float(np.mean(abs_err)), 2) if abs_err else None
     naive_mae = round(float(np.mean(naive_errs)), 2) if naive_errs else None
-    # Skill score > 0 means the model beats "assume no change"
-    skill = None
-    if mae is not None and naive_mae:
-        skill = round((1.0 - mae / naive_mae) * 100, 1)
+    rolling_mae = round(float(np.mean(roll_err)), 2) if roll_err else None
+    seasonal_mae = round(float(np.mean(seas_err)), 2) if seas_err else None
+
+    def _skill(bench):
+        if mae is None or not bench:
+            return None
+        return round((1.0 - mae / bench) * 100, 1)
+
+    skill = _skill(naive_mae)
 
     metrics = {
         "mape": round(float(np.mean(pct_err)), 1) if pct_err else None,
@@ -8518,6 +8601,10 @@ def api_forecast_hindcast():
         "rmse": round(float(np.sqrt(np.mean([e ** 2 for e in abs_err]))), 2) if abs_err else None,
         "naive_mae": naive_mae,
         "skill_score": skill,
+        "rolling_mae": rolling_mae,
+        "skill_vs_rolling": _skill(rolling_mae),
+        "seasonal_naive_mae": seasonal_mae,
+        "skill_vs_seasonal": _skill(seasonal_mae),
         "directional_accuracy": _pct(dir_ok),
         "ci_50_coverage": _pct(ci50),
         "ci_80_coverage": _pct(ci80),
@@ -8554,6 +8641,8 @@ def api_forecast_hindcast():
         "recent_cv": round(recent_cv, 4) if recent_cv is not None else None,
         "model_weight": forecast_weeks[0]["model_weight"] if forecast_weeks else None,
         "level_halflife": forecast_weeks[0]["level_halflife"] if forecast_weeks else None,
+        "seasonal_shrinkage": model.get("shrinkage_weight"),
+        "parent_rows": parent_model.get("n"),
         "training_rows": len(train),
         "history": history_chart,
         "forecast": forecast_weeks,
@@ -8613,11 +8702,26 @@ def api_forecast_hindcast_batch():
             (int(r.year), int(r.day), float(r.price))
         )
 
-    # Rank groups by data volume; only keep ones that can support the evaluation
-    ranked = sorted(
+    # Pick groups round-robin across commodities rather than purely by volume.
+    # Ranking by row count alone made one variety over half the sample, so its
+    # characteristics spoke for the whole book and four varieties never appeared.
+    eligible = sorted(
         ((k, v) for k, v in groups.items() if len(v) >= 40),
         key=lambda kv: -len(kv[1]),
-    )[:max_groups]
+    )
+    by_commodity = defaultdict(list)
+    for k, v in eligible:
+        by_commodity[k[0]].append((k, v))
+    ranked, depth = [], 0
+    while len(ranked) < max_groups:
+        added = False
+        for c in sorted(by_commodity):
+            bucket = by_commodity[c]
+            if depth < len(bucket) and len(ranked) < max_groups:
+                ranked.append(bucket[depth]); added = True
+        if not added:
+            break
+        depth += 1
 
     if not ranked:
         return jsonify({"error": "No segment had enough rows (need >= 40)"}), 200

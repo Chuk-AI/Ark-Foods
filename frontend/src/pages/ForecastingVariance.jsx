@@ -171,6 +171,56 @@ function Spinner() {
   );
 }
 
+
+// ── Plain-language verdict for the client ─────────────────────────────────
+function Verdict({ data }) {
+  const m = data?.metrics;
+  if (!m || !m.weeks_with_actuals) return null;
+
+  const benches = [
+    { key: 'skill_score',      label: 'a price that never moves',        mae: m.naive_mae },
+    { key: 'skill_vs_rolling', label: 'last week\u2019s price each week', mae: m.rolling_mae },
+    { key: 'skill_vs_seasonal',label: 'the same week last year',          mae: m.seasonal_naive_mae },
+  ].filter(b => m[b.key] != null);
+
+  const beaten = benches.filter(b => m[b.key] > 0).length;
+  const tone = beaten === benches.length ? 'good' : beaten === 0 ? 'bad' : 'mixed';
+  const palette = {
+    good:  { bg: '#f0fdf4', bd: '#86efac', fg: '#15803d' },
+    mixed: { bg: '#fffbeb', bd: '#fcd34d', fg: '#b45309' },
+    bad:   { bg: '#fef2f2', bd: '#fca5a5', fg: '#b91c1c' },
+  }[tone];
+
+  const headline = tone === 'good'
+    ? `Our forecast beat every simple rule of thumb over these ${m.weeks_with_actuals} weeks.`
+    : tone === 'mixed'
+      ? `Our forecast beat ${beaten} of ${benches.length} simple rules of thumb over these ${m.weeks_with_actuals} weeks.`
+      : `Over these ${m.weeks_with_actuals} weeks a simple rule of thumb would have done better.`;
+
+  return (
+    <div style={{ background: palette.bg, border: `1px solid ${palette.bd}`, borderRadius: 10, padding: '16px 20px', marginBottom: 20 }}>
+      <div style={{ fontSize: 14, fontWeight: 700, color: palette.fg, marginBottom: 6 }}>{headline}</div>
+      <div style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.7 }}>
+        We forecast <strong>{data.commodity}</strong> in <strong>{data.city}</strong> on{' '}
+        <strong>{data.as_of_date}</strong> using only what was known then, and compared it against
+        what actually happened. On average we were <strong>{fmt(m.mae)}</strong> per unit away from
+        the real price ({pct(m.mape)} off).
+      </div>
+      <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginTop: 12 }}>
+        {benches.map(b => (
+          <div key={b.key} style={{ fontSize: 12 }}>
+            <div style={{ color: 'var(--text-3)', marginBottom: 2 }}>vs {b.label}</div>
+            <div style={{ fontWeight: 700, color: m[b.key] > 0 ? '#15803d' : '#dc2626' }}>
+              {m[b.key] > 0 ? `${m[b.key]}% better` : `${Math.abs(m[b.key])}% worse`}
+              <span style={{ color: 'var(--text-3)', fontWeight: 400 }}> (their {fmt(b.mae)})</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Fan chart drawn on canvas ──────────────────────────────────────────────
 function FanChart({ data, horizonWeeks }) {
   const canvasRef = useRef(null);
@@ -322,6 +372,22 @@ function FanChart({ data, horizonWeeks }) {
       });
     }
 
+    // Frozen base price — the flat benchmark the forecast is measured against
+    if (data.base_price != null) {
+      ctx.strokeStyle = isDark ? 'rgba(168,190,166,0.45)' : 'rgba(74,106,74,0.40)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([2, 4]);
+      ctx.beginPath();
+      ctx.moveTo(xOf(divIdx), yOf(data.base_price));
+      ctx.lineTo(xOf(totalPts - 1), yOf(data.base_price));
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = textCol;
+      ctx.font = '9px DM Sans, system-ui, sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText('base at forecast', xOf(totalPts - 1), yOf(data.base_price) - 4);
+    }
+
     // Forecast median dots
     ctx.fillStyle = foreCol;
     forecast.forEach((f, i) => {
@@ -346,6 +412,7 @@ function FanChart({ data, horizonWeeks }) {
       { color: histCol, dash: false, label: 'Actual (history)' },
       { color: foreCol, dash: true, label: 'Forecast median' },
       { color: actCol, dash: false, label: 'Actual (post-forecast)' },
+      { color: isDark ? 'rgba(168,190,166,0.6)' : 'rgba(74,106,74,0.55)', dash: true, label: 'Base at forecast' },
     ];
     let lx = pad.left + 8;
     legendItems.forEach(({ color, dash, label }) => {
@@ -360,7 +427,7 @@ function FanChart({ data, horizonWeeks }) {
       ctx.textAlign = 'left';
       ctx.font = '9px DM Sans, system-ui, sans-serif';
       ctx.fillText(label, lx + 22, H - 7);
-      lx += 110;
+      lx += 108;
     });
   }, [data]);
 
@@ -399,11 +466,13 @@ function ErrorTable({ forecast, basePrice }) {
     { h: 'Week', align: 'left' },
     { h: 'Date', align: 'left' },
     { h: 'Base @ forecast', align: 'center' },
+    { h: 'Rolling base', align: 'center' },
+    { h: 'Last year', align: 'center' },
     { h: 'Forecast', align: 'center' },
     { h: 'Actual', align: 'center' },
     { h: 'Error', align: 'center' },
     { h: '% Error', align: 'center' },
-    { h: 'vs Naive', align: 'center' },
+    { h: 'Beat flat?', align: 'center' },
     { h: 'Error bar', align: 'left' },
     { h: '50%', align: 'center' },
     { h: '80%', align: 'center' },
@@ -436,6 +505,12 @@ function ErrorTable({ forecast, basePrice }) {
                 <td style={{ padding: '9px 12px', color: 'var(--text-2)', whiteSpace: 'nowrap' }}>{f.week_label}</td>
                 <td style={{ padding: '9px 12px', textAlign: 'center', color: 'var(--text-3)', fontVariantNumeric: 'tabular-nums' }}>
                   {fmt(f.base_price ?? basePrice)}
+                </td>
+                <td style={{ padding: '9px 12px', textAlign: 'center', color: 'var(--text-2)', fontVariantNumeric: 'tabular-nums' }}>
+                  {fmt(f.rolling_base)}
+                </td>
+                <td style={{ padding: '9px 12px', textAlign: 'center', color: 'var(--text-3)', fontVariantNumeric: 'tabular-nums' }}>
+                  {fmt(f.seasonal_naive)}
                 </td>
                 <td style={{ padding: '9px 12px', textAlign: 'center', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{fmt(f.median)}</td>
                 <td style={{ padding: '9px 12px', textAlign: 'center', fontWeight: 700, color: '#b45309', fontVariantNumeric: 'tabular-nums' }}>{fmt(f.actual)}</td>
@@ -533,7 +608,7 @@ function ComponentChart({ forecast }) {
 export default function ForecastingVariance() {
   const [commodities, setCommodities] = useState([]);
   const [cities, setCities] = useState([]);
-  const [commodity, setCommodity] = useState('Bell Peppers');
+  const [commodity, setCommodity] = useState('Jalapeno');
   const [city, setCity] = useState('New York');
   const [horizonWeeks, setHorizonWeeks] = useState(12);
   const [segment, setSegment] = useState('');
@@ -679,6 +754,8 @@ export default function ForecastingVariance() {
 
       {!loading && data && (
         <>
+          <Verdict data={data} />
+
           {/* Metric cards */}
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
             <MetricCard
@@ -700,10 +777,22 @@ export default function ForecastingVariance() {
               color="var(--text-2)"
             />
             <MetricCard
-              label="Skill vs Naive"
+              label="vs Flat price"
               value={m?.skill_score != null ? `${m.skill_score > 0 ? '+' : ''}${m.skill_score}%` : '—'}
-              sub={m?.naive_mae != null ? `naive MAE ${fmt(m.naive_mae)}` : 'vs assume-no-change'}
+              sub={m?.naive_mae != null ? `their MAE ${fmt(m.naive_mae)}` : 'price never moves'}
               color={m?.skill_score == null ? 'var(--text-2)' : m.skill_score > 0 ? '#15803d' : '#dc2626'}
+            />
+            <MetricCard
+              label="vs Rolling"
+              value={m?.skill_vs_rolling != null ? `${m.skill_vs_rolling > 0 ? '+' : ''}${m.skill_vs_rolling}%` : '—'}
+              sub={m?.rolling_mae != null ? `their MAE ${fmt(m.rolling_mae)}` : 'last week each week'}
+              color={m?.skill_vs_rolling == null ? 'var(--text-2)' : m.skill_vs_rolling > 0 ? '#15803d' : '#dc2626'}
+            />
+            <MetricCard
+              label="vs Last year"
+              value={m?.skill_vs_seasonal != null ? `${m.skill_vs_seasonal > 0 ? '+' : ''}${m.skill_vs_seasonal}%` : '—'}
+              sub={m?.seasonal_naive_mae != null ? `their MAE ${fmt(m.seasonal_naive_mae)}` : 'same week last year'}
+              color={m?.skill_vs_seasonal == null ? 'var(--text-2)' : m.skill_vs_seasonal > 0 ? '#15803d' : '#dc2626'}
             />
             <MetricCard
               label="Directional"
@@ -769,30 +858,61 @@ export default function ForecastingVariance() {
             </div>
           </div>
 
-          {/* Interpretation notes */}
-          <div style={{ marginTop: 20, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+          {/* How the forecast is built — plain language for the client */}
+          <div style={{ marginTop: 20, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '18px 20px' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 10 }}>How this forecast was built</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 18 }}>
+              {[
+                ['1 · Where the market was',
+                 `We took the median price over the three weeks before ${data.as_of_date} — ${fmt(data.base_price)}. That is the starting point.`],
+                ['2 · Where this week normally sits',
+                 `Across past years this week of the season averages ${fmt(data.seasonal_at_as_of)}. The market was ${data.level_offset >= 0 ? 'above' : 'below'} that by ${fmt(Math.abs(data.level_offset || 0))}.`],
+                ['3 · How fast that gap closes',
+                 `Prices drift back toward the seasonal norm. For this line we assume half the gap closes every ${data.level_halflife ?? '—'} weeks, based on how choppy it has been.`],
+                ['4 · How much to trust the pattern',
+                 data.model_weight != null
+                   ? `Recent swings have been ${((data.recent_cv ?? 0) * 100).toFixed(0)}%, so we lean ${(data.model_weight * 100).toFixed(0)}% on the seasonal pattern and the rest on simply holding today's price.`
+                   : 'We lean on the seasonal pattern where the market has been choppy, and hold the current price where it has been steady.'],
+              ].map(([h, b]) => (
+                <div key={h}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', marginBottom: 4 }}>{h}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.65 }}>{b}</div>
+                </div>
+              ))}
+            </div>
+            {data.seasonal_shrinkage != null && data.seasonal_shrinkage < 0.7 && (
+              <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)', fontSize: 12, color: 'var(--text-3)', lineHeight: 1.6 }}>
+                This size/origin has limited history of its own, so {((1 - data.seasonal_shrinkage) * 100).toFixed(0)}% of its
+                seasonal shape is borrowed from {data.commodity} in {data.city} across all sizes — a thin line on its own
+                would chase noise.
+              </div>
+            )}
+          </div>
+
+          {/* Honest limits */}
+          <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 12 }}>
             <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '14px 16px' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Reading MAPE</div>
-              <div style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.6 }}>
-                <span style={{ color: '#15803d', fontWeight: 700 }}>≤ 5%</span> · Excellent<br />
-                <span style={{ color: '#b45309', fontWeight: 700 }}>5–12%</span> · Acceptable for ag markets<br />
-                <span style={{ color: '#dc2626', fontWeight: 700 }}>&gt; 12%</span> · Model needs improvement
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Reading the bands</div>
+              <div style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.65 }}>
+                The 80% band should contain the real price about 80% of the time — here it did{' '}
+                <strong>{pct(m?.ci_80_coverage)}</strong> of the time. Bands are calibrated on past
+                errors rather than assumed, so they widen honestly with distance.
               </div>
             </div>
             <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '14px 16px' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Reading CI Coverage</div>
-              <div style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.6 }}>
-                A well-calibrated model has actuals inside the 80% band ~80% of the time. If coverage is much lower, the bands are too narrow (overconfident). Much higher = too wide (uninformative).
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Where to be careful</div>
+              <div style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.65 }}>
+                Accuracy fades with distance — week 1 is far tighter than week 8. Lines with no
+                recorded size or origin blend several qualities together and are the least reliable.
+                Treat the band, not the single line, as the forecast.
               </div>
             </div>
             <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '14px 16px' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Current model</div>
-              <div style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.6 }}>
-                Volatility-gated blend of a flat base price and a seasonal model
-                (shrunk ratios + mean-reverting level offset + decaying trend),
-                anchored to base at short horizons. <strong>Model weight</strong> above shows
-                how much the seasonal side was trusted — calm markets stay near
-                the base price, where a flat forecast measurably wins.
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>What comes next</div>
+              <div style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.65 }}>
+                This forecast reads price history alone. Weather at the growing regions and weekly
+                shipment volumes are the next inputs, and they carry information price history
+                simply does not contain.
               </div>
             </div>
           </div>
