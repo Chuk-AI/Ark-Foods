@@ -760,7 +760,7 @@ export default function ForecastingVariance() {
             ['Seasonal norm', fmt(data.seasonal_at_as_of)],
             ['Level offset', data.level_offset != null ? `${data.level_offset > 0 ? '+' : ''}${data.level_offset.toFixed(2)}` : '—'],
             ['Recent volatility', data.recent_cv != null ? `${(data.recent_cv * 100).toFixed(1)}%` : '—'],
-            ['Model weight', data.model_weight != null ? `${(data.model_weight * 100).toFixed(0)}%` : '—'],
+            ['Reversion half-life', data.level_halflife != null ? `${data.level_halflife} wk` : '—'],
             ['σ (residual)', fmt(data.sigma)],
             ['Trend slope', `${data.slope > 0 ? '+' : ''}${(data.slope || 0).toFixed(2)}/wk`],
             ['Training rows', data.training_rows],
@@ -898,10 +898,8 @@ export default function ForecastingVariance() {
                  `Across past years this week of the season averages ${fmt(data.seasonal_at_as_of)}. The market was ${data.level_offset >= 0 ? 'above' : 'below'} that by ${fmt(Math.abs(data.level_offset || 0))}.`],
                 ['3 · How fast that gap closes',
                  `Prices drift back toward the seasonal norm. For this line we assume half the gap closes every ${data.level_halflife ?? '—'} weeks, based on how choppy it has been.`],
-                ['4 · How much to trust the pattern',
-                 data.model_weight != null
-                   ? `Recent swings have been ${((data.recent_cv ?? 0) * 100).toFixed(0)}%, so we lean ${(data.model_weight * 100).toFixed(0)}% on the seasonal pattern and the rest on simply holding today's price.`
-                   : 'We lean on the seasonal pattern where the market has been choppy, and hold the current price where it has been steady.'],
+                ['4 · How far ahead we are looking',
+                 `Week 1 stays close to the last traded price, where a simple carry-forward is hard to beat. From there the seasonal pattern takes over and the range widens, because eight weeks out genuinely is less certain than one.`],
               ].map(([h, b]) => (
                 <div key={h}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', marginBottom: 4 }}>{h}</div>

@@ -978,6 +978,43 @@ def realized_volatility(weekly_series):
 CI_K50, CI_K80, CI_K95 = 0.716, 1.509, 2.798
 
 
+def blend_seasonal_models(child, parent, prior_strength=40.0):
+    """
+    Shrink a thin segment's seasonal profile toward a broader parent profile.
+
+    Segments are small - typically 8-20 usable observations - which is why
+    fitting anything per segment overfits. Rather than choosing between a
+    segment-specific model and a pooled one, this blends them: the segment's own
+    seasonal shape gets weight n/(n+prior_strength), the parent (same commodity
+    and city across all sizes and origins) takes the rest. A segment with plenty
+    of history is left alone; a thin one leans on its commodity.
+    """
+    if not parent or not parent.get("seasonal_ratio"):
+        return child
+    n = float(child.get("n", 0))
+    w = n / (n + prior_strength) if (n + prior_strength) > 0 else 0.0
+
+    cr, pr = child.get("seasonal_ratio", {}), parent["seasonal_ratio"]
+    ratios = {}
+    for k in set(cr) | set(pr):
+        c, p = cr.get(k), pr.get(k)
+        if c is None:
+            ratios[k] = p
+        elif p is None:
+            ratios[k] = c
+        else:
+            ratios[k] = w * c + (1.0 - w) * p
+
+    # Keep the child's own level and dispersion; only the seasonal shape is shared.
+    return {
+        "seasonal_ratio": ratios,
+        "overall_median": child.get("overall_median", 0.0),
+        "sigma": child.get("sigma", 0.0) or parent.get("sigma", 0.0),
+        "n": child.get("n", 0),
+        "shrinkage_weight": round(w, 3),
+    }
+
+
 def generate_forecast_series(model, recent_level, slope, as_of_woy, horizon_weeks,
                              level_halflife=2.0, trend_decay_weeks=8.0,
                              seasonal_shrink=0.5, anchor_tau=1.5,
@@ -8584,8 +8621,7 @@ def api_forecast_hindcast():
         "sigma": round(model["sigma"], 2),
         "slope": round(slope, 2),
         "recent_cv": round(recent_cv, 4) if recent_cv is not None else None,
-        "model_weight": forecast_weeks[0]["model_weight"] if forecast_weeks else None,
-        "level_halflife": forecast_weeks[0]["level_halflife"] if forecast_weeks else None,
+        "level_halflife": forecast_weeks[0].get("level_halflife") if forecast_weeks else None,
         "seasonal_shrinkage": model.get("shrinkage_weight"),
         "parent_rows": parent_model.get("n"),
         "training_rows": len(train),
@@ -8828,7 +8864,7 @@ def api_forecast_hindcast_batch():
                         "level": f["level_component"],
                         "trend": f["trend_component"],
                         "sigma": f["sigma"],
-                        "model_weight": f["model_weight"],
+                        "level_halflife": f.get("level_halflife"),
                         "ci_80_lo": f["ci_80_lo"], "ci_80_hi": f["ci_80_hi"],
                     })
                 run_rec["weeks_default_params"] = weeks
