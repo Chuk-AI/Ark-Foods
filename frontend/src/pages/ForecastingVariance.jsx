@@ -31,7 +31,7 @@ function DiagnosticsExport() {
   const run = () => {
     setBusy(true); setErr(null); setResult(null);
     axios.get('/api/forecast_hindcast_batch', {
-      params: { horizon_weeks: 8, origins: 4, origin_step: 4, max_groups: 30, sweep: 1 },
+      params: { horizon_weeks: 6, origins: 4, origin_step: 4, max_groups: 30, sweep: 1 },
       timeout: 180000,
     })
       .then(r => {
@@ -181,6 +181,7 @@ function Verdict({ data }) {
     { key: 'skill_score',      label: 'a price that never moves',        mae: m.naive_mae },
     { key: 'skill_vs_rolling', label: 'last week\u2019s price each week', mae: m.rolling_mae },
     { key: 'skill_vs_seasonal',label: 'the same week last year',          mae: m.seasonal_naive_mae },
+    { key: 'skill_vs_shipped', label: 'the live Forecasts page',           mae: m.shipped_model_mae },
   ].filter(b => m[b.key] != null);
 
   const beaten = benches.filter(b => m[b.key] > 0).length;
@@ -261,7 +262,10 @@ function FanChart({ data, horizonWeeks }) {
     const history = Array.isArray(data.history) ? data.history.filter(h => h && h.price != null) : [];
     const forecast = Array.isArray(data.forecast) ? data.forecast : [];
     if (!forecast.length) return;
-    const allPoints = [...history, ...forecast.map(f => f.median)];
+    // history holds {week_offset, price} objects — spreading them raw put objects
+    // into the numeric range calculation, so Math.min/max returned NaN and the
+    // whole chart collapsed to a 0.9–1.1 scale with every point off-canvas.
+    const allPoints = [...history.map(h => h.price), ...forecast.map(f => f.median)];
     const allActuals = forecast.filter(f => f.actual != null).map(f => f.actual);
     const allHi95 = forecast.map(f => f.ci_95_hi);
     const allLo95 = forecast.map(f => f.ci_95_lo);
@@ -497,6 +501,7 @@ function ErrorTable({ forecast, basePrice }) {
     { h: 'Base @ forecast', align: 'center' },
     { h: 'Rolling base', align: 'center' },
     { h: 'Last year', align: 'center' },
+    { h: 'Live page', align: 'center' },
     { h: 'Forecast', align: 'center' },
     { h: 'Actual', align: 'center' },
     { h: 'Error', align: 'center' },
@@ -540,6 +545,9 @@ function ErrorTable({ forecast, basePrice }) {
                 </td>
                 <td style={{ padding: '9px 12px', textAlign: 'center', color: 'var(--text-3)', fontVariantNumeric: 'tabular-nums' }}>
                   {fmt(f.seasonal_naive)}
+                </td>
+                <td style={{ padding: '9px 12px', textAlign: 'center', color: 'var(--text-3)', fontVariantNumeric: 'tabular-nums' }}>
+                  {fmt(f.shipped_forecast)}
                 </td>
                 <td style={{ padding: '9px 12px', textAlign: 'center', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{fmt(f.median)}</td>
                 <td style={{ padding: '9px 12px', textAlign: 'center', fontWeight: 700, color: '#b45309', fontVariantNumeric: 'tabular-nums' }}>{fmt(f.actual)}</td>
@@ -639,7 +647,7 @@ export default function ForecastingVariance() {
   const [cities, setCities] = useState([]);
   const [commodity, setCommodity] = useState('Jalapeno');
   const [city, setCity] = useState('New York');
-  const [horizonWeeks, setHorizonWeeks] = useState(12);
+  const [horizonWeeks, setHorizonWeeks] = useState(6);
   const [segment, setSegment] = useState('');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -726,10 +734,9 @@ export default function ForecastingVariance() {
           <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Horizon</label>
           <select value={horizonWeeks} onChange={e => setHorizonWeeks(+e.target.value)}
             style={{ fontSize: 13, padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', color: 'var(--text)' }}>
+            <option value={6}>6 weeks (what we ship)</option>
             <option value={8}>8 weeks</option>
             <option value={12}>12 weeks</option>
-            <option value={16}>16 weeks</option>
-            <option value={20}>20 weeks</option>
           </select>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -816,6 +823,12 @@ export default function ForecastingVariance() {
               value={m?.skill_vs_rolling != null ? `${m.skill_vs_rolling > 0 ? '+' : ''}${m.skill_vs_rolling}%` : '—'}
               sub={m?.rolling_mae != null ? `their MAE ${fmt(m.rolling_mae)}` : 'last week each week'}
               color={m?.skill_vs_rolling == null ? 'var(--text-2)' : m.skill_vs_rolling > 0 ? '#15803d' : '#dc2626'}
+            />
+            <MetricCard
+              label="vs Live page"
+              value={m?.skill_vs_shipped != null ? `${m.skill_vs_shipped > 0 ? '+' : ''}${m.skill_vs_shipped}%` : '—'}
+              sub={m?.shipped_model_mae != null ? `their MAE ${fmt(m.shipped_model_mae)}` : 'what Forecasts ships today'}
+              color={m?.skill_vs_shipped == null ? 'var(--text-2)' : m.skill_vs_shipped > 0 ? '#15803d' : '#dc2626'}
             />
             <MetricCard
               label="vs Last year"

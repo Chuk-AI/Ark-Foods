@@ -8309,7 +8309,7 @@ def api_forecast_hindcast():
 
     commodity = request.args.get("commodity", "Jalapeno")
     city = request.args.get("city", "New York")
-    horizon_weeks = min(max(int(request.args.get("horizon_weeks", 12)), 2), 24)
+    horizon_weeks = min(max(int(request.args.get("horizon_weeks", 6)), 2), 24)
     want_segment = (request.args.get("segment") or "").strip() or None
 
     now = datetime.now()
@@ -8496,6 +8496,40 @@ def api_forecast_hindcast():
                 aw[wnum].append(float(r.price))
     actuals_by_week = {w: round(float(np.median(v)), 2) for w, v in aw.items()}
 
+    # ---- What the live Forecasts page would have said ---------------------
+    # The page clients actually use runs calculate_hybrid_6week_forecast, which
+    # compounds a historical week-over-week trend off a two-week-old baseline -
+    # a different model from the one hindcast here. Reproducing its arithmetic
+    # on the same training rows keeps this page honest about which forecast is
+    # being judged, and says whether shipping this model would be an upgrade.
+    shipped = {}
+    try:
+        ship_base_rows = [float(r.price) for r in train
+                          if int(r.year) == as_of_year and 7 <= (as_of_day - int(r.day)) <= 14]
+        ship_base = float(np.mean(ship_base_rows)) if ship_base_rows else base_price
+        if ship_base:
+            rolling = ship_base
+            for w in range(1, horizon_weeks + 1):
+                tgt = as_of_date + timedelta(weeks=w)
+                tw = max(0, min(51, (tgt.timetuple().tm_yday - 1) // 7))
+                # historical week-over-week change for this point in the season
+                prev_vals, cur_vals = [], []
+                for yr_back in (1, 2, 3):
+                    yb = as_of_year - yr_back
+                    pv = [float(r.price) for r in train
+                          if int(r.year) == yb and abs(((int(r.day) - 1) // 7) - ((tw - 1) % 52)) <= 0]
+                    cv = [float(r.price) for r in train
+                          if int(r.year) == yb and ((int(r.day) - 1) // 7) == tw]
+                    if pv and cv:
+                        prev_vals.append(float(np.mean(pv))); cur_vals.append(float(np.mean(cv)))
+                if prev_vals and cur_vals and sum(prev_vals) > 0:
+                    trend_pct = (float(np.mean(cur_vals)) - float(np.mean(prev_vals))) / float(np.mean(prev_vals))
+                    trend_pct = max(-0.25, min(0.25, trend_pct))
+                    rolling = rolling * (1.0 + trend_pct)
+                shipped[w] = round(rolling, 2)
+    except Exception:
+        shipped = {}
+
     # ---- Alternative baselines -------------------------------------------
     # The flat base price is frozen at as-of, so it decays as the horizon grows
     # and flatters the model's skill at long range. Two fairer comparisons:
@@ -8513,7 +8547,7 @@ def api_forecast_hindcast():
             seasonal_naive[w] = round(float(np.median(near)), 2)
 
     ci50, ci80, ci95, abs_err, pct_err, dir_ok = [], [], [], [], [], []
-    roll_err, seas_err = [], []
+    roll_err, seas_err, ship_err = [], [], []
     prev_a = prev_f = None
 
     for fw in forecast_weeks:
@@ -8547,6 +8581,12 @@ def api_forecast_hindcast():
         if fw["rolling_error"] is not None:
             roll_err.append(fw["rolling_error"])
 
+        sp = shipped.get(w)
+        fw["shipped_forecast"] = sp
+        fw["shipped_error"] = round(abs(actual - sp), 2) if sp else None
+        if sp:
+            ship_err.append(abs(actual - sp))
+
         sn = seasonal_naive.get(w)
         fw["seasonal_naive"] = sn
         fw["seasonal_naive_error"] = round(abs(actual - sn), 2) if sn else None
@@ -8569,6 +8609,7 @@ def api_forecast_hindcast():
     naive_mae = round(float(np.mean(naive_errs)), 2) if naive_errs else None
     rolling_mae = round(float(np.mean(roll_err)), 2) if roll_err else None
     seasonal_mae = round(float(np.mean(seas_err)), 2) if seas_err else None
+    shipped_mae = round(float(np.mean(ship_err)), 2) if ship_err else None
 
     def _skill(bench):
         if mae is None or not bench:
@@ -8587,6 +8628,8 @@ def api_forecast_hindcast():
         "skill_vs_rolling": _skill(rolling_mae),
         "seasonal_naive_mae": seasonal_mae,
         "skill_vs_seasonal": _skill(seasonal_mae),
+        "shipped_model_mae": shipped_mae,
+        "skill_vs_shipped": _skill(shipped_mae),
         "directional_accuracy": _pct(dir_ok),
         "ci_50_coverage": _pct(ci50),
         "ci_80_coverage": _pct(ci80),
@@ -8652,7 +8695,7 @@ def api_forecast_hindcast_batch():
     from collections import defaultdict
     import math
 
-    horizon_weeks = min(max(int(request.args.get("horizon_weeks", 8)), 2), 16)
+    horizon_weeks = min(max(int(request.args.get("horizon_weeks", 6)), 2), 16)
     n_origins     = min(max(int(request.args.get("origins", 4)), 1), 8)
     origin_step   = min(max(int(request.args.get("origin_step", 4)), 1), 8)
     max_groups    = min(max(int(request.args.get("max_groups", 30)), 1), 80)
