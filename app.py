@@ -8502,14 +8502,18 @@ def api_forecast_hindcast():
     # a different model from the one hindcast here. Reproducing its arithmetic
     # on the same training rows keeps this page honest about which forecast is
     # being judged, and says whether shipping this model would be an upgrade.
-    shipped = {}
+    shipped, shipped_chain = {}, {}
     try:
         ship_base_rows = [float(r.price) for r in train
                           if int(r.year) == as_of_year and 7 <= (as_of_day - int(r.day)) <= 14]
         ship_base = float(np.mean(ship_base_rows)) if ship_base_rows else base_price
         if ship_base:
             rolling = ship_base
+            shipped_chain = {}
             for w in range(1, horizon_weeks + 1):
+                # The base this week's shipped forecast is actually built on:
+                # last week's forecast, never last week's actual.
+                shipped_chain[w] = round(rolling, 2)
                 tgt = as_of_date + timedelta(weeks=w)
                 tw = max(0, min(51, (tgt.timetuple().tm_yday - 1) // 7))
                 # historical week-over-week change for this point in the season
@@ -8528,7 +8532,7 @@ def api_forecast_hindcast():
                     rolling = rolling * (1.0 + trend_pct)
                 shipped[w] = round(rolling, 2)
     except Exception:
-        shipped = {}
+        shipped, shipped_chain = {}, {}
 
     # ---- Alternative baselines -------------------------------------------
     # The flat base price is frozen at as-of, so it decays as the horizon grows
@@ -8575,11 +8579,18 @@ def api_forecast_hindcast():
         # each week on the last actual; the seasonal one is last year's price.
         fw["naive_error"] = round(abs(actual - base_price), 2) if base_price else None
 
-        rolling_base = prev_a if prev_a is not None else base_price
-        fw["rolling_base"] = round(rolling_base, 2) if rolling_base is not None else None
-        fw["rolling_error"] = round(abs(actual - rolling_base), 2) if rolling_base is not None else None
-        if fw["rolling_error"] is not None:
-            roll_err.append(fw["rolling_error"])
+        # Carry-forward benchmark: what you would have had by simply repeating the
+        # last observed price. This uses an actual, so it is a comparison only -
+        # never something either model had available when forecasting.
+        carry = prev_a if prev_a is not None else base_price
+        fw["carry_forward"] = round(carry, 2) if carry is not None else None
+        fw["carry_forward_error"] = round(abs(actual - carry), 2) if carry is not None else None
+        if fw["carry_forward_error"] is not None:
+            roll_err.append(fw["carry_forward_error"])
+
+        # What each model was genuinely working from for this week.
+        fw["model_base"] = base_price          # this model re-derives every week from as-of
+        fw["shipped_base"] = shipped_chain.get(w)  # the shipped model chains on its own forecast
 
         sp = shipped.get(w)
         fw["shipped_forecast"] = sp
@@ -8607,7 +8618,7 @@ def api_forecast_hindcast():
     naive_errs = [fw["naive_error"] for fw in forecast_weeks if fw.get("naive_error") is not None]
     mae = round(float(np.mean(abs_err)), 2) if abs_err else None
     naive_mae = round(float(np.mean(naive_errs)), 2) if naive_errs else None
-    rolling_mae = round(float(np.mean(roll_err)), 2) if roll_err else None
+    carry_forward_mae = round(float(np.mean(roll_err)), 2) if roll_err else None
     seasonal_mae = round(float(np.mean(seas_err)), 2) if seas_err else None
     shipped_mae = round(float(np.mean(ship_err)), 2) if ship_err else None
 
@@ -8624,8 +8635,8 @@ def api_forecast_hindcast():
         "rmse": round(float(np.sqrt(np.mean([e ** 2 for e in abs_err]))), 2) if abs_err else None,
         "naive_mae": naive_mae,
         "skill_score": skill,
-        "rolling_mae": rolling_mae,
-        "skill_vs_rolling": _skill(rolling_mae),
+        "carry_forward_mae": carry_forward_mae,
+        "skill_vs_carry_forward": _skill(carry_forward_mae),
         "seasonal_naive_mae": seasonal_mae,
         "skill_vs_seasonal": _skill(seasonal_mae),
         "shipped_model_mae": shipped_mae,
@@ -8659,6 +8670,8 @@ def api_forecast_hindcast():
         "segment_note": segment_note,
         "segments": seg_catalogue,
         "base_price": base_price,
+        "model_chains": False,   # this model re-derives each week from the as-of anchor
+        "shipped_model_chains": True,
         "seasonal_at_as_of": seasonal_now,
         "level_offset": round((base_price - seasonal_now), 2) if base_price is not None else None,
         "sigma": round(model["sigma"], 2),
@@ -8894,11 +8907,13 @@ def api_forecast_hindcast_batch():
                 prev_actual = None
                 for f in fc:
                     a = actuals.get(f["week"])
-                    rolling_base = prev_actual if prev_actual is not None else base_price
+                    carry = prev_actual if prev_actual is not None else base_price
                     if a is not None:
                         prev_actual = a
                     weeks.append({
-                        "rolling_base": round(rolling_base, 2) if rolling_base else None,
+                        # benchmark only — uses an actual the model never had
+                        "carry_forward": round(carry, 2) if carry else None,
+                        "model_base": round(base_price, 2) if base_price else None,
                         "week": f["week"],
                         "forecast": f["median"],
                         "actual": round(a, 2) if a is not None else None,

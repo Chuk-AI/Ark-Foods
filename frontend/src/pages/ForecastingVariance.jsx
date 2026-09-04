@@ -179,7 +179,7 @@ function Verdict({ data }) {
 
   const benches = [
     { key: 'skill_score',      label: 'a price that never moves',        mae: m.naive_mae },
-    { key: 'skill_vs_rolling', label: 'last week\u2019s price each week', mae: m.rolling_mae },
+    { key: 'skill_vs_carry_forward', label: 'simply repeating last week\u2019s price', mae: m.carry_forward_mae },
     { key: 'skill_vs_seasonal',label: 'the same week last year',          mae: m.seasonal_naive_mae },
     { key: 'skill_vs_shipped', label: 'the live Forecasts page',           mae: m.shipped_model_mae },
   ].filter(b => m[b.key] != null);
@@ -499,7 +499,9 @@ function ErrorTable({ forecast, basePrice }) {
     { h: 'Week', align: 'left' },
     { h: 'Date', align: 'left' },
     { h: 'Base @ forecast', align: 'center' },
-    { h: 'Rolling base', align: 'center' },
+    { h: 'Model base', align: 'center' },
+    { h: 'Live-page base', align: 'center' },
+    { h: 'Carry-fwd*', align: 'center' },
     { h: 'Last year', align: 'center' },
     { h: 'Live page', align: 'center' },
     { h: 'Forecast', align: 'center' },
@@ -514,6 +516,16 @@ function ErrorTable({ forecast, basePrice }) {
   ];
 
   return (
+    <div>
+      <div style={{ padding: '10px 14px', fontSize: 11, color: 'var(--text-3)', lineHeight: 1.65, borderBottom: '1px solid var(--border)' }}>
+        <strong style={{ color: 'var(--text-2)' }}>Model base</strong> is what this model built each week's
+        forecast on — it re-derives every week from the price at forecast time, so it never changes.{' '}
+        <strong style={{ color: 'var(--text-2)' }}>Live-page base</strong> is what the Forecasts page works
+        from: that model chains, feeding each week's forecast in as the next week's starting point.
+        Neither ever sees an actual.{' '}
+        <em>*Carry-forward</em> does use the previous week's real price, so it is a benchmark only —
+        it shows what you'd have got by just repeating the last quote, not something either model knew.
+      </div>
     <div style={{ overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
         <thead>
@@ -541,7 +553,13 @@ function ErrorTable({ forecast, basePrice }) {
                   {fmt(f.base_price ?? basePrice)}
                 </td>
                 <td style={{ padding: '9px 12px', textAlign: 'center', color: 'var(--text-2)', fontVariantNumeric: 'tabular-nums' }}>
-                  {fmt(f.rolling_base)}
+                  {fmt(f.model_base)}
+                </td>
+                <td style={{ padding: '9px 12px', textAlign: 'center', color: 'var(--text-2)', fontVariantNumeric: 'tabular-nums' }}>
+                  {fmt(f.shipped_base)}
+                </td>
+                <td style={{ padding: '9px 12px', textAlign: 'center', color: 'var(--text-3)', fontStyle: 'italic', fontVariantNumeric: 'tabular-nums' }}>
+                  {fmt(f.carry_forward)}
                 </td>
                 <td style={{ padding: '9px 12px', textAlign: 'center', color: 'var(--text-3)', fontVariantNumeric: 'tabular-nums' }}>
                   {fmt(f.seasonal_naive)}
@@ -579,6 +597,7 @@ function ErrorTable({ forecast, basePrice }) {
           })}
         </tbody>
       </table>
+    </div>
     </div>
   );
 }
@@ -819,10 +838,10 @@ export default function ForecastingVariance() {
               color={m?.skill_score == null ? 'var(--text-2)' : m.skill_score > 0 ? '#15803d' : '#dc2626'}
             />
             <MetricCard
-              label="vs Rolling"
-              value={m?.skill_vs_rolling != null ? `${m.skill_vs_rolling > 0 ? '+' : ''}${m.skill_vs_rolling}%` : '—'}
-              sub={m?.rolling_mae != null ? `their MAE ${fmt(m.rolling_mae)}` : 'last week each week'}
-              color={m?.skill_vs_rolling == null ? 'var(--text-2)' : m.skill_vs_rolling > 0 ? '#15803d' : '#dc2626'}
+              label="vs Carry-forward"
+              value={m?.skill_vs_carry_forward != null ? `${m.skill_vs_carry_forward > 0 ? '+' : ''}${m.skill_vs_carry_forward}%` : '—'}
+              sub={m?.carry_forward_mae != null ? `their MAE ${fmt(m.carry_forward_mae)}` : 'repeat last observed'}
+              color={m?.skill_vs_carry_forward == null ? 'var(--text-2)' : m.skill_vs_carry_forward > 0 ? '#15803d' : '#dc2626'}
             />
             <MetricCard
               label="vs Live page"
