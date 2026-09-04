@@ -229,12 +229,22 @@ function FanChart({ data, horizonWeeks }) {
     const canvas = canvasRef.current;
     if (!canvas || !data) return;
     const ctx = canvas.getContext('2d');
-    const W = canvas.offsetWidth;
+    // offsetWidth is 0 until the element has been laid out — on a first paint,
+    // a hidden tab, or a container that is still sizing. Drawing then makes
+    // every coordinate NaN and the chart silently comes out blank, which is why
+    // it rendered only sometimes. Wait for a real width instead.
+    const W = canvas.offsetWidth || canvas.parentElement?.offsetWidth || 0;
+    if (W < 2) {
+      requestAnimationFrame(draw);
+      return;
+    }
     const H = 300;
     const dpr = window.devicePixelRatio || 1;
     canvas.width = W * dpr;
     canvas.height = H * dpr;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, W, H);
 
     // Detect theme
     const style = getComputedStyle(document.documentElement);
@@ -248,7 +258,9 @@ function FanChart({ data, horizonWeeks }) {
     const actCol   = isDark ? '#f59e0b' : '#b45309';
     const divCol   = isDark ? 'rgba(245,158,11,0.5)' : 'rgba(180,83,9,0.45)';
 
-    const { history, forecast } = data;
+    const history = Array.isArray(data.history) ? data.history.filter(h => h && h.price != null) : [];
+    const forecast = Array.isArray(data.forecast) ? data.forecast : [];
+    if (!forecast.length) return;
     const allPoints = [...history, ...forecast.map(f => f.median)];
     const allActuals = forecast.filter(f => f.actual != null).map(f => f.actual);
     const allHi95 = forecast.map(f => f.ci_95_hi);
@@ -259,11 +271,16 @@ function FanChart({ data, horizonWeeks }) {
     const cw = W - pad.left - pad.right;
     const ch = H - pad.top - pad.bottom;
 
-    const minV = Math.min(...allVals) * 0.97;
-    const maxV = Math.max(...allVals) * 1.03;
+    if (!allVals.length) return;
+    let minV = Math.min(...allVals) * 0.97;
+    let maxV = Math.max(...allVals) * 1.03;
+    // A perfectly flat series makes the vertical scale collapse and every point
+    // land on one row; give it a little room so the line stays readable.
+    if (!(maxV > minV)) { const c = maxV || 1; minV = c * 0.9; maxV = c * 1.1; }
 
     const totalPts = history.length + forecast.length;
-    const xOf = (i) => pad.left + (i / (totalPts - 1)) * cw;
+    const span = Math.max(totalPts - 1, 1);
+    const xOf = (i) => pad.left + (i / span) * cw;
     const yOf = (v) => pad.top + ch - ((v - minV) / (maxV - minV)) * ch;
 
     // Grid
@@ -283,7 +300,7 @@ function FanChart({ data, horizonWeeks }) {
       ctx.fillText('$' + v.toFixed(0), pad.left - 6, pad.top + (ch / 5) * i + 4);
     }
 
-    const divIdx = history.length - 1;
+    const divIdx = Math.max(history.length - 1, 0);
     const divX = xOf(divIdx);
 
     // --- Confidence bands (forecast region) ---
@@ -436,8 +453,20 @@ function FanChart({ data, horizonWeeks }) {
     window.addEventListener('resize', draw);
     const mo = new MutationObserver(draw);
     mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', draw);
-    return () => window.removeEventListener('resize', draw);
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    mq.addEventListener('change', draw);
+    // Redraw when the canvas itself gets its size, not only when the window moves
+    let ro;
+    if (typeof ResizeObserver !== 'undefined' && canvasRef.current) {
+      ro = new ResizeObserver(draw);
+      ro.observe(canvasRef.current);
+    }
+    return () => {
+      window.removeEventListener('resize', draw);
+      mq.removeEventListener('change', draw);
+      mo.disconnect();
+      if (ro) ro.disconnect();
+    };
   }, [draw]);
 
   return (
